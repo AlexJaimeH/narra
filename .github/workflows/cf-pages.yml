@@ -47,12 +47,19 @@ jobs:
           command: pages deploy build/web --project-name=narra --commit-dirty=true
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
 
-      # Production: solo push a main
+      # Production: solo push a main (con branch y commit explícitos)
       - name: Deploy Production
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy build/web --project-name=narra --commit-dirty=true --production
+          command: >
+            pages deploy build/web
+            --project-name=narra
+            --branch=main
+            --commit-hash=${{ github.sha }}
+            --commit-message="${{ github.event.head_commit.message }}"
+            --commit-dirty=true
+            --production
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}

@@ -1,6 +1,21 @@
 # narra
 
+[![Build & Deploy (Cloudflare Pages)](https://github.com/narra-app/narra/actions/workflows/cf-pages.yml/badge.svg)](https://github.com/narra-app/narra/actions/workflows/cf-pages.yml)
+
 A new Flutter project.
+
+## Setup
+
+Before building or running the application, install the Flutter dependencies and produce a release build of the web bundle when needed:
+
+1. Fetch dependencies:
+   ```bash
+   flutter pub get
+   ```
+2. Create an optimized web build (optional for local validation):
+   ```bash
+   flutter build web --release
+   ```
 
 ## Getting Started
 

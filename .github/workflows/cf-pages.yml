@@ -2,8 +2,12 @@ name: Build & Deploy (Cloudflare Pages)
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "**" ]   # todas las ramas (incluida main)
   pull_request:
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   deploy:
@@ -33,11 +37,22 @@ jobs:
       - name: Build Web (release)
         run: flutter build web --release
 
-      - name: Deploy to Cloudflare Pages
+      # Preview: PRs y ramas que no sean main
+      - name: Deploy Preview
+        if: github.event_name == 'pull_request' || github.ref != 'refs/heads/main'
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          # Usa tu nombre de proyecto en Pages; si no existe aún, lo creamos en el siguiente paso
-          command: pages deploy build/web --project-name=narra
+          command: pages deploy build/web --project-name=narra --commit-dirty=true
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+
+      # Production: solo push a main
+      - name: Deploy Production
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy build/web --project-name=narra --commit-dirty=true --production
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}

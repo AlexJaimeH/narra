@@ -19,7 +19,7 @@ class NarraApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Narra - Historias de vida',
+      title: 'Narra - (preview test)',
       debugShowCheckedModeBanner: false,
       theme: lightTheme,
       darkTheme: darkTheme,

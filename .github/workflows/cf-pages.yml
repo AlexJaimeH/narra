@@ -51,6 +51,23 @@ jobs:
             --commit-dirty=true
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Slugify branch for Pages subdomain
+        if: github.event_name == 'pull_request'
+        run: |
+          BRANCH="${{ github.head_ref || github.ref_name }}"
+          SAFE="${BRANCH//\//-}"
+          echo "BRANCH_SLUG_SAFE=$SAFE" >> $GITHUB_ENV
+
+      - name: Comment Preview URL on PR
+        if: github.event_name == 'pull_request'
+        uses: peter-evans/create-or-update-comment@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          issue-number: ${{ github.event.pull_request.number }}
+          body: |
+            ✅ Preview listo:
+            https://${{ env.BRANCH_SLUG_SAFE }}.${{ vars.CF_PAGES_SUBDOMAIN }}
+
       - name: Deploy Production
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: cloudflare/wrangler-action@v3

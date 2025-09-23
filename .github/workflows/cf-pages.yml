@@ -37,7 +37,6 @@ jobs:
       - name: Build Web (release)
         run: flutter build web --release
 
-      # Preview: PRs y pushes a ramas ≠ main
       - name: Deploy Preview
         if: github.event_name == 'pull_request' || github.ref != 'refs/heads/main'
         uses: cloudflare/wrangler-action@v3
@@ -49,11 +48,9 @@ jobs:
             --project-name=narra
             --branch=${{ github.head_ref || github.ref_name }}
             --commit-hash=${{ github.sha }}
-            --commit-message="CI preview ${{ github.sha }}"
             --commit-dirty=true
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
 
-      # Production: solo push a main (sin --production)
       - name: Deploy Production
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: cloudflare/wrangler-action@v3
@@ -65,6 +62,5 @@ jobs:
             --project-name=narra
             --branch=main
             --commit-hash=${{ github.sha }}
-            --commit-message="${{ github.event.head_commit.message }}"
             --commit-dirty=true
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}

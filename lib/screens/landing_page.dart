@@ -3,11 +3,11 @@ import 'package:narra/screens/auth/login_page.dart';
 import 'package:narra/screens/auth/register_page.dart';
 import 'package:narra/supabase/supabase_config.dart';
 
-// Const global (fuera de cualquier clase)
-const String kHeroSubtitle = 'Comparte tus historias de vida con tu familia y amigos';
+const String kHeroSubtitle =
+    'Comparte tus historias de vida con tu familia y amigos';
 
 class LandingPage extends StatefulWidget {
-  LandingPage({super.key}); // <- sin const
+  const LandingPage({super.key}); // ← vuelve a const
   @override
   State<LandingPage> createState() => _LandingPageState();
 }

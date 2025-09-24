@@ -4,7 +4,7 @@ import 'package:narra/screens/auth/register_page.dart';
 import 'package:narra/supabase/supabase_config.dart';
 
 const String kHeroSubtitle =
-    'Comparte tus historias de vida con tu familia y amigos';
+    'Escribe tu historia. Regálala para siempre a quienes amas.';
 
 class LandingPage extends StatefulWidget {
   const LandingPage({super.key}); // ← vuelve a const
@@ -13,10 +13,24 @@ class LandingPage extends StatefulWidget {
 }
 
 class _LandingPageState extends State<LandingPage> {
+  final _scrollController = ScrollController();
+
+  final GlobalKey _howKey = GlobalKey();
+  final GlobalKey _featuresKey = GlobalKey();
+  final GlobalKey _testimonialsKey = GlobalKey();
+  final GlobalKey _pricingKey = GlobalKey();
+  final GlobalKey _faqKey = GlobalKey();
+
   @override
   void initState() {
     super.initState();
     _checkAuthState();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   void _checkAuthState() {
@@ -37,84 +51,69 @@ class _LandingPageState extends State<LandingPage> {
     );
   }
 
+  void _scrollTo(GlobalKey key) {
+    final contextForKey = key.currentContext;
+    if (contextForKey != null) {
+      Scrollable.ensureVisible(
+        contextForKey,
+        duration: const Duration(milliseconds: 600),
+        curve: Curves.easeInOut,
+        alignment: 0.1,
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: SingleChildScrollView(
+        controller: _scrollController,
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Hero Section
-            Container(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                children: [
-                  const SizedBox(height: 60),
-                  // Logo and Title
-                  Text(
-                    'Narra',
-                    style: Theme.of(context).textTheme.displayLarge?.copyWith(
-                      color: Theme.of(context).colorScheme.primary,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-  kHeroSubtitle,
-                    style: Theme.of(context).textTheme.headlineMedium,
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 24),
-                  // Hero Image
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
-                    child: Image.network(
-                      'https://pixabay.com/get/gad86189039735b8b0f93e0900e5585200a5b1d97f08f25d52cad4e8842488a528a8ec4d3ef56857739c83f8c236e1ee67e299745e75def46ecd82d4fdcb7a43e_1280.jpg',
-                      height: 200,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) => Container(
-                        height: 200,
-                        color: Theme.of(context).colorScheme.primaryContainer,
-                        child: const Icon(Icons.image, size: 64),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-                  // CTA Buttons
-                  Row(
-                    children: [
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: () => _navigateToAuth(false),
-                          icon: const Icon(Icons.edit, color: Colors.white),
-                          label: const Text('Empezar Gratis'),
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () => _navigateToAuth(true),
-                          icon: const Icon(Icons.login),
-                          label: const Text('Iniciar Sesión'),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  TextButton.icon(
-                    onPressed: () {},
-                    icon: const Icon(Icons.visibility),
-                    label: const Text('Ver historias de ejemplo'),
-                  ),
-                ],
-              ),
+            // Header
+            _LandingHeader(
+              onHow: () => _scrollTo(_howKey),
+              onFeatures: () => _scrollTo(_featuresKey),
+              onTestimonials: () => _scrollTo(_testimonialsKey),
+              onPricing: () => _scrollTo(_pricingKey),
+              onFaq: () => _scrollTo(_faqKey),
+              onLogin: () => _navigateToAuth(true),
+              onRegister: () => _navigateToAuth(false),
+              onBuy: () => _navigateToAuth(false),
             ),
+
+            // Hero
+            _HeroSection(
+              onBuy: () => _navigateToAuth(false),
+              onExplore: () => _scrollTo(_howKey),
+              onLogin: () => _navigateToAuth(true),
+            ),
+
+            // Social proof
+            const _SocialProofBar(),
+
             // How it Works Section
-            const HowItWorksSection(),
+            KeyedSubtree(key: _howKey, child: const HowItWorksSection()),
+
+            // Emotional statement section
+            const _EmotionalSection(),
+
             // Features Section
-            const FeaturesSection(),
+            KeyedSubtree(key: _featuresKey, child: const FeaturesSection()),
+
+            // Testimonials
+            KeyedSubtree(key: _testimonialsKey, child: const _TestimonialsSection()),
+
             // Pricing Section
-            PricingSection(onStartPressed: () => _navigateToAuth(false)),
+            KeyedSubtree(
+              key: _pricingKey,
+              child: PricingSection(onStartPressed: () => _navigateToAuth(false)),
+            ),
+
+            // FAQ
+            KeyedSubtree(key: _faqKey, child: const _FaqSection()),
+
             // Footer
             Container(
               padding: const EdgeInsets.all(24),
@@ -134,14 +133,457 @@ class _LandingPageState extends State<LandingPage> {
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                   const SizedBox(height: 16),
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 16,
+                    runSpacing: 8,
+                    children: const [
+                      Text('Privacidad'),
+                      Text('Términos'),
+                      Text('Cookies'),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
                   Text(
-                    '© 2024 Narra. Todos los derechos reservados.',
+                    '© 2025 Narra. Todos los derechos reservados.',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ],
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LandingHeader extends StatelessWidget {
+  final VoidCallback onHow;
+  final VoidCallback onFeatures;
+  final VoidCallback onTestimonials;
+  final VoidCallback onPricing;
+  final VoidCallback onFaq;
+  final VoidCallback onLogin;
+  final VoidCallback onRegister;
+  final VoidCallback onBuy;
+
+  const _LandingHeader({
+    super.key,
+    required this.onHow,
+    required this.onFeatures,
+    required this.onTestimonials,
+    required this.onPricing,
+    required this.onFaq,
+    required this.onLogin,
+    required this.onRegister,
+    required this.onBuy,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final bool isNarrow = constraints.maxWidth < 800;
+          return Row(
+            children: [
+              // Brand
+              Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primary,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.auto_stories, color: Colors.white),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    'Narra',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              const Spacer(),
+
+              if (!isNarrow)
+                Row(
+                  children: [
+                    _HeaderLink(label: 'Cómo funciona', onTap: onHow),
+                    _HeaderLink(label: 'Características', onTap: onFeatures),
+                    _HeaderLink(label: 'Testimonios', onTap: onTestimonials),
+                    _HeaderLink(label: 'Precio', onTap: onPricing),
+                    _HeaderLink(label: 'FAQ', onTap: onFaq),
+                    const SizedBox(width: 8),
+                  ],
+                ),
+
+              // Actions
+              Row(
+                children: [
+                  TextButton(onPressed: onLogin, child: const Text('Iniciar sesión')),
+                  const SizedBox(width: 8),
+                  OutlinedButton(onPressed: onRegister, child: const Text('Registrarse')),
+                  const SizedBox(width: 8),
+                  ElevatedButton.icon(
+                    onPressed: onBuy,
+                    icon: const Icon(Icons.favorite, color: Colors.white),
+                    label: const Text('Comprar'),
+                  ),
+                ],
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _HeaderLink extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+
+  const _HeaderLink({super.key, required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return TextButton(
+      onPressed: onTap,
+      child: Text(label),
+    );
+  }
+}
+
+class _HeroSection extends StatelessWidget {
+  final VoidCallback onBuy;
+  final VoidCallback onExplore;
+  final VoidCallback onLogin;
+
+  const _HeroSection({
+    super.key,
+    required this.onBuy,
+    required this.onExplore,
+    required this.onLogin,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Theme.of(context).colorScheme.primary.withOpacity(0.08),
+            Theme.of(context).colorScheme.surface,
+          ],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+        ),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final bool isNarrow = constraints.maxWidth < 900;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // Title
+              Text(
+                'Tu vida es un legado',
+                style: Theme.of(context).textTheme.displayMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                kHeroSubtitle,
+                style: Theme.of(context).textTheme.headlineMedium,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              Wrap(
+                alignment: WrapAlignment.center,
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  ElevatedButton.icon(
+                    onPressed: onBuy,
+                    icon: const Icon(Icons.card_giftcard, color: Colors.white),
+                    label: const Text('Comprar para un ser querido'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: onExplore,
+                    icon: const Icon(Icons.play_circle_outline),
+                    label: const Text('Cómo funciona'),
+                  ),
+                  TextButton(
+                    onPressed: onLogin,
+                    child: const Text('Ya tengo cuenta'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 32),
+              // Visual
+              ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: Image.network(
+                  'https://images.unsplash.com/photo-1543269865-cbf427effbad?q=80&w=1600&auto=format&fit=crop',
+                  height: isNarrow ? 220 : 360,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) => Container(
+                    height: isNarrow ? 220 : 360,
+                    color: Theme.of(context).colorScheme.primaryContainer,
+                    child: const Icon(Icons.image, size: 64),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _SocialProofBar extends StatelessWidget {
+  const _SocialProofBar({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+      child: Wrap(
+        alignment: WrapAlignment.center,
+        spacing: 24,
+        runSpacing: 12,
+        children: [
+          _ProofItem(icon: Icons.star, text: 'Calificación 4.9/5'),
+          _ProofItem(icon: Icons.groups, text: '1000+ familias inspiradas'),
+          _ProofItem(icon: Icons.lock, text: 'Privado y seguro'),
+          _ProofItem(icon: Icons.schedule, text: 'En 10 minutos por semana'),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProofItem extends StatelessWidget {
+  final IconData icon;
+  final String text;
+
+  const _ProofItem({super.key, required this.icon, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, color: Theme.of(context).colorScheme.primary),
+        const SizedBox(width: 8),
+        Text(text, style: Theme.of(context).textTheme.bodyMedium),
+      ],
+    );
+  }
+}
+
+class _EmotionalSection extends StatelessWidget {
+  const _EmotionalSection({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 36),
+      color: Theme.of(context).colorScheme.surfaceContainer,
+      child: Column(
+        children: [
+          Text(
+            'Porque tu voz importa',
+            style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Narra te acompaña para guardar anécdotas, fotos y aprendizajes. Un regalo de amor para tus hijos y nietos — una biblioteca hecha de recuerdos auténticos.',
+            style: Theme.of(context).textTheme.bodyLarge,
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TestimonialsSection extends StatelessWidget {
+  const _TestimonialsSection({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Text(
+            'Testimonios',
+            style: Theme.of(context).textTheme.headlineLarge,
+          ),
+          const SizedBox(height: 24),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isNarrow = constraints.maxWidth < 900;
+              return Wrap(
+                spacing: 16,
+                runSpacing: 16,
+                alignment: WrapAlignment.center,
+                children: const [
+                  _TestimonialCard(
+                    quote: '“Mi madre escribió su infancia. Hoy mis hijos la leen con una sonrisa.”',
+                    name: 'Lucía, 38',
+                    relation: 'Hija',
+                    avatarUrl: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?q=80&w=300&auto=format&fit=crop',
+                  ),
+                  _TestimonialCard(
+                    quote: '“Nunca pensé que escribiría. Con Narra fue fácil y hermoso.”',
+                    name: 'Jorge, 72',
+                    relation: 'Abuelo',
+                    avatarUrl: 'https://images.unsplash.com/photo-1544006659-f0b21884ce1d?q=80&w=300&auto=format&fit=crop',
+                  ),
+                  _TestimonialCard(
+                    quote: '“Es el mejor regalo que nos hicimos como familia.”',
+                    name: 'María, 45',
+                    relation: 'Madre',
+                    avatarUrl: 'https://images.unsplash.com/photo-1556157382-97eda2d62296?q=80&w=300&auto=format&fit=crop',
+                  ),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TestimonialCard extends StatelessWidget {
+  final String quote;
+  final String name;
+  final String relation;
+  final String avatarUrl;
+
+  const _TestimonialCard({
+    super.key,
+    required this.quote,
+    required this.name,
+    required this.relation,
+    required this.avatarUrl,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 320,
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  CircleAvatar(
+                    radius: 24,
+                    backgroundImage: NetworkImage(avatarUrl),
+                    backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                  ),
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(name, style: Theme.of(context).textTheme.titleMedium),
+                      Text(relation, style: Theme.of(context).textTheme.bodySmall),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                quote,
+                style: Theme.of(context).textTheme.bodyLarge,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FaqSection extends StatelessWidget {
+  const _FaqSection({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      color: Theme.of(context).colorScheme.surface,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Text('Preguntas frecuentes', style: Theme.of(context).textTheme.headlineLarge),
+          const SizedBox(height: 16),
+          const _FaqItem(
+            q: '¿Es difícil escribir mis historias?',
+            a: 'No. Te guiamos con preguntas sencillas y puedes dictar por voz.',
+          ),
+          const _FaqItem(
+            q: '¿Quién puede leer mis historias?',
+            a: 'Tú decides. Las historias son privadas y solo accede quien invites.',
+          ),
+          const _FaqItem(
+            q: '¿Cuánto cuesta?',
+            a: 'Un pago único de 25€ para desbloquear todas las funciones.',
+          ),
+          const _FaqItem(
+            q: '¿Puedo regalar Narra?',
+            a: 'Sí. Usa “Comprar para un ser querido” y te guiamos en el proceso.',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FaqItem extends StatelessWidget {
+  final String q;
+  final String a;
+
+  const _FaqItem({super.key, required this.q, required this.a});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(q, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Text(a, style: Theme.of(context).textTheme.bodyMedium),
+            ],
+          ),
         ),
       ),
     );
@@ -430,7 +872,7 @@ class PricingSection extends StatelessWidget {
                     width: double.infinity,
                     child: ElevatedButton(
                       onPressed: onStartPressed,
-                      child: const Text('Empezar ahora'),
+                      child: const Text('Comprar ahora'),
                     ),
                   ),
                 ],

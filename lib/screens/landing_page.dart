@@ -5,7 +5,8 @@ import 'package:narra/supabase/supabase_config.dart';
 
 class LandingPage extends StatefulWidget {
   const LandingPage({super.key});
-
+const kHeroSubtitle =
+    'Comparte tus historias de vida con tu familia y amigos';
   @override
   State<LandingPage> createState() => _LandingPageState();
 }

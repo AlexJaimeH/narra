@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:narra/screens/auth/login_page.dart';
 import 'package:narra/screens/auth/register_page.dart';
 import 'package:narra/supabase/supabase_config.dart';
-const String kHeroSubtitle =
-    'Comparte tus historias de vida con tu familia y amigos';
+
+// Const global (fuera de cualquier clase)
+const String kHeroSubtitle = 'Comparte tus historias de vida con tu familia y amigos';
 
 class LandingPage extends StatefulWidget {
-LandingPage({super.key});
+  LandingPage({super.key}); // <- sin const
   @override
   State<LandingPage> createState() => _LandingPageState();
 }
@@ -58,7 +59,7 @@ class _LandingPageState extends State<LandingPage> {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'Comparte tus historias de vida con tu familia',
+  kHeroSubtitle,
                     style: Theme.of(context).textTheme.headlineMedium,
                     textAlign: TextAlign.center,
                   ),

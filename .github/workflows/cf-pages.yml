@@ -36,6 +36,13 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Analyze (errors only; warnings no-fatales)
+        run: dart analyze --no-fatal-warnings
+
+      - name: Run tests (only if present)
+        if: ${{ hashFiles('test/**') != '' }}
+        run: flutter test -r expanded
+
       - name: Build Web (release)
         run: flutter build web --release
 

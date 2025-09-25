@@ -196,10 +196,10 @@ class _SettingsPageState extends State<SettingsPage> {
                             min: 0.8,
                             max: 2.0,
                             divisions: 12,
-                            onChanged: (value) {
-                          setState(() { _textScale = value; });
-                          await ThemeController.instance.updateTextScale(value);
-                          await _updateUserSettings();
+                            onChanged: (value) async {
+                              setState(() { _textScale = value; });
+                              await ThemeController.instance.updateTextScale(value);
+                              await _updateUserSettings();
                             },
                           ),
                         ),

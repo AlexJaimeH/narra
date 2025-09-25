@@ -34,11 +34,19 @@ class VoiceRecorder {
 
     _recorder!.addEventListener('dataavailable', (event) async {
       final e = event as html.BlobEvent;
-      if (e.data != null && e.data!.size! > 0) {
-        final arrayBuffer = await e.data!.arrayBuffer();
-        final bytes = Uint8List.view(arrayBuffer);
-        _chunks.add(bytes);
-        if (onChunk != null) onChunk(bytes, _mimeType);
+      final blob = e.data;
+      if (blob != null && (blob.size ?? 0) > 0) {
+        final reader = html.FileReader();
+        final completer = Completer<Uint8List>();
+        reader.onLoadEnd.listen((_) {
+          final buffer = reader.result as ByteBuffer;
+          final bytes = Uint8List.view(buffer);
+          _chunks.add(bytes);
+          if (onChunk != null) onChunk(bytes, _mimeType);
+          completer.complete(bytes);
+        });
+        reader.readAsArrayBuffer(blob);
+        await completer.future;
       }
     });
 

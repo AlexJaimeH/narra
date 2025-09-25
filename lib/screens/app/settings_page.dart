@@ -21,8 +21,6 @@ class _SettingsPageState extends State<SettingsPage> {
   String _fontFamily = 'Montserrat';
   bool _highContrast = false;
   bool _reducedMotion = false;
-  bool _highContrast = false;
-  bool _reducedMotion = false;
   String _ghostTone = 'warm';
   String _ghostPerson = 'first';
   bool _noBadWords = false;

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:narra/theme.dart';
+import 'package:narra/theme_controller.dart';
 import 'package:narra/screens/landing_page.dart';
 import 'package:narra/screens/app/app_navigation.dart';
 import 'package:narra/supabase/supabase_config.dart';
@@ -18,20 +19,24 @@ class NarraApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    final themeController = ThemeController.instance;
+    return AnimatedBuilder(
+      animation: themeController,
+      builder: (context, _) => MaterialApp(
 
       title: 'Narra',
 
 
       debugShowCheckedModeBanner: false,
-      theme: lightTheme,
-      darkTheme: darkTheme,
+      theme: themeController.light,
+      darkTheme: themeController.dark,
       themeMode: ThemeMode.system,
       home: const LandingPage(),
       routes: {
         '/app': (context) => const AppNavigation(),
         '/landing': (context) => const LandingPage(),
       },
+      ),
     );
   }
 }

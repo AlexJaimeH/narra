@@ -115,6 +115,9 @@ CREATE TABLE IF NOT EXISTS user_settings (
   notification_reminders BOOLEAN DEFAULT TRUE,
   sharing_enabled BOOLEAN DEFAULT FALSE,
   language TEXT DEFAULT 'es',
+  font_family TEXT DEFAULT 'Montserrat',
+  text_scale NUMERIC DEFAULT 1.0,
+  ai_extra_instructions TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(user_id)

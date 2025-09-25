@@ -50,7 +50,8 @@ class FontSizes {
   static const double bodySmall = 14.0;
 }
 
-ThemeData get lightTheme => ThemeData(
+ThemeData get lightTheme => buildLightThemeWithFont('Montserrat');
+ThemeData buildLightThemeWithFont(String fontFamily) => ThemeData(
   useMaterial3: true,
   colorScheme: ColorScheme.light(
     primary: NarraColors.brandPrimary,
@@ -136,101 +137,27 @@ ThemeData get lightTheme => ThemeData(
     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
   ),
   textTheme: TextTheme(
-    displayLarge: GoogleFonts.sourceSans3(
-      fontSize: FontSizes.displayLarge,
-      fontWeight: FontWeight.w600,
-      color: NarraColors.textPrimary,
-      height: 1.4,
-    ),
-    displayMedium: GoogleFonts.sourceSans3(
-      fontSize: FontSizes.displayMedium,
-      fontWeight: FontWeight.w600,
-      color: NarraColors.textPrimary,
-      height: 1.4,
-    ),
-    displaySmall: GoogleFonts.sourceSans3(
-      fontSize: FontSizes.displaySmall,
-      fontWeight: FontWeight.w600,
-      color: NarraColors.textPrimary,
-      height: 1.4,
-    ),
-    headlineLarge: GoogleFonts.sourceSans3(
-      fontSize: FontSizes.headlineLarge,
-      fontWeight: FontWeight.w600,
-      color: NarraColors.textPrimary,
-      height: 1.4,
-    ),
-    headlineMedium: GoogleFonts.sourceSans3(
-      fontSize: FontSizes.headlineMedium,
-      fontWeight: FontWeight.w500,
-      color: NarraColors.textPrimary,
-      height: 1.4,
-    ),
-    headlineSmall: GoogleFonts.sourceSans3(
-      fontSize: FontSizes.headlineSmall,
-      fontWeight: FontWeight.w500,
-      color: NarraColors.textPrimary,
-      height: 1.4,
-    ),
-    titleLarge: GoogleFonts.sourceSans3(
-      fontSize: FontSizes.titleLarge,
-      fontWeight: FontWeight.w500,
-      color: NarraColors.textPrimary,
-      height: 1.4,
-    ),
-    titleMedium: GoogleFonts.sourceSans3(
-      fontSize: FontSizes.titleMedium,
-      fontWeight: FontWeight.w500,
-      color: NarraColors.textPrimary,
-      height: 1.4,
-    ),
-    titleSmall: GoogleFonts.sourceSans3(
-      fontSize: FontSizes.titleSmall,
-      fontWeight: FontWeight.w500,
-      color: NarraColors.textPrimary,
-      height: 1.4,
-    ),
-    labelLarge: GoogleFonts.sourceSans3(
-      fontSize: FontSizes.labelLarge,
-      fontWeight: FontWeight.w500,
-      color: NarraColors.textPrimary,
-      height: 1.4,
-    ),
-    labelMedium: GoogleFonts.sourceSans3(
-      fontSize: FontSizes.labelMedium,
-      fontWeight: FontWeight.w500,
-      color: NarraColors.textPrimary,
-      height: 1.4,
-    ),
-    labelSmall: GoogleFonts.sourceSans3(
-      fontSize: FontSizes.labelSmall,
-      fontWeight: FontWeight.w500,
-      color: NarraColors.textPrimary,
-      height: 1.4,
-    ),
+    displayLarge: _headlineFont(fontFamily, FontSizes.displayLarge, FontWeight.w600, NarraColors.textPrimary),
+    displayMedium: _headlineFont(fontFamily, FontSizes.displayMedium, FontWeight.w600, NarraColors.textPrimary),
+    displaySmall: _headlineFont(fontFamily, FontSizes.displaySmall, FontWeight.w600, NarraColors.textPrimary),
+    headlineLarge: _headlineFont(fontFamily, FontSizes.headlineLarge, FontWeight.w600, NarraColors.textPrimary),
+    headlineMedium: _headlineFont(fontFamily, FontSizes.headlineMedium, FontWeight.w500, NarraColors.textPrimary),
+    headlineSmall: _headlineFont(fontFamily, FontSizes.headlineSmall, FontWeight.w500, NarraColors.textPrimary),
+    titleLarge: _headlineFont(fontFamily, FontSizes.titleLarge, FontWeight.w500, NarraColors.textPrimary),
+    titleMedium: _headlineFont(fontFamily, FontSizes.titleMedium, FontWeight.w500, NarraColors.textPrimary),
+    titleSmall: _headlineFont(fontFamily, FontSizes.titleSmall, FontWeight.w500, NarraColors.textPrimary),
+    labelLarge: _headlineFont(fontFamily, FontSizes.labelLarge, FontWeight.w500, NarraColors.textPrimary),
+    labelMedium: _headlineFont(fontFamily, FontSizes.labelMedium, FontWeight.w500, NarraColors.textPrimary),
+    labelSmall: _headlineFont(fontFamily, FontSizes.labelSmall, FontWeight.w500, NarraColors.textPrimary),
     // Reading text uses Source Serif 4
-    bodyLarge: GoogleFonts.sourceSerif4(
-      fontSize: FontSizes.bodyLarge,
-      fontWeight: FontWeight.normal,
-      color: NarraColors.textPrimary,
-      height: 1.5,
-    ),
-    bodyMedium: GoogleFonts.sourceSerif4(
-      fontSize: FontSizes.bodyMedium,
-      fontWeight: FontWeight.normal,
-      color: NarraColors.textPrimary,
-      height: 1.5,
-    ),
-    bodySmall: GoogleFonts.sourceSerif4(
-      fontSize: FontSizes.bodySmall,
-      fontWeight: FontWeight.normal,
-      color: NarraColors.textPrimary,
-      height: 1.5,
-    ),
+    bodyLarge: _bodyFont(fontFamily, FontSizes.bodyLarge, NarraColors.textPrimary),
+    bodyMedium: _bodyFont(fontFamily, FontSizes.bodyMedium, NarraColors.textPrimary),
+    bodySmall: _bodyFont(fontFamily, FontSizes.bodySmall, NarraColors.textPrimary),
   ),
 );
 
-ThemeData get darkTheme => ThemeData(
+ThemeData get darkTheme => buildDarkThemeWithFont('Montserrat');
+ThemeData buildDarkThemeWithFont(String fontFamily) => ThemeData(
   useMaterial3: true,
   colorScheme: ColorScheme.dark(
     primary: NarraColors.brandPrimary,
@@ -316,96 +243,55 @@ ThemeData get darkTheme => ThemeData(
     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
   ),
   textTheme: TextTheme(
-    displayLarge: GoogleFonts.sourceSans3(
-      fontSize: FontSizes.displayLarge,
-      fontWeight: FontWeight.w600,
-      color: NarraColors.darkOnSurface,
-      height: 1.4,
-    ),
-    displayMedium: GoogleFonts.sourceSans3(
-      fontSize: FontSizes.displayMedium,
-      fontWeight: FontWeight.w600,
-      color: NarraColors.darkOnSurface,
-      height: 1.4,
-    ),
-    displaySmall: GoogleFonts.sourceSans3(
-      fontSize: FontSizes.displaySmall,
-      fontWeight: FontWeight.w600,
-      color: NarraColors.darkOnSurface,
-      height: 1.4,
-    ),
-    headlineLarge: GoogleFonts.sourceSans3(
-      fontSize: FontSizes.headlineLarge,
-      fontWeight: FontWeight.w600,
-      color: NarraColors.darkOnSurface,
-      height: 1.4,
-    ),
-    headlineMedium: GoogleFonts.sourceSans3(
-      fontSize: FontSizes.headlineMedium,
-      fontWeight: FontWeight.w500,
-      color: NarraColors.darkOnSurface,
-      height: 1.4,
-    ),
-    headlineSmall: GoogleFonts.sourceSans3(
-      fontSize: FontSizes.headlineSmall,
-      fontWeight: FontWeight.w500,
-      color: NarraColors.darkOnSurface,
-      height: 1.4,
-    ),
-    titleLarge: GoogleFonts.sourceSans3(
-      fontSize: FontSizes.titleLarge,
-      fontWeight: FontWeight.w500,
-      color: NarraColors.darkOnSurface,
-      height: 1.4,
-    ),
-    titleMedium: GoogleFonts.sourceSans3(
-      fontSize: FontSizes.titleMedium,
-      fontWeight: FontWeight.w500,
-      color: NarraColors.darkOnSurface,
-      height: 1.4,
-    ),
-    titleSmall: GoogleFonts.sourceSans3(
-      fontSize: FontSizes.titleSmall,
-      fontWeight: FontWeight.w500,
-      color: NarraColors.darkOnSurface,
-      height: 1.4,
-    ),
-    labelLarge: GoogleFonts.sourceSans3(
-      fontSize: FontSizes.labelLarge,
-      fontWeight: FontWeight.w500,
-      color: NarraColors.darkOnSurface,
-      height: 1.4,
-    ),
-    labelMedium: GoogleFonts.sourceSans3(
-      fontSize: FontSizes.labelMedium,
-      fontWeight: FontWeight.w500,
-      color: NarraColors.darkOnSurface,
-      height: 1.4,
-    ),
-    labelSmall: GoogleFonts.sourceSans3(
-      fontSize: FontSizes.labelSmall,
-      fontWeight: FontWeight.w500,
-      color: NarraColors.darkOnSurface,
-      height: 1.4,
-    ),
+    displayLarge: _headlineFont(fontFamily, FontSizes.displayLarge, FontWeight.w600, NarraColors.darkOnSurface),
+    displayMedium: _headlineFont(fontFamily, FontSizes.displayMedium, FontWeight.w600, NarraColors.darkOnSurface),
+    displaySmall: _headlineFont(fontFamily, FontSizes.displaySmall, FontWeight.w600, NarraColors.darkOnSurface),
+    headlineLarge: _headlineFont(fontFamily, FontSizes.headlineLarge, FontWeight.w600, NarraColors.darkOnSurface),
+    headlineMedium: _headlineFont(fontFamily, FontSizes.headlineMedium, FontWeight.w500, NarraColors.darkOnSurface),
+    headlineSmall: _headlineFont(fontFamily, FontSizes.headlineSmall, FontWeight.w500, NarraColors.darkOnSurface),
+    titleLarge: _headlineFont(fontFamily, FontSizes.titleLarge, FontWeight.w500, NarraColors.darkOnSurface),
+    titleMedium: _headlineFont(fontFamily, FontSizes.titleMedium, FontWeight.w500, NarraColors.darkOnSurface),
+    titleSmall: _headlineFont(fontFamily, FontSizes.titleSmall, FontWeight.w500, NarraColors.darkOnSurface),
+    labelLarge: _headlineFont(fontFamily, FontSizes.labelLarge, FontWeight.w500, NarraColors.darkOnSurface),
+    labelMedium: _headlineFont(fontFamily, FontSizes.labelMedium, FontWeight.w500, NarraColors.darkOnSurface),
+    labelSmall: _headlineFont(fontFamily, FontSizes.labelSmall, FontWeight.w500, NarraColors.darkOnSurface),
     // Reading text uses Source Serif 4
-    bodyLarge: GoogleFonts.sourceSerif4(
-      fontSize: FontSizes.bodyLarge,
-      fontWeight: FontWeight.normal,
-      color: NarraColors.darkOnSurface,
-      height: 1.5,
-    ),
-    bodyMedium: GoogleFonts.sourceSerif4(
-      fontSize: FontSizes.bodyMedium,
-      fontWeight: FontWeight.normal,
-      color: NarraColors.darkOnSurface,
-      height: 1.5,
-    ),
-    bodySmall: GoogleFonts.sourceSerif4(
-      fontSize: FontSizes.bodySmall,
-      fontWeight: FontWeight.normal,
-      color: NarraColors.darkOnSurface,
-      height: 1.5,
-    ),
+    bodyLarge: _bodyFont(fontFamily, FontSizes.bodyLarge, NarraColors.darkOnSurface),
+    bodyMedium: _bodyFont(fontFamily, FontSizes.bodyMedium, NarraColors.darkOnSurface),
+    bodySmall: _bodyFont(fontFamily, FontSizes.bodySmall, NarraColors.darkOnSurface),
   ),
 );
+
+TextStyle _headlineFont(String family, double size, FontWeight weight, Color color) {
+  switch (family) {
+    case 'Montserrat':
+      return GoogleFonts.montserrat(fontSize: size, fontWeight: weight, color: color, height: 1.4);
+    case 'Source Sans 3':
+      return GoogleFonts.sourceSans3(fontSize: size, fontWeight: weight, color: color, height: 1.4);
+    case 'Inter':
+      return GoogleFonts.inter(fontSize: size, fontWeight: weight, color: color, height: 1.4);
+    case 'Noto Sans':
+      return GoogleFonts.notoSans(fontSize: size, fontWeight: weight, color: color, height: 1.4);
+    case 'Atkinson Hyperlegible':
+      return GoogleFonts.atkinsonHyperlegible(fontSize: size, fontWeight: weight, color: color, height: 1.4);
+    default:
+      return GoogleFonts.montserrat(fontSize: size, fontWeight: weight, color: color, height: 1.4);
+  }
+}
+
+TextStyle _bodyFont(String family, double size, Color color) {
+  switch (family) {
+    case 'Montserrat':
+      return GoogleFonts.montserrat(fontSize: size, fontWeight: FontWeight.w400, color: color, height: 1.5);
+    case 'Source Sans 3':
+      return GoogleFonts.sourceSans3(fontSize: size, fontWeight: FontWeight.w400, color: color, height: 1.5);
+    case 'Inter':
+      return GoogleFonts.inter(fontSize: size, fontWeight: FontWeight.w400, color: color, height: 1.5);
+    case 'Noto Sans':
+      return GoogleFonts.notoSans(fontSize: size, fontWeight: FontWeight.w400, color: color, height: 1.5);
+    case 'Atkinson Hyperlegible':
+      return GoogleFonts.atkinsonHyperlegible(fontSize: size, fontWeight: FontWeight.w400, color: color, height: 1.5);
+    default:
+      return GoogleFonts.montserrat(fontSize: size, fontWeight: FontWeight.w400, color: color, height: 1.5);
+  }
+}

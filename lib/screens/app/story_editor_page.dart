@@ -1373,9 +1373,9 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   }
 
   void _insertPhotoIntoText(int index) {
-    final text = _contentController.text.trim();
+    final text = _contentController.text;
     
-    if (text.isEmpty) {
+    if (text.trim().isEmpty) {
       // If no content, just insert at the beginning
       _insertPhotoPlaceholder(index, 0);
       return;
@@ -1396,54 +1396,32 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   
   List<Map<String, dynamic>> _parseParagraphs(String text) {
     final paragraphs = <Map<String, dynamic>>[];
-    final lines = text.split('\n');
-    int currentPosition = 0;
-    String currentParagraph = '';
-    
-    for (int i = 0; i < lines.length; i++) {
-      final line = lines[i].trim();
-      
-      if (line.isEmpty) {
-        // Empty line - end current paragraph if it has content
-        if (currentParagraph.trim().isNotEmpty) {
-          final preview = _getParagraphPreview(currentParagraph);
-          paragraphs.add({
-            'text': currentParagraph.trim(),
-            'preview': preview,
-            'position': currentPosition,
-            'endPosition': currentPosition + currentParagraph.length,
-          });
-          currentPosition += currentParagraph.length + 1; // +1 for newline
-          currentParagraph = '';
-        } else {
-          currentPosition += 1; // Just the newline
-        }
-      } else {
-        // Add line to current paragraph
-        if (currentParagraph.isNotEmpty) {
-          currentParagraph += '\n';
-          currentPosition += 1;
-        }
-        currentParagraph += line;
-        currentPosition += line.length;
-        
-        if (i < lines.length - 1) {
-          currentPosition += 1; // For the newline we'll add
-        }
+    final breakExp = RegExp(r'\n[ \t]*\n');
+    int start = 0;
+    for (final match in breakExp.allMatches(text)) {
+      final end = match.start;
+      final segment = text.substring(start, end);
+      if (segment.trim().isNotEmpty) {
+        paragraphs.add({
+          'text': segment,
+          'preview': _getParagraphPreview(segment),
+          'position': start,
+          'endPosition': end,
+        });
+      }
+      start = match.end;
+    }
+    if (start <= text.length) {
+      final segment = text.substring(start, text.length);
+      if (segment.trim().isNotEmpty) {
+        paragraphs.add({
+          'text': segment,
+          'preview': _getParagraphPreview(segment),
+          'position': start,
+          'endPosition': text.length,
+        });
       }
     }
-    
-    // Add final paragraph if it exists
-    if (currentParagraph.trim().isNotEmpty) {
-      final preview = _getParagraphPreview(currentParagraph);
-      paragraphs.add({
-        'text': currentParagraph.trim(),
-        'preview': preview,
-        'position': currentPosition - currentParagraph.length,
-        'endPosition': currentPosition,
-      });
-    }
-    
     return paragraphs;
   }
   
@@ -1689,51 +1667,56 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   }
   
   void _insertPhotoPlaceholder(int imageIndex, int position) {
-    final text = _contentController.text;
+    final originalText = _contentController.text;
     final photoPlaceholder = '[img_${imageIndex + 1}]';
     
-    // Remove any existing placeholders for this image first
-    final existingPattern = RegExp(r'\[img_' + (imageIndex + 1).toString() + r'\]');
-    final cleanText = text.replaceAll(existingPattern, '');
+    // Build the text with the new placeholder inserted exactly at the requested position
+    final safePosition = position.clamp(0, originalText.length);
+    final beforeText = originalText.substring(0, safePosition);
+    final afterText = originalText.substring(safePosition);
     
-    // Adjust position if text was shortened by removing existing placeholder
-    int adjustedPosition = position;
-    if (cleanText.length < text.length) {
-      // Text was shortened, need to adjust position
-      adjustedPosition = position.clamp(0, cleanText.length);
-    }
-    
-    // Insert the new placeholder
-    final beforeText = cleanText.substring(0, adjustedPosition);
-    final afterText = cleanText.substring(adjustedPosition);
-    
-    // Add some spacing around the placeholder
-    String newText;
-    if (adjustedPosition == 0) {
-      // At the beginning
-      newText = '$photoPlaceholder\n\n$cleanText';
-    } else if (adjustedPosition >= cleanText.length) {
-      // At the end
-      newText = '$cleanText\n\n$photoPlaceholder';
+    String withInserted;
+    if (safePosition == 0) {
+      withInserted = '$photoPlaceholder\n\n$originalText';
+    } else if (safePosition >= originalText.length) {
+      withInserted = '$originalText\n\n$photoPlaceholder';
     } else {
-      // In the middle
-      newText = beforeText + '\n\n$photoPlaceholder\n\n' + afterText;
+      withInserted = beforeText + '\n\n$photoPlaceholder\n\n' + afterText;
     }
     
-    _contentController.text = newText;
+    // Protect the newly inserted placeholder with a unique token to avoid removing it
+    final keepToken = '__NARRA_KEEP_IMG_${imageIndex + 1}__';
+    final insertedIndexHint = safePosition; // Hint where to search from
+    final insertedIndex = withInserted.indexOf(photoPlaceholder, insertedIndexHint);
+    if (insertedIndex >= 0) {
+      withInserted = withInserted.replaceRange(
+        insertedIndex,
+        insertedIndex + photoPlaceholder.length,
+        keepToken,
+      );
+    }
     
-    // Position cursor after the inserted placeholder
-    final newCursorPosition = adjustedPosition == 0 
-        ? photoPlaceholder.length + 2
-        : beforeText.length + 2 + photoPlaceholder.length + 2;
+    // Remove any previous occurrences of this placeholder (and their padding) except the kept one
+    String cleaned = _removeAllPlaceholdersExceptToken(withInserted, imageIndex + 1, keepToken);
     
+    // Restore the kept token back to the placeholder
+    cleaned = cleaned.replaceAll(keepToken, photoPlaceholder);
+    
+    // Collapse 3+ newlines into 2 for neat spacing
+    cleaned = cleaned.replaceAll(RegExp(r'\n[ \t]*\n[ \t]*\n+'), '\n\n');
+    
+    _contentController.text = cleaned;
+    
+    // Position cursor just after the inserted placeholder
+    final finalIndex = cleaned.indexOf(photoPlaceholder, (safePosition - 2).clamp(0, cleaned.length));
+    final cursorAfter = finalIndex >= 0 
+        ? (finalIndex + photoPlaceholder.length + 2).clamp(0, cleaned.length)
+        : cleaned.length;
     _contentController.selection = TextSelection.fromPosition(
-      TextPosition(offset: newCursorPosition.clamp(0, newText.length)),
+      TextPosition(offset: cursorAfter),
     );
     
     setState(() => _hasChanges = true);
-    
-    // Switch to writing tab to see the result
     _tabController.animateTo(0);
     
     ScaffoldMessenger.of(context).showSnackBar(
@@ -1745,6 +1728,31 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         ),
       ),
     );
+  }
+
+  String _removeAllPlaceholdersExceptToken(String text, int imageNumber, String keepToken) {
+    final placeholder = '[img_$imageNumber]';
+    // Temporarily replace the kept token to avoid interference
+    var temp = text.replaceAll(placeholder, placeholder); // no-op to ensure placeholder variable used
+    temp = text;
+    
+    // Remove occurrences in the middle with surrounding blank lines → keep a single blank separation
+    final middlePattern = RegExp('\\n[ \\t]*\\n[ \\t]*' + RegExp.escape(placeholder) + '[ \\t]*\\n[ \\t]*\\n');
+    temp = temp.replaceAllMapped(middlePattern, (m) => '\n\n');
+    
+    // Beginning of text
+    final startPattern = RegExp('^' + RegExp.escape(placeholder) + '[ \\t]*\\n[ \\t]*\\n');
+    temp = temp.replaceAll(startPattern, '');
+    
+    // End of text
+    final endPattern = RegExp('\\n[ \\t]*\\n[ \\t]*' + RegExp.escape(placeholder) + r'[ 	]*$');
+    temp = temp.replaceAll(endPattern, '');
+    
+    // Any remaining single placeholders (without padding)
+    final loosePattern = RegExp('(?<!' + RegExp.escape(keepToken) + ')' + RegExp.escape(placeholder));
+    temp = temp.replaceAll(loosePattern, '');
+    
+    return temp;
   }
 
   void _selectDate(BuildContext context, bool isStartDate) async {

@@ -369,7 +369,7 @@ class NarraAPI {
     String outputFormat = 'json',
     int? targetWords,
   }) async {
-    return OpenAIService.improveStoryText(
+    return OpenAIService.improveStoryTextAdvanced(
       originalText: originalText,
       sttText: sttText,
       currentDraft: currentDraft,

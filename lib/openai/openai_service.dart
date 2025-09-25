@@ -28,17 +28,23 @@ class OpenAIService {
     throw Exception('OpenAI proxy error: ${response.statusCode}');
   }
 
-  // Generar preguntas/pistas para ayudar a escribir historias  
+  // Generar preguntas/pistas para ayudar a escribir historias
+  // Compatibilidad: acepta (currentTitle/currentContent) o (context/theme)
   static Future<List<String>> generateStoryPrompts({
-    required String currentTitle,
-    required String currentContent,
+    String? currentTitle,
+    String? currentContent,
+    String? context,
+    String? theme,
     int count = 3,
   }) async {
-    final prompt = '''
+    final bool hasDraft = (currentTitle != null && currentContent != null);
+    final bool hasContext = (context != null && theme != null);
+    final prompt = hasDraft
+        ? '''
 Analiza esta historia que se está escribiendo y genera $count preguntas específicas que ayuden al autor a expandir y enriquecer su relato.
 
-Título actual: "$currentTitle"
-Contenido actual: "$currentContent"
+Título actual: "${currentTitle ?? ''}"
+Contenido actual: "${currentContent ?? ''}"
 
 Genera preguntas que:
 - Ayuden a recordar más detalles específicos sobre la experiencia
@@ -49,6 +55,24 @@ Genera preguntas que:
 - Sean específicas al contenido ya escrito
 
 Responde SOLO con un objeto JSON:
+{
+  "prompts": ["pregunta1", "pregunta2", "pregunta3"]
+}
+'''
+        : '''
+Eres un asistente especializado en ayudar a personas mayores a recordar y contar sus historias de vida.
+
+Contexto: ${context ?? ''}
+Tema: ${theme ?? ''}
+
+Genera $count preguntas específicas y emotivas que ayuden a la persona a recordar detalles importantes de esta experiencia. Las preguntas deben:
+- Ser específicas y evocar emociones y detalles sensoriales
+- Ayudar a recordar personas, lugares, fechas y sensaciones
+- Ser apropiadas para personas mayores con respeto y calidez
+- Estar en español
+- Ser preguntas abiertas que inviten a la narrativa
+
+Responde SOLO con un objeto JSON con esta estructura:
 {
   "prompts": ["pregunta1", "pregunta2", "pregunta3"]
 }
@@ -82,10 +106,10 @@ Responde SOLO con un objeto JSON:
     }
   }
 
-  // Comprehensive Ghost Writer with advanced parameters
+  // Ghost Writer básico (compatibilidad: título opcional)
   static Future<Map<String, dynamic>> improveStoryText({
     required String originalText,
-    required String title,
+    String title = '',
     String tone = 'nostálgico',
     String fidelity = 'high',
     String language = 'español',
@@ -180,6 +204,135 @@ Write in $language. Be respectful of this personal story.''';
         'word_count': originalText.split(' ').length,
       };
     }
+  }
+
+  // Versión avanzada (parámetros extendidos, para compatibilidad con API antigua)
+  static Future<Map<String, dynamic>> improveStoryTextAdvanced({
+    required String originalText,
+    String? sttText,
+    String? currentDraft,
+    String language = 'es',
+    String tone = 'warm',
+    String person = 'first',
+    String fidelity = 'balanced',
+    String profanity = 'soften',
+    String readingLevel = 'plain',
+    String lengthTarget = 'keep',
+    String formatting = 'clean paragraphs',
+    bool keepMarkers = true,
+    bool anonymizePrivate = false,
+    List<String> forbiddenPhrases = const [],
+    List<String> privatePeople = const [],
+    List<String> tags = const [],
+    String? dateRange,
+    String? authorProfile,
+    String? styleHints,
+    String outputFormat = 'json',
+    int? targetWords,
+  }) async {
+    final prompt = '''
+You are "Narra Ghost Writer," a careful editorial assistant.
+Goal: polish the user's story for clarity, flow, and warmth **without inventing facts**.
+Respect all constraints below, keep privacy, and keep inline markers unchanged.
+
+LANGUAGE: $language
+TONE: $tone
+VOICE PERSON: $person
+FIDELITY LEVEL: $fidelity
+PROFANITY POLICY: $profanity
+READING LEVEL: $readingLevel
+LENGTH TARGET: $lengthTarget${targetWords != null ? ' (~$targetWords words)' : ''}
+FORMATTING: $formatting
+KEEP INLINE MARKERS: $keepMarkers
+FORBIDDEN PHRASES: ${forbiddenPhrases.isNotEmpty ? forbiddenPhrases : 'none'}
+STYLE HINTS: ${styleHints ?? 'none'}
+ANONYMIZE PRIVATE PERSONS: $anonymizePrivate
+
+${authorProfile != null ? 'AUTHOR PROFILE: $authorProfile\n' : ''}
+STORY METADATA:
+  - DATE RANGE: ${dateRange ?? 'not specified'}
+  - TAGS: ${tags.isNotEmpty ? tags : ['general']}
+
+PRIVACY:
+  - PRIVATE PEOPLE: ${privatePeople.isNotEmpty ? privatePeople : 'none'}
+
+SOURCE TEXTS:
+  - ORIGINAL TEXT (immutable reference):
+    """
+    $originalText
+    """
+  - RAW SPEECH-TO-TEXT (may contain errors):
+    """
+    ${sttText ?? 'not provided'}
+    """
+  - CURRENT DRAFT (the version to polish):
+    """
+    ${currentDraft ?? originalText}
+    """
+
+EDITORIAL RULES:
+1) Do not invent events, names, dates, places, or dialogue. If something is unclear, keep it neutral or omit.
+2) Preserve meaning and chronology; improve clarity, coherence, and pacing.
+3) Keep all inline markers exactly as they are (e.g., [PHOTO:3], [[person:123]], {DATE:1976-08}). Do not move or delete them.
+4) Respect LANGUAGE, TONE, VOICE PERSON, PROFANITY POLICY, and READING LEVEL.
+5) If ANONYMIZE PRIVATE PERSONS = true, replace occurrences of names in PRIVATE PEOPLE with roles (e.g., "my aunt").
+6) Avoid clichés; prefer concrete details already present.
+7) Keep the author's voice; adjust per FIDELITY.
+8) Friendly paragraph breaks.
+9) If shorter, compress repetition; if longer, add connective tissue only (no new facts).
+10) Never expose secrets/keys.
+
+OUTPUT FORMAT: $outputFormat
+''';
+
+    try {
+      final data = await _proxyChat(
+        messages: [
+          {
+            'role': 'system',
+            'content': 'You are Narra Ghost Writer, a careful editorial assistant specialized in personal memoirs. Always follow the provided instructions precisely.',
+          },
+          {
+            'role': 'user',
+            'content': prompt,
+          },
+        ],
+        responseFormat: outputFormat == 'json' ? {'type': 'json_object'} : null,
+        temperature: 0.7,
+      );
+
+      final content = data['choices'][0]['message']['content'];
+      if (outputFormat == 'json') {
+        final jsonContent = jsonDecode(content);
+        return {
+          'polished_text': jsonContent['polished_text'] ?? originalText,
+          'changes_summary': List<String>.from(jsonContent['changes_summary'] ?? []),
+          'notes_for_author': List<String>.from(jsonContent['notes_for_author'] ?? []),
+        };
+      } else {
+        return {'polished_text': content};
+      }
+    } catch (e) {
+      print('Error improving story text (advanced): $e');
+      return {
+        'polished_text': originalText,
+        'changes_summary': ['Error occurred during processing'],
+        'notes_for_author': [],
+      };
+    }
+  }
+
+  // Wrapper simple para compatibilidad
+  static Future<String> improveStoryTextSimple({
+    required String originalText,
+    required String writingTone,
+  }) async {
+    final result = await improveStoryText(
+      originalText: originalText,
+      title: '',
+      tone: writingTone,
+    );
+    return result['polished_text'] ?? originalText;
   }
 
   // Evaluar completitud de la historia (completómetro)

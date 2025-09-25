@@ -136,6 +136,7 @@ class StoryService {
 
     final result = await OpenAIService.improveStoryText(
       originalText: originalText,
+      title: '',
       tone: writingTone,
     );
     return result['polished_text'] ?? originalText;

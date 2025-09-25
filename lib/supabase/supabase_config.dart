@@ -1,13 +1,17 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SupabaseConfig {
-  static const String supabaseUrl = 'https://ptlzlaacaiftusslzwhc.supabase.co';
-  static const String supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB0bHpsYWFjYWlmdHVzc2x6d2hjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc5ODc3NzEsImV4cCI6MjA3MzU2Mzc3MX0.Da1VcxbSjd3sWdks9CzXU4OJaRSv0pW016thze0mAs4';
-  
+  // Values are provided via --dart-define or environment at build time.
+  static const String supabaseUrl = String.fromEnvironment('SUPABASE_URL', defaultValue: '');
+  static const String supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY', defaultValue: '');
+
   static late Supabase _instance;
   static SupabaseClient get client => _instance.client;
-  
+
   static Future<void> initialize() async {
+    if (supabaseUrl.isEmpty || supabaseAnonKey.isEmpty) {
+      throw Exception('Supabase env not configured. Provide SUPABASE_URL and SUPABASE_ANON_KEY via --dart-define.');
+    }
     _instance = await Supabase.initialize(
       url: supabaseUrl,
       anonKey: supabaseAnonKey,

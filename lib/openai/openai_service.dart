@@ -3,13 +3,30 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 
 class OpenAIService {
-  static const String _apiKey = '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';
-  static const String _endpoint = 'https://api.openai.com/v1/chat/completions';
-  
-  static const Map<String, String> _headers = {
-    'Content-Type': 'application/json',
-    'Authorization': 'Bearer $_apiKey',
-  };
+  // Route proxied by Cloudflare Pages Functions. No client-side key usage.
+  static const String _proxyEndpoint = '/api/openai';
+
+  static Future<Map<String, dynamic>> _proxyChat({
+    required List<Map<String, dynamic>> messages,
+    String model = 'gpt-5-mini',
+    Map<String, dynamic>? responseFormat,
+    double temperature = 0.7,
+  }) async {
+    final response = await http.post(
+      Uri.parse(_proxyEndpoint),
+      headers: const {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'model': model,
+        'messages': messages,
+        if (responseFormat != null) 'response_format': responseFormat,
+        'temperature': temperature,
+      }),
+    );
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      return jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+    }
+    throw Exception('OpenAI proxy error: ${response.statusCode}');
+  }
 
   // Generar preguntas/pistas para ayudar a escribir historias  
   static Future<List<String>> generateStoryPrompts({
@@ -38,33 +55,22 @@ Responde SOLO con un objeto JSON:
 ''';
 
     try {
-      final response = await http.post(
-        Uri.parse(_endpoint),
-        headers: _headers,
-        body: jsonEncode({
-          'model': 'gpt-5-mini',
-          'messages': [
-            {
-              'role': 'system',
-              'content': 'Eres un experto en storytelling para personas mayores. Siempre responde con un objeto JSON válido.',
-            },
-            {
-              'role': 'user',
-              'content': prompt,
-            },
-          ],
-          'response_format': {'type': 'json_object'},
-          'temperature': 0.7,
-        }),
+      final data = await _proxyChat(
+        messages: [
+          {
+            'role': 'system',
+            'content': 'Eres un experto en storytelling para personas mayores. Siempre responde con un objeto JSON válido.',
+          },
+          {
+            'role': 'user',
+            'content': prompt,
+          },
+        ],
+        responseFormat: {'type': 'json_object'},
+        temperature: 0.7,
       );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(utf8.decode(response.bodyBytes));
-        final content = jsonDecode(data['choices'][0]['message']['content']);
-        return List<String>.from(content['prompts'] ?? []);
-      } else {
-        throw Exception('Error generating prompts: ${response.statusCode}');
-      }
+      final content = jsonDecode(data['choices'][0]['message']['content']);
+      return List<String>.from(content['prompts'] ?? []);
     } catch (e) {
       print('Error generating story prompts: $e');
       // Fallback prompts
@@ -142,39 +148,28 @@ Return ONLY a JSON object with this exact structure:
 Write in $language. Be respectful of this personal story.''';
 
     try {
-      final response = await http.post(
-        Uri.parse(_endpoint),
-        headers: _headers,
-        body: jsonEncode({
-          'model': 'gpt-5-mini',
-          'messages': [
-            {
-              'role': 'system',
-              'content': 'Eres un ghost writer experto en memorias personales. Siempre responde con un objeto JSON válido.',
-            },
-            {
-              'role': 'user',
-              'content': prompt,
-            },
-          ],
-          'response_format': {'type': 'json_object'},
-          'temperature': 0.7,
-        }),
+      final data = await _proxyChat(
+        messages: [
+          {
+            'role': 'system',
+            'content': 'Eres un ghost writer experto en memorias personales. Siempre responde con un objeto JSON válido.',
+          },
+          {
+            'role': 'user',
+            'content': prompt,
+          },
+        ],
+        responseFormat: {'type': 'json_object'},
+        temperature: 0.7,
       );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(utf8.decode(response.bodyBytes));
-        final content = jsonDecode(data['choices'][0]['message']['content']);
-        return {
-          'polished_text': content['polished_text'] ?? originalText,
-          'changes_summary': content['changes_summary'] ?? 'No changes made',
-          'suggestions': List<String>.from(content['suggestions'] ?? []),
-          'tone_analysis': content['tone_analysis'] ?? 'No tone analysis',
-          'word_count': content['word_count'] ?? originalText.split(' ').length,
-        };
-      } else {
-        throw Exception('Error improving text: ${response.statusCode}');
-      }
+      final content = jsonDecode(data['choices'][0]['message']['content']);
+      return {
+        'polished_text': content['polished_text'] ?? originalText,
+        'changes_summary': content['changes_summary'] ?? 'No changes made',
+        'suggestions': List<String>.from(content['suggestions'] ?? []),
+        'tone_analysis': content['tone_analysis'] ?? 'No tone analysis',
+        'word_count': content['word_count'] ?? originalText.split(' ').length,
+      };
     } catch (e) {
       print('Error improving story text: $e');
       return {
@@ -217,38 +212,27 @@ Responde SOLO con un objeto JSON:
 ''';
 
     try {
-      final response = await http.post(
-        Uri.parse(_endpoint),
-        headers: _headers,
-        body: jsonEncode({
-          'model': 'gpt-5-mini',
-          'messages': [
-            {
-              'role': 'system',
-              'content': 'Eres un experto en análisis narrativo y storytelling personal. Siempre responde con un objeto JSON válido.',
-            },
-            {
-              'role': 'user',
-              'content': prompt,
-            },
-          ],
-          'response_format': {'type': 'json_object'},
-          'temperature': 0.3,
-        }),
+      final data = await _proxyChat(
+        messages: [
+          {
+            'role': 'system',
+            'content': 'Eres un experto en análisis narrativo y storytelling personal. Siempre responde con un objeto JSON válido.',
+          },
+          {
+            'role': 'user',
+            'content': prompt,
+          },
+        ],
+        responseFormat: {'type': 'json_object'},
+        temperature: 0.3,
       );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(utf8.decode(response.bodyBytes));
-        final content = jsonDecode(data['choices'][0]['message']['content']);
-        return {
-          'completeness_score': content['completeness_score'] ?? 0,
-          'missing_elements': List<String>.from(content['missing_elements'] ?? []),
-          'suggestions': List<String>.from(content['suggestions'] ?? []),
-          'strengths': List<String>.from(content['strengths'] ?? []),
-        };
-      } else {
-        throw Exception('Error evaluating completeness: ${response.statusCode}');
-      }
+      final content = jsonDecode(data['choices'][0]['message']['content']);
+      return {
+        'completeness_score': content['completeness_score'] ?? 0,
+        'missing_elements': List<String>.from(content['missing_elements'] ?? []),
+        'suggestions': List<String>.from(content['suggestions'] ?? []),
+        'strengths': List<String>.from(content['strengths'] ?? []),
+      };
     } catch (e) {
       print('Error evaluating story completeness: $e');
       return {
@@ -291,33 +275,22 @@ Responde SOLO con un objeto JSON:
 ''';
 
     try {
-      final response = await http.post(
-        Uri.parse(_endpoint),
-        headers: _headers,
-        body: jsonEncode({
-          'model': 'gpt-5-mini',
-          'messages': [
-            {
-              'role': 'system',
-              'content': 'Eres un experto en títulos creativos para memorias personales. Siempre responde con un objeto JSON válido.',
-            },
-            {
-              'role': 'user',
-              'content': prompt,
-            },
-          ],
-          'response_format': {'type': 'json_object'},
-          'temperature': 0.9,
-        }),
+      final data = await _proxyChat(
+        messages: [
+          {
+            'role': 'system',
+            'content': 'Eres un experto en títulos creativos para memorias personales. Siempre responde con un objeto JSON válido.',
+          },
+          {
+            'role': 'user',
+            'content': prompt,
+          },
+        ],
+        responseFormat: {'type': 'json_object'},
+        temperature: 0.9,
       );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(utf8.decode(response.bodyBytes));
-        final content = jsonDecode(data['choices'][0]['message']['content']);
-        return List<String>.from(content['titles'] ?? []);
-      } else {
-        throw Exception('Error generating titles: ${response.statusCode}');
-      }
+      final content = jsonDecode(data['choices'][0]['message']['content']);
+      return List<String>.from(content['titles'] ?? []);
     } catch (e) {
       print('Error generating title suggestions: $e');
       return ['Mi Historia', 'Recuerdos Preciados', 'Una Vida Vivida'];

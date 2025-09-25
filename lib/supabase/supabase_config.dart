@@ -9,6 +9,7 @@ class SupabaseConfig {
   static SupabaseClient get client => _instance.client;
 
   static Future<void> initialize() async {
+
     // In Pages build previews, dart-define may be missing. Fallback to public constants if provided via html or kIsWeb globals.
     if (supabaseUrl.isEmpty || supabaseAnonKey.isEmpty) {
       // Try reading from JS global vars injected at runtime (optional)
@@ -19,6 +20,7 @@ class SupabaseConfig {
         // but return early to avoid throwing on production blank page.
         return;
       }
+
     }
     _instance = await Supabase.initialize(
       url: supabaseUrl,

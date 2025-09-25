@@ -23,7 +23,9 @@ class NarraApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+
     final themeController = ThemeController.instance..loadInitialFromSupabase();
+
     return AnimatedBuilder(
       animation: themeController,
       builder: (context, _) => MaterialApp(

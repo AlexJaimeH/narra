@@ -51,16 +51,16 @@ class FontSizes {
 }
 
 ThemeData get lightTheme => buildLightThemeWithFont('Montserrat');
-ThemeData buildLightThemeWithFont(String fontFamily) => ThemeData(
+ThemeData buildLightThemeWithFont(String fontFamily, {bool highContrast = false}) => ThemeData(
   useMaterial3: true,
   colorScheme: ColorScheme.light(
     primary: NarraColors.brandPrimary,
     onPrimary: Colors.white,
-    primaryContainer: NarraColors.brandPrimary.withValues(alpha: 0.1),
+    primaryContainer: NarraColors.brandPrimary.withValues(alpha: highContrast ? 0.2 : 0.1),
     onPrimaryContainer: NarraColors.textPrimary,
     secondary: NarraColors.brandSecondary,
     onSecondary: Colors.white,
-    secondaryContainer: NarraColors.brandSecondary.withValues(alpha: 0.1),
+    secondaryContainer: NarraColors.brandSecondary.withValues(alpha: highContrast ? 0.2 : 0.1),
     onSecondaryContainer: NarraColors.textPrimary,
     tertiary: NarraColors.brandAccent,
     onTertiary: NarraColors.textPrimary,
@@ -120,11 +120,11 @@ ThemeData buildLightThemeWithFont(String fontFamily) => ThemeData(
     fillColor: Colors.white,
     border: OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
-      borderSide: const BorderSide(color: NarraColors.divider),
+      borderSide: BorderSide(color: NarraColors.divider, width: highContrast ? 2 : 1),
     ),
     enabledBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
-      borderSide: const BorderSide(color: NarraColors.divider),
+      borderSide: BorderSide(color: NarraColors.divider, width: highContrast ? 2 : 1),
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
@@ -157,16 +157,16 @@ ThemeData buildLightThemeWithFont(String fontFamily) => ThemeData(
 );
 
 ThemeData get darkTheme => buildDarkThemeWithFont('Montserrat');
-ThemeData buildDarkThemeWithFont(String fontFamily) => ThemeData(
+ThemeData buildDarkThemeWithFont(String fontFamily, {bool highContrast = false}) => ThemeData(
   useMaterial3: true,
   colorScheme: ColorScheme.dark(
     primary: NarraColors.brandPrimary,
     onPrimary: Colors.white,
-    primaryContainer: NarraColors.brandPrimary.withValues(alpha: 0.2),
+    primaryContainer: NarraColors.brandPrimary.withValues(alpha: highContrast ? 0.3 : 0.2),
     onPrimaryContainer: NarraColors.darkOnSurface,
     secondary: NarraColors.brandSecondary,
     onSecondary: Colors.white,
-    secondaryContainer: NarraColors.brandSecondary.withValues(alpha: 0.2),
+    secondaryContainer: NarraColors.brandSecondary.withValues(alpha: highContrast ? 0.3 : 0.2),
     onSecondaryContainer: NarraColors.darkOnSurface,
     tertiary: NarraColors.brandAccent,
     onTertiary: NarraColors.textPrimary,
@@ -226,11 +226,11 @@ ThemeData buildDarkThemeWithFont(String fontFamily) => ThemeData(
     fillColor: const Color(0xFF2A2A2A),
     border: OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
-      borderSide: const BorderSide(color: Color(0xFF404040)),
+      borderSide: BorderSide(color: const Color(0xFF606060), width: highContrast ? 2 : 1),
     ),
     enabledBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
-      borderSide: const BorderSide(color: Color(0xFF404040)),
+      borderSide: BorderSide(color: const Color(0xFF606060), width: highContrast ? 2 : 1),
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),

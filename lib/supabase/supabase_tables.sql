@@ -117,6 +117,8 @@ CREATE TABLE IF NOT EXISTS user_settings (
   language TEXT DEFAULT 'es',
   font_family TEXT DEFAULT 'Montserrat',
   text_scale NUMERIC DEFAULT 1.0,
+  high_contrast BOOLEAN DEFAULT FALSE,
+  reduce_motion BOOLEAN DEFAULT FALSE,
   ai_extra_instructions TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),

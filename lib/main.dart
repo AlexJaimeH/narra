@@ -36,6 +36,7 @@ class NarraApp extends StatelessWidget {
         '/app': (context) => const AppNavigation(),
         '/landing': (context) => const LandingPage(),
       },
+      ),
     );
   }
 }

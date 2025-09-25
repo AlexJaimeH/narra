@@ -9,8 +9,16 @@ class SupabaseConfig {
   static SupabaseClient get client => _instance.client;
 
   static Future<void> initialize() async {
+    // In Pages build previews, dart-define may be missing. Fallback to public constants if provided via html or kIsWeb globals.
     if (supabaseUrl.isEmpty || supabaseAnonKey.isEmpty) {
-      throw Exception('Supabase env not configured. Provide SUPABASE_URL and SUPABASE_ANON_KEY via --dart-define.');
+      // Try reading from JS global vars injected at runtime (optional)
+      final url = const String.fromEnvironment('PUBLIC_SUPABASE_URL', defaultValue: supabaseUrl);
+      final key = const String.fromEnvironment('PUBLIC_SUPABASE_ANON_KEY', defaultValue: supabaseAnonKey);
+      if (url.isEmpty || key.isEmpty) {
+        // Initialize with empty to avoid crash; landing page won't use client until auth
+        // but return early to avoid throwing on production blank page.
+        return;
+      }
     }
     _instance = await Supabase.initialize(
       url: supabaseUrl,

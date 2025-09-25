@@ -9,7 +9,11 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
   // Inicializar Supabase
-  await SupabaseConfig.initialize();
+  try {
+    await SupabaseConfig.initialize();
+  } catch (_) {
+    // Evitar pantalla en blanco si faltan envs en preview; la app pública puede funcionar sin sesión
+  }
   
   runApp(const NarraApp());
 }
@@ -19,7 +23,7 @@ class NarraApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final themeController = ThemeController.instance;
+    final themeController = ThemeController.instance..loadInitialFromSupabase();
     return AnimatedBuilder(
       animation: themeController,
       builder: (context, _) => MaterialApp(

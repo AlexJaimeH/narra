@@ -277,11 +277,13 @@ class _SettingsPageState extends State<SettingsPage> {
                     trailing: DropdownButton<String>(
                       value: _ghostPerson,
                       underline: const SizedBox(),
-                      onChanged: (value) {
+                      onChanged: (value) async {
                         if (value != null) {
                           setState(() {
                             _ghostPerson = value;
                           });
+                          await UserService.updateAiPreferences(narrativePerson: value);
+                          await _updateUserSettings();
                         }
                       },
                       items: const [
@@ -298,10 +300,10 @@ class _SettingsPageState extends State<SettingsPage> {
                     title: const Text('Sin palabras fuertes'),
                     subtitle: const Text('Evita lenguaje inapropiado en las sugerencias'),
                     value: _noBadWords,
-                    onChanged: (value) {
-                      setState(() {
-                        _noBadWords = value;
-                      });
+                    onChanged: (value) async {
+                      setState(() { _noBadWords = value; });
+                      await UserService.updateAiPreferences(noBadWords: value);
+                      await _updateUserSettings();
                     },
                   ),
                   const Divider(),
@@ -320,11 +322,10 @@ class _SettingsPageState extends State<SettingsPage> {
                       decoration: const InputDecoration(
                         hintText: 'Ej. Prefiere tono cercano, evita tecnicismos, usa párrafos cortos...',
                       ),
-                      onChanged: (val) {
+                      onChanged: (val) async {
                         _userSettings = {...?_userSettings, 'ai_extra_instructions': val};
-                      },
-                      onFieldSubmitted: (val) async {
-                        await UserService.updateUserSettings({'ai_extra_instructions': val});
+                        await UserService.updateAiPreferences(extraInstructions: val);
+                        await _updateUserSettings();
                       },
                     ),
                   ),
@@ -337,11 +338,13 @@ class _SettingsPageState extends State<SettingsPage> {
                     trailing: DropdownButton<String>(
                       value: _ghostFidelity,
                       underline: const SizedBox(),
-                      onChanged: (value) {
+                      onChanged: (value) async {
                         if (value != null) {
                           setState(() {
                             _ghostFidelity = value;
                           });
+                          await UserService.updateAiPreferences(editingStyle: value);
+                          await _updateUserSettings();
                         }
                       },
                       items: const [

@@ -28,7 +28,14 @@ class NarraApp extends StatelessWidget {
 
     return AnimatedBuilder(
       animation: themeController,
-      builder: (context, _) => MaterialApp(
+      builder: (context, child) {
+        // Aplicar escala de texto global
+        final scaled = MediaQuery.of(context).copyWith(
+          textScaler: TextScaler.linear(themeController.textScale),
+        );
+        return MediaQuery(
+          data: scaled,
+          child: MaterialApp(
 
       title: 'Narra',
 
@@ -42,7 +49,9 @@ class NarraApp extends StatelessWidget {
         '/app': (context) => const AppNavigation(),
         '/landing': (context) => const LandingPage(),
       },
-      ),
+          ),
+        );
+      },
     );
   }
 }

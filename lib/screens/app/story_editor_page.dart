@@ -7,6 +7,8 @@ import 'package:narra/services/tag_service.dart';
 import 'package:narra/services/image_upload_service.dart';
 import 'package:narra/repositories/story_repository.dart';
 import 'package:narra/openai/openai_service.dart';
+import 'package:narra/services/voice_recorder.dart';
+import 'package:narra/services/audio_upload_service.dart';
 import 'package:narra/supabase/narra_client.dart';
 
 class StoryEditorPage extends StatefulWidget {
@@ -26,6 +28,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   final ScrollController _scrollController = ScrollController();
   
   bool _isRecording = false;
+  VoiceRecorder? _recorder;
+  String _sttStatus = '';
   bool _hasChanges = false;
   bool _isLoading = false;
   bool _isSaving = false;
@@ -773,26 +777,74 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   }
 
   void _toggleRecording() {
-    setState(() {
-      _isRecording = !_isRecording;
-    });
-    
     if (_isRecording) {
-      // Start recording
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('🎤 Grabando... Toca para detener'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      _stopRecording();
     } else {
-      // Stop recording
+      _startRecording();
+    }
+  }
+
+  Future<void> _startRecording() async {
+    try {
+      _recorder = VoiceRecorder();
+      setState(() { _isRecording = true; _sttStatus = 'Grabando...'; });
+      await _recorder!.start(onChunk: (bytes, mime) async {
+        // Transcribir en background y agregar al cursor
+        try {
+          final text = await OpenAIService.transcribeChunk(audioBytes: bytes, mimeType: mime, language: 'es');
+          if (text.trim().isEmpty) return;
+          _insertAtCursor('$text ');
+        } catch (_) {}
+      });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('✓ Grabación guardada. Procesando...'),
-        ),
+        const SnackBar(content: Text('🎤 Grabando... Toca de nuevo para detener'), backgroundColor: Colors.red),
+      );
+    } catch (e) {
+      setState(() { _isRecording = false; _sttStatus = ''; });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo iniciar el micrófono: $e')),
       );
     }
+  }
+
+  Future<void> _stopRecording() async {
+    try {
+      setState(() { _sttStatus = 'Guardando audio...'; });
+      final bytes = await _recorder?.stop();
+      setState(() { _isRecording = false; _sttStatus = ''; });
+      if (bytes != null && _currentStory != null) {
+        // Subir audio al bucket
+        await AudioUploadService.uploadStoryAudio(
+          storyId: _currentStory!.id,
+          audioBytes: bytes,
+          fileName: 'voice_${DateTime.now().millisecondsSinceEpoch}.webm',
+        );
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('✓ Grabación guardada')),
+      );
+    } catch (e) {
+      setState(() { _isRecording = false; _sttStatus = ''; });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error al detener/guardar audio: $e')),
+      );
+    }
+  }
+
+  void _insertAtCursor(String text) {
+    final selection = _contentController.selection;
+    final full = _contentController.text;
+    if (!selection.isValid) {
+      _contentController.text += text;
+      _contentController.selection = TextSelection.collapsed(offset: _contentController.text.length);
+      return;
+    }
+    final start = selection.start;
+    final end = selection.end;
+    final newText = full.replaceRange(start, end, text);
+    _contentController.text = newText;
+    final caret = start + text.length;
+    _contentController.selection = TextSelection.collapsed(offset: caret);
   }
 
   bool _canPublish() {

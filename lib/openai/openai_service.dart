@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 class OpenAIService {
   // Route proxied by Cloudflare Pages Functions. No client-side key usage.
   static const String _proxyEndpoint = '/api/openai';
+  static const String _whisperEndpoint = '/api/whisper';
 
   static Future<Map<String, dynamic>> _proxyChat({
     required List<Map<String, dynamic>> messages,
@@ -448,5 +449,31 @@ Responde SOLO con un objeto JSON:
       print('Error generating title suggestions: $e');
       return ['Mi Historia', 'Recuerdos Preciados', 'Una Vida Vivida'];
     }
+  }
+
+  // Transcripción en tiempo casi real (web): envía fragmentos de audio a CF Function Whisper
+  static Future<String> transcribeChunk({
+    required Uint8List audioBytes,
+    String mimeType = 'audio/webm',
+    String language = 'es',
+  }) async {
+    final uri = Uri.parse('$_whisperEndpoint?language=$language');
+    final response = await http.post(
+      uri,
+      headers: {
+        'Content-Type': mimeType,
+      },
+      body: audioBytes,
+    );
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      try {
+        final json = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        // OpenAI transcriptions return { text: "..." }
+        return (json['text'] as String?) ?? '';
+      } catch (_) {
+        return utf8.decode(response.bodyBytes);
+      }
+    }
+    throw Exception('Whisper proxy error: ${response.statusCode}');
   }
 }

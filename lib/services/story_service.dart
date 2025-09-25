@@ -1,6 +1,6 @@
 import 'package:uuid/uuid.dart';
 import 'package:narra/supabase/supabase_config.dart';
-import 'package:narra/openai/openai_config.dart';
+import 'package:narra/openai/openai_service.dart';
 
 class StoryService {
   static const _uuid = Uuid();
@@ -136,6 +136,7 @@ class StoryService {
 
     final result = await OpenAIService.improveStoryText(
       originalText: originalText,
+      title: '',
       tone: writingTone,
     );
     return result['polished_text'] ?? originalText;

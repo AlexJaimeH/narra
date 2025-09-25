@@ -2,7 +2,7 @@ import 'package:narra/repositories/auth_repository.dart';
 import 'package:narra/repositories/user_repository.dart';
 import 'package:narra/repositories/story_repository.dart';
 import 'package:narra/supabase/narra_client.dart';
-import 'package:narra/openai/openai_config.dart';
+import 'package:narra/openai/openai_service.dart';
 
 /// Main API client for the Narra application
 /// Provides a unified interface for all backend operations
@@ -369,7 +369,7 @@ class NarraAPI {
     String outputFormat = 'json',
     int? targetWords,
   }) async {
-    return OpenAIService.improveStoryText(
+    return OpenAIService.improveStoryTextAdvanced(
       originalText: originalText,
       sttText: sttText,
       currentDraft: currentDraft,

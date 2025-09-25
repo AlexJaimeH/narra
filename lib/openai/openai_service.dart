@@ -3,25 +3,48 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 
 class OpenAIService {
-  static const String _apiKey = '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';
-  static const String _endpoint = 'https://api.openai.com/v1/chat/completions';
-  
-  static const Map<String, String> _headers = {
-    'Content-Type': 'application/json',
-    'Authorization': 'Bearer $_apiKey',
-  };
+  // Route proxied by Cloudflare Pages Functions. No client-side key usage.
+  static const String _proxyEndpoint = '/api/openai';
 
-  // Generar preguntas/pistas para ayudar a escribir historias  
+  static Future<Map<String, dynamic>> _proxyChat({
+    required List<Map<String, dynamic>> messages,
+    String model = 'gpt-5-mini',
+    Map<String, dynamic>? responseFormat,
+    double temperature = 0.7,
+  }) async {
+    final response = await http.post(
+      Uri.parse(_proxyEndpoint),
+      headers: const {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'model': model,
+        'messages': messages,
+        if (responseFormat != null) 'response_format': responseFormat,
+        'temperature': temperature,
+      }),
+    );
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      return jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+    }
+    throw Exception('OpenAI proxy error: ${response.statusCode}');
+  }
+
+  // Generar preguntas/pistas para ayudar a escribir historias
+  // Compatibilidad: acepta (currentTitle/currentContent) o (context/theme)
   static Future<List<String>> generateStoryPrompts({
-    required String currentTitle,
-    required String currentContent,
+    String? currentTitle,
+    String? currentContent,
+    String? context,
+    String? theme,
     int count = 3,
   }) async {
-    final prompt = '''
+    final bool hasDraft = (currentTitle != null && currentContent != null);
+    final bool hasContext = (context != null && theme != null);
+    final prompt = hasDraft
+        ? '''
 Analiza esta historia que se está escribiendo y genera $count preguntas específicas que ayuden al autor a expandir y enriquecer su relato.
 
-Título actual: "$currentTitle"
-Contenido actual: "$currentContent"
+Título actual: "${currentTitle ?? ''}"
+Contenido actual: "${currentContent ?? ''}"
 
 Genera preguntas que:
 - Ayuden a recordar más detalles específicos sobre la experiencia
@@ -35,36 +58,43 @@ Responde SOLO con un objeto JSON:
 {
   "prompts": ["pregunta1", "pregunta2", "pregunta3"]
 }
+'''
+        : '''
+Eres un asistente especializado en ayudar a personas mayores a recordar y contar sus historias de vida.
+
+Contexto: ${context ?? ''}
+Tema: ${theme ?? ''}
+
+Genera $count preguntas específicas y emotivas que ayuden a la persona a recordar detalles importantes de esta experiencia. Las preguntas deben:
+- Ser específicas y evocar emociones y detalles sensoriales
+- Ayudar a recordar personas, lugares, fechas y sensaciones
+- Ser apropiadas para personas mayores con respeto y calidez
+- Estar en español
+- Ser preguntas abiertas que inviten a la narrativa
+
+Responde SOLO con un objeto JSON con esta estructura:
+{
+  "prompts": ["pregunta1", "pregunta2", "pregunta3"]
+}
 ''';
 
     try {
-      final response = await http.post(
-        Uri.parse(_endpoint),
-        headers: _headers,
-        body: jsonEncode({
-          'model': 'gpt-5-mini',
-          'messages': [
-            {
-              'role': 'system',
-              'content': 'Eres un experto en storytelling para personas mayores. Siempre responde con un objeto JSON válido.',
-            },
-            {
-              'role': 'user',
-              'content': prompt,
-            },
-          ],
-          'response_format': {'type': 'json_object'},
-          'temperature': 0.7,
-        }),
+      final data = await _proxyChat(
+        messages: [
+          {
+            'role': 'system',
+            'content': 'Eres un experto en storytelling para personas mayores. Siempre responde con un objeto JSON válido.',
+          },
+          {
+            'role': 'user',
+            'content': prompt,
+          },
+        ],
+        responseFormat: {'type': 'json_object'},
+        temperature: 0.7,
       );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(utf8.decode(response.bodyBytes));
-        final content = jsonDecode(data['choices'][0]['message']['content']);
-        return List<String>.from(content['prompts'] ?? []);
-      } else {
-        throw Exception('Error generating prompts: ${response.statusCode}');
-      }
+      final content = jsonDecode(data['choices'][0]['message']['content']);
+      return List<String>.from(content['prompts'] ?? []);
     } catch (e) {
       print('Error generating story prompts: $e');
       // Fallback prompts
@@ -76,10 +106,10 @@ Responde SOLO con un objeto JSON:
     }
   }
 
-  // Comprehensive Ghost Writer with advanced parameters
+  // Ghost Writer básico (compatibilidad: título opcional)
   static Future<Map<String, dynamic>> improveStoryText({
     required String originalText,
-    required String title,
+    String title = '',
     String tone = 'nostálgico',
     String fidelity = 'high',
     String language = 'español',
@@ -142,39 +172,28 @@ Return ONLY a JSON object with this exact structure:
 Write in $language. Be respectful of this personal story.''';
 
     try {
-      final response = await http.post(
-        Uri.parse(_endpoint),
-        headers: _headers,
-        body: jsonEncode({
-          'model': 'gpt-5-mini',
-          'messages': [
-            {
-              'role': 'system',
-              'content': 'Eres un ghost writer experto en memorias personales. Siempre responde con un objeto JSON válido.',
-            },
-            {
-              'role': 'user',
-              'content': prompt,
-            },
-          ],
-          'response_format': {'type': 'json_object'},
-          'temperature': 0.7,
-        }),
+      final data = await _proxyChat(
+        messages: [
+          {
+            'role': 'system',
+            'content': 'Eres un ghost writer experto en memorias personales. Siempre responde con un objeto JSON válido.',
+          },
+          {
+            'role': 'user',
+            'content': prompt,
+          },
+        ],
+        responseFormat: {'type': 'json_object'},
+        temperature: 0.7,
       );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(utf8.decode(response.bodyBytes));
-        final content = jsonDecode(data['choices'][0]['message']['content']);
-        return {
-          'polished_text': content['polished_text'] ?? originalText,
-          'changes_summary': content['changes_summary'] ?? 'No changes made',
-          'suggestions': List<String>.from(content['suggestions'] ?? []),
-          'tone_analysis': content['tone_analysis'] ?? 'No tone analysis',
-          'word_count': content['word_count'] ?? originalText.split(' ').length,
-        };
-      } else {
-        throw Exception('Error improving text: ${response.statusCode}');
-      }
+      final content = jsonDecode(data['choices'][0]['message']['content']);
+      return {
+        'polished_text': content['polished_text'] ?? originalText,
+        'changes_summary': content['changes_summary'] ?? 'No changes made',
+        'suggestions': List<String>.from(content['suggestions'] ?? []),
+        'tone_analysis': content['tone_analysis'] ?? 'No tone analysis',
+        'word_count': content['word_count'] ?? originalText.split(' ').length,
+      };
     } catch (e) {
       print('Error improving story text: $e');
       return {
@@ -185,6 +204,135 @@ Write in $language. Be respectful of this personal story.''';
         'word_count': originalText.split(' ').length,
       };
     }
+  }
+
+  // Versión avanzada (parámetros extendidos, para compatibilidad con API antigua)
+  static Future<Map<String, dynamic>> improveStoryTextAdvanced({
+    required String originalText,
+    String? sttText,
+    String? currentDraft,
+    String language = 'es',
+    String tone = 'warm',
+    String person = 'first',
+    String fidelity = 'balanced',
+    String profanity = 'soften',
+    String readingLevel = 'plain',
+    String lengthTarget = 'keep',
+    String formatting = 'clean paragraphs',
+    bool keepMarkers = true,
+    bool anonymizePrivate = false,
+    List<String> forbiddenPhrases = const [],
+    List<String> privatePeople = const [],
+    List<String> tags = const [],
+    String? dateRange,
+    String? authorProfile,
+    String? styleHints,
+    String outputFormat = 'json',
+    int? targetWords,
+  }) async {
+    final prompt = '''
+You are "Narra Ghost Writer," a careful editorial assistant.
+Goal: polish the user's story for clarity, flow, and warmth **without inventing facts**.
+Respect all constraints below, keep privacy, and keep inline markers unchanged.
+
+LANGUAGE: $language
+TONE: $tone
+VOICE PERSON: $person
+FIDELITY LEVEL: $fidelity
+PROFANITY POLICY: $profanity
+READING LEVEL: $readingLevel
+LENGTH TARGET: $lengthTarget${targetWords != null ? ' (~$targetWords words)' : ''}
+FORMATTING: $formatting
+KEEP INLINE MARKERS: $keepMarkers
+FORBIDDEN PHRASES: ${forbiddenPhrases.isNotEmpty ? forbiddenPhrases : 'none'}
+STYLE HINTS: ${styleHints ?? 'none'}
+ANONYMIZE PRIVATE PERSONS: $anonymizePrivate
+
+${authorProfile != null ? 'AUTHOR PROFILE: $authorProfile\n' : ''}
+STORY METADATA:
+  - DATE RANGE: ${dateRange ?? 'not specified'}
+  - TAGS: ${tags.isNotEmpty ? tags : ['general']}
+
+PRIVACY:
+  - PRIVATE PEOPLE: ${privatePeople.isNotEmpty ? privatePeople : 'none'}
+
+SOURCE TEXTS:
+  - ORIGINAL TEXT (immutable reference):
+    """
+    $originalText
+    """
+  - RAW SPEECH-TO-TEXT (may contain errors):
+    """
+    ${sttText ?? 'not provided'}
+    """
+  - CURRENT DRAFT (the version to polish):
+    """
+    ${currentDraft ?? originalText}
+    """
+
+EDITORIAL RULES:
+1) Do not invent events, names, dates, places, or dialogue. If something is unclear, keep it neutral or omit.
+2) Preserve meaning and chronology; improve clarity, coherence, and pacing.
+3) Keep all inline markers exactly as they are (e.g., [PHOTO:3], [[person:123]], {DATE:1976-08}). Do not move or delete them.
+4) Respect LANGUAGE, TONE, VOICE PERSON, PROFANITY POLICY, and READING LEVEL.
+5) If ANONYMIZE PRIVATE PERSONS = true, replace occurrences of names in PRIVATE PEOPLE with roles (e.g., "my aunt").
+6) Avoid clichés; prefer concrete details already present.
+7) Keep the author's voice; adjust per FIDELITY.
+8) Friendly paragraph breaks.
+9) If shorter, compress repetition; if longer, add connective tissue only (no new facts).
+10) Never expose secrets/keys.
+
+OUTPUT FORMAT: $outputFormat
+''';
+
+    try {
+      final data = await _proxyChat(
+        messages: [
+          {
+            'role': 'system',
+            'content': 'You are Narra Ghost Writer, a careful editorial assistant specialized in personal memoirs. Always follow the provided instructions precisely.',
+          },
+          {
+            'role': 'user',
+            'content': prompt,
+          },
+        ],
+        responseFormat: outputFormat == 'json' ? {'type': 'json_object'} : null,
+        temperature: 0.7,
+      );
+
+      final content = data['choices'][0]['message']['content'];
+      if (outputFormat == 'json') {
+        final jsonContent = jsonDecode(content);
+        return {
+          'polished_text': jsonContent['polished_text'] ?? originalText,
+          'changes_summary': List<String>.from(jsonContent['changes_summary'] ?? []),
+          'notes_for_author': List<String>.from(jsonContent['notes_for_author'] ?? []),
+        };
+      } else {
+        return {'polished_text': content};
+      }
+    } catch (e) {
+      print('Error improving story text (advanced): $e');
+      return {
+        'polished_text': originalText,
+        'changes_summary': ['Error occurred during processing'],
+        'notes_for_author': [],
+      };
+    }
+  }
+
+  // Wrapper simple para compatibilidad
+  static Future<String> improveStoryTextSimple({
+    required String originalText,
+    required String writingTone,
+  }) async {
+    final result = await improveStoryText(
+      originalText: originalText,
+      title: '',
+      tone: writingTone,
+    );
+    return result['polished_text'] ?? originalText;
   }
 
   // Evaluar completitud de la historia (completómetro)
@@ -217,38 +365,27 @@ Responde SOLO con un objeto JSON:
 ''';
 
     try {
-      final response = await http.post(
-        Uri.parse(_endpoint),
-        headers: _headers,
-        body: jsonEncode({
-          'model': 'gpt-5-mini',
-          'messages': [
-            {
-              'role': 'system',
-              'content': 'Eres un experto en análisis narrativo y storytelling personal. Siempre responde con un objeto JSON válido.',
-            },
-            {
-              'role': 'user',
-              'content': prompt,
-            },
-          ],
-          'response_format': {'type': 'json_object'},
-          'temperature': 0.3,
-        }),
+      final data = await _proxyChat(
+        messages: [
+          {
+            'role': 'system',
+            'content': 'Eres un experto en análisis narrativo y storytelling personal. Siempre responde con un objeto JSON válido.',
+          },
+          {
+            'role': 'user',
+            'content': prompt,
+          },
+        ],
+        responseFormat: {'type': 'json_object'},
+        temperature: 0.3,
       );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(utf8.decode(response.bodyBytes));
-        final content = jsonDecode(data['choices'][0]['message']['content']);
-        return {
-          'completeness_score': content['completeness_score'] ?? 0,
-          'missing_elements': List<String>.from(content['missing_elements'] ?? []),
-          'suggestions': List<String>.from(content['suggestions'] ?? []),
-          'strengths': List<String>.from(content['strengths'] ?? []),
-        };
-      } else {
-        throw Exception('Error evaluating completeness: ${response.statusCode}');
-      }
+      final content = jsonDecode(data['choices'][0]['message']['content']);
+      return {
+        'completeness_score': content['completeness_score'] ?? 0,
+        'missing_elements': List<String>.from(content['missing_elements'] ?? []),
+        'suggestions': List<String>.from(content['suggestions'] ?? []),
+        'strengths': List<String>.from(content['strengths'] ?? []),
+      };
     } catch (e) {
       print('Error evaluating story completeness: $e');
       return {
@@ -291,33 +428,22 @@ Responde SOLO con un objeto JSON:
 ''';
 
     try {
-      final response = await http.post(
-        Uri.parse(_endpoint),
-        headers: _headers,
-        body: jsonEncode({
-          'model': 'gpt-5-mini',
-          'messages': [
-            {
-              'role': 'system',
-              'content': 'Eres un experto en títulos creativos para memorias personales. Siempre responde con un objeto JSON válido.',
-            },
-            {
-              'role': 'user',
-              'content': prompt,
-            },
-          ],
-          'response_format': {'type': 'json_object'},
-          'temperature': 0.9,
-        }),
+      final data = await _proxyChat(
+        messages: [
+          {
+            'role': 'system',
+            'content': 'Eres un experto en títulos creativos para memorias personales. Siempre responde con un objeto JSON válido.',
+          },
+          {
+            'role': 'user',
+            'content': prompt,
+          },
+        ],
+        responseFormat: {'type': 'json_object'},
+        temperature: 0.9,
       );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(utf8.decode(response.bodyBytes));
-        final content = jsonDecode(data['choices'][0]['message']['content']);
-        return List<String>.from(content['titles'] ?? []);
-      } else {
-        throw Exception('Error generating titles: ${response.statusCode}');
-      }
+      final content = jsonDecode(data['choices'][0]['message']['content']);
+      return List<String>.from(content['titles'] ?? []);
     } catch (e) {
       print('Error generating title suggestions: $e');
       return ['Mi Historia', 'Recuerdos Preciados', 'Una Vida Vivida'];

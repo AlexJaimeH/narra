@@ -234,7 +234,7 @@ class NarraSupabaseClient {
     }
 
     if (searchQuery != null && searchQuery.isNotEmpty) {
-      query = query.or('title.ilike.%\$searchQuery%,content.ilike.%\$searchQuery%');
+      query = query.or('title.ilike.%$searchQuery%,content.ilike.%$searchQuery%');
     }
 
     if (limit != null) {
@@ -336,7 +336,7 @@ class NarraSupabaseClient {
             'tag_id': tag['id'],
           });
         } catch (e) {
-          print('Error adding tag \$tagName: \$e');
+          print('Error adding tag $tagName: $e');
         }
       }
     }

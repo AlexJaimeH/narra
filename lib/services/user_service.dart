@@ -238,6 +238,12 @@ class UserService {
       'language': 'es',
       'font_family': 'Montserrat',
       'text_scale': 1.0,
+      'high_contrast': false,
+      'reduce_motion': false,
+      // Defaults para asistente IA
+      'ai_no_bad_words': false,
+      'ai_person': 'first',
+      'ai_fidelity': 'balanced',
     });
   }
 

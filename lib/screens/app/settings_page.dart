@@ -49,6 +49,8 @@ class _SettingsPageState extends State<SettingsPage> {
             _selectedLanguage = settings['language'] ?? 'es';
             _textScale = (settings['text_scale'] as num?)?.toDouble() ?? 1.0;
             _fontFamily = (settings['font_family'] as String?) ?? 'Montserrat';
+            _highContrast = settings['high_contrast'] ?? false;
+            _reducedMotion = settings['reduce_motion'] ?? false;
             _ghostTone = profile?['writing_tone'] ?? 'warm';
           }
           
@@ -71,6 +73,8 @@ class _SettingsPageState extends State<SettingsPage> {
         'language': _selectedLanguage,
         'text_scale': _textScale,
         'font_family': _fontFamily,
+        'high_contrast': _highContrast,
+        'reduce_motion': _reducedMotion,
       });
       
       await UserService.updateUserProfile({
@@ -190,10 +194,10 @@ class _SettingsPageState extends State<SettingsPage> {
                             min: 0.8,
                             max: 2.0,
                             divisions: 12,
-                            onChanged: (value) {
-                              setState(() {
-                                _textScale = value;
-                              });
+                            onChanged: (value) async {
+                              setState(() { _textScale = value; });
+                              await ThemeController.instance.updateTextScale(value);
+                              await _updateUserSettings();
                             },
                           ),
                         ),
@@ -203,30 +207,30 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                   const Divider(),
                   
-                  // High Contrast
+                  // High Contrast (global)
                   SwitchListTile(
                     secondary: const Icon(Icons.contrast),
                     title: const Text('Alto contraste'),
                     subtitle: const Text('Mejora la visibilidad del texto'),
                     value: _highContrast,
-                    onChanged: (value) {
-                      setState(() {
-                        _highContrast = value;
-                      });
+                    onChanged: (value) async {
+                      setState(() { _highContrast = value; });
+                      await ThemeController.instance.updateHighContrast(value);
+                      await _updateUserSettings();
                     },
                   ),
                   const Divider(),
                   
-                  // Reduced Motion
+                  // Reduced Motion (global)
                   SwitchListTile(
                     secondary: const Icon(Icons.motion_photos_off),
                     title: const Text('Reducir movimiento'),
                     subtitle: const Text('Minimiza animaciones y transiciones'),
                     value: _reducedMotion,
-                    onChanged: (value) {
-                      setState(() {
-                        _reducedMotion = value;
-                      });
+                    onChanged: (value) async {
+                      setState(() { _reducedMotion = value; });
+                      await ThemeController.instance.updateReduceMotion(value);
+                      await _updateUserSettings();
                     },
                   ),
                 ],

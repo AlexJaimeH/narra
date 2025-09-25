@@ -211,6 +211,8 @@ class UserService {
       'notification_reminders': true,
       'sharing_enabled': false,
       'language': 'es',
+      'font_family': 'Montserrat',
+      'text_scale': 1.0,
     });
   }
 

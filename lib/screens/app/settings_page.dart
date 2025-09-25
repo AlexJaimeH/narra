@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:narra/supabase/supabase_config.dart';
 import 'package:narra/services/user_service.dart';
+import 'package:narra/theme_controller.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -13,10 +14,11 @@ class _SettingsPageState extends State<SettingsPage> {
   Map<String, dynamic>? _userProfile;
   Map<String, dynamic>? _userSettings;
   bool _isLoading = true;
-  bool _isPremium = false;
+  bool _isPremium = true; // Todos pagados por requerimiento
 
   String _selectedLanguage = 'es';
   double _textScale = 1.0;
+  String _fontFamily = 'Montserrat';
   bool _highContrast = false;
   bool _reducedMotion = false;
   String _ghostTone = 'warm';
@@ -34,7 +36,7 @@ class _SettingsPageState extends State<SettingsPage> {
     try {
       final profile = await UserService.getCurrentUserProfile();
       final settings = await UserService.getUserSettings();
-      final isPremium = await UserService.isPremiumUser();
+      final isPremium = true; // Todos con acceso
 
       if (mounted) {
         setState(() {
@@ -45,6 +47,8 @@ class _SettingsPageState extends State<SettingsPage> {
           // Cargar configuraciones del usuario
           if (settings != null) {
             _selectedLanguage = settings['language'] ?? 'es';
+            _textScale = (settings['text_scale'] as num?)?.toDouble() ?? 1.0;
+            _fontFamily = (settings['font_family'] as String?) ?? 'Montserrat';
             _ghostTone = profile?['writing_tone'] ?? 'warm';
           }
           
@@ -65,6 +69,8 @@ class _SettingsPageState extends State<SettingsPage> {
     try {
       await UserService.updateUserSettings({
         'language': _selectedLanguage,
+        'text_scale': _textScale,
+        'font_family': _fontFamily,
       });
       
       await UserService.updateUserProfile({
@@ -79,49 +85,7 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  Future<void> _upgradeToPremiun() async {
-    // Simular proceso de pago
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const AlertDialog(
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text('Procesando pago...'),
-          ],
-        ),
-      ),
-    );
-
-    // Simular delay de pago
-    await Future.delayed(const Duration(seconds: 2));
-
-    try {
-      await UserService.upgradeToPremium();
-      
-      if (mounted) {
-        Navigator.pop(context); // Cerrar diálogo de loading
-        setState(() => _isPremium = true);
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('¡Bienvenido a Premium! 🎉'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error en el pago: $e')),
-        );
-      }
-    }
-  }
+  Future<void> _upgradeToPremiun() async {}
 
   @override
   Widget build(BuildContext context) {
@@ -171,10 +135,7 @@ class _SettingsPageState extends State<SettingsPage> {
                               ),
                             ),
                           )
-                        : TextButton(
-                            onPressed: _upgradeToPremiun,
-                            child: const Text('Actualizar a Premium'),
-                          ),
+                        : const SizedBox.shrink(),
                   ),
                 ],
               ),
@@ -275,7 +236,7 @@ class _SettingsPageState extends State<SettingsPage> {
             const SizedBox(height: 24),
             
             // AI Assistant Section
-            _buildSectionHeader('Asistente de IA'),
+            _buildSectionHeader('Asistente de IA (Ghostwriter)'),
             Card(
               child: Column(
                 children: [
@@ -341,6 +302,29 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                   const Divider(),
                   
+                  // Additional AI instructions
+                  ListTile(
+                    leading: const Icon(Icons.notes),
+                    title: const Text('Instrucciones adicionales'),
+                    subtitle: const Text('Se aplicarán a mejoras y sugerencias'),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: TextFormField(
+                      initialValue: _userSettings?['ai_extra_instructions'] ?? '',
+                      maxLines: 3,
+                      decoration: const InputDecoration(
+                        hintText: 'Ej. Prefiere tono cercano, evita tecnicismos, usa párrafos cortos...',
+                      ),
+                      onChanged: (val) {
+                        _userSettings = {...?_userSettings, 'ai_extra_instructions': val};
+                      },
+                      onFieldSubmitted: (val) async {
+                        await UserService.updateUserSettings({'ai_extra_instructions': val});
+                      },
+                    ),
+                  ),
+                  
                   // Ghost Fidelity
                   ListTile(
                     leading: const Icon(Icons.tune),
@@ -389,14 +373,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     trailing: const Icon(Icons.arrow_forward_ios),
                     onTap: () => _showOriginalsDialog(),
                   ),
-                  const Divider(),
-                  ListTile(
-                    leading: const Icon(Icons.backup),
-                    title: const Text('Copia de seguridad'),
-                    subtitle: const Text('Configurar respaldo automático'),
-                    trailing: const Icon(Icons.arrow_forward_ios),
-                    onTap: () {},
-                  ),
+                  // Backup removed
                 ],
               ),
             ),

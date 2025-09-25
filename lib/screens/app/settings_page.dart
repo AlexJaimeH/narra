@@ -52,6 +52,10 @@ class _SettingsPageState extends State<SettingsPage> {
             _highContrast = settings['high_contrast'] ?? false;
             _reducedMotion = settings['reduce_motion'] ?? false;
             _ghostTone = profile?['writing_tone'] ?? 'warm';
+            // Preferencias AI adicionales
+            _ghostPerson = (settings['ai_person'] as String?) ?? 'first';
+            _noBadWords = (settings['ai_no_bad_words'] as bool?) ?? false;
+            _ghostFidelity = (settings['ai_fidelity'] as String?) ?? 'balanced';
           }
           
           _isLoading = false;

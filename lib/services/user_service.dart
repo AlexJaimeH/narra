@@ -57,6 +57,31 @@ class UserService {
     return await SupabaseService.update('users', userId, updates);
   }
 
+  // Guardar preferencias del asistente IA
+  static Future<void> updateAiPreferences({
+    String? writingTone,
+    String? narrativePerson,
+    bool? noBadWords,
+    String? editingStyle,
+    String? extraInstructions,
+  }) async {
+    final userId = SupabaseAuth.currentUser?.id;
+    if (userId == null) return;
+
+    if (writingTone != null) {
+      await SupabaseService.update('users', userId, { 'writing_tone': writingTone });
+    }
+
+    final settings = <String, dynamic>{};
+    if (extraInstructions != null) settings['ai_extra_instructions'] = extraInstructions;
+    if (noBadWords != null) settings['ai_no_bad_words'] = noBadWords;
+    if (narrativePerson != null) settings['ai_person'] = narrativePerson; // opcional si creas la columna
+    if (editingStyle != null) settings['ai_fidelity'] = editingStyle; // opcional si creas la columna
+    if (settings.isNotEmpty) {
+      await updateUserSettings(settings);
+    }
+  }
+
   // Obtener configuraciones del usuario
   static Future<Map<String, dynamic>?> getUserSettings() async {
     final userId = SupabaseAuth.currentUser?.id;

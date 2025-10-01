@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 typedef OnText = void Function(String text);
 
 class VoiceRecorder {

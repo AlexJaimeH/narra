@@ -40,13 +40,29 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       formData.append('response_format', 'json');
     }
 
-    const openaiRes = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${openaiApiKey}`,
-      },
-      body: formData,
-    });
+    const attempt = async (m: string) => {
+      const fd = new FormData();
+      for (const [k, v] of (formData as any).entries()) {
+        fd.append(k, v);
+      }
+      fd.set('model', m);
+      if (!fd.get('response_format')) fd.set('response_format', 'json');
+      const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${openaiApiKey}` },
+        body: fd,
+      });
+      return res;
+    };
+
+    let openaiRes = await attempt(model);
+    if (openaiRes.status >= 400) {
+      // Fallbacks for compatibility
+      openaiRes = await attempt('gpt-4o-mini-transcribe');
+      if (openaiRes.status >= 400) {
+        openaiRes = await attempt('whisper-1');
+      }
+    }
 
     const body = await openaiRes.text();
     return new Response(body, {

@@ -11,7 +11,7 @@ class VoiceRecorder {
   html.MediaRecorder? _recorder;
   final List<Uint8List> _chunks = [];
   String _mimeType = 'application/octet-stream';
-  html.Timer? _flushTimer;
+  Timer? _flushTimer;
 
 
   Future<void> start({OnText? onText}) async {
@@ -91,7 +91,7 @@ class VoiceRecorder {
     // Some browsers ignore timeslice; start without slice and manually flush
     _recorder!.start();
     _flushTimer?.cancel();
-    _flushTimer = html.Timer.periodic(const Duration(milliseconds: 750), (_) {
+    _flushTimer = Timer.periodic(const Duration(milliseconds: 750), (_) {
       try {
         _recorder?.requestData();
       } catch (_) {}

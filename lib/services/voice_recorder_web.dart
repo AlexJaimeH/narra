@@ -10,37 +10,61 @@ typedef OnText = void Function(String text);
 class VoiceRecorder {
   html.MediaRecorder? _recorder;
   final List<Uint8List> _chunks = [];
-  String _mimeType = 'audio/webm';
+  String _mimeType = 'application/octet-stream';
+  Timer? _flushTimer;
+
 
 
   Future<void> start({OnText? onText}) async {
+    final isSecure = html.window.isSecureContext ?? false;
+    if (!isSecure) {
+      throw Exception('El micrófono requiere HTTPS.');
+    }
 
-    // Request mic
-    final stream = await html.window.navigator.mediaDevices!.getUserMedia({'audio': true});
+    // Request mic with safe defaults
+    final mediaDevices = html.window.navigator.mediaDevices;
+    if (mediaDevices == null) {
+      throw Exception('Navegador sin soporte de mediaDevices');
+    }
+    final stream = await mediaDevices.getUserMedia({
+      'audio': {
+        'echoCancellation': true,
+        'noiseSuppression': true,
+      }
+    });
 
-    // Choose supported mime type
-    const candidates = [
+    // Choose supported mime type (browsers vary; Safari often prefers mp4/aac)
+    final candidates = <String>[
       'audio/webm;codecs=opus',
       'audio/webm',
       'audio/ogg;codecs=opus',
       'audio/ogg',
+      'audio/mp4;codecs=mp4a.40.2',
+      'audio/mp4',
+      'audio/aac',
     ];
+
+    String? supported;
     for (final c in candidates) {
       if (html.MediaRecorder.isTypeSupported(c)) {
-        _mimeType = c.split(';').first; // simplify for backend
+        supported = c;
         break;
       }
     }
 
-    _recorder = html.MediaRecorder(stream, {'mimeType': candidates.firstWhere(
-      (c) => html.MediaRecorder.isTypeSupported(c),
-      orElse: () => 'audio/webm;codecs=opus',
-    )});
+    if (supported != null) {
+      _recorder = html.MediaRecorder(stream, {'mimeType': supported});
+      _mimeType = supported.split(';').first;
+    } else {
+      // Let browser pick default container
+      _recorder = html.MediaRecorder(stream);
+      _mimeType = 'application/octet-stream';
+    }
 
     _recorder!.addEventListener('dataavailable', (event) async {
       final e = event as html.BlobEvent;
       final blob = e.data;
-      if (blob != null && (blob.size ?? 0) > 0) {
+      if (blob != null && blob.size > 0) {
         final reader = html.FileReader();
         final completer = Completer<Uint8List>();
         reader.onLoadEnd.listen((_) {
@@ -65,13 +89,21 @@ class VoiceRecorder {
       }
     });
 
-    // Emit frequent chunks for near-real-time transcription
-    _recorder!.start(750); // timeslice in ms
+    // Some browsers ignore timeslice; start without slice and manually flush
+    _recorder!.start();
+    _flushTimer?.cancel();
+    _flushTimer = Timer.periodic(const Duration(milliseconds: 750), (_) {
+      try {
+        _recorder?.requestData();
+      } catch (_) {}
+    });
   }
 
   Future<Uint8List?> stop() async {
     final recorder = _recorder;
     if (recorder == null) return null;
+    _flushTimer?.cancel();
+    _flushTimer = null;
     final completer = Completer<void>();
     recorder.addEventListener('stop', (_) => completer.complete());
     recorder.stop();

@@ -1,3 +1,6 @@
+import 'dart:math' as math;
+import 'dart:typed_data' as typed;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:file_picker/file_picker.dart';
@@ -26,14 +29,14 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _contentController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  
+
   bool _isRecording = false;
   VoiceRecorder? _recorder;
-  String _sttStatus = '';
 
   String _liveTranscript = '';
-  bool _showDictationPanel = false;
+  String? _lastTranscriptChunk;
   bool _isPaused = false;
+  final List<typed.Uint8List> _recordedSegments = [];
 
   bool _hasChanges = false;
   bool _isLoading = false;
@@ -45,12 +48,12 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   String _datesPrecision = 'day'; // day, month, year
   String _status = 'draft'; // draft, published
   Story? _currentStory;
-  
+
   List<String> _availableTags = [];
   List<String> _aiSuggestions = [];
   bool _showAdvancedGhostWriter = false;
   bool _showSuggestions = false;
-  
+
   // Ghost Writer configuration
   String _ghostWriterTone = 'nostálgico';
   String _ghostWriterFidelity = 'high';
@@ -65,18 +68,18 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
-    
+
     _loadAvailableTags();
-    
+
     // Load existing story if editing
     if (widget.storyId != null) {
       _loadStory();
     }
-    
+
     // Listen to content changes - debounced to prevent flickering
     _contentController.addListener(_handleContentChange);
     _titleController.addListener(_handleTitleChange);
-    
+
     // Generate initial AI suggestions when suggestions are shown
   }
 
@@ -87,7 +90,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     // Note: We could add placeholder detection here if needed
     // but for now we keep it simple - users can manually manage placeholders
   }
-  
+
   void _handleTitleChange() {
     if (!_hasChanges) {
       setState(() => _hasChanges = true);
@@ -115,26 +118,39 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       if (mounted) {
         setState(() {
           _availableTags = [
-            'infancia', 'familia', 'trabajo', 'viaje', 'celebración',
-            'cambio', 'aprendizaje', 'amistad', 'amor', 'pérdida',
-            'logro', 'aventura', 'hogar', 'tradición', 'guerra'
+            'infancia',
+            'familia',
+            'trabajo',
+            'viaje',
+            'celebración',
+            'cambio',
+            'aprendizaje',
+            'amistad',
+            'amor',
+            'pérdida',
+            'logro',
+            'aventura',
+            'hogar',
+            'tradición',
+            'guerra'
           ];
         });
       }
     }
   }
-  
+
   Future<void> _loadStory() async {
     if (widget.storyId == null) return;
-    
+
     setState(() => _isLoading = true);
     try {
       final story = await StoryServiceNew.getStoryById(widget.storyId!);
       if (story != null && mounted) {
         // Load story photos from database
-        final storyData = await NarraSupabaseClient.getStoryById(widget.storyId!);
+        final storyData =
+            await NarraSupabaseClient.getStoryById(widget.storyId!);
         final photos = <Map<String, dynamic>>[];
-        
+
         if (storyData != null && storyData['story_photos'] != null) {
           final storyPhotos = storyData['story_photos'] as List<dynamic>;
           for (int i = 0; i < storyPhotos.length; i++) {
@@ -151,7 +167,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
             });
           }
         }
-        
+
         setState(() {
           _currentStory = story;
           _titleController.text = story.title;
@@ -180,8 +196,9 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   }
 
   Future<void> _generateAISuggestions() async {
-    if (_titleController.text.isEmpty && _contentController.text.isEmpty) return;
-    
+    if (_titleController.text.isEmpty && _contentController.text.isEmpty)
+      return;
+
     try {
       final suggestions = await OpenAIService.generateStoryPrompts(
         currentTitle: _titleController.text,
@@ -222,101 +239,108 @@ class _StoryEditorPageState extends State<StoryEditorPage>
               body: Center(child: CircularProgressIndicator()),
             )
           : Scaffold(
-        appBar: AppBar(
-          title: Text(widget.storyId == null ? 'Nueva historia' : 'Editar historia'),
-          actions: [
-            if (_isSaving)
-              const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            else
-              TextButton(
-                onPressed: _saveDraft,
-                child: const Text('Guardar'),
-              ),
-
-          ],
-          bottom: TabBar(
-            controller: _tabController,
-            isScrollable: true,
-            tabAlignment: TabAlignment.start,
-            tabs: const [
-              Tab(icon: Icon(Icons.edit), text: 'Escribir'),
-              Tab(icon: Icon(Icons.photo_library), text: 'Fotos'),
-              Tab(icon: Icon(Icons.calendar_today), text: 'Fechas'),
-              Tab(icon: Icon(Icons.label), text: 'Etiquetas'),
-            ],
-          ),
-        ),
-        body: TabBarView(
-          controller: _tabController,
-          children: [
-            _buildWritingTab(),
-            _buildPhotosTab(),
-            _buildDatesTab(),
-            _buildTagsTab(),
-          ],
-        ),
-        bottomNavigationBar: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Theme.of(context).scaffoldBackgroundColor,
-            border: Border(
-              top: BorderSide(
-                color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
-              ),
-            ),
-          ),
-          child: Row(
-            children: [
-              // Dictation bottom-sheet launcher (no inline recording state)
-              IconButton(
-                onPressed: _openDictationPanel,
-                icon: const Icon(Icons.mic),
-                color: Theme.of(context).colorScheme.primary,
-                style: IconButton.styleFrom(
-                  backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+              appBar: AppBar(
+                title: Text(widget.storyId == null
+                    ? 'Nueva historia'
+                    : 'Editar historia'),
+                actions: [
+                  if (_isSaving)
+                    const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  else
+                    TextButton(
+                      onPressed: _saveDraft,
+                      child: const Text('Guardar'),
+                    ),
+                ],
+                bottom: TabBar(
+                  controller: _tabController,
+                  isScrollable: true,
+                  tabAlignment: TabAlignment.start,
+                  tabs: const [
+                    Tab(icon: Icon(Icons.edit), text: 'Escribir'),
+                    Tab(icon: Icon(Icons.photo_library), text: 'Fotos'),
+                    Tab(icon: Icon(Icons.calendar_today), text: 'Fechas'),
+                    Tab(icon: Icon(Icons.label), text: 'Etiquetas'),
+                  ],
                 ),
               ),
-              
-              const SizedBox(width: 16),
-              
-              // Action Buttons
-              Expanded(
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    TextButton.icon(
-                      onPressed: _isSaving ? null : _saveDraft,
-                      icon: _isSaving 
-                          ? const SizedBox(
-                              width: 16, 
-                              height: 16, 
-                              child: CircularProgressIndicator(strokeWidth: 2)
-                            )
-                          : const Icon(Icons.save),
-                      label: const Text('Borrador'),
+              body: TabBarView(
+                controller: _tabController,
+                children: [
+                  _buildWritingTab(),
+                  _buildPhotosTab(),
+                  _buildDatesTab(),
+                  _buildTagsTab(),
+                ],
+              ),
+              bottomNavigationBar: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).scaffoldBackgroundColor,
+                  border: Border(
+                    top: BorderSide(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .outline
+                          .withValues(alpha: 0.3),
                     ),
-                    ElevatedButton.icon(
-                      onPressed: _canPublish() ? _showPublishDialog : null,
-                      icon: const Icon(Icons.publish, color: Colors.white),
-                      label: const Text('Publicar'),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    // Dictation bottom-sheet launcher (no inline recording state)
+                    IconButton(
+                      onPressed: _openDictationPanel,
+                      icon: const Icon(Icons.mic),
+                      color: Theme.of(context).colorScheme.primary,
+                      style: IconButton.styleFrom(
+                        backgroundColor:
+                            Theme.of(context).colorScheme.primaryContainer,
+                      ),
+                    ),
+
+                    const SizedBox(width: 16),
+
+                    // Action Buttons
+                    Expanded(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          TextButton.icon(
+                            onPressed: _isSaving ? null : _saveDraft,
+                            icon: _isSaving
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2))
+                                : const Icon(Icons.save),
+                            label: const Text('Borrador'),
+                          ),
+                          ElevatedButton.icon(
+                            onPressed:
+                                _canPublish() ? _showPublishDialog : null,
+                            icon:
+                                const Icon(Icons.publish, color: Colors.white),
+                            label: const Text('Publicar'),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
               ),
-            ],
-          ),
-        ),
-      ),
+            ),
     );
   }
 
   Widget _buildWritingTab() {
     final wordCount = _getWordCount();
-    
+
     return Column(
       children: [
         Expanded(
@@ -330,26 +354,27 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                   decoration: InputDecoration(
                     hintText: 'Título de tu historia...',
                     hintStyle: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      color: Theme.of(context).colorScheme.outline,
-                    ),
+                          color: Theme.of(context).colorScheme.outline,
+                        ),
                     border: InputBorder.none,
                   ),
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                        fontWeight: FontWeight.bold,
+                      ),
                 ),
-                
+
                 const Divider(),
-                
+
                 // Content Field
                 Expanded(
                   child: TextField(
                     controller: _contentController,
                     decoration: InputDecoration(
                       hintText: 'Cuenta tu historia...',
-                      hintStyle: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: Theme.of(context).colorScheme.outline,
-                      ),
+                      hintStyle:
+                          Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                color: Theme.of(context).colorScheme.outline,
+                              ),
                       border: InputBorder.none,
                     ),
                     style: Theme.of(context).textTheme.bodyLarge,
@@ -362,7 +387,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
             ),
           ),
         ),
-        
+
         // AI Tools Section
         Container(
           padding: const EdgeInsets.all(16),
@@ -370,7 +395,10 @@ class _StoryEditorPageState extends State<StoryEditorPage>
             color: Theme.of(context).colorScheme.surfaceVariant,
             border: Border(
               top: BorderSide(
-                color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                color: Theme.of(context)
+                    .colorScheme
+                    .outline
+                    .withValues(alpha: 0.3),
               ),
             ),
           ),
@@ -387,11 +415,13 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                         children: [
                           // Ghost Writer Button
                           OutlinedButton.icon(
-                            onPressed: _canUseGhostWriter() ? _showGhostWriterDialog : null,
+                            onPressed: _canUseGhostWriter()
+                                ? _showGhostWriterDialog
+                                : null,
                             icon: const Icon(Icons.auto_fix_high),
                             label: const Text('Ghost Writer'),
                             style: OutlinedButton.styleFrom(
-                              foregroundColor: _canUseGhostWriter() 
+                              foregroundColor: _canUseGhostWriter()
                                   ? Theme.of(context).colorScheme.primary
                                   : Theme.of(context).colorScheme.outline,
                             ),
@@ -400,15 +430,18 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                           // AI Suggestions Button
                           OutlinedButton.icon(
                             onPressed: () {
-                              setState(() => _showSuggestions = !_showSuggestions);
+                              setState(
+                                  () => _showSuggestions = !_showSuggestions);
                               if (_showSuggestions && _aiSuggestions.isEmpty) {
                                 _generateAISuggestions();
                               }
                             },
-                            icon: Icon(_showSuggestions ? Icons.lightbulb : Icons.lightbulb_outline),
+                            icon: Icon(_showSuggestions
+                                ? Icons.lightbulb
+                                : Icons.lightbulb_outline),
                             label: const Text('Sugerencias'),
                             style: OutlinedButton.styleFrom(
-                              foregroundColor: _showSuggestions 
+                              foregroundColor: _showSuggestions
                                   ? Theme.of(context).colorScheme.primary
                                   : Theme.of(context).colorScheme.onSurface,
                             ),
@@ -435,7 +468,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                   ),
                 ],
               ),
-              
+
               // Ghost Writer requirement note
               if (!_canUseGhostWriter())
                 Padding(
@@ -443,20 +476,20 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                   child: Text(
                     'Ghost Writer disponible con título y 400+ palabras',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.outline,
-                      fontStyle: FontStyle.italic,
-                    ),
+                          color: Theme.of(context).colorScheme.outline,
+                          fontStyle: FontStyle.italic,
+                        ),
                   ),
                 ),
-              
+
               // AI Suggestions
               if (_showSuggestions) ...[
                 const SizedBox(height: 16),
                 Text(
                   'Sugerencias para mejorar tu historia:',
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                        fontWeight: FontWeight.bold,
+                      ),
                 ),
                 const SizedBox(height: 8),
                 if (_aiSuggestions.isEmpty) ...[
@@ -464,35 +497,36 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                     child: CircularProgressIndicator(),
                   ),
                   const SizedBox(height: 8),
-                  const Text('Generando sugerencias...', textAlign: TextAlign.center),
+                  const Text('Generando sugerencias...',
+                      textAlign: TextAlign.center),
                 ] else ...[
                   Text(
                     'Palabras: $wordCount',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.outline,
-                    ),
+                          color: Theme.of(context).colorScheme.outline,
+                        ),
                   ),
                   const SizedBox(height: 8),
                   ..._aiSuggestions.map((suggestion) => Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(
-                          Icons.help_outline,
-                          size: 16,
-                          color: Theme.of(context).colorScheme.primary,
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(
+                              Icons.help_outline,
+                              size: 16,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                suggestion,
+                                style: Theme.of(context).textTheme.bodyMedium,
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            suggestion,
-                            style: Theme.of(context).textTheme.bodyMedium,
-                          ),
-                        ),
-                      ],
-                    ),
-                  )),
+                      )),
                 ],
               ],
             ],
@@ -514,8 +548,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
               Text(
                 'Fotos (${_photos.length}/8)',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+                      fontWeight: FontWeight.bold,
+                    ),
               ),
               if (_photos.length < 8)
                 ElevatedButton.icon(
@@ -525,19 +559,15 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                 ),
             ],
           ),
-          
           const SizedBox(height: 8),
-          
           Text(
             'Usa "Colocar foto" para insertar placeholders [img_1] en tu texto. Puedes mover los placeholders libremente.',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: Theme.of(context).colorScheme.outline,
-              fontStyle: FontStyle.italic,
-            ),
+                  color: Theme.of(context).colorScheme.outline,
+                  fontStyle: FontStyle.italic,
+                ),
           ),
-          
           const SizedBox(height: 16),
-          
           if (_photos.isEmpty)
             Expanded(
               child: Center(
@@ -601,12 +631,10 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           Text(
             'Fechas de la historia',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
+                  fontWeight: FontWeight.bold,
+                ),
           ),
-          
           const SizedBox(height: 16),
-          
           Card(
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -616,8 +644,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                   Text(
                     'Precisión de fechas',
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
+                          fontWeight: FontWeight.bold,
+                        ),
                   ),
                   const SizedBox(height: 12),
                   SegmentedButton<String>(
@@ -637,9 +665,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
               ),
             ),
           ),
-          
           const SizedBox(height: 16),
-          
           Card(
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -651,22 +677,20 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                     leading: const Icon(Icons.event),
                     title: const Text('Fecha de inicio'),
                     subtitle: Text(
-                      _startDate != null 
+                      _startDate != null
                           ? _formatDate(_startDate!, _datesPrecision)
                           : 'No especificada',
                     ),
                     trailing: const Icon(Icons.edit),
                     onTap: () => _selectDate(context, true),
                   ),
-                  
                   const Divider(),
-                  
                   ListTile(
                     contentPadding: EdgeInsets.zero,
                     leading: const Icon(Icons.event_busy),
                     title: const Text('Fecha de fin (opcional)'),
                     subtitle: Text(
-                      _endDate != null 
+                      _endDate != null
                           ? _formatDate(_endDate!, _datesPrecision)
                           : 'No especificada',
                     ),
@@ -691,52 +715,48 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           Text(
             'Etiquetas temáticas',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
+                  fontWeight: FontWeight.bold,
+                ),
           ),
-          
           const SizedBox(height: 8),
-          
           Text(
             'Ayuda a organizar y encontrar tus historias',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Theme.of(context).colorScheme.outline,
-            ),
+                  color: Theme.of(context).colorScheme.outline,
+                ),
           ),
-          
           const SizedBox(height: 16),
-          
           if (_selectedTags.isNotEmpty) ...[
             Text(
               'Seleccionadas (${_selectedTags.length})',
               style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).colorScheme.primary,
-              ),
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
             ),
             const SizedBox(height: 8),
             Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: _selectedTags.map((tag) => Chip(
-                label: Text(tag),
-                onDeleted: () => _toggleTag(tag),
-                deleteIcon: const Icon(Icons.close, size: 18),
-                backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-              )).toList(),
+              children: _selectedTags
+                  .map((tag) => Chip(
+                        label: Text(tag),
+                        onDeleted: () => _toggleTag(tag),
+                        deleteIcon: const Icon(Icons.close, size: 18),
+                        backgroundColor:
+                            Theme.of(context).colorScheme.primaryContainer,
+                      ))
+                  .toList(),
             ),
             const SizedBox(height: 24),
           ],
-          
           Text(
             'Disponibles',
             style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
+                  fontWeight: FontWeight.bold,
+                ),
           ),
-          
           const SizedBox(height: 8),
-          
           Expanded(
             child: SingleChildScrollView(
               child: Wrap(
@@ -745,9 +765,10 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                 children: _availableTags
                     .where((tag) => !_selectedTags.contains(tag))
                     .map((tag) => ActionChip(
-                      label: Text(tag),
-                      onPressed: () => _toggleTag(tag),
-                    )).toList(),
+                          label: Text(tag),
+                          onPressed: () => _toggleTag(tag),
+                        ))
+                    .toList(),
               ),
             ),
           ),
@@ -765,79 +786,13 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     }
   }
 
-  void _toggleRecording() {
-    if (_isRecording) {
-
-      _pauseOrStopRecording();
-    } else {
-      _openDictationPanel();
-
-    }
-  }
-
-  Future<void> _startRecording() async {
-    try {
-      _recorder = VoiceRecorder();
-      setState(() { _isRecording = true; _sttStatus = 'Grabando...'; });
-
-      await _recorder!.start(onText: (text) {
-        if (text.trim().isEmpty) return;
-        setState(() { _liveTranscript += (text.endsWith(' ') ? text : '$text '); });
-
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('🎤 Grabando... Toca de nuevo para detener'), backgroundColor: Colors.red),
-      );
-    } catch (e) {
-      setState(() { _isRecording = false; _sttStatus = ''; });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo iniciar el micrófono: $e')),
-      );
-    }
-  }
-
-  Future<void> _pauseOrStopRecording() async {
-    if (!_isPaused) {
-      await _stopRecording(partial: true);
-      setState(() { _isPaused = true; });
-    } else {
-      setState(() { _isPaused = false; });
-      await _startRecording();
-    }
-  }
-
-  Future<void> _stopRecording({bool partial = false}) async {
-    try {
-      setState(() { _sttStatus = 'Guardando audio...'; });
-      final bytes = await _recorder?.stop();
-      setState(() { _isRecording = false; _sttStatus = ''; });
-      if (!partial && bytes != null && _currentStory != null) {
-        // Subir audio al bucket
-        await AudioUploadService.uploadStoryAudio(
-          storyId: _currentStory!.id,
-          audioBytes: bytes,
-          fileName: 'voice_${DateTime.now().millisecondsSinceEpoch}.webm',
-        );
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('✓ Grabación guardada')),
-      );
-    } catch (e) {
-      setState(() { _isRecording = false; _sttStatus = ''; });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error al detener/guardar audio: $e')),
-      );
-    }
-  }
-
-
   void _insertAtCursor(String text) {
     final selection = _contentController.selection;
     final full = _contentController.text;
     if (!selection.isValid) {
       _contentController.text += text;
-      _contentController.selection = TextSelection.collapsed(offset: _contentController.text.length);
+      _contentController.selection =
+          TextSelection.collapsed(offset: _contentController.text.length);
       return;
     }
     final start = selection.start;
@@ -848,22 +803,265 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     _contentController.selection = TextSelection.collapsed(offset: caret);
   }
 
+  void _handleTranscriptChunk(String text) {
+    final chunk = text.trim();
+    if (chunk.isEmpty) return;
 
-  void _openDictationPanel() {
+    final trimmedExisting = _liveTranscript.trimRight();
+    if (chunk == _lastTranscriptChunk || trimmedExisting.endsWith(chunk)) {
+      _lastTranscriptChunk = chunk;
+      return;
+    }
+
+    final overlap = _computeOverlap(trimmedExisting, chunk);
+    final addition = chunk.substring(overlap).trimLeft();
+    if (addition.isEmpty) {
+      _lastTranscriptChunk = chunk;
+      return;
+    }
+
+    if (!mounted) return;
+
     setState(() {
-      _showDictationPanel = true;
-      _liveTranscript = '';
+      final buffer = StringBuffer(_liveTranscript);
+      final needsSpaceBefore = _liveTranscript.isNotEmpty &&
+          !RegExp(r'\s$').hasMatch(_liveTranscript);
+      if (needsSpaceBefore) {
+        buffer.write(' ');
+      }
+      buffer.write(addition);
+      if (!RegExp(r'\s$').hasMatch(addition)) {
+        buffer.write(' ');
+      }
+      _liveTranscript = buffer.toString();
+      _lastTranscriptChunk = chunk;
     });
-    _isPaused = false;
-    _startRecording();
-    showModalBottomSheet(
+  }
+
+  int _computeOverlap(String existing, String chunk) {
+    if (existing.isEmpty || chunk.isEmpty) return 0;
+    final maxLen = math.min(200, math.min(existing.length, chunk.length));
+    for (var len = maxLen; len > 0; len--) {
+      final suffix = existing.substring(existing.length - len);
+      final prefix = chunk.substring(0, len);
+      if (suffix == prefix) {
+        return len;
+      }
+    }
+    return 0;
+  }
+
+  Future<void> _startRecording({bool resetTranscript = false}) async {
+    final recorder = _recorder ?? VoiceRecorder();
+    _recorder = recorder;
+
+    if (resetTranscript) {
+      setState(() {
+        _liveTranscript = '';
+        _lastTranscriptChunk = null;
+      });
+    } else {
+      _lastTranscriptChunk = null;
+    }
+
+    try {
+      setState(() {
+        _isRecording = true;
+        _isPaused = false;
+      });
+
+      await recorder.start(onText: _handleTranscriptChunk);
+
+      if (mounted && resetTranscript) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('🎤 Grabando... toca pausa para descansar'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isRecording = false;
+          _isPaused = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo iniciar el micrófono: $e')),
+        );
+      }
+      _recorder = null;
+      rethrow;
+    }
+  }
+
+  Future<void> _togglePauseResume() async {
+    final recorder = _recorder;
+    if (recorder == null) {
+      try {
+        await _startRecording(resetTranscript: false);
+      } catch (_) {}
+      return;
+    }
+
+    if (_isPaused) {
+      try {
+        final resumed = await recorder.resume();
+        if (!resumed) {
+          await _startRecording(resetTranscript: false);
+        } else if (mounted) {
+          setState(() {
+            _isPaused = false;
+            _isRecording = true;
+          });
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('No se pudo reanudar: $e')),
+          );
+        }
+        try {
+          await _startRecording(resetTranscript: false);
+        } catch (_) {}
+      }
+      return;
+    }
+
+    try {
+      final paused = await recorder.pause();
+      if (paused) {
+        if (mounted) {
+          setState(() => _isPaused = true);
+        }
+        return;
+      }
+    } catch (_) {
+      // fall back to stop below
+    }
+
+    try {
+      final bytes = await recorder.stop();
+      if (bytes != null && bytes.isNotEmpty) {
+        _recordedSegments.add(bytes);
+      }
+    } catch (_) {}
+    _recorder = null;
+    if (mounted) {
+      setState(() {
+        _isRecording = false;
+        _isPaused = true;
+      });
+    }
+  }
+
+  Future<void> _stopRecording(
+      {bool partial = false, bool discardSegments = false}) async {
+    typed.Uint8List? latest;
+    try {
+      if (_recorder != null) {
+        latest = await _recorder!.stop();
+      }
+    } catch (e) {
+      if (!partial && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al detener la grabación: $e')),
+        );
+      }
+    } finally {
+      _recorder = null;
+    }
+
+    if (mounted) {
+      setState(() {
+        _isRecording = false;
+        _isPaused = false;
+      });
+    }
+
+    if (latest != null && latest.isNotEmpty) {
+      _recordedSegments.add(latest);
+    }
+
+    if (discardSegments) {
+      _recordedSegments.clear();
+      return;
+    }
+
+    if (partial) {
+      return;
+    }
+
+    if (_recordedSegments.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se detectó audio para guardar')),
+        );
+      }
+      return;
+    }
+
+    if (_currentStory != null) {
+      try {
+        final merged = _mergeAudioSegments(_recordedSegments);
+        await AudioUploadService.uploadStoryAudio(
+          storyId: _currentStory!.id,
+          audioBytes: merged,
+          fileName: 'voice_${DateTime.now().millisecondsSinceEpoch}.webm',
+        );
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error al guardar el audio: $e')),
+          );
+        }
+        _recordedSegments.clear();
+        return;
+      }
+    }
+
+    _recordedSegments.clear();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('✓ Dictado listo para insertar')),
+      );
+    }
+  }
+
+  typed.Uint8List _mergeAudioSegments(List<typed.Uint8List> segments) {
+    final totalLength =
+        segments.fold<int>(0, (sum, bytes) => sum + bytes.length);
+    final merged = typed.Uint8List(totalLength);
+    var offset = 0;
+    for (final segment in segments) {
+      merged.setAll(offset, segment);
+      offset += segment.length;
+    }
+    return merged;
+  }
+
+  Future<void> _openDictationPanel() async {
+    if (_isRecording) return;
+
+    try {
+      await _startRecording(resetTranscript: true);
+    } catch (_) {
+      return;
+    }
+
+    final transcript = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
       isDismissible: false,
       enableDrag: false,
-      builder: (context) {
+      builder: (sheetContext) {
         return Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+          padding: EdgeInsets.fromLTRB(
+            16,
+            16,
+            16,
+            24 + MediaQuery.of(sheetContext).viewInsets.bottom,
+          ),
           child: SafeArea(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -871,22 +1069,23 @@ class _StoryEditorPageState extends State<StoryEditorPage>
               children: [
                 Row(
                   children: [
-                    Icon(_isRecording && !_isPaused ? Icons.mic : Icons.play_arrow, color: Colors.red),
+                    Icon(
+                      _isRecording && !_isPaused ? Icons.mic : Icons.play_arrow,
+                      color: Colors.red,
+                    ),
                     const SizedBox(width: 8),
-                    Text(_isRecording && !_isPaused ? 'Grabando...' : (_isPaused ? 'Pausado' : 'Listo')),
+                    Text(_isRecording && !_isPaused
+                        ? 'Grabando...'
+                        : (_isPaused ? 'Pausado' : 'Listo')),
                     const Spacer(),
                     IconButton(
                       tooltip: _isPaused ? 'Reanudar' : 'Pausar',
                       onPressed: () async {
-                        // avoid affecting underlying page shortcuts
-                        FocusScope.of(context).requestFocus(FocusNode());
-                        await _pauseOrStopRecording();
+                        FocusScope.of(sheetContext).requestFocus(FocusNode());
+                        await _togglePauseResume();
                       },
                       icon: Icon(_isPaused ? Icons.play_arrow : Icons.pause),
                     ),
-
-                    // Stop removed per requirements
-
                   ],
                 ),
                 const SizedBox(height: 12),
@@ -895,12 +1094,15 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                   width: double.infinity,
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    color:
+                        Theme.of(context).colorScheme.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: SingleChildScrollView(
                     child: Text(
-                      _liveTranscript.isEmpty ? 'Empieza a hablar…' : _liveTranscript,
+                      _liveTranscript.isEmpty
+                          ? 'Empieza a hablar…'
+                          : _liveTranscript,
                       style: Theme.of(context).textTheme.bodyLarge,
                     ),
                   ),
@@ -909,37 +1111,47 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                 Row(
                   children: [
                     ElevatedButton.icon(
-                      onPressed: _liveTranscript.trim().isEmpty ? null : () {
-                        // Elegir dónde insertar como con fotos
-                        _chooseInsertPositionForTranscript(_liveTranscript.trim());
-                        Navigator.pop(context);
-                        setState(() { _showDictationPanel = false; });
-                      },
+                      onPressed: _liveTranscript.trim().isEmpty
+                          ? null
+                          : () async {
+                              final text = _liveTranscript.trim();
+                              await _stopRecording(partial: false);
+                              if (sheetContext.mounted) {
+                                Navigator.pop(sheetContext, text);
+                              }
+                            },
                       icon: const Icon(Icons.add),
                       label: const Text('Agregar a la historia'),
                     ),
                     const SizedBox(width: 12),
                     TextButton(
-
                       onPressed: () async {
                         if (_liveTranscript.trim().isNotEmpty) {
                           final confirm = await showDialog<bool>(
-                            context: context,
+                            context: sheetContext,
                             builder: (ctx) => AlertDialog(
                               title: const Text('¿Descartar dictado?'),
-                              content: const Text('Si cierras ahora, se perderá el fragmento grabado.'),
+                              content: const Text(
+                                  'Si cierras ahora, se perderá el fragmento grabado.'),
                               actions: [
-                                TextButton(onPressed: ()=> Navigator.pop(ctx, false), child: const Text('Cancelar')),
-                                ElevatedButton(onPressed: ()=> Navigator.pop(ctx, true), child: const Text('Descartar')),
+                                TextButton(
+                                  onPressed: () => Navigator.pop(ctx, false),
+                                  child: const Text('Cancelar'),
+                                ),
+                                ElevatedButton(
+                                  onPressed: () => Navigator.pop(ctx, true),
+                                  child: const Text('Descartar'),
+                                ),
                               ],
                             ),
                           );
                           if (confirm != true) return;
                         }
-                        await _stopRecording(partial: true);
-                        if (mounted) Navigator.pop(context);
-
-                        setState(() { _showDictationPanel = false; });
+                        await _stopRecording(
+                            partial: true, discardSegments: true);
+                        if (sheetContext.mounted) {
+                          Navigator.pop(sheetContext, null);
+                        }
                       },
                       child: const Text('Cerrar'),
                     ),
@@ -951,52 +1163,272 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         );
       },
     );
+
+    if (_recorder != null) {
+      await _stopRecording(partial: true, discardSegments: true);
+    }
+
+    if (!mounted) return;
+
+    if (transcript != null && transcript.trim().isNotEmpty) {
+      await _showTranscriptPlacementDialog(transcript.trim());
+    }
+
+    setState(() {
+      _liveTranscript = '';
+      _lastTranscriptChunk = null;
+      _isPaused = false;
+    });
   }
 
-  void _chooseInsertPositionForTranscript(String transcript) {
+  Future<void> _showTranscriptPlacementDialog(String transcript) async {
     final text = _contentController.text;
     if (text.trim().isEmpty) {
-      _insertAtCursor(transcript + '\n\n');
+      _insertAtCursor('$transcript\n\n');
       return;
     }
+
     final paragraphs = _parseParagraphs(text);
-    showDialog(
+    if (paragraphs.isEmpty) {
+      _insertTextAtPosition('\n\n$transcript\n\n', text.length);
+      return;
+    }
+
+    await showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('¿Dónde agregar el dictado?'),
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('¿Dónde colocar el dictado?'),
         content: SizedBox(
-          width: 520,
-          height: 400,
+          width: double.maxFinite,
+          height: 420,
           child: ListView.builder(
             itemCount: paragraphs.length,
-            itemBuilder: (context, idx) {
-              final p = paragraphs[idx];
-              return ListTile(
-                title: Text(p['preview'] as String),
-                subtitle: const Text('Elegir posición'),
-                trailing: Wrap(
-                  spacing: 8,
+            itemBuilder: (context, index) {
+              final paragraph = paragraphs[index];
+              return Card(
+                margin: const EdgeInsets.only(bottom: 8),
+                child: Column(
                   children: [
-                    IconButton(
-                      tooltip: 'Antes',
-                      onPressed: () {
-                        Navigator.pop(context);
-                        _insertTextAtPosition(transcript + '\n\n', p['position'] as int);
+                    InkWell(
+                      borderRadius: BorderRadius.circular(8),
+                      onTap: () {
+                        _showTranscriptBeforeAfterDialog(
+                          dialogContext,
+                          paragraph,
+                          index + 1,
+                          transcript,
+                        );
                       },
-                      icon: const Icon(Icons.vertical_align_top),
-                    ),
-                    IconButton(
-                      tooltip: 'Después',
-                      onPressed: () {
-                        Navigator.pop(context);
-                        _insertTextAtPosition('\n\n' + transcript + '\n\n', p['endPosition'] as int);
-                      },
-                      icon: const Icon(Icons.vertical_align_bottom),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    'Párrafo ${index + 1}',
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w600),
+                                  ),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.expand_more),
+                                  iconSize: 20,
+                                  onPressed: () {
+                                    _showTranscriptFullDialog(
+                                      dialogContext,
+                                      paragraph,
+                                      index + 1,
+                                      transcript,
+                                    );
+                                  },
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              paragraph['preview'] as String,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurface
+                                        .withValues(alpha: 0.7),
+                                  ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Toca para insertar el dictado antes o después',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(
+                                    color:
+                                        Theme.of(context).colorScheme.primary,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ],
                 ),
               );
             },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancelar'),
+          ),
+          OutlinedButton.icon(
+            onPressed: () {
+              Navigator.pop(dialogContext);
+              _insertTextAtPosition('$transcript\n\n', 0);
+            },
+            icon: const Icon(Icons.first_page),
+            label: const Text('Al inicio'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.pop(dialogContext);
+              _insertTextAtPosition(
+                  '\n\n$transcript\n\n', _contentController.text.length);
+            },
+            icon: const Icon(Icons.last_page),
+            label: const Text('Al final'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showTranscriptBeforeAfterDialog(
+    BuildContext parentDialog,
+    Map<String, dynamic> paragraph,
+    int paragraphNumber,
+    String transcript,
+  ) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Dictado en párrafo $paragraphNumber'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceVariant,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                paragraph['preview'] as String,
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text('¿Dónde quieres colocar el dictado?'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          OutlinedButton.icon(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.pop(parentDialog);
+              _insertTextAtPosition(
+                  '$transcript\n\n', paragraph['position'] as int);
+            },
+            icon: const Icon(Icons.vertical_align_top),
+            label: const Text('Antes'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.pop(parentDialog);
+              _insertTextAtPosition(
+                  '\n\n$transcript\n\n', paragraph['endPosition'] as int);
+            },
+            icon: const Icon(Icons.vertical_align_bottom),
+            label: const Text('Después'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showTranscriptFullDialog(
+    BuildContext parentDialog,
+    Map<String, dynamic> paragraph,
+    int paragraphNumber,
+    String transcript,
+  ) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Párrafo $paragraphNumber completo'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceVariant,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  paragraph['text'] as String,
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text('¿Dónde quieres colocar el dictado?'),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        Navigator.pop(parentDialog);
+                        _insertTextAtPosition(
+                            '$transcript\n\n', paragraph['position'] as int);
+                      },
+                      icon: const Icon(Icons.vertical_align_top),
+                      label: const Text('Antes'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        Navigator.pop(parentDialog);
+                        _insertTextAtPosition('\n\n$transcript\n\n',
+                            paragraph['endPosition'] as int);
+                      },
+                      icon: const Icon(Icons.vertical_align_bottom),
+                      label: const Text('Después'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
         actions: [
@@ -1015,14 +1447,16 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     final before = full.substring(0, safe);
     final after = full.substring(safe);
     _contentController.text = before + text + after;
-    _contentController.selection = TextSelection.collapsed(offset: (before + text).length);
-    setState(() { _hasChanges = true; });
+    _contentController.selection =
+        TextSelection.collapsed(offset: (before + text).length);
+    setState(() {
+      _hasChanges = true;
+    });
   }
 
-
   bool _canPublish() {
-    return _titleController.text.isNotEmpty && 
-           _contentController.text.isNotEmpty;
+    return _titleController.text.isNotEmpty &&
+        _contentController.text.isNotEmpty;
   }
 
   Future<void> _saveDraft() async {
@@ -1032,9 +1466,9 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       );
       return;
     }
-    
+
     setState(() => _isSaving = true);
-    
+
     try {
       // Get current user
       final user = NarraSupabaseClient.currentUser;
@@ -1046,7 +1480,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         // Create new story with minimal data first
         final now = DateTime.now().toIso8601String();
         final content = _contentController.text.trim();
-        
+
         final storyData = {
           'title': _titleController.text.trim(),
           'content': content,
@@ -1063,28 +1497,25 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
         // Direct Supabase insert
         final client = NarraSupabaseClient.client;
-        final result = await client
-            .from('stories')
-            .insert(storyData)
-            .select()
-            .single();
-        
+        final result =
+            await client.from('stories').insert(storyData).select().single();
+
         _currentStory = Story.fromMap(result);
       } else {
         // Update existing story
         final content = _contentController.text.trim();
-        
+
         final updates = {
           'title': _titleController.text.trim(),
           'content': content,
           'updated_at': DateTime.now().toIso8601String(),
         };
-        
+
         // Add optional fields
         if (_startDate != null) {
           updates['story_date'] = _startDate!.toIso8601String();
         }
-        
+
         final client = NarraSupabaseClient.client;
         await client
             .from('stories')
@@ -1092,15 +1523,15 @@ class _StoryEditorPageState extends State<StoryEditorPage>
             .eq('id', _currentStory!.id)
             .eq('user_id', user.id);
       }
-      
+
       // Upload and save photos
       await _uploadAndSavePhotos();
-      
+
       setState(() {
         _hasChanges = false;
         _isSaving = false;
       });
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Borrador guardado')),
       );
@@ -1116,21 +1547,22 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     if (_currentStory == null || _photos.isEmpty) return;
 
     final storyId = _currentStory!.id;
-    
+
     // Process each photo that needs to be uploaded
     for (int i = 0; i < _photos.length; i++) {
       final photo = _photos[i];
-      
+
       if (!photo['uploaded'] && photo['bytes'] != null) {
         try {
           // Upload image to storage
           final imageUrl = await ImageUploadService.uploadStoryImage(
             storyId: storyId,
             imageBytes: photo['bytes'],
-            fileName: ImageUploadService.getOptimizedFileName(photo['fileName']),
+            fileName:
+                ImageUploadService.getOptimizedFileName(photo['fileName']),
             mimeType: ImageUploadService.getMimeType(photo['fileName']),
           );
-          
+
           // Save photo reference to database
           await NarraSupabaseClient.addPhotoToStory(
             storyId: storyId,
@@ -1138,7 +1570,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
             caption: photo['caption'] ?? '',
             position: i,
           );
-          
+
           // Update photo data to reflect it's now uploaded
           setState(() {
             _photos[i]['uploaded'] = true;
@@ -1158,13 +1590,10 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         // Update caption for already uploaded photos if changed
         try {
           final client = NarraSupabaseClient.client;
-          await client
-              .from('story_photos')
-              .update({
-                'caption': photo['caption'] ?? '',
-                'position': i,
-              })
-              .eq('id', photo['id']);
+          await client.from('story_photos').update({
+            'caption': photo['caption'] ?? '',
+            'position': i,
+          }).eq('id', photo['id']);
         } catch (e) {
           if (kDebugMode) {
             print('Error updating photo caption: $e');
@@ -1180,20 +1609,20 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       if (_hasChanges) {
         await _saveDraft();
       }
-      
+
       if (_currentStory == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Error: Historia no encontrada')),
         );
         return;
       }
-      
+
       await StoryServiceNew.publishStory(_currentStory!.id);
-      
+
       setState(() {
         _status = 'published';
       });
-      
+
       Navigator.pop(context); // Return to previous screen
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -1206,7 +1635,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       );
     }
   }
-  
+
   void _showPublishDialog() {
     // Validate required fields
     if (_titleController.text.trim().isEmpty) {
@@ -1215,18 +1644,20 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       );
       return;
     }
-    
+
     if (_contentController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('El contenido es obligatorio para publicar')),
+        const SnackBar(
+            content: Text('El contenido es obligatorio para publicar')),
       );
       return;
     }
-    
+
     if (_startDate == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Por favor, añade al menos la fecha aproximada de tu historia para poder publicarla'),
+          content: Text(
+              'Por favor, añade al menos la fecha aproximada de tu historia para poder publicarla'),
           duration: Duration(seconds: 4),
         ),
       );
@@ -1234,7 +1665,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       _tabController.animateTo(2);
       return;
     }
-    
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -1264,7 +1695,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('¿Descartar cambios?'),
-        content: const Text('Tienes cambios sin guardar. ¿Quieres descartarlos?'),
+        content:
+            const Text('Tienes cambios sin guardar. ¿Quieres descartarlos?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -1330,13 +1762,14 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     try {
       String? imagePath;
       String? fileName;
-      Uint8List? imageBytes;
+      typed.Uint8List? imageBytes;
 
       if (source == 'gallery' || source == 'camera') {
         // Use ImagePicker for gallery and camera
         final ImagePicker picker = ImagePicker();
         final XFile? image = await picker.pickImage(
-          source: source == 'gallery' ? ImageSource.gallery : ImageSource.camera,
+          source:
+              source == 'gallery' ? ImageSource.gallery : ImageSource.camera,
           maxWidth: 1920,
           maxHeight: 1080,
           imageQuality: 85,
@@ -1345,7 +1778,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         if (image != null) {
           imagePath = image.path;
           fileName = image.name;
-          
+
           // On web, we need to read bytes
           if (kIsWeb) {
             imageBytes = await image.readAsBytes();
@@ -1370,7 +1803,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       if (imagePath != null || imageBytes != null) {
         // Create image data structure
         final imageId = DateTime.now().millisecondsSinceEpoch.toString();
-        
+
         setState(() {
           _photos.add({
             'id': imageId,
@@ -1397,12 +1830,11 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     }
   }
 
-
   void _editPhoto(int index) {
     final photo = _photos[index];
-    final TextEditingController captionController = 
+    final TextEditingController captionController =
         TextEditingController(text: photo['caption'] ?? '');
-    final TextEditingController altController = 
+    final TextEditingController altController =
         TextEditingController(text: photo['alt'] ?? '');
 
     showDialog(
@@ -1432,7 +1864,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                             errorBuilder: (context, error, stackTrace) =>
                                 const Icon(Icons.broken_image, size: 48),
                           )
-                        : photo['path'] != null && photo['path'].toString().startsWith('http')
+                        : photo['path'] != null &&
+                                photo['path'].toString().startsWith('http')
                             ? Image.network(
                                 photo['path'],
                                 fit: BoxFit.cover,
@@ -1440,19 +1873,23 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                                     const Icon(Icons.broken_image, size: 48),
                               )
                             : Container(
-                                color: Theme.of(context).colorScheme.surfaceVariant,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .surfaceVariant,
                                 child: Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
                                     Icon(
                                       Icons.image,
                                       size: 32,
-                                      color: Theme.of(context).colorScheme.primary,
+                                      color:
+                                          Theme.of(context).colorScheme.primary,
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
                                       photo['fileName'] ?? 'Imagen',
-                                      style: Theme.of(context).textTheme.bodySmall,
+                                      style:
+                                          Theme.of(context).textTheme.bodySmall,
                                       textAlign: TextAlign.center,
                                     ),
                                   ],
@@ -1460,9 +1897,9 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                               ),
                   ),
                 ),
-                
+
                 const SizedBox(height: 16),
-                
+
                 // Caption field
                 TextField(
                   controller: captionController,
@@ -1473,9 +1910,9 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                   ),
                   maxLines: 2,
                 ),
-                
+
                 const SizedBox(height: 12),
-                
+
                 // Alt text field
                 TextField(
                   controller: altController,
@@ -1522,13 +1959,14 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
   void _deletePhoto(int index) async {
     final photo = _photos[index];
-    
+
     // Show confirmation dialog
     final shouldDelete = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Eliminar foto'),
-        content: Text('¿Estás seguro de que quieres eliminar esta foto? Esta acción no se puede deshacer y eliminará todos los placeholders [img_${index + 1}] del texto.'),
+        content: Text(
+            '¿Estás seguro de que quieres eliminar esta foto? Esta acción no se puede deshacer y eliminará todos los placeholders [img_${index + 1}] del texto.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -1537,14 +1975,15 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Eliminar', style: TextStyle(color: Colors.white)),
+            child:
+                const Text('Eliminar', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
     );
-    
+
     if (shouldDelete != true) return;
-    
+
     try {
       // If photo is uploaded, delete from storage and database
       if (photo['uploaded']) {
@@ -1555,26 +1994,27 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           await NarraSupabaseClient.removePhotoFromStory(photo['id']);
         }
       }
-      
+
       // Remove all placeholders for this image from text
       final deletedImageIndex = index + 1;
       final pattern = RegExp(r'\[img_' + deletedImageIndex.toString() + r'\]');
       final currentText = _contentController.text;
       final cleanedText = currentText.replaceAll(pattern, '');
       _contentController.text = cleanedText;
-      
+
       setState(() {
         _photos.removeAt(index);
-        
+
         // Update placeholders for remaining images (renumber)
         final updatedText = _renumberImagePlaceholders(cleanedText, index);
         _contentController.text = updatedText;
-        
+
         _hasChanges = true;
       });
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('✓ Foto eliminada y placeholders actualizados')),
+        const SnackBar(
+            content: Text('✓ Foto eliminada y placeholders actualizados')),
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1582,43 +2022,43 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       );
     }
   }
-  
+
   // Helper function to renumber image placeholders after deletion
   String _renumberImagePlaceholders(String text, int deletedIndex) {
     String updatedText = text;
-    
+
     // For all photos after the deleted one, reduce their index by 1
     for (int i = deletedIndex + 1; i < _photos.length + 1; i++) {
       final oldPlaceholder = '[img_${i + 1}]';
       final newPlaceholder = '[img_$i]';
       updatedText = updatedText.replaceAll(oldPlaceholder, newPlaceholder);
     }
-    
+
     return updatedText;
   }
 
   void _insertPhotoIntoText(int index) {
     final text = _contentController.text;
-    
+
     if (text.trim().isEmpty) {
       // If no content, just insert at the beginning
       _insertPhotoPlaceholder(index, 0);
       return;
     }
-    
+
     // Parse text into paragraphs
     final paragraphs = _parseParagraphs(text);
-    
+
     if (paragraphs.isEmpty) {
       // If no paragraphs found, insert at the end
       _insertPhotoPlaceholder(index, text.length);
       return;
     }
-    
+
     // Show paragraph selection dialog
     _showParagraphSelectionDialog(index, paragraphs);
   }
-  
+
   List<Map<String, dynamic>> _parseParagraphs(String text) {
     final paragraphs = <Map<String, dynamic>>[];
     final breakExp = RegExp(r'\n[ \t]*\n');
@@ -1627,7 +2067,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       final end = match.start;
       final segment = text.substring(start, end);
       if (segment.trim().isNotEmpty) {
-          paragraphs.add({
+        paragraphs.add({
           'text': segment,
           'preview': _getParagraphPreview(segment),
           'position': start,
@@ -1639,7 +2079,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     if (start <= text.length) {
       final segment = text.substring(start, text.length);
       if (segment.trim().isNotEmpty) {
-      paragraphs.add({
+        paragraphs.add({
           'text': segment,
           'preview': _getParagraphPreview(segment),
           'position': start,
@@ -1649,11 +2089,11 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     }
     return paragraphs;
   }
-  
+
   String _getParagraphPreview(String paragraph) {
     final lines = paragraph.split('\n');
     if (lines.isEmpty) return '';
-    
+
     if (lines.length == 1) {
       // Single line - show up to 100 characters
       final line = lines[0].trim();
@@ -1663,17 +2103,17 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       // Multiple lines - show first two lines
       final firstLine = lines[0].trim();
       final secondLine = lines.length > 1 ? lines[1].trim() : '';
-      
-      final preview = secondLine.isNotEmpty 
-          ? '$firstLine\n$secondLine'
-          : firstLine;
-      
+
+      final preview =
+          secondLine.isNotEmpty ? '$firstLine\n$secondLine' : firstLine;
+
       if (preview.length <= 100) return preview;
       return '${preview.substring(0, 100)}...';
     }
   }
-  
-  void _showParagraphSelectionDialog(int imageIndex, List<Map<String, dynamic>> paragraphs) {
+
+  void _showParagraphSelectionDialog(
+      int imageIndex, List<Map<String, dynamic>> paragraphs) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -1686,8 +2126,9 @@ class _StoryEditorPageState extends State<StoryEditorPage>
             itemBuilder: (context, paragraphIndex) {
               final paragraph = paragraphs[paragraphIndex];
               final preview = paragraph['preview'] as String;
-              final isExpanded = false; // We could add state for expansion if needed
-              
+              final isExpanded =
+                  false; // We could add state for expansion if needed
+
               return Card(
                 margin: const EdgeInsets.only(bottom: 8),
                 child: Column(
@@ -1696,7 +2137,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                     InkWell(
                       onTap: () {
                         // Show before/after dialog for quick selection
-                        _showBeforeAfterDialog(context, imageIndex, paragraph, paragraphIndex + 1);
+                        _showBeforeAfterDialog(
+                            context, imageIndex, paragraph, paragraphIndex + 1);
                       },
                       borderRadius: BorderRadius.circular(8),
                       child: Padding(
@@ -1709,14 +2151,19 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                                 Expanded(
                                   child: Text(
                                     'Párrafo ${paragraphIndex + 1}',
-                                    style: const TextStyle(fontWeight: FontWeight.w600),
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w600),
                                   ),
                                 ),
                                 // Expansion arrow (optional - for full text view)
                                 IconButton(
                                   icon: const Icon(Icons.expand_more),
                                   onPressed: () {
-                                    _showFullParagraphDialog(context, imageIndex, paragraph, paragraphIndex + 1);
+                                    _showFullParagraphDialog(
+                                        context,
+                                        imageIndex,
+                                        paragraph,
+                                        paragraphIndex + 1);
                                   },
                                   iconSize: 20,
                                 ),
@@ -1727,17 +2174,27 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                               preview,
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-                              ),
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurface
+                                        .withValues(alpha: 0.7),
+                                  ),
                             ),
                             const SizedBox(height: 8),
                             Text(
                               'Toca para seleccionar dónde colocar la imagen',
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: Theme.of(context).colorScheme.primary,
-                                fontStyle: FontStyle.italic,
-                              ),
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(
+                                    color:
+                                        Theme.of(context).colorScheme.primary,
+                                    fontStyle: FontStyle.italic,
+                                  ),
                             ),
                           ],
                         ),
@@ -1765,7 +2222,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           ElevatedButton.icon(
             onPressed: () {
               Navigator.pop(context);
-              _insertPhotoPlaceholder(imageIndex, _contentController.text.length);
+              _insertPhotoPlaceholder(
+                  imageIndex, _contentController.text.length);
             },
             icon: const Icon(Icons.last_page),
             label: const Text('Al final'),
@@ -1774,8 +2232,9 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       ),
     );
   }
-  
-  void _showBeforeAfterDialog(BuildContext context, int imageIndex, Map<String, dynamic> paragraph, int paragraphNumber) {
+
+  void _showBeforeAfterDialog(BuildContext context, int imageIndex,
+      Map<String, dynamic> paragraph, int paragraphNumber) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -1817,7 +2276,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
             onPressed: () {
               Navigator.pop(context); // Close this dialog
               Navigator.pop(context); // Close the paragraph selection dialog
-              _insertPhotoPlaceholder(imageIndex, paragraph['endPosition'] as int);
+              _insertPhotoPlaceholder(
+                  imageIndex, paragraph['endPosition'] as int);
             },
             icon: const Icon(Icons.vertical_align_bottom),
             label: const Text('Después'),
@@ -1826,8 +2286,9 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       ),
     );
   }
-  
-  void _showFullParagraphDialog(BuildContext context, int imageIndex, Map<String, dynamic> paragraph, int paragraphNumber) {
+
+  void _showFullParagraphDialog(BuildContext context, int imageIndex,
+      Map<String, dynamic> paragraph, int paragraphNumber) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -1857,8 +2318,10 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                     child: OutlinedButton.icon(
                       onPressed: () {
                         Navigator.pop(context); // Close this dialog
-                        Navigator.pop(context); // Close the paragraph selection dialog
-                        _insertPhotoPlaceholder(imageIndex, paragraph['position'] as int);
+                        Navigator.pop(
+                            context); // Close the paragraph selection dialog
+                        _insertPhotoPlaceholder(
+                            imageIndex, paragraph['position'] as int);
                       },
                       icon: const Icon(Icons.vertical_align_top),
                       label: const Text('Antes'),
@@ -1869,8 +2332,10 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                     child: ElevatedButton.icon(
                       onPressed: () {
                         Navigator.pop(context); // Close this dialog
-                        Navigator.pop(context); // Close the paragraph selection dialog
-                        _insertPhotoPlaceholder(imageIndex, paragraph['endPosition'] as int);
+                        Navigator.pop(
+                            context); // Close the paragraph selection dialog
+                        _insertPhotoPlaceholder(
+                            imageIndex, paragraph['endPosition'] as int);
                       },
                       icon: const Icon(Icons.vertical_align_bottom),
                       label: const Text('Después'),
@@ -1890,16 +2355,16 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       ),
     );
   }
-  
+
   void _insertPhotoPlaceholder(int imageIndex, int position) {
     final originalText = _contentController.text;
     final photoPlaceholder = '[img_${imageIndex + 1}]';
-    
+
     // Build the text with the new placeholder inserted exactly at the requested position
     final safePosition = position.clamp(0, originalText.length);
     final beforeText = originalText.substring(0, safePosition);
     final afterText = originalText.substring(safePosition);
-    
+
     String withInserted;
     if (safePosition == 0) {
       withInserted = '$photoPlaceholder\n\n$originalText';
@@ -1908,11 +2373,12 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     } else {
       withInserted = beforeText + '\n\n$photoPlaceholder\n\n' + afterText;
     }
-    
+
     // Protect the newly inserted placeholder with a unique token to avoid removing it
     final keepToken = '__NARRA_KEEP_IMG_${imageIndex + 1}__';
     final insertedIndexHint = safePosition; // Hint where to search from
-    final insertedIndex = withInserted.indexOf(photoPlaceholder, insertedIndexHint);
+    final insertedIndex =
+        withInserted.indexOf(photoPlaceholder, insertedIndexHint);
     if (insertedIndex >= 0) {
       withInserted = withInserted.replaceRange(
         insertedIndex,
@@ -1920,30 +2386,32 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         keepToken,
       );
     }
-    
+
     // Remove any previous occurrences of this placeholder (and their padding) except the kept one
-    String cleaned = _removeAllPlaceholdersExceptToken(withInserted, imageIndex + 1, keepToken);
-    
+    String cleaned = _removeAllPlaceholdersExceptToken(
+        withInserted, imageIndex + 1, keepToken);
+
     // Restore the kept token back to the placeholder
     cleaned = cleaned.replaceAll(keepToken, photoPlaceholder);
-    
+
     // Collapse 3+ newlines into 2 for neat spacing
     cleaned = cleaned.replaceAll(RegExp(r'\n[ \t]*\n[ \t]*\n+'), '\n\n');
-    
+
     _contentController.text = cleaned;
-    
+
     // Position cursor just after the inserted placeholder
-    final finalIndex = cleaned.indexOf(photoPlaceholder, (safePosition - 2).clamp(0, cleaned.length));
-    final cursorAfter = finalIndex >= 0 
+    final finalIndex = cleaned.indexOf(
+        photoPlaceholder, (safePosition - 2).clamp(0, cleaned.length));
+    final cursorAfter = finalIndex >= 0
         ? (finalIndex + photoPlaceholder.length + 2).clamp(0, cleaned.length)
         : cleaned.length;
     _contentController.selection = TextSelection.fromPosition(
       TextPosition(offset: cursorAfter),
     );
-    
+
     setState(() => _hasChanges = true);
     _tabController.animateTo(0);
-    
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('✓ Imagen ${imageIndex + 1} colocada en el texto'),
@@ -1955,40 +2423,47 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     );
   }
 
-  String _removeAllPlaceholdersExceptToken(String text, int imageNumber, String keepToken) {
+  String _removeAllPlaceholdersExceptToken(
+      String text, int imageNumber, String keepToken) {
     final placeholder = '[img_$imageNumber]';
     // Temporarily replace the kept token to avoid interference
-    var temp = text.replaceAll(placeholder, placeholder); // no-op to ensure placeholder variable used
+    var temp = text.replaceAll(
+        placeholder, placeholder); // no-op to ensure placeholder variable used
     temp = text;
-    
+
     // Remove occurrences in the middle with surrounding blank lines → keep a single blank separation
-    final middlePattern = RegExp('\\n[ \\t]*\\n[ \\t]*' + RegExp.escape(placeholder) + '[ \\t]*\\n[ \\t]*\\n');
+    final middlePattern = RegExp('\\n[ \\t]*\\n[ \\t]*' +
+        RegExp.escape(placeholder) +
+        '[ \\t]*\\n[ \\t]*\\n');
     temp = temp.replaceAllMapped(middlePattern, (m) => '\n\n');
-    
+
     // Beginning of text
-    final startPattern = RegExp('^' + RegExp.escape(placeholder) + '[ \\t]*\\n[ \\t]*\\n');
+    final startPattern =
+        RegExp('^' + RegExp.escape(placeholder) + '[ \\t]*\\n[ \\t]*\\n');
     temp = temp.replaceAll(startPattern, '');
-    
+
     // End of text
-    final endPattern = RegExp('\\n[ \\t]*\\n[ \\t]*' + RegExp.escape(placeholder) + r'[ 	]*$');
+    final endPattern =
+        RegExp('\\n[ \\t]*\\n[ \\t]*' + RegExp.escape(placeholder) + r'[ 	]*$');
     temp = temp.replaceAll(endPattern, '');
-    
+
     // Any remaining single placeholders (without padding)
-    final loosePattern = RegExp('(?<!' + RegExp.escape(keepToken) + ')' + RegExp.escape(placeholder));
+    final loosePattern = RegExp(
+        '(?<!' + RegExp.escape(keepToken) + ')' + RegExp.escape(placeholder));
     temp = temp.replaceAll(loosePattern, '');
-    
+
     return temp;
   }
 
   void _selectDate(BuildContext context, bool isStartDate) async {
     DateTime? picked;
-    
+
     if (_datesPrecision == 'day') {
       // Full date picker for day precision
       picked = await showDatePicker(
         context: context,
-        initialDate: isStartDate 
-            ? (_startDate ?? DateTime.now()) 
+        initialDate: isStartDate
+            ? (_startDate ?? DateTime.now())
             : (_endDate ?? _startDate ?? DateTime.now()),
         firstDate: DateTime(1900),
         lastDate: DateTime.now(),
@@ -1998,8 +2473,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       picked = await showDialog<DateTime>(
         context: context,
         builder: (context) => _buildMonthYearPicker(
-          isStartDate 
-              ? (_startDate ?? DateTime.now()) 
+          isStartDate
+              ? (_startDate ?? DateTime.now())
               : (_endDate ?? _startDate ?? DateTime.now()),
         ),
       );
@@ -2008,13 +2483,13 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       picked = await showDialog<DateTime>(
         context: context,
         builder: (context) => _buildYearPicker(
-          isStartDate 
-              ? (_startDate ?? DateTime.now()) 
+          isStartDate
+              ? (_startDate ?? DateTime.now())
               : (_endDate ?? _startDate ?? DateTime.now()),
         ),
       );
     }
-    
+
     if (picked != null) {
       setState(() {
         if (isStartDate) {
@@ -2033,7 +2508,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   Widget _buildMonthYearPicker(DateTime initialDate) {
     int selectedYear = initialDate.year;
     int selectedMonth = initialDate.month;
-    
+
     return StatefulBuilder(
       builder: (context, setDialogState) {
         return AlertDialog(
@@ -2048,7 +2523,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     IconButton(
-                      onPressed: selectedYear > 1900 
+                      onPressed: selectedYear > 1900
                           ? () => setDialogState(() => selectedYear--)
                           : null,
                       icon: const Icon(Icons.chevron_left),
@@ -2076,30 +2551,48 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                     crossAxisSpacing: 8,
                     mainAxisSpacing: 8,
                     children: List.generate(12, (index) {
-                      final monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
-                                       'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+                      final monthNames = [
+                        'Ene',
+                        'Feb',
+                        'Mar',
+                        'Abr',
+                        'May',
+                        'Jun',
+                        'Jul',
+                        'Ago',
+                        'Sep',
+                        'Oct',
+                        'Nov',
+                        'Dic'
+                      ];
                       final month = index + 1;
                       final isSelected = month == selectedMonth;
                       return Material(
                         color: Colors.transparent,
                         child: InkWell(
-                          onTap: () => setDialogState(() => selectedMonth = month),
+                          onTap: () =>
+                              setDialogState(() => selectedMonth = month),
                           borderRadius: BorderRadius.circular(8),
                           child: Container(
                             decoration: BoxDecoration(
-                              color: isSelected 
+                              color: isSelected
                                   ? Theme.of(context).colorScheme.primary
-                                  : Theme.of(context).colorScheme.surfaceVariant,
+                                  : Theme.of(context)
+                                      .colorScheme
+                                      .surfaceVariant,
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Center(
                               child: Text(
                                 monthNames[index],
                                 style: TextStyle(
-                                  color: isSelected 
+                                  color: isSelected
                                       ? Theme.of(context).colorScheme.onPrimary
-                                      : Theme.of(context).colorScheme.onSurfaceVariant,
-                                  fontWeight: isSelected ? FontWeight.bold : null,
+                                      : Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant,
+                                  fontWeight:
+                                      isSelected ? FontWeight.bold : null,
                                 ),
                               ),
                             ),
@@ -2119,7 +2612,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
             ),
             TextButton(
               onPressed: () {
-                Navigator.pop(context, DateTime(selectedYear, selectedMonth, 1));
+                Navigator.pop(
+                    context, DateTime(selectedYear, selectedMonth, 1));
               },
               child: const Text('Seleccionar'),
             ),
@@ -2128,18 +2622,18 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       },
     );
   }
-  
+
   Widget _buildYearPicker(DateTime initialDate) {
     int selectedYear = initialDate.year;
     late int startYear;
-    
+
     // Initialize startYear to show 9 years centered around selected year
     int getStartYear(int year) {
       return ((year - 1900) ~/ 9) * 9 + 1900;
     }
-    
+
     startYear = getStartYear(selectedYear);
-    
+
     return StatefulBuilder(
       builder: (context, setDialogState) {
         List<int> getYearRange() {
@@ -2152,9 +2646,9 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           }
           return years;
         }
-        
+
         final years = getYearRange();
-        
+
         return AlertDialog(
           title: const Text('Seleccionar año'),
           content: SizedBox(
@@ -2175,8 +2669,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                     Text(
                       '$startYear - ${startYear + 8}',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                            fontWeight: FontWeight.bold,
+                          ),
                     ),
                     IconButton(
                       onPressed: (startYear + 8) < DateTime.now().year
@@ -2201,23 +2695,30 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                       return Material(
                         color: Colors.transparent,
                         child: InkWell(
-                          onTap: () => setDialogState(() => selectedYear = year),
+                          onTap: () =>
+                              setDialogState(() => selectedYear = year),
                           borderRadius: BorderRadius.circular(8),
                           child: Container(
                             decoration: BoxDecoration(
-                              color: isSelected 
+                              color: isSelected
                                   ? Theme.of(context).colorScheme.primary
-                                  : Theme.of(context).colorScheme.surfaceVariant,
+                                  : Theme.of(context)
+                                      .colorScheme
+                                      .surfaceVariant,
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Center(
                               child: Text(
                                 '$year',
                                 style: TextStyle(
-                                  color: isSelected 
+                                  color: isSelected
                                       ? Theme.of(context).colorScheme.onPrimary
-                                      : Theme.of(context).colorScheme.onSurfaceVariant,
-                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                      : Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant,
+                                  fontWeight: isSelected
+                                      ? FontWeight.bold
+                                      : FontWeight.w500,
                                 ),
                               ),
                             ),
@@ -2231,8 +2732,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                 Text(
                   'Usa las flechas para ver más años',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.outline,
-                  ),
+                        color: Theme.of(context).colorScheme.outline,
+                      ),
                 ),
               ],
             ),
@@ -2258,18 +2759,18 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     if (content.isEmpty) {
       return 'Sin contenido';
     }
-    
+
     // Remove extra whitespace and get first 150 characters
     final cleanContent = content.trim().replaceAll(RegExp(r'\s+'), ' ');
     if (cleanContent.length <= 150) {
       return cleanContent;
     }
-    
+
     // Find a good breaking point (end of sentence or word)
     final truncated = cleanContent.substring(0, 150);
     final lastPeriod = truncated.lastIndexOf('.');
     final lastSpace = truncated.lastIndexOf(' ');
-    
+
     if (lastPeriod > 100) {
       return truncated.substring(0, lastPeriod + 1);
     } else if (lastSpace > 100) {
@@ -2295,13 +2796,37 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       case 'year':
         return '${date.year}';
       case 'month':
-        final months = ['ene', 'feb', 'mar', 'abr', 'may', 'jun',
-                       'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+        final months = [
+          'ene',
+          'feb',
+          'mar',
+          'abr',
+          'may',
+          'jun',
+          'jul',
+          'ago',
+          'sep',
+          'oct',
+          'nov',
+          'dic'
+        ];
         return '${months[date.month - 1]} ${date.year}';
       case 'day':
       default:
-        final months = ['ene', 'feb', 'mar', 'abr', 'may', 'jun',
-                       'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+        final months = [
+          'ene',
+          'feb',
+          'mar',
+          'abr',
+          'may',
+          'jun',
+          'jul',
+          'ago',
+          'sep',
+          'oct',
+          'nov',
+          'dic'
+        ];
         return '${date.day} ${months[date.month - 1]} ${date.year}';
     }
   }
@@ -2324,8 +2849,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       return 'imagen.jpg';
     }
   }
-
-
 
   Future<void> _showGhostWriterDialog() async {
     if (!_canUseGhostWriter()) {
@@ -2356,7 +2879,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                     style: TextStyle(fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 12),
-                  
+
                   DropdownButtonFormField<String>(
                     value: _ghostWriterTone,
                     decoration: const InputDecoration(
@@ -2364,28 +2887,34 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                       border: OutlineInputBorder(),
                     ),
                     items: const [
-                      DropdownMenuItem(value: 'nostálgico', child: Text('Nostálgico')),
+                      DropdownMenuItem(
+                          value: 'nostálgico', child: Text('Nostálgico')),
                       DropdownMenuItem(value: 'alegre', child: Text('Alegre')),
-                      DropdownMenuItem(value: 'emotivo', child: Text('Emotivo')),
-                      DropdownMenuItem(value: 'reflexivo', child: Text('Reflexivo')),
-                      DropdownMenuItem(value: 'divertido', child: Text('Divertido')),
+                      DropdownMenuItem(
+                          value: 'emotivo', child: Text('Emotivo')),
+                      DropdownMenuItem(
+                          value: 'reflexivo', child: Text('Reflexivo')),
+                      DropdownMenuItem(
+                          value: 'divertido', child: Text('Divertido')),
                     ],
-                    onChanged: (value) => setState(() => _ghostWriterTone = value!),
+                    onChanged: (value) =>
+                        setState(() => _ghostWriterTone = value!),
                   ),
-                  
+
                   const SizedBox(height: 16),
-                  
+
                   // Advanced options toggle
                   Row(
                     children: [
                       Checkbox(
                         value: _showAdvancedGhostWriter,
-                        onChanged: (value) => setState(() => _showAdvancedGhostWriter = value ?? false),
+                        onChanged: (value) => setState(
+                            () => _showAdvancedGhostWriter = value ?? false),
                       ),
                       const Text('Mostrar opciones avanzadas'),
                     ],
                   ),
-                  
+
                   // Advanced configuration
                   if (_showAdvancedGhostWriter) ...[
                     const SizedBox(height: 16),
@@ -2394,7 +2923,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                       style: TextStyle(fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 12),
-                    
                     DropdownButtonFormField<String>(
                       value: _ghostWriterFidelity,
                       decoration: const InputDecoration(
@@ -2402,15 +2930,20 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                         border: OutlineInputBorder(),
                       ),
                       items: const [
-                        DropdownMenuItem(value: 'high', child: Text('Alta - cambios mínimos')),
-                        DropdownMenuItem(value: 'medium', child: Text('Media - mejoras moderadas')),
-                        DropdownMenuItem(value: 'creative', child: Text('Creativa - interpretación libre')),
+                        DropdownMenuItem(
+                            value: 'high',
+                            child: Text('Alta - cambios mínimos')),
+                        DropdownMenuItem(
+                            value: 'medium',
+                            child: Text('Media - mejoras moderadas')),
+                        DropdownMenuItem(
+                            value: 'creative',
+                            child: Text('Creativa - interpretación libre')),
                       ],
-                      onChanged: (value) => setState(() => _ghostWriterFidelity = value!),
+                      onChanged: (value) =>
+                          setState(() => _ghostWriterFidelity = value!),
                     ),
-                    
                     const SizedBox(height: 12),
-                    
                     DropdownButtonFormField<String>(
                       value: _ghostWriterAudience,
                       decoration: const InputDecoration(
@@ -2418,27 +2951,30 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                         border: OutlineInputBorder(),
                       ),
                       items: const [
-                        DropdownMenuItem(value: 'familia', child: Text('Familia')),
-                        DropdownMenuItem(value: 'amigos', child: Text('Amigos')),
-                        DropdownMenuItem(value: 'público', child: Text('Público general')),
+                        DropdownMenuItem(
+                            value: 'familia', child: Text('Familia')),
+                        DropdownMenuItem(
+                            value: 'amigos', child: Text('Amigos')),
+                        DropdownMenuItem(
+                            value: 'público', child: Text('Público general')),
                       ],
-                      onChanged: (value) => setState(() => _ghostWriterAudience = value!),
+                      onChanged: (value) =>
+                          setState(() => _ghostWriterAudience = value!),
                     ),
-                    
                     const SizedBox(height: 12),
-                    
                     SwitchListTile(
                       title: const Text('Expandir contenido'),
                       subtitle: const Text('Añadir más detalles y contexto'),
                       value: _ghostWriterExpandContent,
-                      onChanged: (value) => setState(() => _ghostWriterExpandContent = value),
+                      onChanged: (value) =>
+                          setState(() => _ghostWriterExpandContent = value),
                     ),
-                    
                     SwitchListTile(
                       title: const Text('Preservar estructura'),
                       subtitle: const Text('Mantener organización de párrafos'),
                       value: _ghostWriterPreserveStructure,
-                      onChanged: (value) => setState(() => _ghostWriterPreserveStructure = value),
+                      onChanged: (value) =>
+                          setState(() => _ghostWriterPreserveStructure = value),
                     ),
                   ],
                 ],
@@ -2467,12 +3003,12 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         ),
       ),
     );
-    
+
     if (result != null) {
       _applyGhostWriter(result);
     }
   }
-  
+
   Future<void> _applyGhostWriter(Map<String, dynamic> params) async {
     showDialog(
       context: context,
@@ -2493,7 +3029,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         ),
       ),
     );
-    
+
     try {
       final result = await OpenAIService.improveStoryText(
         originalText: _contentController.text,
@@ -2507,9 +3043,9 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         expandContent: params['expandContent'],
         preserveStructure: params['preserveStructure'],
       );
-      
+
       Navigator.pop(context); // Close loading dialog
-      
+
       // Show results dialog
       showDialog(
         context: context,
@@ -2523,21 +3059,18 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                 Text(
                   'Cambios realizados:',
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                        fontWeight: FontWeight.bold,
+                      ),
                 ),
                 const SizedBox(height: 8),
                 Text(result['changes_summary']),
-                
                 const SizedBox(height: 16),
-                
                 Text(
                   'Palabras: ${result['word_count']}',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.outline,
-                  ),
+                        color: Theme.of(context).colorScheme.outline,
+                      ),
                 ),
-                
                 if (result['suggestions'].isNotEmpty) ...[
                   const SizedBox(height: 16),
                   const Text(
@@ -2546,15 +3079,15 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                   ),
                   const SizedBox(height: 8),
                   ...result['suggestions'].map((suggestion) => Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('• '),
-                        Expanded(child: Text(suggestion)),
-                      ],
-                    ),
-                  )),
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('• '),
+                            Expanded(child: Text(suggestion)),
+                          ],
+                        ),
+                      )),
                 ],
               ],
             ),
@@ -2619,7 +3152,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       ),
     );
   }
-  
 }
 
 class PhotoCard extends StatelessWidget {
@@ -2651,14 +3183,16 @@ class PhotoCard extends StatelessWidget {
             width: double.infinity,
             decoration: BoxDecoration(
               color: Theme.of(context).colorScheme.surfaceVariant,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(12)),
             ),
             child: ClipRRect(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(12)),
               child: _buildImageWidget(context),
             ),
           ),
-          
+
           // Photo details
           ListTile(
             leading: CircleAvatar(
@@ -2676,8 +3210,8 @@ class PhotoCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  photo['caption']?.isNotEmpty == true 
-                      ? photo['caption'] 
+                  photo['caption']?.isNotEmpty == true
+                      ? photo['caption']
                       : 'Sin descripción',
                 ),
                 Row(
@@ -2761,7 +3295,7 @@ class PhotoCard extends StatelessWidget {
               ],
             ),
           ),
-          
+
           // Colocar foto button
           Padding(
             padding: const EdgeInsets.all(12),
@@ -2793,7 +3327,8 @@ class PhotoCard extends StatelessWidget {
         height: double.infinity,
         errorBuilder: (context, error, stackTrace) => _buildErrorWidget(),
       );
-    } else if (photo['path'] != null && photo['path'].toString().startsWith('http')) {
+    } else if (photo['path'] != null &&
+        photo['path'].toString().startsWith('http')) {
       // If it's a URL (already uploaded), use network image
       return Image.network(
         photo['path'],
@@ -2822,8 +3357,8 @@ class PhotoCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(
-                Icons.image, 
-                size: 48, 
+                Icons.image,
+                size: 48,
                 color: Theme.of(context).colorScheme.primary,
               ),
               const SizedBox(height: 8),
@@ -2836,8 +3371,8 @@ class PhotoCard extends StatelessWidget {
               Text(
                 'Imagen seleccionada',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.outline,
-                ),
+                      color: Theme.of(context).colorScheme.outline,
+                    ),
               ),
             ],
           ),

@@ -791,13 +791,9 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     try {
       _recorder = VoiceRecorder();
       setState(() { _isRecording = true; _sttStatus = 'Grabando...'; });
-      await _recorder!.start(onChunk: (bytes, mime) async {
-        // Transcribir en background y agregar al cursor
-        try {
-          final text = await OpenAIService.transcribeChunk(audioBytes: bytes, mimeType: mime, language: 'es');
-          if (text.trim().isEmpty) return;
-          setState(() { _liveTranscript += (text.endsWith(' ') ? text : '$text '); });
-        } catch (_) {}
+      await _recorder!.start(onText: (text) {
+        if (text.trim().isEmpty) return;
+        setState(() { _liveTranscript += (text.endsWith(' ') ? text : '$text '); });
       });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('🎤 Grabando... Toca de nuevo para detener'), backgroundColor: Colors.red),

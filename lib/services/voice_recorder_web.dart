@@ -70,7 +70,8 @@ class VoiceRecorder {
     _recorder!.addEventListener('dataavailable', (event) async {
       final e = event as html.BlobEvent;
       final blob = e.data;
-      if (blob != null && blob.size > 0) {
+      // Evitar enviar fragmentos diminutos que provocan 400
+      if (blob != null && blob.size > 65536) {
         final reader = html.FileReader();
         final completer = Completer<Uint8List>();
         reader.onError.listen((_) {
@@ -114,14 +115,8 @@ class VoiceRecorder {
       }
     });
 
-    // Some browsers ignore timeslice; start without slice and manually flush
-    _recorder!.start();
-    _flushTimer?.cancel();
-    _flushTimer = Timer.periodic(const Duration(milliseconds: 750), (_) {
-      try {
-        _recorder?.requestData();
-      } catch (_) {}
-    });
+    // Solicitar fragmentos más largos (~3s) para contenedores válidos y mejor precisión
+    _recorder!.start(3000);
   }
 
   Future<Uint8List?> stop() async {

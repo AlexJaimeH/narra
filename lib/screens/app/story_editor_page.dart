@@ -271,29 +271,13 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           ),
           child: Row(
             children: [
-              // Voice Recording Button
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                child: InkWell(
-                  onTap: _toggleRecording,
-                  borderRadius: BorderRadius.circular(28),
-                  child: Container(
-                    width: 56,
-                    height: 56,
-                    decoration: BoxDecoration(
-                      color: _isRecording 
-                          ? Colors.red 
-                          : Theme.of(context).colorScheme.primaryContainer,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      _isRecording ? Icons.stop : Icons.mic,
-                      color: _isRecording 
-                          ? Colors.white 
-                          : Theme.of(context).colorScheme.primary,
-                      size: 28,
-                    ),
-                  ),
+              // Dictation bottom-sheet launcher (no inline recording state)
+              IconButton(
+                onPressed: _openDictationPanel,
+                icon: const Icon(Icons.mic),
+                color: Theme.of(context).colorScheme.primary,
+                style: IconButton.styleFrom(
+                  backgroundColor: Theme.of(context).colorScheme.primaryContainer,
                 ),
               ),
               
@@ -815,11 +799,9 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
   Future<void> _pauseOrStopRecording() async {
     if (!_isPaused) {
-      // Pausa (en web MediaRecorder no tiene pausa estándar, simulamos stop parcial)
       await _stopRecording(partial: true);
       setState(() { _isPaused = true; });
     } else {
-      // Reanudar
       setState(() { _isPaused = false; });
       await _startRecording();
     }
@@ -899,16 +881,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                       },
                       icon: Icon(_isPaused ? Icons.play_arrow : Icons.pause),
                     ),
-                    IconButton(
-                      tooltip: 'Detener',
-                      onPressed: () async {
-                        FocusScope.of(context).requestFocus(FocusNode());
-                        await _stopRecording();
-                        if (mounted) Navigator.pop(context);
-                        setState(() { _showDictationPanel = false; });
-                      },
-                      icon: const Icon(Icons.stop),
-                    ),
+                    // Stop removed per requirements
                   ],
                 ),
                 const SizedBox(height: 12),
@@ -942,9 +915,23 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                     ),
                     const SizedBox(width: 12),
                     TextButton(
-                      onPressed: () {
-                        _stopRecording();
-                        Navigator.pop(context);
+                      onPressed: () async {
+                        if (_liveTranscript.trim().isNotEmpty) {
+                          final confirm = await showDialog<bool>(
+                            context: context,
+                            builder: (ctx) => AlertDialog(
+                              title: const Text('¿Descartar dictado?'),
+                              content: const Text('Si cierras ahora, se perderá el fragmento grabado.'),
+                              actions: [
+                                TextButton(onPressed: ()=> Navigator.pop(ctx, false), child: const Text('Cancelar')),
+                                ElevatedButton(onPressed: ()=> Navigator.pop(ctx, true), child: const Text('Descartar')),
+                              ],
+                            ),
+                          );
+                          if (confirm != true) return;
+                        }
+                        await _stopRecording(partial: true);
+                        if (mounted) Navigator.pop(context);
                         setState(() { _showDictationPanel = false; });
                       },
                       child: const Text('Cerrar'),

@@ -64,6 +64,9 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   bool _ghostWriterExpandContent = false;
   bool _ghostWriterPreserveStructure = true;
 
+  static const _whisperInstructions =
+      'Idioma: español. Si el audio es ruidoso, prioriza claridad. No inventes texto.';
+
   @override
   void initState() {
     super.initState();
@@ -806,6 +809,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   void _handleTranscriptChunk(String text) {
     final chunk = text.trim();
     if (chunk.isEmpty) return;
+    if (chunk == _whisperInstructions) return;
 
     final trimmedExisting = _liveTranscript.trimRight();
     if (chunk == _lastTranscriptChunk || trimmedExisting.endsWith(chunk)) {
@@ -860,6 +864,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         _liveTranscript = '';
         _lastTranscriptChunk = null;
       });
+      _recordedSegments.clear();
     } else {
       _lastTranscriptChunk = null;
     }
@@ -896,61 +901,28 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   }
 
   Future<void> _togglePauseResume() async {
-    final recorder = _recorder;
-    if (recorder == null) {
-      try {
-        await _startRecording(resetTranscript: false);
-      } catch (_) {}
+    if (!_isRecording && !_isPaused) {
       return;
     }
 
-    if (_isPaused) {
+    if (_isPaused || _recorder == null) {
       try {
-        final resumed = await recorder.resume();
-        if (!resumed) {
-          await _startRecording(resetTranscript: false);
-        } else if (mounted) {
-          setState(() {
-            _isPaused = false;
-            _isRecording = true;
-          });
-        }
+        await _startRecording(resetTranscript: false);
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('No se pudo reanudar: $e')),
           );
         }
-        try {
-          await _startRecording(resetTranscript: false);
-        } catch (_) {}
       }
       return;
     }
 
-    try {
-      final paused = await recorder.pause();
-      if (paused) {
-        if (mounted) {
-          setState(() => _isPaused = true);
-        }
-        return;
-      }
-    } catch (_) {
-      // fall back to stop below
-    }
-
-    try {
-      final bytes = await recorder.stop();
-      if (bytes != null && bytes.isNotEmpty) {
-        _recordedSegments.add(bytes);
-      }
-    } catch (_) {}
-    _recorder = null;
+    await _stopRecording(partial: true);
     if (mounted) {
       setState(() {
-        _isRecording = false;
         _isPaused = true;
+        _isRecording = false;
       });
     }
   }

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 import 'dart:html' as html;
 
+import 'package:flutter/foundation.dart';
 import 'package:narra/openai/openai_service.dart';
 
 typedef OnText = void Function(String text);
@@ -274,8 +275,13 @@ class VoiceRecorder {
       if (text.trim().isNotEmpty) {
         handler(text);
       }
-    } catch (_) {
-      // Ignore transcription failures; subsequent chunks may succeed
+    } catch (error, stackTrace) {
+      if (kDebugMode) {
+        // Surface errors in dev tools to speed up debugging of Whisper issues
+        // ignore: avoid_print
+        print('⚠️ Whisper chunk failed: $error\n$stackTrace');
+      }
+      html.window.console.error('Whisper chunk failed: $error');
     }
   }
 

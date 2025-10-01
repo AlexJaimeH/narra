@@ -34,7 +34,24 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     } else {
       const arrayBuffer = await request.arrayBuffer();
       const type = request.headers.get('Content-Type') || 'audio/webm';
-      const file = new File([arrayBuffer], 'audio.webm', { type });
+      const extension = (() => {
+        const mime = type.split(';')[0]?.trim() || 'audio/webm';
+        switch (mime) {
+          case 'audio/mp4':
+            return 'mp4';
+          case 'audio/mpeg':
+            return 'mp3';
+          case 'audio/ogg':
+            return 'ogg';
+          case 'audio/webm':
+            return 'webm';
+          case 'audio/aac':
+            return 'aac';
+          default:
+            return 'webm';
+        }
+      })();
+      const file = new File([arrayBuffer], `audio.${extension}`, { type });
       formData = new FormData();
       formData.append('file', file);
       formData.append('model', model);
@@ -81,5 +98,3 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     return new Response(`Error: ${error.message || String(error)}`, { status: 500 });
   }
 };
-
-

@@ -881,7 +881,9 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                       },
                       icon: Icon(_isPaused ? Icons.play_arrow : Icons.pause),
                     ),
+
                     // Stop removed per requirements
+
                   ],
                 ),
                 const SizedBox(height: 12),
@@ -915,6 +917,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                     ),
                     const SizedBox(width: 12),
                     TextButton(
+
                       onPressed: () async {
                         if (_liveTranscript.trim().isNotEmpty) {
                           final confirm = await showDialog<bool>(
@@ -932,6 +935,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                         }
                         await _stopRecording(partial: true);
                         if (mounted) Navigator.pop(context);
+
                         setState(() { _showDictationPanel = false; });
                       },
                       child: const Text('Cerrar'),

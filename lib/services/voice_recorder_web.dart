@@ -1,16 +1,20 @@
 import 'dart:async';
 import 'dart:typed_data';
 import 'dart:html' as html;
+
 import 'package:narra/openai/openai_service.dart';
 
 typedef OnText = void Function(String text);
+
 
 class VoiceRecorder {
   html.MediaRecorder? _recorder;
   final List<Uint8List> _chunks = [];
   String _mimeType = 'audio/webm';
 
+
   Future<void> start({OnText? onText}) async {
+
     // Request mic
     final stream = await html.window.navigator.mediaDevices!.getUserMedia({'audio': true});
 
@@ -43,6 +47,7 @@ class VoiceRecorder {
           final buffer = reader.result as ByteBuffer;
           final bytes = Uint8List.view(buffer);
           _chunks.add(bytes);
+
           // Transcribe chunk via OpenAI Whisper proxy and emit text
           () async {
             try {
@@ -52,6 +57,7 @@ class VoiceRecorder {
               }
             } catch (_) {}
           }();
+
           completer.complete(bytes);
         });
         reader.readAsArrayBuffer(blob);

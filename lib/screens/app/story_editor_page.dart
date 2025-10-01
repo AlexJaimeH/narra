@@ -30,9 +30,11 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   bool _isRecording = false;
   VoiceRecorder? _recorder;
   String _sttStatus = '';
+
   String _liveTranscript = '';
   bool _showDictationPanel = false;
   bool _isPaused = false;
+
   bool _hasChanges = false;
   bool _isLoading = false;
   bool _isSaving = false;
@@ -781,9 +783,11 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
   void _toggleRecording() {
     if (_isRecording) {
+
       _pauseOrStopRecording();
     } else {
       _openDictationPanel();
+
     }
   }
 
@@ -791,15 +795,18 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     try {
       _recorder = VoiceRecorder();
       setState(() { _isRecording = true; _sttStatus = 'Grabando...'; });
+
       await _recorder!.start(onText: (text) {
         if (text.trim().isEmpty) return;
         setState(() { _liveTranscript += (text.endsWith(' ') ? text : '$text '); });
+
       });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('🎤 Grabando... Toca de nuevo para detener'), backgroundColor: Colors.red),
       );
     } catch (e) {
       setState(() { _isRecording = false; _sttStatus = ''; });
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('No se pudo iniciar el micrófono: $e')),
       );
@@ -842,6 +849,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     }
   }
 
+
   void _insertAtCursor(String text) {
     final selection = _contentController.selection;
     final full = _contentController.text;
@@ -857,6 +865,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     final caret = start + text.length;
     _contentController.selection = TextSelection.collapsed(offset: caret);
   }
+
 
   void _openDictationPanel() {
     setState(() {
@@ -1011,6 +1020,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     _contentController.selection = TextSelection.collapsed(offset: (before + text).length);
     setState(() { _hasChanges = true; });
   }
+
 
   bool _canPublish() {
     return _titleController.text.isNotEmpty && 

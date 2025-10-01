@@ -12,6 +12,7 @@ class VoiceRecorder {
   final List<Uint8List> _chunks = [];
   String _mimeType = 'application/octet-stream';
   Timer? _flushTimer;
+  html.MediaStream? _stream;
 
 
 
@@ -32,6 +33,7 @@ class VoiceRecorder {
         'noiseSuppression': true,
       }
     });
+    _stream = stream;
 
     // Choose supported mime type (browsers vary; Safari often prefers mp4/aac)
     final candidates = <String>[
@@ -67,22 +69,39 @@ class VoiceRecorder {
       if (blob != null && blob.size > 0) {
         final reader = html.FileReader();
         final completer = Completer<Uint8List>();
+        reader.onError.listen((_) {
+          try { reader.abort(); } catch (_) {}
+          if (!completer.isCompleted) completer.completeError(reader.error ?? 'read error');
+        });
         reader.onLoadEnd.listen((_) {
-          final buffer = reader.result as ByteBuffer;
-          final bytes = Uint8List.view(buffer);
-          _chunks.add(bytes);
-
-          // Transcribe chunk via OpenAI Whisper proxy and emit text
-          () async {
-            try {
-              final text = await OpenAIService.transcribeChunk(audioBytes: bytes, mimeType: _mimeType, language: 'es');
-              if (text.trim().isNotEmpty) {
-                onText?.call(text);
-              }
-            } catch (_) {}
-          }();
-
-          completer.complete(bytes);
+          try {
+            final result = reader.result;
+            Uint8List? bytes;
+            if (result is ByteBuffer) {
+              bytes = Uint8List.view(result);
+            } else if (result is Uint8List) {
+              bytes = result;
+            } else if (result is List<int>) {
+              bytes = Uint8List.fromList(result);
+            }
+            if (bytes == null) {
+              if (!completer.isCompleted) completer.completeError('empty buffer');
+              return;
+            }
+            _chunks.add(bytes);
+            // Transcribe chunk via OpenAI Whisper proxy and emit text
+            () async {
+              try {
+                final text = await OpenAIService.transcribeChunk(audioBytes: bytes!, mimeType: _mimeType, language: 'es');
+                if (text.trim().isNotEmpty) {
+                  onText?.call(text);
+                }
+              } catch (_) {}
+            }();
+            if (!completer.isCompleted) completer.complete(bytes);
+          } catch (_) {
+            if (!completer.isCompleted) completer.completeError('load error');
+          }
         });
         reader.readAsArrayBuffer(blob);
         await completer.future;
@@ -108,6 +127,10 @@ class VoiceRecorder {
     recorder.addEventListener('stop', (_) => completer.complete());
     recorder.stop();
     await completer.future;
+    try {
+      _stream?.getTracks().forEach((t) { try { t.stop(); } catch (_) {} });
+    } catch (_) {}
+    _stream = null;
 
     if (_chunks.isEmpty) return null;
     final totalLength = _chunks.fold<int>(0, (sum, b) => sum + b.length);

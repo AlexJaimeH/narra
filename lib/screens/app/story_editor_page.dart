@@ -30,6 +30,9 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   bool _isRecording = false;
   VoiceRecorder? _recorder;
   String _sttStatus = '';
+  String _liveTranscript = '';
+  bool _showDictationPanel = false;
+  bool _isPaused = false;
   bool _hasChanges = false;
   bool _isLoading = false;
   bool _isSaving = false;
@@ -778,9 +781,9 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
   void _toggleRecording() {
     if (_isRecording) {
-      _stopRecording();
+      _pauseOrStopRecording();
     } else {
-      _startRecording();
+      _openDictationPanel();
     }
   }
 
@@ -793,7 +796,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         try {
           final text = await OpenAIService.transcribeChunk(audioBytes: bytes, mimeType: mime, language: 'es');
           if (text.trim().isEmpty) return;
-          _insertAtCursor('$text ');
+          setState(() { _liveTranscript += (text.endsWith(' ') ? text : '$text '); });
         } catch (_) {}
       });
       ScaffoldMessenger.of(context).showSnackBar(
@@ -807,12 +810,24 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     }
   }
 
-  Future<void> _stopRecording() async {
+  Future<void> _pauseOrStopRecording() async {
+    if (!_isPaused) {
+      // Pausa (en web MediaRecorder no tiene pausa estándar, simulamos stop parcial)
+      await _stopRecording(partial: true);
+      setState(() { _isPaused = true; });
+    } else {
+      // Reanudar
+      setState(() { _isPaused = false; });
+      await _startRecording();
+    }
+  }
+
+  Future<void> _stopRecording({bool partial = false}) async {
     try {
       setState(() { _sttStatus = 'Guardando audio...'; });
       final bytes = await _recorder?.stop();
       setState(() { _isRecording = false; _sttStatus = ''; });
-      if (bytes != null && _currentStory != null) {
+      if (!partial && bytes != null && _currentStory != null) {
         // Subir audio al bucket
         await AudioUploadService.uploadStoryAudio(
           storyId: _currentStory!.id,
@@ -845,6 +860,160 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     _contentController.text = newText;
     final caret = start + text.length;
     _contentController.selection = TextSelection.collapsed(offset: caret);
+  }
+
+  void _openDictationPanel() {
+    setState(() {
+      _showDictationPanel = true;
+      _liveTranscript = '';
+    });
+    _startRecording();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+          child: SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(_isRecording && !_isPaused ? Icons.mic : Icons.pause_circle_filled, color: Colors.red),
+                    const SizedBox(width: 8),
+                    Text(_isRecording && !_isPaused ? 'Grabando...' : (_isPaused ? 'Pausado' : 'Listo')),
+                    const Spacer(),
+                    IconButton(
+                      tooltip: _isPaused ? 'Reanudar' : 'Pausar',
+                      onPressed: () async {
+                        await _pauseOrStopRecording();
+                      },
+                      icon: Icon(_isPaused ? Icons.play_arrow : Icons.pause),
+                    ),
+                    IconButton(
+                      tooltip: 'Detener',
+                      onPressed: () async {
+                        await _stopRecording();
+                        if (mounted) Navigator.pop(context);
+                        setState(() { _showDictationPanel = false; });
+                      },
+                      icon: const Icon(Icons.stop),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  constraints: const BoxConstraints(maxHeight: 260),
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: SingleChildScrollView(
+                    child: Text(
+                      _liveTranscript.isEmpty ? 'Empieza a hablar…' : _liveTranscript,
+                      style: Theme.of(context).textTheme.bodyLarge,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    ElevatedButton.icon(
+                      onPressed: _liveTranscript.trim().isEmpty ? null : () {
+                        // Elegir dónde insertar como con fotos
+                        _chooseInsertPositionForTranscript(_liveTranscript.trim());
+                        Navigator.pop(context);
+                        setState(() { _showDictationPanel = false; });
+                      },
+                      icon: const Icon(Icons.add),
+                      label: const Text('Agregar a la historia'),
+                    ),
+                    const SizedBox(width: 12),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        setState(() { _showDictationPanel = false; });
+                      },
+                      child: const Text('Cerrar'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _chooseInsertPositionForTranscript(String transcript) {
+    final text = _contentController.text;
+    if (text.trim().isEmpty) {
+      _insertAtCursor(transcript + '\n\n');
+      return;
+    }
+    final paragraphs = _parseParagraphs(text);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('¿Dónde agregar el dictado?'),
+        content: SizedBox(
+          width: 520,
+          height: 400,
+          child: ListView.builder(
+            itemCount: paragraphs.length,
+            itemBuilder: (context, idx) {
+              final p = paragraphs[idx];
+              return ListTile(
+                title: Text(p['preview'] as String),
+                subtitle: const Text('Elegir posición'),
+                trailing: Wrap(
+                  spacing: 8,
+                  children: [
+                    IconButton(
+                      tooltip: 'Antes',
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _insertTextAtPosition(transcript + '\n\n', p['position'] as int);
+                      },
+                      icon: const Icon(Icons.vertical_align_top),
+                    ),
+                    IconButton(
+                      tooltip: 'Después',
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _insertTextAtPosition('\n\n' + transcript + '\n\n', p['endPosition'] as int);
+                      },
+                      icon: const Icon(Icons.vertical_align_bottom),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _insertTextAtPosition(String text, int position) {
+    final full = _contentController.text;
+    final safe = position.clamp(0, full.length);
+    final before = full.substring(0, safe);
+    final after = full.substring(safe);
+    _contentController.text = before + text + after;
+    _contentController.selection = TextSelection.collapsed(offset: (before + text).length);
+    setState(() { _hasChanges = true; });
   }
 
   bool _canPublish() {

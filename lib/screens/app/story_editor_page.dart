@@ -806,6 +806,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     _contentController.selection = TextSelection.collapsed(offset: caret);
   }
 
+
   void _handleTranscriptChunk(String text) {
     final chunk = text.trim();
     if (chunk.isEmpty) return;
@@ -816,6 +817,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       _lastTranscriptChunk = chunk;
       return;
     }
+
 
     final overlap = _computeOverlap(trimmedExisting, chunk);
     final addition = chunk.substring(overlap).trimLeft();
@@ -875,6 +877,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         _isPaused = false;
       });
 
+
       await recorder.start(onText: _handleTranscriptChunk);
 
       if (mounted && resetTranscript) {
@@ -901,6 +904,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   }
 
   Future<void> _togglePauseResume() async {
+
     if (!_isRecording && !_isPaused) {
       return;
     }
@@ -908,21 +912,25 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     if (_isPaused || _recorder == null) {
       try {
         await _startRecording(resetTranscript: false);
+
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('No se pudo reanudar: $e')),
           );
         }
+
       }
       return;
     }
+
 
     await _stopRecording(partial: true);
     if (mounted) {
       setState(() {
         _isPaused = true;
         _isRecording = false;
+
       });
     }
   }
@@ -1114,6 +1122,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                                   onPressed: () => Navigator.pop(ctx, true),
                                   child: const Text('Descartar'),
                                 ),
+
                               ],
                             ),
                           );
@@ -1219,6 +1228,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                                 ),
                               ],
                             ),
+
                             const SizedBox(height: 4),
                             Text(
                               paragraph['preview'] as String,

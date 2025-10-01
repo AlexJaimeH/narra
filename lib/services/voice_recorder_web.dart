@@ -275,6 +275,7 @@ class VoiceRecorder {
       if (text.trim().isNotEmpty) {
         handler(text);
       }
+
     } catch (error, stackTrace) {
       if (kDebugMode) {
         // Surface errors in dev tools to speed up debugging of Whisper issues
@@ -282,6 +283,7 @@ class VoiceRecorder {
         print('⚠️ Whisper chunk failed: $error\n$stackTrace');
       }
       html.window.console.error('Whisper chunk failed: $error');
+
     }
   }
 

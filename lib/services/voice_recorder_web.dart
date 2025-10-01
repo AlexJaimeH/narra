@@ -14,6 +14,7 @@ class VoiceRecorder {
   Timer? _flushTimer;
 
 
+
   Future<void> start({OnText? onText}) async {
     final isSecure = html.window.isSecureContext ?? false;
     if (!isSecure) {

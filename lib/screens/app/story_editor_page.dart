@@ -854,10 +854,13 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       _showDictationPanel = true;
       _liveTranscript = '';
     });
+    _isPaused = false;
     _startRecording();
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      isDismissible: false,
+      enableDrag: false,
       builder: (context) {
         return Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
@@ -868,7 +871,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
               children: [
                 Row(
                   children: [
-                    Icon(_isRecording && !_isPaused ? Icons.mic : Icons.pause_circle_filled, color: Colors.red),
+                    Icon(_isRecording && !_isPaused ? Icons.mic : Icons.play_arrow, color: Colors.red),
                     const SizedBox(width: 8),
                     Text(_isRecording && !_isPaused ? 'Grabando...' : (_isPaused ? 'Pausado' : 'Listo')),
                     const Spacer(),
@@ -1624,7 +1627,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       final end = match.start;
       final segment = text.substring(start, end);
       if (segment.trim().isNotEmpty) {
-        paragraphs.add({
+          paragraphs.add({
           'text': segment,
           'preview': _getParagraphPreview(segment),
           'position': start,
@@ -1636,7 +1639,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     if (start <= text.length) {
       final segment = text.substring(start, text.length);
       if (segment.trim().isNotEmpty) {
-        paragraphs.add({
+      paragraphs.add({
           'text': segment,
           'preview': _getParagraphPreview(segment),
           'position': start,

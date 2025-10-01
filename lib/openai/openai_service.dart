@@ -459,9 +459,8 @@ Responde SOLO con un objeto JSON:
   }) async {
     // Force correct content type, default to audio/webm if unknown
     final contentType = (mimeType.isNotEmpty && mimeType.contains('/')) ? mimeType : 'audio/webm';
-
-    final uri = Uri.parse('$_whisperEndpoint?language=$language&model=gpt-5-mini-transcribe');
-
+    final prompt = 'Idioma: español. Si el audio es ruidoso, prioriza claridad. No inventes texto.';
+    final uri = Uri.parse('$_whisperEndpoint?language=$language&model=gpt-5-mini-transcribe&prompt=${Uri.encodeComponent(prompt)}');
     final response = await http.post(uri, headers: {'Content-Type': contentType}, body: audioBytes);
     if (response.statusCode >= 200 && response.statusCode < 300) {
       try {

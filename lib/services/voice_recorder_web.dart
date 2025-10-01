@@ -96,7 +96,9 @@ class VoiceRecorder {
             // Transcribe chunk via OpenAI Whisper proxy and emit text
             () async {
               try {
-                final text = await OpenAIService.transcribeChunk(audioBytes: bytes!, mimeType: _mimeType, language: 'es');
+                // De-bounce: si el chunk es demasiado pequeño (<8k), omite para evitar 400s
+                if (bytes!.length < 8192) return;
+                final text = await OpenAIService.transcribeChunk(audioBytes: bytes, mimeType: _mimeType, language: 'es');
                 if (text.trim().isNotEmpty) {
                   onText?.call(text);
                 }

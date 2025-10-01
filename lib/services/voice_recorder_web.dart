@@ -12,7 +12,9 @@ class VoiceRecorder {
   final List<Uint8List> _chunks = [];
   String _mimeType = 'application/octet-stream';
   Timer? _flushTimer;
+
   html.MediaStream? _stream;
+
 
 
 
@@ -33,7 +35,9 @@ class VoiceRecorder {
         'noiseSuppression': true,
       }
     });
+
     _stream = stream;
+
 
     // Choose supported mime type (browsers vary; Safari often prefers mp4/aac)
     final candidates = <String>[

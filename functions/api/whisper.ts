@@ -18,7 +18,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     }
 
     const url = new URL(request.url);
-    const model = url.searchParams.get('model') || 'whisper-1';
+    const model = url.searchParams.get('model') || 'gpt-4o-mini-transcribe';
     const language = url.searchParams.get('language') || 'es';
 
     const contentType = request.headers.get('content-type') || '';

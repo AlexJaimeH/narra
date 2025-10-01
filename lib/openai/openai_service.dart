@@ -457,14 +457,10 @@ Responde SOLO con un objeto JSON:
     String mimeType = 'audio/webm',
     String language = 'es',
   }) async {
+    // Force correct content type, default to audio/webm if unknown
+    final contentType = (mimeType.isNotEmpty && mimeType.contains('/')) ? mimeType : 'audio/webm';
     final uri = Uri.parse('$_whisperEndpoint?language=$language');
-    final response = await http.post(
-      uri,
-      headers: {
-        'Content-Type': mimeType,
-      },
-      body: audioBytes,
-    );
+    final response = await http.post(uri, headers: {'Content-Type': contentType}, body: audioBytes);
     if (response.statusCode >= 200 && response.statusCode < 300) {
       try {
         final json = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
@@ -474,6 +470,8 @@ Responde SOLO con un objeto JSON:
         return utf8.decode(response.bodyBytes);
       }
     }
-    throw Exception('Whisper proxy error: ${response.statusCode}');
+    // Bubble up text error body for debugging content-type mismatches
+    final body = utf8.decode(response.bodyBytes);
+    throw Exception('Whisper proxy error: ${response.statusCode} - $body');
   }
 }

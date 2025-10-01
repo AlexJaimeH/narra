@@ -78,6 +78,7 @@ class VoiceRecorder {
 
       final e = event as html.BlobEvent;
       final blob = e.data;
+
       if (blob == null || blob.size == 0) return;
 
       try {
@@ -130,6 +131,7 @@ class VoiceRecorder {
       }
     }
     return recorder.state == 'recording';
+
   }
 
   Future<Uint8List?> stop() async {

@@ -893,6 +893,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                     IconButton(
                       tooltip: _isPaused ? 'Reanudar' : 'Pausar',
                       onPressed: () async {
+                        // avoid affecting underlying page shortcuts
+                        FocusScope.of(context).requestFocus(FocusNode());
                         await _pauseOrStopRecording();
                       },
                       icon: Icon(_isPaused ? Icons.play_arrow : Icons.pause),
@@ -900,6 +902,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                     IconButton(
                       tooltip: 'Detener',
                       onPressed: () async {
+                        FocusScope.of(context).requestFocus(FocusNode());
                         await _stopRecording();
                         if (mounted) Navigator.pop(context);
                         setState(() { _showDictationPanel = false; });
@@ -940,6 +943,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                     const SizedBox(width: 12),
                     TextButton(
                       onPressed: () {
+                        _stopRecording();
                         Navigator.pop(context);
                         setState(() { _showDictationPanel = false; });
                       },

@@ -11,6 +11,7 @@ class VoiceRecorder {
   html.MediaRecorder? _recorder;
   final List<Uint8List> _chunks = [];
   String _mimeType = 'application/octet-stream';
+  html.Timer? _flushTimer;
 
 
   Future<void> start({OnText? onText}) async {
@@ -87,13 +88,21 @@ class VoiceRecorder {
       }
     });
 
-    // Emit frequent chunks for near-real-time transcription
-    _recorder!.start(750); // timeslice in ms
+    // Some browsers ignore timeslice; start without slice and manually flush
+    _recorder!.start();
+    _flushTimer?.cancel();
+    _flushTimer = html.Timer.periodic(const Duration(milliseconds: 750), (_) {
+      try {
+        _recorder?.requestData();
+      } catch (_) {}
+    });
   }
 
   Future<Uint8List?> stop() async {
     final recorder = _recorder;
     if (recorder == null) return null;
+    _flushTimer?.cancel();
+    _flushTimer = null;
     final completer = Completer<void>();
     recorder.addEventListener('stop', (_) => completer.complete());
     recorder.stop();

@@ -924,15 +924,13 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       return;
     }
 
-
-    await _stopRecording(partial: true);
     if (mounted) {
       setState(() {
         _isPaused = true;
         _isRecording = false;
-
       });
     }
+    await _stopRecording(partial: true);
   }
 
   Future<void> _stopRecording(
@@ -955,7 +953,9 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     if (mounted) {
       setState(() {
         _isRecording = false;
-        _isPaused = false;
+        if (!partial) {
+          _isPaused = false;
+        }
       });
     }
 

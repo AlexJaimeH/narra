@@ -1,16 +1,22 @@
-export const onRequestOptions: PagesFunction = async () => {
+export interface Env {
+  OPENAI_API_KEY: string;
+}
+
+const CORS_HEADERS: Record<string, string> = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Max-Age': '86400',
+};
+
+export const onRequestOptions: PagesFunction<Env> = async () => {
   return new Response(null, {
     status: 204,
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      'Access-Control-Max-Age': '86400',
-    },
+    headers: CORS_HEADERS,
   });
 };
 
-export const onRequestPost: PagesFunction = async ({ request, env }) => {
+export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   try {
     const openaiApiKey = env.OPENAI_API_KEY;
     if (!openaiApiKey) {
@@ -87,12 +93,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const body = await openaiRes.text();
     return new Response(body, {
       status: openaiRes.status,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      },
+      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
     });
   } catch (error: any) {
     return new Response(`Error: ${error.message || String(error)}`, { status: 500 });

@@ -10,10 +10,6 @@ typedef OnText = void Function(String text);
 typedef OnRecorderLog = void Function(String level, String message);
 
 class VoiceRecorder {
-
-  static const _model = 'gpt-4o-mini-transcribe-realtime';
-
-
   html.MediaStream? _inputStream;
   html.MediaStreamTrack? _audioTrack;
   html.MediaRecorder? _mediaRecorder;
@@ -26,7 +22,6 @@ class VoiceRecorder {
 
   OnText? _onText;
   OnRecorderLog? _onLog;
-
 
   bool _stopping = false;
   bool _channelOpen = false;
@@ -47,8 +42,6 @@ class VoiceRecorder {
     _eventsChannelReadyCompleter = Completer<void>();
 
     _log('Preparando sesión de transcripción...');
-
-    final sessionSecret = await _createRealtimeSession();
     final devices = html.window.navigator.mediaDevices;
     if (devices == null) {
       _log('El navegador no soporta mediaDevices', level: 'error');
@@ -72,10 +65,8 @@ class VoiceRecorder {
     _audioTrack = tracks.first;
     _log('Micrófono listo: ${_audioTrack?.label ?? 'sin etiqueta'}');
 
-
     _initializeMediaRecorder(stream);
-    await _initializePeerConnection(sessionSecret);
-
+    await _initializePeerConnection();
 
     try {
       await _eventsChannelReadyCompleter!.future
@@ -89,7 +80,6 @@ class VoiceRecorder {
       _log('Sesión cancelada antes de iniciar', level: 'warning');
       throw Exception('Grabación cancelada');
     }
-
 
     _log('Conectado. Comienza a hablar cuando quieras.');
   }
@@ -123,20 +113,17 @@ class VoiceRecorder {
     }
 
     return true;
-
   }
 
   Future<bool> resume() async {
     _log('Reanudando grabación...');
     _isPaused = false;
 
-
     try {
       _audioTrack?.enabled = true;
     } catch (error) {
       _log('No se pudo activar la pista de audio',
           level: 'warning', error: error);
-
     }
 
     try {
@@ -145,13 +132,11 @@ class VoiceRecorder {
       _log('MediaRecorder.resume falló', level: 'warning', error: error);
     }
 
-
     if (_peerConnection?.connectionState != 'connected') {
       _log(
         'PeerConnection no está conectado (${_peerConnection?.connectionState})',
         level: 'warning',
       );
-
     }
 
     _requestTranscription(force: true);
@@ -167,7 +152,6 @@ class VoiceRecorder {
     _stopping = true;
 
     _isPaused = false;
-
 
     if (_activeResponseId != null) {
       _safeSend({
@@ -224,14 +208,12 @@ class VoiceRecorder {
     await stop();
   }
 
-
-  Future<void> _initializePeerConnection(String sessionSecret) async {
+  Future<void> _initializePeerConnection() async {
     final configuration = {
       'iceServers': [
         {'urls': 'stun:stun.l.google.com:19302'},
       ],
     };
-
 
     final pc = html.RtcPeerConnection(configuration);
     _peerConnection = pc;
@@ -273,35 +255,19 @@ class VoiceRecorder {
         ? localDescription.sdp!
         : offer.sdp!;
 
-    _log('Enviando oferta WebRTC a OpenAI...', level: 'debug');
-    final response = await http.post(
-      Uri.parse('https://api.openai.com/v1/realtime?model=$_model'),
-      headers: {
-        'Authorization': 'Bearer $sessionSecret',
-        'Content-Type': 'application/sdp',
-        'Accept': 'application/sdp',
-        'OpenAI-Beta': 'realtime=v1',
-      },
-      body: localSdp,
-    );
-
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      _log(
-        'OpenAI Realtime respondió ${response.statusCode}',
-        level: 'error',
-        error: response.body,
-      );
-      throw Exception(
-        'OpenAI Realtime respondió ${response.statusCode}: ${response.body}',
-      );
+    if (localSdp.trim().isEmpty) {
+      throw Exception('No se pudo generar descripción de sesión local');
     }
+
+    _log('Enviando oferta WebRTC a Narra (SDP ${localSdp.length} chars)...',
+        level: 'debug');
+    final answerSdp = await _fetchRemoteAnswer(localSdp);
 
     await pc.setRemoteDescription({
       'type': 'answer',
-      'sdp': response.body,
+      'sdp': answerSdp,
     });
   }
-
 
   void _initializeMediaRecorder(html.MediaStream stream) {
     final candidates = <String>[
@@ -356,34 +322,45 @@ class VoiceRecorder {
     }
   }
 
-  Future<String> _createRealtimeSession() async {
-    _log('Creando sesión Realtime...', level: 'debug');
-    final response = await http.post(
-      Uri.parse('/api/realtime-session'),
-      headers: const {'Content-Type': 'application/json'},
-    );
+  Future<String> _fetchRemoteAnswer(String localSdp) async {
+    try {
+      final response = await http.post(
+        Uri.parse('/api/realtime-session'),
+        headers: const {'Content-Type': 'application/json'},
+        body: jsonEncode({'sdp': localSdp}),
+      );
 
-    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final body = response.body;
+      Map<String, dynamic>? data;
+      try {
+        data = jsonDecode(body) as Map<String, dynamic>;
+      } catch (_) {
+        data = null;
+      }
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final answer = data?['answer'];
+        if (answer is String && answer.isNotEmpty) {
+          _log('Respuesta SDP recibida (${answer.length} chars)',
+              level: 'debug');
+          return answer;
+        }
+        if (body.isNotEmpty) {
+          _log('Respuesta inesperada del backend: $body', level: 'warning');
+        }
+        throw Exception('Respuesta SDP inválida del backend');
+      }
+
+      final details = data?['details'] ?? body;
       _log(
-        'No se pudo iniciar sesión Realtime (${response.statusCode})',
+        'Intercambio SDP falló (${response.statusCode}): $details',
         level: 'error',
-        error: response.body,
       );
-      throw Exception(
-        'No se pudo iniciar sesión Realtime (${response.statusCode})',
-      );
+      throw Exception('Intercambio SDP falló: $details');
+    } catch (error) {
+      _log('No se pudo obtener respuesta SDP', level: 'error', error: error);
+      rethrow;
     }
-
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
-    final secret = data['client_secret'];
-    if (secret is String) {
-      return secret;
-    }
-    if (secret is Map && secret['value'] is String) {
-      return secret['value'] as String;
-    }
-    _log('Respuesta inválida al crear sesión Realtime', level: 'error');
-    throw Exception('Respuesta inválida al crear sesión Realtime');
   }
 
   Future<void> _waitForIceGatheringComplete(html.RtcPeerConnection pc) async {
@@ -480,7 +457,6 @@ class VoiceRecorder {
     }
   }
 
-
   void _emitDelta(dynamic delta) {
     if (delta == null) return;
 
@@ -548,7 +524,6 @@ class VoiceRecorder {
       return;
     }
 
-
     try {
       final message = jsonEncode(payload);
       _eventsChannel?.send(message);
@@ -570,7 +545,6 @@ class VoiceRecorder {
     for (final chunk in _recordedChunks) {
       merged.setAll(offset, chunk);
       offset += chunk.length;
-
     }
     _recordedChunks.clear();
     return merged;

@@ -36,6 +36,9 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   String _liveTranscript = '';
   String? _lastTranscriptChunk;
   bool _isPaused = false;
+  bool _isRecorderConnecting = false;
+  final List<String> _recorderLogs = [];
+  static const int _maxRecorderLogs = 200;
 
   bool _hasChanges = false;
   bool _isLoading = false;
@@ -778,6 +781,40 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   }
 
   // Helper Methods
+  String get _recorderStatusLabel {
+    if (_isRecorderConnecting) return 'Conectando...';
+    if (_isRecording && !_isPaused) return 'Grabando...';
+    if (_isPaused) return 'Pausado';
+    return _liveTranscript.isNotEmpty ? 'Listo' : 'Listo';
+  }
+
+  void _appendRecorderLog(String level, String message) {
+    final timestamp = DateTime.now().toIso8601String();
+    final entry = '[$timestamp][$level] $message';
+    if (kDebugMode) {
+      debugPrint(entry);
+    }
+
+    _recorderLogs.add(entry);
+    if (_recorderLogs.length > _maxRecorderLogs) {
+      _recorderLogs.removeRange(
+        0,
+        _recorderLogs.length - _maxRecorderLogs,
+      );
+    }
+
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  List<String> _recentRecorderLogs({int maxItems = 6}) {
+    if (_recorderLogs.length <= maxItems) {
+      return List<String>.from(_recorderLogs);
+    }
+    return _recorderLogs.sublist(_recorderLogs.length - maxItems);
+  }
+
   void _handleAppBarAction(String action) {
     switch (action) {
       case 'view_originals':
@@ -861,17 +898,32 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       _lastTranscriptChunk = null;
     }
 
+    if (mounted) {
+      setState(() {
+        _isRecorderConnecting = true;
+        _recorderLogs.clear();
+      });
+    } else {
+      _isRecorderConnecting = true;
+      _recorderLogs.clear();
+    }
+
     final recorder = VoiceRecorder();
     try {
-      await recorder.start(onText: _handleTranscriptChunk);
+      await recorder.start(
+        onText: _handleTranscriptChunk,
+        onLog: _appendRecorderLog,
+      );
       if (!mounted) {
         await recorder.dispose();
+        _isRecorderConnecting = false;
         return;
       }
       setState(() {
         _recorder = recorder;
         _isRecording = true;
         _isPaused = false;
+        _isRecorderConnecting = false;
       });
 
       if (resetTranscript) {
@@ -884,20 +936,26 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       }
     } catch (e) {
       await recorder.dispose();
-      if (mounted) {
-        setState(() {
-          _recorder = null;
-          _isRecording = false;
-          _isPaused = false;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('No se pudo iniciar la transcripción: $e')),
-        );
+      if (!mounted) {
+        _isRecorderConnecting = false;
+        return;
       }
+      setState(() {
+        _recorder = null;
+        _isRecording = false;
+        _isPaused = false;
+        _isRecorderConnecting = false;
+      });
+      _appendRecorderLog('error', 'No se pudo iniciar: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo iniciar la transcripción: $e')),
+      );
     }
   }
 
   Future<void> _togglePauseResume() async {
+    if (_isRecorderConnecting) return;
+
     final recorder = _recorder;
     if (recorder == null) {
       await _startRecording(resetTranscript: false);
@@ -905,34 +963,64 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     }
 
     if (_isPaused) {
+      if (mounted) {
+        setState(() => _isRecorderConnecting = true);
+      } else {
+        _isRecorderConnecting = true;
+      }
       try {
         final resumed = await recorder.resume();
-        if (resumed && mounted) {
+        if (!mounted) {
+          _isRecorderConnecting = false;
+          return;
+        }
+        if (resumed) {
           setState(() {
             _isPaused = false;
             _isRecording = true;
+            _isRecorderConnecting = false;
           });
+          _appendRecorderLog('info', 'Grabación reanudada');
+        } else {
+          await recorder.dispose();
+          setState(() {
+            _recorder = null;
+            _isPaused = false;
+            _isRecording = false;
+            _isRecorderConnecting = false;
+          });
+          _appendRecorderLog(
+              'warning', 'No se pudo reanudar, reiniciando sesión');
+          await _startRecording(resetTranscript: false);
         }
       } catch (e) {
         if (mounted) {
+          setState(() => _isRecorderConnecting = false);
+          _appendRecorderLog('error', 'No se pudo reanudar: $e');
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('No se pudo reanudar: $e')),
           );
+        }
+      } finally {
+        if (!mounted) {
+          _isRecorderConnecting = false;
         }
       }
       return;
     }
 
     try {
-      final paused = await recorder.pause();
-      if (paused && mounted) {
+      await recorder.pause();
+      if (mounted) {
         setState(() {
           _isPaused = true;
           _isRecording = false;
         });
       }
+      _appendRecorderLog('info', 'Grabación pausada');
     } catch (e) {
       if (mounted) {
+        _appendRecorderLog('error', 'No se pudo pausar: $e');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('No se pudo pausar: $e')),
         );
@@ -949,6 +1037,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       audioBytes = await recorder.stop();
     } catch (e) {
       if (mounted) {
+        _appendRecorderLog('error', 'Error al detener grabación: $e');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error al detener la grabación: $e')),
         );
@@ -960,8 +1049,10 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         _recorder = null;
         _isRecording = false;
         _isPaused = false;
+        _isRecorderConnecting = false;
       });
     }
+    _isRecorderConnecting = false;
 
     if (discard || audioBytes == null || audioBytes.isEmpty) {
       return;
@@ -984,6 +1075,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     }
 
     if (mounted) {
+      _appendRecorderLog('info', 'Audio listo para insertar');
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('✓ Dictado listo para insertar')),
       );
@@ -1020,21 +1112,36 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                 Row(
                   children: [
                     Icon(
-                      _isRecording && !_isPaused ? Icons.mic : Icons.play_arrow,
-                      color: Colors.red,
+                      _isRecorderConnecting
+                          ? Icons.hourglass_top
+                          : (_isRecording && !_isPaused
+                              ? Icons.mic
+                              : Icons.play_arrow),
+                      color: _isRecorderConnecting
+                          ? Theme.of(context).colorScheme.outline
+                          : (_isRecording && !_isPaused
+                              ? Colors.red
+                              : Theme.of(context).colorScheme.primary),
                     ),
                     const SizedBox(width: 8),
-                    Text(_isRecording && !_isPaused
-                        ? 'Grabando...'
-                        : (_isPaused ? 'Pausado' : 'Listo')),
+                    Text(_recorderStatusLabel),
                     const Spacer(),
                     IconButton(
-                      tooltip: _isPaused ? 'Reanudar' : 'Pausar',
-                      onPressed: () async {
-                        FocusScope.of(sheetContext).requestFocus(FocusNode());
-                        await _togglePauseResume();
-                      },
-                      icon: Icon(_isPaused ? Icons.play_arrow : Icons.pause),
+                      tooltip: _isRecorderConnecting
+                          ? 'Preparando...'
+                          : (_isPaused ? 'Reanudar' : 'Pausar'),
+                      onPressed: _isRecorderConnecting
+                          ? null
+                          : () async {
+                              FocusScope.of(sheetContext)
+                                  .requestFocus(FocusNode());
+                              await _togglePauseResume();
+                            },
+                      icon: Icon(
+                        _isPaused || !_isRecording
+                            ? Icons.play_arrow
+                            : Icons.pause,
+                      ),
                     ),
                   ],
                 ),
@@ -1057,11 +1164,60 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                     ),
                   ),
                 ),
+                if (_recorderLogs.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    'Eventos recientes',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                  const SizedBox(height: 6),
+                  Container(
+                    constraints: const BoxConstraints(maxHeight: 110),
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color:
+                          Theme.of(context).colorScheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .outline
+                            .withValues(alpha: 0.3),
+                      ),
+                    ),
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: _recentRecorderLogs().map((log) {
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 4),
+                            child: Text(
+                              log,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurface
+                                        .withValues(alpha: 0.7),
+                                  ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 12),
                 Row(
                   children: [
                     ElevatedButton.icon(
-                      onPressed: _liveTranscript.trim().isEmpty
+                      onPressed: _isRecorderConnecting ||
+                              _liveTranscript.trim().isEmpty
                           ? null
                           : () async {
                               final text = _liveTranscript.trim();

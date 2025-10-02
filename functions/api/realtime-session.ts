@@ -27,6 +27,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ env }) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'OpenAI-Beta': 'realtime=v1',
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({

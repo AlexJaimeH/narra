@@ -264,10 +264,12 @@ class VoiceRecorder {
       if (text.trim().isNotEmpty) {
         handler(text);
       }
+
       if (kDebugMode) {
         // ignore: avoid_print
         print('🎙️ Whisper chunk ok (${audioBytes.length} bytes, $_mimeType)');
       }
+
     } catch (error, stackTrace) {
       if (kDebugMode) {
         // Surface errors in dev tools to speed up debugging of Whisper issues
@@ -275,6 +277,7 @@ class VoiceRecorder {
         print('⚠️ Whisper chunk failed: $error\n$stackTrace');
       }
       html.window.console.error('Whisper chunk failed: $error');
+
     }
   }
 
@@ -310,6 +313,7 @@ class VoiceRecorder {
       reader.readAsArrayBuffer(blob);
     } catch (_) {
       completer.complete(null);
+
     }
 
     return completer.future;

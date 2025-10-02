@@ -10,6 +10,7 @@ typedef OnText = void Function(String text);
 typedef OnRecorderLog = void Function(String level, String message);
 
 class VoiceRecorder {
+  static const _model = 'gpt-4o-mini-transcribe-realtime';
   html.MediaStream? _inputStream;
   html.MediaStreamTrack? _audioTrack;
   html.MediaRecorder? _mediaRecorder;
@@ -66,7 +67,9 @@ class VoiceRecorder {
     _log('Micrófono listo: ${_audioTrack?.label ?? 'sin etiqueta'}');
 
     _initializeMediaRecorder(stream);
-    await _initializePeerConnection();
+
+    final sessionSecret = await _createRealtimeSession();
+    await _initializePeerConnection(sessionSecret);
 
     try {
       await _eventsChannelReadyCompleter!.future
@@ -208,7 +211,7 @@ class VoiceRecorder {
     await stop();
   }
 
-  Future<void> _initializePeerConnection() async {
+  Future<void> _initializePeerConnection(String sessionSecret) async {
     final configuration = {
       'iceServers': [
         {'urls': 'stun:stun.l.google.com:19302'},
@@ -255,17 +258,28 @@ class VoiceRecorder {
         ? localDescription.sdp!
         : offer.sdp!;
 
-    if (localSdp.trim().isEmpty) {
-      throw Exception('No se pudo generar descripción de sesión local');
-    }
-
-    _log('Enviando oferta WebRTC a Narra (SDP ${localSdp.length} chars)...',
+    _log('Enviando oferta WebRTC a OpenAI (SDP ${localSdp.length} chars)...',
         level: 'debug');
-    final answerSdp = await _fetchRemoteAnswer(localSdp);
+    final response = await http.post(
+      Uri.parse('https://api.openai.com/v1/realtime?model=$_model'),
+      headers: {
+        'Authorization': 'Bearer $sessionSecret',
+        'Content-Type': 'application/sdp',
+        'Accept': 'application/sdp',
+        'OpenAI-Beta': 'realtime=v1',
+      },
+      body: localSdp,
+    );
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(
+        'OpenAI Realtime respondió ${response.statusCode}: ${response.body}',
+      );
+    }
 
     await pc.setRemoteDescription({
       'type': 'answer',
-      'sdp': answerSdp,
+      'sdp': response.body,
     });
   }
 
@@ -322,12 +336,13 @@ class VoiceRecorder {
     }
   }
 
-  Future<String> _fetchRemoteAnswer(String localSdp) async {
+  Future<String> _createRealtimeSession() async {
     try {
+      _log('Creando sesión Realtime...', level: 'debug');
       final response = await http.post(
         Uri.parse('/api/realtime-session'),
         headers: const {'Content-Type': 'application/json'},
-        body: jsonEncode({'sdp': localSdp}),
+        body: jsonEncode({'action': 'create_session'}),
       );
 
       final body = response.body;
@@ -338,27 +353,25 @@ class VoiceRecorder {
         data = null;
       }
 
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        final answer = data?['answer'];
-        if (answer is String && answer.isNotEmpty) {
-          _log('Respuesta SDP recibida (${answer.length} chars)',
-              level: 'debug');
-          return answer;
+      if (response.statusCode >= 200 &&
+          response.statusCode < 300 &&
+          data != null) {
+        final clientSecret = data['client_secret'];
+        if (clientSecret is String && clientSecret.isNotEmpty) {
+          return clientSecret;
         }
-        if (body.isNotEmpty) {
-          _log('Respuesta inesperada del backend: $body', level: 'warning');
+        if (clientSecret is Map && clientSecret['value'] is String) {
+          return clientSecret['value'] as String;
         }
-        throw Exception('Respuesta SDP inválida del backend');
       }
 
-      final details = data?['details'] ?? body;
       _log(
-        'Intercambio SDP falló (${response.statusCode}): $details',
+        'Sesión Realtime inválida (${response.statusCode}): $body',
         level: 'error',
       );
-      throw Exception('Intercambio SDP falló: $details');
+      throw Exception('Sesión Realtime inválida');
     } catch (error) {
-      _log('No se pudo obtener respuesta SDP', level: 'error', error: error);
+      _log('No se pudo crear sesión Realtime', level: 'error', error: error);
       rethrow;
     }
   }

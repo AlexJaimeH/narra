@@ -10,4 +10,6 @@ class VoiceRecorder {
   Future<bool> resume() async => false;
 
   Future<Uint8List?> stop() async => null;
+
+  Future<void> dispose() async {}
 }

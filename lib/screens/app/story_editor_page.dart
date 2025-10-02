@@ -36,7 +36,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   String _liveTranscript = '';
   String? _lastTranscriptChunk;
   bool _isPaused = false;
-  final List<typed.Uint8List> _recordedSegments = [];
 
   bool _hasChanges = false;
   bool _isLoading = false;
@@ -63,9 +62,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   String _ghostWriterPrivacy = 'privado';
   bool _ghostWriterExpandContent = false;
   bool _ghostWriterPreserveStructure = true;
-
-  static const _whisperInstructions =
-      'Idioma: español. Si el audio es ruidoso, prioriza claridad. No inventes texto.';
 
   @override
   void initState() {
@@ -102,6 +98,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
   @override
   void dispose() {
+    _recorder?.dispose();
     _tabController.dispose();
     _titleController.dispose();
     _contentController.dispose();
@@ -806,18 +803,15 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     _contentController.selection = TextSelection.collapsed(offset: caret);
   }
 
-
   void _handleTranscriptChunk(String text) {
     final chunk = text.trim();
     if (chunk.isEmpty) return;
-    if (chunk == _whisperInstructions) return;
 
     final trimmedExisting = _liveTranscript.trimRight();
     if (chunk == _lastTranscriptChunk || trimmedExisting.endsWith(chunk)) {
       _lastTranscriptChunk = chunk;
       return;
     }
-
 
     final overlap = _computeOverlap(trimmedExisting, chunk);
     final addition = chunk.substring(overlap).trimLeft();
@@ -858,29 +852,29 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   }
 
   Future<void> _startRecording({bool resetTranscript = false}) async {
-    final recorder = _recorder ?? VoiceRecorder();
-    _recorder = recorder;
-
     if (resetTranscript) {
       setState(() {
         _liveTranscript = '';
         _lastTranscriptChunk = null;
       });
-      _recordedSegments.clear();
     } else {
       _lastTranscriptChunk = null;
     }
 
+    final recorder = VoiceRecorder();
     try {
+      await recorder.start(onText: _handleTranscriptChunk);
+      if (!mounted) {
+        await recorder.dispose();
+        return;
+      }
       setState(() {
+        _recorder = recorder;
         _isRecording = true;
         _isPaused = false;
       });
 
-
-      await recorder.start(onText: _handleTranscriptChunk);
-
-      if (mounted && resetTranscript) {
+      if (resetTranscript) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('🎤 Grabando... toca pausa para descansar'),
@@ -889,104 +883,95 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         );
       }
     } catch (e) {
+      await recorder.dispose();
       if (mounted) {
         setState(() {
+          _recorder = null;
           _isRecording = false;
           _isPaused = false;
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('No se pudo iniciar el micrófono: $e')),
+          SnackBar(content: Text('No se pudo iniciar la transcripción: $e')),
         );
       }
-      _recorder = null;
-      rethrow;
     }
   }
 
   Future<void> _togglePauseResume() async {
-
-    if (!_isRecording && !_isPaused) {
+    final recorder = _recorder;
+    if (recorder == null) {
+      await _startRecording(resetTranscript: false);
       return;
     }
 
-    if (_isPaused || _recorder == null) {
+    if (_isPaused) {
       try {
-        await _startRecording(resetTranscript: false);
-
+        final resumed = await recorder.resume();
+        if (resumed && mounted) {
+          setState(() {
+            _isPaused = false;
+            _isRecording = true;
+          });
+        }
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('No se pudo reanudar: $e')),
           );
         }
-
       }
       return;
     }
 
-    if (mounted) {
-      setState(() {
-        _isPaused = true;
-        _isRecording = false;
-      });
-    }
-    await _stopRecording(partial: true);
-  }
-
-  Future<void> _stopRecording(
-      {bool partial = false, bool discardSegments = false}) async {
-    typed.Uint8List? latest;
     try {
-      if (_recorder != null) {
-        latest = await _recorder!.stop();
+      final paused = await recorder.pause();
+      if (paused && mounted) {
+        setState(() {
+          _isPaused = true;
+          _isRecording = false;
+        });
       }
     } catch (e) {
-      if (!partial && mounted) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo pausar: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _finalizeRecording({bool discard = false}) async {
+    final recorder = _recorder;
+    if (recorder == null) return;
+
+    typed.Uint8List? audioBytes;
+    try {
+      audioBytes = await recorder.stop();
+    } catch (e) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error al detener la grabación: $e')),
         );
       }
-    } finally {
-      _recorder = null;
     }
 
     if (mounted) {
       setState(() {
+        _recorder = null;
         _isRecording = false;
-        if (!partial) {
-          _isPaused = false;
-        }
+        _isPaused = false;
       });
     }
 
-    if (latest != null && latest.isNotEmpty) {
-      _recordedSegments.add(latest);
-    }
-
-    if (discardSegments) {
-      _recordedSegments.clear();
-      return;
-    }
-
-    if (partial) {
-      return;
-    }
-
-    if (_recordedSegments.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No se detectó audio para guardar')),
-        );
-      }
+    if (discard || audioBytes == null || audioBytes.isEmpty) {
       return;
     }
 
     if (_currentStory != null) {
       try {
-        final merged = _mergeAudioSegments(_recordedSegments);
         await AudioUploadService.uploadStoryAudio(
           storyId: _currentStory!.id,
-          audioBytes: merged,
+          audioBytes: audioBytes,
           fileName: 'voice_${DateTime.now().millisecondsSinceEpoch}.webm',
         );
       } catch (e) {
@@ -995,29 +980,14 @@ class _StoryEditorPageState extends State<StoryEditorPage>
             SnackBar(content: Text('Error al guardar el audio: $e')),
           );
         }
-        _recordedSegments.clear();
-        return;
       }
     }
 
-    _recordedSegments.clear();
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('✓ Dictado listo para insertar')),
       );
     }
-  }
-
-  typed.Uint8List _mergeAudioSegments(List<typed.Uint8List> segments) {
-    final totalLength =
-        segments.fold<int>(0, (sum, bytes) => sum + bytes.length);
-    final merged = typed.Uint8List(totalLength);
-    var offset = 0;
-    for (final segment in segments) {
-      merged.setAll(offset, segment);
-      offset += segment.length;
-    }
-    return merged;
   }
 
   Future<void> _openDictationPanel() async {
@@ -1095,7 +1065,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                           ? null
                           : () async {
                               final text = _liveTranscript.trim();
-                              await _stopRecording(partial: false);
+                              await _finalizeRecording();
                               if (sheetContext.mounted) {
                                 Navigator.pop(sheetContext, text);
                               }
@@ -1122,14 +1092,12 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                                   onPressed: () => Navigator.pop(ctx, true),
                                   child: const Text('Descartar'),
                                 ),
-
                               ],
                             ),
                           );
                           if (confirm != true) return;
                         }
-                        await _stopRecording(
-                            partial: true, discardSegments: true);
+                        await _finalizeRecording(discard: true);
                         if (sheetContext.mounted) {
                           Navigator.pop(sheetContext, null);
                         }
@@ -1146,7 +1114,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     );
 
     if (_recorder != null) {
-      await _stopRecording(partial: true, discardSegments: true);
+      await _finalizeRecording(discard: true);
     }
 
     if (!mounted) return;
@@ -1228,7 +1196,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                                 ),
                               ],
                             ),
-
                             const SizedBox(height: 4),
                             Text(
                               paragraph['preview'] as String,

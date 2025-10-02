@@ -82,7 +82,7 @@ class VoiceRecorder {
 
       html.Blob effectiveBlob = blob;
       if (_pendingBlob != null) {
-        effectiveBlob = html.Blob([_pendingBlob!, blob], {"type": _mimeType});
+        effectiveBlob = html.Blob([_pendingBlob!, blob], _mimeType);
         _pendingBlob = null;
       }
 
@@ -276,14 +276,12 @@ class VoiceRecorder {
         // ignore: avoid_print
         print('🎙️ Whisper chunk ok (${audioBytes.length} bytes, $_mimeType)');
       }
-
     } catch (error, stackTrace) {
       if (kDebugMode) {
         // ignore: avoid_print
         print('⚠️ Whisper chunk failed: $error\n$stackTrace');
       }
       html.window.console.error('Whisper chunk failed: $error');
-
     }
   }
 

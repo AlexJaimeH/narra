@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 
 class OpenAIService {
   // Route proxied by Cloudflare Pages Functions. No client-side key usage.
@@ -24,7 +25,8 @@ class OpenAIService {
       }),
     );
     if (response.statusCode >= 200 && response.statusCode < 300) {
-      return jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      return jsonDecode(utf8.decode(response.bodyBytes))
+          as Map<String, dynamic>;
     }
     throw Exception('OpenAI proxy error: ${response.statusCode}');
   }
@@ -84,7 +86,8 @@ Responde SOLO con un objeto JSON con esta estructura:
         messages: [
           {
             'role': 'system',
-            'content': 'Eres un experto en storytelling para personas mayores. Siempre responde con un objeto JSON válido.',
+            'content':
+                'Eres un experto en storytelling para personas mayores. Siempre responde con un objeto JSON válido.',
           },
           {
             'role': 'user',
@@ -121,17 +124,24 @@ Responde SOLO con un objeto JSON con esta estructura:
     bool preserveStructure = true,
   }) async {
     final toneMap = {
-      'nostálgico': 'nostalgic and warm, evoking sweet memories and gentle melancholy',
-      'alegre': 'joyful and uplifting, highlighting positive moments and celebrations',
-      'emotivo': 'deeply emotional and touching, bringing out heartfelt feelings',
+      'nostálgico':
+          'nostalgic and warm, evoking sweet memories and gentle melancholy',
+      'alegre':
+          'joyful and uplifting, highlighting positive moments and celebrations',
+      'emotivo':
+          'deeply emotional and touching, bringing out heartfelt feelings',
       'reflexivo': 'thoughtful and contemplative, encouraging introspection',
-      'divertido': 'light-hearted and amusing, finding gentle humor in life\'s moments'
+      'divertido':
+          'light-hearted and amusing, finding gentle humor in life\'s moments'
     };
-    
+
     final fidelityMap = {
-      'high': 'Maintain extremely high fidelity to original facts and events. Make minimal changes.',
-      'medium': 'Preserve core facts while allowing moderate enhancement and expansion.',
-      'creative': 'Allow creative interpretation while keeping the essence of the story.'
+      'high':
+          'Maintain extremely high fidelity to original facts and events. Make minimal changes.',
+      'medium':
+          'Preserve core facts while allowing moderate enhancement and expansion.',
+      'creative':
+          'Allow creative interpretation while keeping the essence of the story.'
     };
 
     final prompt = '''
@@ -177,7 +187,8 @@ Write in $language. Be respectful of this personal story.''';
         messages: [
           {
             'role': 'system',
-            'content': 'Eres un ghost writer experto en memorias personales. Siempre responde con un objeto JSON válido.',
+            'content':
+                'Eres un ghost writer experto en memorias personales. Siempre responde con un objeto JSON válido.',
           },
           {
             'role': 'user',
@@ -291,7 +302,8 @@ OUTPUT FORMAT: $outputFormat
         messages: [
           {
             'role': 'system',
-            'content': 'You are Narra Ghost Writer, a careful editorial assistant specialized in personal memoirs. Always follow the provided instructions precisely.',
+            'content':
+                'You are Narra Ghost Writer, a careful editorial assistant specialized in personal memoirs. Always follow the provided instructions precisely.',
           },
           {
             'role': 'user',
@@ -307,8 +319,10 @@ OUTPUT FORMAT: $outputFormat
         final jsonContent = jsonDecode(content);
         return {
           'polished_text': jsonContent['polished_text'] ?? originalText,
-          'changes_summary': List<String>.from(jsonContent['changes_summary'] ?? []),
-          'notes_for_author': List<String>.from(jsonContent['notes_for_author'] ?? []),
+          'changes_summary':
+              List<String>.from(jsonContent['changes_summary'] ?? []),
+          'notes_for_author':
+              List<String>.from(jsonContent['notes_for_author'] ?? []),
         };
       } else {
         return {'polished_text': content};
@@ -370,7 +384,8 @@ Responde SOLO con un objeto JSON:
         messages: [
           {
             'role': 'system',
-            'content': 'Eres un experto en análisis narrativo y storytelling personal. Siempre responde con un objeto JSON válido.',
+            'content':
+                'Eres un experto en análisis narrativo y storytelling personal. Siempre responde con un objeto JSON válido.',
           },
           {
             'role': 'user',
@@ -383,7 +398,8 @@ Responde SOLO con un objeto JSON:
       final content = jsonDecode(data['choices'][0]['message']['content']);
       return {
         'completeness_score': content['completeness_score'] ?? 0,
-        'missing_elements': List<String>.from(content['missing_elements'] ?? []),
+        'missing_elements':
+            List<String>.from(content['missing_elements'] ?? []),
         'suggestions': List<String>.from(content['suggestions'] ?? []),
         'strengths': List<String>.from(content['strengths'] ?? []),
       };
@@ -433,7 +449,8 @@ Responde SOLO con un objeto JSON:
         messages: [
           {
             'role': 'system',
-            'content': 'Eres un experto en títulos creativos para memorias personales. Siempre responde con un objeto JSON válido.',
+            'content':
+                'Eres un experto en títulos creativos para memorias personales. Siempre responde con un objeto JSON válido.',
           },
           {
             'role': 'user',
@@ -457,24 +474,57 @@ Responde SOLO con un objeto JSON:
     String mimeType = 'audio/webm',
     String language = 'es',
   }) async {
-    // Force correct content type, default to audio/webm if unknown
-    final contentType = (mimeType.isNotEmpty && mimeType.contains('/')) ? mimeType : 'audio/webm';
+    final normalizedMime = (mimeType.isNotEmpty && mimeType.contains('/'))
+        ? mimeType.split(';').first
+        : 'audio/webm';
 
-    final prompt = 'Idioma: español. Si el audio es ruidoso, prioriza claridad. No inventes texto.';
-    final uri = Uri.parse('$_whisperEndpoint?language=$language&model=gpt-5-mini-transcribe&prompt=${Uri.encodeComponent(prompt)}');
+    final prompt =
+        'Idioma: español. Si el audio es ruidoso, prioriza claridad. No inventes texto.';
+    final uri = Uri.parse(
+      '$_whisperEndpoint?language=$language&model=gpt-4o-mini-transcribe&prompt=${Uri.encodeComponent(prompt)}',
+    );
 
-    final response = await http.post(uri, headers: {'Content-Type': contentType}, body: audioBytes);
+    final request = http.MultipartRequest('POST', uri)
+      ..headers['Accept'] = 'application/json'
+      ..files.add(
+        http.MultipartFile.fromBytes(
+          'file',
+          audioBytes,
+          filename: 'chunk.${_extensionFromMime(normalizedMime)}',
+          contentType: MediaType.parse(normalizedMime),
+        ),
+      );
+
+    final response = await request.send();
+    final bodyBytes = await response.stream.toBytes();
     if (response.statusCode >= 200 && response.statusCode < 300) {
       try {
-        final json = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
-        // OpenAI transcriptions return { text: "..." }
+        final json = jsonDecode(utf8.decode(bodyBytes)) as Map<String, dynamic>;
         return (json['text'] as String?) ?? '';
       } catch (_) {
-        return utf8.decode(response.bodyBytes);
+        return utf8.decode(bodyBytes);
       }
     }
-    // Bubble up text error body for debugging content-type mismatches
-    final body = utf8.decode(response.bodyBytes);
+
+    final body = utf8.decode(bodyBytes);
     throw Exception('Whisper proxy error: ${response.statusCode} - $body');
+  }
+
+  static String _extensionFromMime(String mime) {
+    switch (mime) {
+      case 'audio/mp4':
+        return 'mp4';
+      case 'audio/mpeg':
+        return 'mp3';
+      case 'audio/ogg':
+        return 'ogg';
+      case 'audio/aac':
+        return 'aac';
+      case 'audio/wav':
+        return 'wav';
+      case 'audio/webm':
+      default:
+        return 'webm';
+    }
   }
 }

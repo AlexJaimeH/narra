@@ -1,12 +1,9 @@
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:http/http.dart' as http;
-import 'package:http_parser/http_parser.dart';
 
 class OpenAIService {
   // Route proxied by Cloudflare Pages Functions. No client-side key usage.
   static const String _proxyEndpoint = '/api/openai';
-  static const String _whisperEndpoint = '/api/whisper';
 
   static Future<Map<String, dynamic>> _proxyChat({
     required List<Map<String, dynamic>> messages,
@@ -414,13 +411,6 @@ Responde SOLO con un objeto JSON:
     }
   }
 
-  // Transcribir y mejorar audio a texto
-  static Future<String> transcribeAudio(Uint8List audioData) async {
-    // Nota: Esta función requeriría la API de Whisper de OpenAI
-    // Por ahora retornamos un placeholder
-    return 'Funcionalidad de transcripción de audio pendiente de implementación con Whisper API';
-  }
-
   // Generar ideas de títulos para historias
   static Future<List<String>> generateTitleSuggestions({
     required String storyContent,
@@ -465,72 +455,6 @@ Responde SOLO con un objeto JSON:
     } catch (e) {
       print('Error generating title suggestions: $e');
       return ['Mi Historia', 'Recuerdos Preciados', 'Una Vida Vivida'];
-    }
-  }
-
-  // Transcripción en tiempo casi real (web): envía fragmentos de audio a CF Function Whisper
-  static Future<String> transcribeChunk({
-    required Uint8List audioBytes,
-    String mimeType = 'audio/webm',
-    String language = 'es',
-  }) async {
-    final normalizedMime = (mimeType.isNotEmpty && mimeType.contains('/'))
-        ? mimeType.split(';').first
-        : 'audio/webm';
-
-    final prompt =
-        'Idioma: español. Si el audio es ruidoso, prioriza claridad. No inventes texto.';
-    final uri = Uri.parse(
-      '$_whisperEndpoint?language=$language&model=gpt-4o-mini-transcribe&prompt=${Uri.encodeComponent(prompt)}',
-    );
-
-    final request = http.MultipartRequest('POST', uri)
-      ..headers['Accept'] = 'application/json'
-      ..files.add(
-        http.MultipartFile.fromBytes(
-          'file',
-          audioBytes,
-          filename: 'chunk.${_extensionFromMime(normalizedMime)}',
-          contentType: MediaType.parse(normalizedMime),
-        ),
-      );
-
-    request.fields['language'] = language;
-    request.fields['model'] = 'gpt-4o-mini-transcribe';
-    request.fields['prompt'] = prompt;
-    request.fields['response_format'] = 'json';
-
-
-    final response = await request.send();
-    final bodyBytes = await response.stream.toBytes();
-    if (response.statusCode >= 200 && response.statusCode < 300) {
-      try {
-        final json = jsonDecode(utf8.decode(bodyBytes)) as Map<String, dynamic>;
-        return (json['text'] as String?) ?? '';
-      } catch (_) {
-        return utf8.decode(bodyBytes);
-      }
-    }
-
-    final body = utf8.decode(bodyBytes);
-    throw Exception('Whisper proxy error: ${response.statusCode} - $body');
-  }
-
-  static String _extensionFromMime(String mime) {
-    switch (mime) {
-      case 'audio/mp4':
-        return 'mp4';
-      case 'audio/mpeg':
-        return 'mp3';
-      case 'audio/ogg':
-        return 'ogg';
-      case 'audio/aac':
-        return 'aac';
-      case 'audio/wav':
-        return 'wav';
-      case 'audio/webm':
-      default:
-        return 'webm';
     }
   }
 }

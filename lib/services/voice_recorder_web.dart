@@ -258,7 +258,7 @@ class VoiceRecorder {
         ? localDescription.sdp!
         : offer.sdp!;
 
-    _log('Enviando oferta WebRTC a OpenAI (SDP ${localSdp.length} chars)...',
+    _log('Intercambiando SDP vía backend (SDP ${localSdp.length} chars)...',
         level: 'debug');
     final response = await http.post(
       Uri.parse('https://api.openai.com/v1/realtime?model=$_model'),
@@ -353,23 +353,18 @@ class VoiceRecorder {
         data = null;
       }
 
-      if (response.statusCode >= 200 &&
-          response.statusCode < 300 &&
-          data != null) {
-        final clientSecret = data['client_secret'];
-        if (clientSecret is String && clientSecret.isNotEmpty) {
-          return clientSecret;
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        if (data != null && data['answer'] is String) {
+          return data['answer'] as String;
         }
-        if (clientSecret is Map && clientSecret['value'] is String) {
-          return clientSecret['value'] as String;
+        if (body.trim().isNotEmpty) {
+          return body;
         }
       }
 
-      _log(
-        'Sesión Realtime inválida (${response.statusCode}): $body',
-        level: 'error',
-      );
-      throw Exception('Sesión Realtime inválida');
+      _log('Intercambio SDP falló (${response.statusCode}): $body',
+          level: 'error');
+      throw Exception('Intercambio SDP falló: $body');
     } catch (error) {
       _log('No se pudo crear sesión Realtime', level: 'error', error: error);
       rethrow;

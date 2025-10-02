@@ -8,8 +8,8 @@ import 'package:narra/openai/openai_service.dart';
 typedef OnText = void Function(String text);
 
 class VoiceRecorder {
-  static const _minFlushBytes = 4 * 1024; // aim for ~1s of audio per chunk
-  static const _maxFlushInterval = Duration(milliseconds: 1500);
+  static const _minChunkBytes = 24 * 1024; // ~1.5s de audio opus
+  static const _chunkInterval = Duration(milliseconds: 2000);
 
   html.MediaRecorder? _recorder;
   final List<Uint8List> _chunks = [];
@@ -18,9 +18,8 @@ class VoiceRecorder {
   String _mimeType = 'application/octet-stream';
   OnText? _onText;
 
-  final List<html.Blob> _pendingBlobs = [];
-  int _pendingBytesLength = 0;
-  Timer? _flushTimer;
+  html.Blob? _pendingBlob;
+  Timer? _chunkTimer;
   Future<void> _transcriptionQueue = Future<void>.value();
   bool _stopping = false;
 
@@ -47,6 +46,7 @@ class VoiceRecorder {
 
     _stream = stream;
     _onText = onText;
+    _pendingBlob = null;
 
     final candidates = <String>[
       'audio/webm;codecs=opus',
@@ -76,45 +76,41 @@ class VoiceRecorder {
 
     _recorder!.addEventListener('dataavailable', (event) async {
       if (_stopping) return;
-
       final e = event as html.BlobEvent;
       final blob = e.data;
-
       if (blob == null || blob.size == 0) return;
 
-      try {
-        final bytes = await _readBlob(blob);
-        if (bytes == null || bytes.isEmpty) return;
-
-        _chunks.add(bytes);
-        _pendingBlobs.add(blob);
-        _pendingBytesLength += blob.size;
-
-        if (_pendingBytesLength >= _minFlushBytes) {
-          _queueTranscription();
-        } else {
-          _scheduleFlush();
-        }
-      } catch (_) {
-        // Ignore read issues and keep recording
+      html.Blob effectiveBlob = blob;
+      if (_pendingBlob != null) {
+        effectiveBlob = html.Blob([_pendingBlob!, blob], {"type": _mimeType});
+        _pendingBlob = null;
       }
+
+      if (effectiveBlob.size < _minChunkBytes) {
+        _pendingBlob = effectiveBlob;
+        return;
+      }
+
+      await _processChunk(effectiveBlob);
     });
 
-    // Frequent chunks to keep UX reactive even with long silences
-    _recorder!.start(800);
+    _recorder!.start();
+    _scheduleChunkTimer();
   }
 
   Future<bool> pause() async {
     final recorder = _recorder;
     if (recorder == null || recorder.state != 'recording') return false;
 
+    _cancelChunkTimer();
     await _flushPending();
+
     var paused = false;
     try {
       recorder.pause();
       paused = recorder.state == 'paused';
     } catch (_) {
-      // Some browsers may not support pause
+      // Algunos navegadores no soportan pause()
     }
     return paused;
   }
@@ -126,9 +122,10 @@ class VoiceRecorder {
     if (recorder.state == 'paused') {
       try {
         recorder.resume();
+        _scheduleChunkTimer();
         return recorder.state == 'recording';
       } catch (_) {
-        // If resume is unsupported the caller will handle restarting
+        // Si falla, el flujo de arriba reiniciará la grabación completa
       }
     }
     return recorder.state == 'recording';
@@ -139,8 +136,8 @@ class VoiceRecorder {
     if (recorder == null) return null;
 
     _stopping = true;
+    _cancelChunkTimer();
     await _flushPending();
-    _cancelFlushTimer();
 
     final completer = Completer<void>();
     late html.EventListener listener;
@@ -180,6 +177,50 @@ class VoiceRecorder {
     await stop();
   }
 
+  void _scheduleChunkTimer() {
+    _chunkTimer?.cancel();
+    _chunkTimer = Timer.periodic(_chunkInterval, (_) {
+      final recorder = _recorder;
+      if (recorder != null && recorder.state == 'recording') {
+        try {
+          recorder.requestData();
+        } catch (_) {}
+      }
+    });
+
+    // Primer request para no esperar al primer periodo completo
+    Future.delayed(_chunkInterval ~/ 2, () {
+      final recorder = _recorder;
+      if (recorder != null && recorder.state == 'recording') {
+        try {
+          recorder.requestData();
+        } catch (_) {}
+      }
+    });
+  }
+
+  void _cancelChunkTimer() {
+    _chunkTimer?.cancel();
+    _chunkTimer = null;
+  }
+
+  Future<void> _processChunk(html.Blob blob) async {
+    final bytes = await _readBlob(blob);
+    if (bytes == null || bytes.isEmpty) return;
+    _chunks.add(bytes);
+    _transcriptionQueue = _transcriptionQueue.then((_) async {
+      await _transcribe(bytes);
+    });
+  }
+
+  Future<void> _flushPending() async {
+    final pending = _pendingBlob;
+    if (pending == null) return;
+    _pendingBlob = null;
+    await _processChunk(pending);
+    await _transcriptionQueue;
+  }
+
   Future<Uint8List?> _readBlob(html.Blob blob) async {
     final reader = html.FileReader();
     final completer = Completer<Uint8List?>();
@@ -217,40 +258,6 @@ class VoiceRecorder {
     return completer.future;
   }
 
-  void _queueTranscription() {
-    if (_pendingBlobs.isEmpty) return;
-    final blobs = List<html.Blob>.from(_pendingBlobs);
-    _pendingBlobs.clear();
-    _pendingBytesLength = 0;
-
-    _transcriptionQueue = _transcriptionQueue.then((_) async {
-      final combined = blobs.length == 1 ? blobs.first : html.Blob(blobs);
-      final payload = await _blobToBytes(combined);
-      if (payload == null || payload.isEmpty) return;
-      await _transcribe(payload);
-    });
-  }
-
-  Future<void> _flushPending() async {
-    _cancelFlushTimer();
-    if (_pendingBlobs.isEmpty) return;
-    _queueTranscription();
-    await _transcriptionQueue;
-  }
-
-  void _scheduleFlush() {
-    if (_flushTimer?.isActive ?? false) return;
-    _flushTimer = Timer(_maxFlushInterval, () {
-      _flushTimer = null;
-      _queueTranscription();
-    });
-  }
-
-  void _cancelFlushTimer() {
-    _flushTimer?.cancel();
-    _flushTimer = null;
-  }
-
   Future<void> _transcribe(Uint8List audioBytes) async {
     final handler = _onText;
     if (handler == null) return;
@@ -272,51 +279,12 @@ class VoiceRecorder {
 
     } catch (error, stackTrace) {
       if (kDebugMode) {
-        // Surface errors in dev tools to speed up debugging of Whisper issues
         // ignore: avoid_print
         print('⚠️ Whisper chunk failed: $error\n$stackTrace');
       }
       html.window.console.error('Whisper chunk failed: $error');
 
     }
-  }
-
-  Future<Uint8List?> _blobToBytes(html.Blob blob) async {
-    final reader = html.FileReader();
-    final completer = Completer<Uint8List?>();
-
-    reader.onError.listen((_) {
-      try {
-        reader.abort();
-      } catch (_) {}
-      completer.complete(null);
-    });
-
-    reader.onLoadEnd.listen((_) {
-      try {
-        final result = reader.result;
-        if (result is ByteBuffer) {
-          completer.complete(Uint8List.view(result));
-        } else if (result is Uint8List) {
-          completer.complete(result);
-        } else if (result is List<int>) {
-          completer.complete(Uint8List.fromList(result));
-        } else {
-          completer.complete(null);
-        }
-      } catch (_) {
-        completer.complete(null);
-      }
-    });
-
-    try {
-      reader.readAsArrayBuffer(blob);
-    } catch (_) {
-      completer.complete(null);
-
-    }
-
-    return completer.future;
   }
 
   Uint8List? _mergeChunks() {
@@ -337,9 +305,8 @@ class VoiceRecorder {
   void _resetState() {
     _recorder = null;
     _onText = null;
-    _pendingBlobs.clear();
-    _pendingBytesLength = 0;
-    _cancelFlushTimer();
+    _pendingBlob = null;
+    _cancelChunkTimer();
     _transcriptionQueue = Future<void>.value();
     _stopping = false;
   }

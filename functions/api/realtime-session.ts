@@ -13,7 +13,7 @@ export const onRequestOptions: PagesFunction<Env> = async () => {
   return new Response(null, { status: 204, headers: CORS_HEADERS });
 };
 
-export const onRequestPost: PagesFunction<Env> = async ({ env }) => {
+export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   try {
     const apiKey = env.OPENAI_API_KEY;
     if (!apiKey) {
@@ -23,31 +23,64 @@ export const onRequestPost: PagesFunction<Env> = async ({ env }) => {
       });
     }
 
-    const response = await fetch('https://api.openai.com/v1/realtime/sessions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
+    const contentType = request.headers.get('Content-Type') ?? '';
+    let offerSdp: string | undefined;
 
-        'OpenAI-Beta': 'realtime=v1',
+    if (contentType.includes('application/json')) {
+      const data = await request.json().catch(() => null);
+      offerSdp = typeof data?.sdp === 'string' ? data.sdp : undefined;
+    } else {
+      const bodyText = await request.text();
+      offerSdp = bodyText.trim().length > 0 ? bodyText : undefined;
+    }
 
-        Authorization: `Bearer ${apiKey}`,
+    if (!offerSdp) {
+      return new Response(
+        JSON.stringify({ error: 'Missing SDP offer' }),
+        {
+          status: 400,
+          headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+        },
+      );
+    }
+
+    const response = await fetch(
+      'https://api.openai.com/v1/realtime?model=gpt-4o-mini-transcribe-realtime',
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'OpenAI-Beta': 'realtime=v1',
+          'Content-Type': 'application/sdp',
+          Accept: 'application/sdp',
+        },
+        body: offerSdp,
       },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini-transcribe-realtime',
-        modalities: ['text'],
-        instructions:
-          'Eres un transcriptor en español. Devuelve exclusivamente el discurso del usuario como texto claro y sin instrucciones adicionales.',
+    );
+
+    const answerBody = await response.text();
+
+    if (response.status >= 200 && response.status < 300) {
+      return new Response(
+        JSON.stringify({ answer: answerBody }),
+        {
+          status: 200,
+          headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+        },
+      );
+    }
+
+    return new Response(
+      JSON.stringify({
+        error: 'Realtime handshake failed',
+        status: response.status,
+        details: answerBody,
       }),
-    });
-
-    const body = await response.text();
-    return new Response(body, {
-      status: response.status,
-      headers: {
-        ...CORS_HEADERS,
-        'Content-Type': 'application/json',
+      {
+        status: response.status,
+        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
       },
-    });
+    );
   } catch (error: any) {
     return new Response(`Error: ${error?.message ?? String(error)}`, {
       status: 500,

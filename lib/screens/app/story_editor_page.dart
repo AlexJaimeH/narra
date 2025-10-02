@@ -1186,7 +1186,9 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                 if (_recorderLogs.isNotEmpty) ...[
                   const SizedBox(height: 12),
                   Text(
+
                     'Eventos recientes (logs)',
+
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),

@@ -12,11 +12,13 @@ typedef OnRecorderLog = void Function(String level, String message);
 class VoiceRecorder {
   static const _model = 'gpt-4o-mini-transcribe-realtime';
 
+
   html.MediaStream? _inputStream;
   html.MediaStreamTrack? _audioTrack;
   html.MediaRecorder? _mediaRecorder;
   html.RtcPeerConnection? _peerConnection;
   html.RtcDataChannel? _eventsChannel;
+
 
   final List<Uint8List> _recordedChunks = [];
   Completer<void>? _recorderStopCompleter;
@@ -401,6 +403,7 @@ class VoiceRecorder {
       _log('No se pudo parsear mensaje JSON', level: 'warning', error: error);
       return;
     }
+  }
 
     final type = payload['type'] as String?;
     if (type == null) return;

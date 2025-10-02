@@ -23,6 +23,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       });
     }
 
+
     const contentType = request.headers.get('Content-Type') ?? '';
     let offerSdp: string | undefined;
 
@@ -55,6 +56,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
           Accept: 'application/sdp',
         },
         body: offerSdp,
+
       },
     );
 

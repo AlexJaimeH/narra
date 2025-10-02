@@ -266,32 +266,17 @@ class VoiceRecorder {
         ? localDescription.sdp!
         : offer.sdp!;
 
-    _log('Enviando oferta WebRTC a OpenAI...', level: 'debug');
-    final response = await http.post(
-      Uri.parse('https://api.openai.com/v1/realtime?model=$_model'),
-      headers: {
-        'Authorization': 'Bearer $sessionSecret',
-        'Content-Type': 'application/sdp',
-        'Accept': 'application/sdp',
-        'OpenAI-Beta': 'realtime=v1',
-      },
-      body: localSdp,
-    );
-
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      _log(
-        'OpenAI Realtime respondió ${response.statusCode}',
-        level: 'error',
-        error: response.body,
-      );
-      throw Exception(
-        'OpenAI Realtime respondió ${response.statusCode}: ${response.body}',
-      );
+    if (localSdp.trim().isEmpty) {
+      throw Exception('No se pudo generar descripción de sesión local');
     }
+
+    _log('Enviando oferta WebRTC a Narra (SDP ${localSdp.length} chars)...',
+        level: 'debug');
+    final answerSdp = await _fetchRemoteAnswer(localSdp);
 
     await pc.setRemoteDescription({
       'type': 'answer',
-      'sdp': response.body,
+      'sdp': answerSdp,
     });
   }
 

@@ -77,13 +77,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         'OpenAI-Beta': 'realtime=v1',
         Authorization: `Bearer ${apiKey}`,
       },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini-transcribe-realtime',
-        modalities: ['text'],
-        instructions:
-          'Eres un transcriptor en español. Devuelve exclusivamente el discurso del usuario como texto claro y sin instrucciones adicionales.',
-      }),
-    });
+    );
 
     const body = await sessionResponse.text();
     return new Response(body, {

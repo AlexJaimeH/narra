@@ -24,65 +24,81 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     }
 
     const contentType = request.headers.get('Content-Type') ?? '';
-    let offerSdp: string | undefined;
-
+    let jsonPayload: any = null;
     if (contentType.includes('application/json')) {
-      const data = await request.json().catch(() => null);
-      offerSdp = typeof data?.sdp === 'string' ? data.sdp : undefined;
-    } else {
-      const bodyText = await request.text();
-      offerSdp = bodyText.trim().length > 0 ? bodyText : undefined;
+      jsonPayload = await request.json().catch(() => null);
     }
 
-    if (!offerSdp) {
-      return new Response(
-        JSON.stringify({ error: 'Missing SDP offer' }),
+    const offerSdp =
+      typeof jsonPayload?.sdp === 'string'
+        ? (jsonPayload.sdp as string)
+        : undefined;
+
+    if (offerSdp) {
+      const response = await fetch(
+        'https://api.openai.com/v1/realtime?model=gpt-4o-mini-transcribe-realtime',
         {
-          status: 400,
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'OpenAI-Beta': 'realtime=v1',
+            'Content-Type': 'application/sdp',
+            Accept: 'application/sdp',
+          },
+          body: offerSdp,
+        },
+      );
+
+      const answerBody = await response.text();
+
+      if (response.status >= 200 && response.status < 300) {
+        return new Response(
+          JSON.stringify({ answer: answerBody }),
+          {
+            status: 200,
+            headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+          },
+        );
+      }
+
+      return new Response(
+        JSON.stringify({
+          error: 'Realtime handshake failed',
+          status: response.status,
+          details: answerBody,
+        }),
+        {
+          status: response.status,
           headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
         },
       );
     }
 
-    const response = await fetch(
-      'https://api.openai.com/v1/realtime?model=gpt-4o-mini-transcribe-realtime',
+    const sessionResponse = await fetch(
+      'https://api.openai.com/v1/realtime/sessions',
       {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
           'OpenAI-Beta': 'realtime=v1',
-          'Content-Type': 'application/sdp',
-          Accept: 'application/sdp',
+          Authorization: `Bearer ${apiKey}`,
         },
-        body: offerSdp,
+        body: JSON.stringify({
+          model: 'gpt-4o-mini-transcribe-realtime',
+          modalities: ['text'],
+          instructions:
+            'Eres un transcriptor en español. Devuelve exclusivamente el discurso del usuario como texto claro y sin instrucciones adicionales.',
+        }),
       },
     );
 
-    const answerBody = await response.text();
-
-    if (response.status >= 200 && response.status < 300) {
-      return new Response(
-        JSON.stringify({ answer: answerBody }),
-        {
-          status: 200,
-          headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-        },
-      );
-    }
-
-    return new Response(
-      JSON.stringify({
-        error: 'Realtime handshake failed',
-        status: response.status,
-        details: answerBody,
-      }),
-      {
-        status: response.status,
-        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-      },
-    );
-  } catch (error: any) {
-    return new Response(`Error: ${error?.message ?? String(error)}`, {
+    const body = await sessionResponse.text();
+    return new Response(body, {
+      status: sessionResponse.status,
+      headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+    });
+  } catch (error: unknown) {
+    return new Response(`Error: ${error instanceof Error ? error.message : String(error)}`, {
       status: 500,
       headers: CORS_HEADERS,
     });

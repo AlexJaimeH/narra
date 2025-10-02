@@ -8,8 +8,10 @@ import 'package:narra/openai/openai_service.dart';
 typedef OnText = void Function(String text);
 
 class VoiceRecorder {
+
   static const _minChunkBytes = 24 * 1024; // ~1.5s de audio opus
   static const _chunkInterval = Duration(milliseconds: 2000);
+
 
   html.MediaRecorder? _recorder;
   final List<Uint8List> _chunks = [];
@@ -18,8 +20,10 @@ class VoiceRecorder {
   String _mimeType = 'application/octet-stream';
   OnText? _onText;
 
+
   html.Blob? _pendingBlob;
   Timer? _chunkTimer;
+
   Future<void> _transcriptionQueue = Future<void>.value();
   bool _stopping = false;
 
@@ -46,7 +50,9 @@ class VoiceRecorder {
 
     _stream = stream;
     _onText = onText;
+
     _pendingBlob = null;
+
 
     final candidates = <String>[
       'audio/webm;codecs=opus',
@@ -80,6 +86,7 @@ class VoiceRecorder {
       final blob = e.data;
       if (blob == null || blob.size == 0) return;
 
+
       html.Blob effectiveBlob = blob;
       if (_pendingBlob != null) {
         effectiveBlob = html.Blob([_pendingBlob!, blob], _mimeType);
@@ -89,13 +96,16 @@ class VoiceRecorder {
       if (effectiveBlob.size < _minChunkBytes) {
         _pendingBlob = effectiveBlob;
         return;
+
       }
 
       await _processChunk(effectiveBlob);
     });
 
+
     _recorder!.start();
     _scheduleChunkTimer();
+
   }
 
   Future<bool> pause() async {
@@ -258,6 +268,7 @@ class VoiceRecorder {
     return completer.future;
   }
 
+
   Future<void> _transcribe(Uint8List audioBytes) async {
     final handler = _onText;
     if (handler == null) return;
@@ -276,6 +287,7 @@ class VoiceRecorder {
         // ignore: avoid_print
         print('🎙️ Whisper chunk ok (${audioBytes.length} bytes, $_mimeType)');
       }
+
     } catch (error, stackTrace) {
       if (kDebugMode) {
         // ignore: avoid_print
@@ -283,6 +295,44 @@ class VoiceRecorder {
       }
       html.window.console.error('Whisper chunk failed: $error');
     }
+  }
+
+  Future<Uint8List?> _blobToBytes(html.Blob blob) async {
+    final reader = html.FileReader();
+    final completer = Completer<Uint8List?>();
+
+    reader.onError.listen((_) {
+      try {
+        reader.abort();
+      } catch (_) {}
+      completer.complete(null);
+    });
+
+    reader.onLoadEnd.listen((_) {
+      try {
+        final result = reader.result;
+        if (result is ByteBuffer) {
+          completer.complete(Uint8List.view(result));
+        } else if (result is Uint8List) {
+          completer.complete(result);
+        } else if (result is List<int>) {
+          completer.complete(Uint8List.fromList(result));
+        } else {
+          completer.complete(null);
+        }
+      } catch (_) {
+        completer.complete(null);
+      }
+    });
+
+    try {
+      reader.readAsArrayBuffer(blob);
+    } catch (_) {
+      completer.complete(null);
+
+    }
+
+    return completer.future;
   }
 
   Uint8List? _mergeChunks() {
@@ -303,8 +353,10 @@ class VoiceRecorder {
   void _resetState() {
     _recorder = null;
     _onText = null;
+
     _pendingBlob = null;
     _cancelChunkTimer();
+
     _transcriptionQueue = Future<void>.value();
     _stopping = false;
   }

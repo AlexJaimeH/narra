@@ -494,6 +494,10 @@ Responde SOLO con un objeto JSON:
           contentType: MediaType.parse(normalizedMime),
         ),
       );
+    request.fields['language'] = language;
+    request.fields['model'] = 'gpt-4o-mini-transcribe';
+    request.fields['prompt'] = prompt;
+    request.fields['response_format'] = 'json';
 
     final response = await request.send();
     final bodyBytes = await response.stream.toBytes();

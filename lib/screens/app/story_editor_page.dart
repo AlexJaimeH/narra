@@ -36,9 +36,11 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   String _liveTranscript = '';
   String? _lastTranscriptChunk;
   bool _isPaused = false;
+
   bool _isRecorderConnecting = false;
   final List<String> _recorderLogs = [];
   static const int _maxRecorderLogs = 200;
+
 
   bool _hasChanges = false;
   bool _isLoading = false;
@@ -898,6 +900,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       _lastTranscriptChunk = null;
     }
 
+
     if (mounted) {
       setState(() {
         _isRecorderConnecting = true;
@@ -917,6 +920,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       if (!mounted) {
         await recorder.dispose();
         _isRecorderConnecting = false;
+
         return;
       }
       setState(() {
@@ -936,6 +940,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       }
     } catch (e) {
       await recorder.dispose();
+
       if (!mounted) {
         _isRecorderConnecting = false;
         return;
@@ -950,11 +955,14 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('No se pudo iniciar la transcripción: $e')),
       );
+
     }
   }
 
   Future<void> _togglePauseResume() async {
+
     if (_isRecorderConnecting) return;
+
 
     final recorder = _recorder;
     if (recorder == null) {
@@ -963,6 +971,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     }
 
     if (_isPaused) {
+
       if (mounted) {
         setState(() => _isRecorderConnecting = true);
       } else {
@@ -992,6 +1001,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           _appendRecorderLog(
               'warning', 'No se pudo reanudar, reiniciando sesión');
           await _startRecording(resetTranscript: false);
+
         }
       } catch (e) {
         if (mounted) {
@@ -1001,26 +1011,32 @@ class _StoryEditorPageState extends State<StoryEditorPage>
             SnackBar(content: Text('No se pudo reanudar: $e')),
           );
         }
+
       } finally {
         if (!mounted) {
           _isRecorderConnecting = false;
         }
+
       }
       return;
     }
 
     try {
+
       await recorder.pause();
       if (mounted) {
+
         setState(() {
           _isPaused = true;
           _isRecording = false;
         });
       }
+
       _appendRecorderLog('info', 'Grabación pausada');
     } catch (e) {
       if (mounted) {
         _appendRecorderLog('error', 'No se pudo pausar: $e');
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('No se pudo pausar: $e')),
         );
@@ -1038,6 +1054,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     } catch (e) {
       if (mounted) {
         _appendRecorderLog('error', 'Error al detener grabación: $e');
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error al detener la grabación: $e')),
         );
@@ -1049,7 +1066,9 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         _recorder = null;
         _isRecording = false;
         _isPaused = false;
+
         _isRecorderConnecting = false;
+
       });
     }
     _isRecorderConnecting = false;

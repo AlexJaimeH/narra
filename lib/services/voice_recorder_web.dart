@@ -10,7 +10,9 @@ typedef OnText = void Function(String text);
 typedef OnRecorderLog = void Function(String level, String message);
 
 class VoiceRecorder {
+
   static const _model = 'gpt-4o-mini-transcribe-realtime';
+
 
   html.MediaStream? _inputStream;
   html.MediaStreamTrack? _audioTrack;
@@ -24,6 +26,7 @@ class VoiceRecorder {
 
   OnText? _onText;
   OnRecorderLog? _onLog;
+
 
   bool _stopping = false;
   bool _channelOpen = false;
@@ -69,8 +72,10 @@ class VoiceRecorder {
     _audioTrack = tracks.first;
     _log('Micrófono listo: ${_audioTrack?.label ?? 'sin etiqueta'}');
 
+
     _initializeMediaRecorder(stream);
     await _initializePeerConnection(sessionSecret);
+
 
     try {
       await _eventsChannelReadyCompleter!.future
@@ -84,6 +89,7 @@ class VoiceRecorder {
       _log('Sesión cancelada antes de iniciar', level: 'warning');
       throw Exception('Grabación cancelada');
     }
+
 
     _log('Conectado. Comienza a hablar cuando quieras.');
   }
@@ -117,17 +123,20 @@ class VoiceRecorder {
     }
 
     return true;
+
   }
 
   Future<bool> resume() async {
     _log('Reanudando grabación...');
     _isPaused = false;
 
+
     try {
       _audioTrack?.enabled = true;
     } catch (error) {
       _log('No se pudo activar la pista de audio',
           level: 'warning', error: error);
+
     }
 
     try {
@@ -136,11 +145,13 @@ class VoiceRecorder {
       _log('MediaRecorder.resume falló', level: 'warning', error: error);
     }
 
+
     if (_peerConnection?.connectionState != 'connected') {
       _log(
         'PeerConnection no está conectado (${_peerConnection?.connectionState})',
         level: 'warning',
       );
+
     }
 
     _requestTranscription(force: true);
@@ -154,7 +165,9 @@ class VoiceRecorder {
 
     _log('Deteniendo grabación...');
     _stopping = true;
+
     _isPaused = false;
+
 
     if (_activeResponseId != null) {
       _safeSend({
@@ -211,12 +224,14 @@ class VoiceRecorder {
     await stop();
   }
 
+
   Future<void> _initializePeerConnection(String sessionSecret) async {
     final configuration = {
       'iceServers': [
         {'urls': 'stun:stun.l.google.com:19302'},
       ],
     };
+
 
     final pc = html.RtcPeerConnection(configuration);
     _peerConnection = pc;
@@ -286,6 +301,7 @@ class VoiceRecorder {
       'sdp': response.body,
     });
   }
+
 
   void _initializeMediaRecorder(html.MediaStream stream) {
     final candidates = <String>[
@@ -464,6 +480,7 @@ class VoiceRecorder {
     }
   }
 
+
   void _emitDelta(dynamic delta) {
     if (delta == null) return;
 
@@ -531,6 +548,7 @@ class VoiceRecorder {
       return;
     }
 
+
     try {
       final message = jsonEncode(payload);
       _eventsChannel?.send(message);
@@ -552,6 +570,7 @@ class VoiceRecorder {
     for (final chunk in _recordedChunks) {
       merged.setAll(offset, chunk);
       offset += chunk.length;
+
     }
     _recordedChunks.clear();
     return merged;
@@ -609,7 +628,9 @@ class VoiceRecorder {
     _inputStream = null;
     _audioTrack = null;
     _onText = null;
+
     _onLog = null;
+
     _stopping = false;
     _channelOpen = false;
     _isPaused = false;

@@ -41,7 +41,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   final List<String> _recorderLogs = [];
   static const int _maxRecorderLogs = 200;
 
-
   bool _hasChanges = false;
   bool _isLoading = false;
   bool _isSaving = false;
@@ -900,7 +899,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       _lastTranscriptChunk = null;
     }
 
-
     if (mounted) {
       setState(() {
         _isRecorderConnecting = true;
@@ -955,14 +953,11 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('No se pudo iniciar la transcripción: $e')),
       );
-
     }
   }
 
   Future<void> _togglePauseResume() async {
-
     if (_isRecorderConnecting) return;
-
 
     final recorder = _recorder;
     if (recorder == null) {
@@ -971,7 +966,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     }
 
     if (_isPaused) {
-
       if (mounted) {
         setState(() => _isRecorderConnecting = true);
       } else {
@@ -1001,7 +995,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           _appendRecorderLog(
               'warning', 'No se pudo reanudar, reiniciando sesión');
           await _startRecording(resetTranscript: false);
-
         }
       } catch (e) {
         if (mounted) {
@@ -1011,21 +1004,17 @@ class _StoryEditorPageState extends State<StoryEditorPage>
             SnackBar(content: Text('No se pudo reanudar: $e')),
           );
         }
-
       } finally {
         if (!mounted) {
           _isRecorderConnecting = false;
         }
-
       }
       return;
     }
 
     try {
-
       await recorder.pause();
       if (mounted) {
-
         setState(() {
           _isPaused = true;
           _isRecording = false;
@@ -1068,7 +1057,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         _isPaused = false;
 
         _isRecorderConnecting = false;
-
       });
     }
     _isRecorderConnecting = false;
@@ -1186,7 +1174,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                 if (_recorderLogs.isNotEmpty) ...[
                   const SizedBox(height: 12),
                   Text(
-                    'Eventos recientes',
+                    'Eventos recientes (logs)',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),

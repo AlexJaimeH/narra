@@ -10,9 +10,7 @@ typedef OnText = void Function(String text);
 typedef OnRecorderLog = void Function(String level, String message);
 
 class VoiceRecorder {
-
   static const _model = 'gpt-4o-mini-transcribe-realtime';
-
 
   html.MediaStream? _inputStream;
   html.MediaStreamTrack? _audioTrack;
@@ -26,7 +24,6 @@ class VoiceRecorder {
 
   OnText? _onText;
   OnRecorderLog? _onLog;
-
 
   bool _stopping = false;
   bool _channelOpen = false;
@@ -47,8 +44,6 @@ class VoiceRecorder {
     _eventsChannelReadyCompleter = Completer<void>();
 
     _log('Preparando sesión de transcripción...');
-
-    final sessionSecret = await _createRealtimeSession();
     final devices = html.window.navigator.mediaDevices;
     if (devices == null) {
       _log('El navegador no soporta mediaDevices', level: 'error');
@@ -72,10 +67,17 @@ class VoiceRecorder {
     _audioTrack = tracks.first;
     _log('Micrófono listo: ${_audioTrack?.label ?? 'sin etiqueta'}');
 
-
     _initializeMediaRecorder(stream);
-    await _initializePeerConnection(sessionSecret);
 
+    String sessionSecret;
+    try {
+      sessionSecret = await _createRealtimeSession();
+    } catch (error) {
+      _log('No se pudo obtener sesión Realtime', level: 'error', error: error);
+      rethrow;
+    }
+
+    await _initializePeerConnection(sessionSecret);
 
     try {
       await _eventsChannelReadyCompleter!.future
@@ -89,7 +91,6 @@ class VoiceRecorder {
       _log('Sesión cancelada antes de iniciar', level: 'warning');
       throw Exception('Grabación cancelada');
     }
-
 
     _log('Conectado. Comienza a hablar cuando quieras.');
   }
@@ -123,20 +124,17 @@ class VoiceRecorder {
     }
 
     return true;
-
   }
 
   Future<bool> resume() async {
     _log('Reanudando grabación...');
     _isPaused = false;
 
-
     try {
       _audioTrack?.enabled = true;
     } catch (error) {
       _log('No se pudo activar la pista de audio',
           level: 'warning', error: error);
-
     }
 
     try {
@@ -145,13 +143,11 @@ class VoiceRecorder {
       _log('MediaRecorder.resume falló', level: 'warning', error: error);
     }
 
-
     if (_peerConnection?.connectionState != 'connected') {
       _log(
         'PeerConnection no está conectado (${_peerConnection?.connectionState})',
         level: 'warning',
       );
-
     }
 
     _requestTranscription(force: true);
@@ -167,7 +163,6 @@ class VoiceRecorder {
     _stopping = true;
 
     _isPaused = false;
-
 
     if (_activeResponseId != null) {
       _safeSend({
@@ -224,14 +219,12 @@ class VoiceRecorder {
     await stop();
   }
 
-
   Future<void> _initializePeerConnection(String sessionSecret) async {
     final configuration = {
       'iceServers': [
         {'urls': 'stun:stun.l.google.com:19302'},
       ],
     };
-
 
     final pc = html.RtcPeerConnection(configuration);
     _peerConnection = pc;
@@ -302,7 +295,6 @@ class VoiceRecorder {
     });
   }
 
-
   void _initializeMediaRecorder(html.MediaStream stream) {
     final candidates = <String>[
       'audio/webm;codecs=opus',
@@ -357,33 +349,43 @@ class VoiceRecorder {
   }
 
   Future<String> _createRealtimeSession() async {
-    _log('Creando sesión Realtime...', level: 'debug');
-    final response = await http.post(
-      Uri.parse('/api/realtime-session'),
-      headers: const {'Content-Type': 'application/json'},
-    );
+    try {
+      _log('Creando sesión Realtime...', level: 'debug');
+      final response = await http.post(
+        Uri.parse('/api/realtime-session'),
+        headers: const {'Content-Type': 'application/json'},
+        body: jsonEncode({'action': 'create_session'}),
+      );
 
-    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final body = response.body;
+      Map<String, dynamic>? data;
+      try {
+        data = jsonDecode(body) as Map<String, dynamic>;
+      } catch (_) {
+        data = null;
+      }
+
+      if (response.statusCode >= 200 &&
+          response.statusCode < 300 &&
+          data != null) {
+        final clientSecret = data['client_secret'];
+        if (clientSecret is String && clientSecret.isNotEmpty) {
+          return clientSecret;
+        }
+        if (clientSecret is Map && clientSecret['value'] is String) {
+          return clientSecret['value'] as String;
+        }
+      }
+
       _log(
-        'No se pudo iniciar sesión Realtime (${response.statusCode})',
+        'Sesión Realtime inválida (${response.statusCode}): $body',
         level: 'error',
-        error: response.body,
       );
-      throw Exception(
-        'No se pudo iniciar sesión Realtime (${response.statusCode})',
-      );
+      throw Exception('Sesión Realtime inválida');
+    } catch (error) {
+      _log('No se pudo crear sesión Realtime', level: 'error', error: error);
+      rethrow;
     }
-
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
-    final secret = data['client_secret'];
-    if (secret is String) {
-      return secret;
-    }
-    if (secret is Map && secret['value'] is String) {
-      return secret['value'] as String;
-    }
-    _log('Respuesta inválida al crear sesión Realtime', level: 'error');
-    throw Exception('Respuesta inválida al crear sesión Realtime');
   }
 
   Future<void> _waitForIceGatheringComplete(html.RtcPeerConnection pc) async {
@@ -480,7 +482,6 @@ class VoiceRecorder {
     }
   }
 
-
   void _emitDelta(dynamic delta) {
     if (delta == null) return;
 
@@ -548,7 +549,6 @@ class VoiceRecorder {
       return;
     }
 
-
     try {
       final message = jsonEncode(payload);
       _eventsChannel?.send(message);
@@ -570,7 +570,6 @@ class VoiceRecorder {
     for (final chunk in _recordedChunks) {
       merged.setAll(offset, chunk);
       offset += chunk.length;
-
     }
     _recordedChunks.clear();
     return merged;

@@ -26,7 +26,7 @@ class _RealtimeSessionDetails {
 }
 
 class VoiceRecorder {
-  static const _defaultModel = 'gpt-4o-mini-realtime-preview-2024-12-17';
+  static const _defaultModel = 'gpt-4o-realtime-preview-2024-10-01';
   html.MediaStream? _inputStream;
   html.MediaStreamTrack? _audioTrack;
   html.MediaRecorder? _mediaRecorder;

@@ -1,0 +1,6 @@
+# Variables de entorno para desarrollo local
+# Copia este archivo a .dev.vars y completa con tus valores reales
+
+# OpenAI API Key - Requerida para transcripción en tiempo real
+OPENAI_API_KEY=sk-proj-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+

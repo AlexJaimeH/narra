@@ -1,0 +1,12 @@
+name = "narra"
+compatibility_date = "2024-10-03"
+pages_build_output_dir = "build/web"
+
+# Variables de entorno para desarrollo local
+# NOTA: Crea un archivo .dev.vars con tu API key para desarrollo local
+# Ejemplo: OPENAI_API_KEY=tu-key-aqui
+
+[env.production]
+# Las variables de producción se configuran en Cloudflare Pages Dashboard
+# Settings > Environment variables > Production
+

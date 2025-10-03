@@ -9,8 +9,8 @@ interface Env {
   OPENAI_API_KEY: string;
 }
 
-const DEFAULT_MODEL = 'gpt-4o-mini-realtime-preview-2024-12-17';
-const DEFAULT_MODALITIES = ['text'];
+const DEFAULT_MODEL = 'gpt-4o-realtime-preview-2024-10-01';
+const DEFAULT_MODALITIES = ['text', 'audio'];
 const DEFAULT_INSTRUCTIONS =
   'Eres un transcriptor en español. Devuelve exclusivamente el discurso del usuario como texto claro y sin instrucciones adicionales.';
 
@@ -65,21 +65,26 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       model,
       modalities,
       instructions,
-      intent: 'transcription',
       input_audio_format: 'pcm16',
       output_audio_format: 'pcm16',
-      input_audio_transcription: {
-        model: 'gpt-4o-mini-transcribe',
+      turn_detection: {
+        type: 'server_vad',
+        threshold: 0.5,
+        prefix_padding_ms: 300,
+        silence_duration_ms: 500,
       },
-      voice: 'none',
     };
 
     if (normalizedPayload.voice && typeof normalizedPayload.voice === 'string') {
       sessionRequest.voice = normalizedPayload.voice;
+    } else {
+      sessionRequest.voice = 'alloy';
     }
 
     if (normalizedPayload.temperature != null) {
       sessionRequest.temperature = normalizedPayload.temperature;
+    } else {
+      sessionRequest.temperature = 0.8;
     }
 
     const sessionResponse = await fetch('https://api.openai.com/v1/realtime/sessions', {

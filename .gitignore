@@ -22,5 +22,8 @@ DerivedData/
 .idea/
 .DS_Store
 
+# Cloudflare (variables de entorno locales)
+.dev.vars
+.wrangler/
+
 # Web
-lib/generated_plugin_registrant.dart

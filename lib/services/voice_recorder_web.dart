@@ -9,7 +9,24 @@ import 'package:http/http.dart' as http;
 typedef OnText = void Function(String text);
 typedef OnRecorderLog = void Function(String level, String message);
 
+class _RealtimeSessionDetails {
+  const _RealtimeSessionDetails({
+    required this.clientSecret,
+    required this.iceServers,
+    required this.model,
+    this.sessionId,
+    this.expiresAt,
+  });
+
+  final String clientSecret;
+  final List<Map<String, dynamic>> iceServers;
+  final String model;
+  final String? sessionId;
+  final String? expiresAt;
+}
+
 class VoiceRecorder {
+  static const _defaultModel = 'gpt-4o-mini-transcribe-realtime';
   html.MediaStream? _inputStream;
   html.MediaStreamTrack? _audioTrack;
   html.MediaRecorder? _mediaRecorder;
@@ -28,6 +45,7 @@ class VoiceRecorder {
   bool _isPaused = false;
   String? _activeResponseId;
   int _chunkCount = 0;
+  String? _sessionId;
 
   Future<void> start({OnText? onText, OnRecorderLog? onLog}) async {
     _onText = onText;
@@ -66,7 +84,10 @@ class VoiceRecorder {
     _log('Micrófono listo: ${_audioTrack?.label ?? 'sin etiqueta'}');
 
     _initializeMediaRecorder(stream);
-    await _initializePeerConnection();
+
+    final session = await _createRealtimeSession();
+    _sessionId = session.sessionId;
+    await _initializePeerConnection(session);
 
     try {
       await _eventsChannelReadyCompleter!.future
@@ -208,11 +229,15 @@ class VoiceRecorder {
     await stop();
   }
 
-  Future<void> _initializePeerConnection() async {
+  Future<void> _initializePeerConnection(_RealtimeSessionDetails session) async {
+    final iceServers = session.iceServers.isNotEmpty
+        ? session.iceServers
+        : [
+            {'urls': 'stun:stun.l.google.com:19302'},
+          ];
+
     final configuration = {
-      'iceServers': [
-        {'urls': 'stun:stun.l.google.com:19302'},
-      ],
+      'iceServers': iceServers,
     };
 
     final pc = html.RtcPeerConnection(configuration);
@@ -231,7 +256,8 @@ class VoiceRecorder {
 
     dataChannel.onOpen.listen((_) {
       _channelOpen = true;
-      _log('Canal de eventos abierto');
+      final sessionLabel = _sessionId != null ? ' ($_sessionId)' : '';
+      _log('Canal de eventos abierto$sessionLabel');
       _eventsChannelReadyCompleter?.complete();
       _sendSessionConfiguration();
       _requestTranscription(force: true);
@@ -255,9 +281,11 @@ class VoiceRecorder {
         ? localDescription.sdp!
         : offer.sdp!;
 
-    _log('Intercambiando SDP vía backend (SDP ${localSdp.length} chars)...',
-        level: 'debug');
-    final answerSdp = await _exchangeSdp(localSdp);
+    _log(
+      'Intercambiando SDP con OpenAI (model: ${session.model}, offer ${localSdp.length} chars)...',
+      level: 'debug',
+    );
+    final answerSdp = await _exchangeSdp(localSdp, session);
 
     await pc.setRemoteDescription({
       'type': 'answer',
@@ -318,40 +346,116 @@ class VoiceRecorder {
     }
   }
 
-  Future<String> _exchangeSdp(String offerSdp) async {
+  Future<String> _exchangeSdp(
+    String offerSdp,
+    _RealtimeSessionDetails session,
+  ) async {
     try {
-      _log('Solicitando intercambio SDP via backend...', level: 'debug');
+      final uri = Uri.parse(
+        'https://api.openai.com/v1/realtime?model=${Uri.encodeComponent(session.model)}',
+      );
       final response = await http.post(
-        Uri.parse('/api/realtime-session'),
-        headers: const {'Content-Type': 'application/json'},
-        body: jsonEncode({'sdp': offerSdp}),
+        uri,
+        headers: {
+          'Authorization': 'Bearer ${session.clientSecret}',
+          'Content-Type': 'application/sdp',
+          'Accept': 'application/sdp',
+          'OpenAI-Beta': 'realtime=v1',
+        },
+        body: offerSdp,
       );
 
-      final body = response.body;
-      Map<String, dynamic>? data;
-      try {
-        data = jsonDecode(body) as Map<String, dynamic>;
-      } catch (_) {
-        data = null;
-      }
-
       if (response.statusCode >= 200 && response.statusCode < 300) {
-        final answer = data?['answer'];
-        if (answer is String && answer.isNotEmpty) {
-          return answer;
-        }
-        if (body.trim().isNotEmpty) {
-          return body;
-        }
+        return response.body;
       }
 
-      _log('Intercambio SDP falló (${response.statusCode}): $body',
-          level: 'error');
-      throw Exception('Intercambio SDP falló: $body');
+      final errorDetails = _extractRealtimeError(response.body);
+      _log(
+        'Intercambio SDP falló (${response.statusCode}): $errorDetails',
+        level: 'error',
+      );
+      throw Exception(
+        'Intercambio SDP falló (${response.statusCode}): $errorDetails',
+      );
     } catch (error) {
       _log('No se pudo intercambiar SDP', level: 'error', error: error);
       rethrow;
     }
+  }
+
+  Future<_RealtimeSessionDetails> _createRealtimeSession() async {
+    try {
+      _log('Solicitando sesión Realtime...', level: 'debug');
+      final response = await http.post(
+        Uri.parse('/api/realtime-session'),
+        headers: const {'Content-Type': 'application/json'},
+        body: '{}',
+      );
+
+      final body = response.body;
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        _log('Sesión Realtime falló (${response.statusCode}): $body',
+            level: 'error');
+        throw Exception(
+          'No se pudo crear sesión Realtime (${response.statusCode})',
+        );
+      }
+
+      final data = jsonDecode(body) as Map<String, dynamic>;
+      final clientSecret = (data['clientSecret'] ?? data['client_secret']) as String?;
+      if (clientSecret == null || clientSecret.isEmpty) {
+        throw Exception('Respuesta Realtime sin client_secret');
+      }
+
+      final rawIceServers = data['iceServers'] ?? data['ice_servers'];
+      final iceServers = <Map<String, dynamic>>[];
+      if (rawIceServers is List) {
+        for (final entry in rawIceServers) {
+          if (entry is Map<String, dynamic>) {
+            iceServers.add(entry);
+          } else if (entry is Map) {
+            iceServers.add(Map<String, dynamic>.from(entry as Map));
+          }
+        }
+      }
+      if (iceServers.isEmpty) {
+        iceServers.add({'urls': 'stun:stun.l.google.com:19302'});
+      }
+
+      final model = (data['model'] as String?)?.trim();
+
+      return _RealtimeSessionDetails(
+        clientSecret: clientSecret,
+        iceServers: iceServers,
+        model: model != null && model.isNotEmpty ? model : _defaultModel,
+        sessionId: (data['sessionId'] ?? data['session_id']) as String?,
+        expiresAt: (data['expiresAt'] ?? data['expires_at']) as String?,
+      );
+    } catch (error) {
+      _log('No se pudo obtener sesión Realtime', level: 'error', error: error);
+      rethrow;
+    }
+  }
+
+  String _extractRealtimeError(String body) {
+    try {
+      final payload = jsonDecode(body);
+      if (payload is Map<String, dynamic>) {
+        final error = payload['error'];
+        if (error is Map<String, dynamic>) {
+          final message = (error['message'] ?? error['code'] ?? error['type'])
+              ?.toString()
+              .trim();
+          if (message != null && message.isNotEmpty) {
+            return message;
+          }
+        }
+      }
+    } catch (_) {
+      // Ignored, fallback below.
+    }
+    final trimmed = body.trim();
+    return trimmed.isEmpty ? 'sin detalles' : trimmed;
   }
 
   Future<void> _waitForIceGatheringComplete(html.RtcPeerConnection pc) async {
@@ -601,6 +705,7 @@ class VoiceRecorder {
     _isPaused = false;
     _activeResponseId = null;
     _chunkCount = 0;
+    _sessionId = null;
   }
 
   void _log(String message, {String level = 'info', Object? error}) {

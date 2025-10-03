@@ -47,6 +47,7 @@ class VoiceRecorder {
   int _chunkCount = 0;
   String? _sessionId;
   bool _responseInFlight = false;
+  int _lastSubmittedChunk = 0;
 
   Future<void> start({OnText? onText, OnRecorderLog? onLog}) async {
     debugPrint('[VoiceRecorder] Iniciando grabación...');
@@ -59,6 +60,7 @@ class VoiceRecorder {
     _activeResponseId = null;
     _recordedChunks.clear();
     _chunkCount = 0;
+    _lastSubmittedChunk = 0;
     _eventsChannelReadyCompleter = Completer<void>();
 
     _log('Preparando sesión de transcripción...');
@@ -182,8 +184,8 @@ class VoiceRecorder {
       debugPrint('[VoiceRecorder] PeerConnection estado: ${_peerConnection?.connectionState}');
     }
 
-    _requestTranscription(force: true);
-    debugPrint('[VoiceRecorder] Reanudación completada, transcripción solicitada');
+    _maybeRequestTranscription();
+    debugPrint('[VoiceRecorder] Reanudación completada, verificación de transcripción');
     return true;
   }
 
@@ -285,11 +287,7 @@ class VoiceRecorder {
       debugPrint('[VoiceRecorder] Canal de eventos abierto, configurando sesión...');
       _eventsChannelReadyCompleter?.complete();
       _sendSessionConfiguration();
-      // Pequeño delay para asegurar que la configuración se aplique
-      Future.delayed(const Duration(milliseconds: 100), () {
-        debugPrint('[VoiceRecorder] Solicitando primera transcripción...');
-        _requestTranscription(force: true);
-      });
+      Future.delayed(const Duration(milliseconds: 100), _maybeRequestTranscription);
     });
 
     dataChannel.onClose.listen((_) {
@@ -357,6 +355,7 @@ class VoiceRecorder {
         _chunkCount += 1;
         _log('Chunk $_chunkCount recibido (${bytes.length} bytes)',
             level: 'debug');
+        _maybeRequestTranscription();
       }
     });
 
@@ -599,7 +598,7 @@ class VoiceRecorder {
         _log('Respuesta completada (${finishedId ?? 'desconocida'})',
             level: 'debug');
         if (!_stopping && !_isPaused) {
-          _requestTranscription();
+          _maybeRequestTranscription();
         }
         break;
       case 'response.canceled':
@@ -610,6 +609,9 @@ class VoiceRecorder {
         _responseInFlight = false;
         _log('Respuesta cancelada (${canceledId ?? 'desconocida'})',
             level: 'debug');
+        if (!_stopping && !_isPaused) {
+          _maybeRequestTranscription();
+        }
         break;
       case 'response.error':
       case 'error':
@@ -621,6 +623,9 @@ class VoiceRecorder {
             level: 'error');
         debugPrint('[VoiceRecorder] ERROR: ${message ?? payload.toString()}');
         _responseInFlight = false;
+        if (!_stopping && !_isPaused) {
+          _maybeRequestTranscription();
+        }
         break;
       case 'rate_limits.updated':
         debugPrint('[VoiceRecorder] Rate limits actualizado: ${payload['rate_limits']}');
@@ -676,13 +681,17 @@ class VoiceRecorder {
         'modalities': ['text'],
         'instructions':
             'Eres un transcriptor multilingüe. Devuelve únicamente el texto exacto que escuchas, en el mismo idioma y sin comentarios, etiquetas, resúmenes ni traducciones.',
+        'turn_detection': {
+          'type': 'server_vad',
+          'silence_duration': 0.6,
+        },
       },
     }, level: 'debug', logPayload: true);
   }
 
   void _requestTranscription({bool force = false}) {
     debugPrint('[VoiceRecorder] requestTranscription - channelOpen=$_channelOpen, stopping=$_stopping, force=$force, isPaused=$_isPaused, activeResponseId=$_activeResponseId');
-    
+
     if (!_channelOpen || _stopping) {
       debugPrint('[VoiceRecorder] No solicitando transcripción: channelOpen=$_channelOpen, stopping=$_stopping');
       return;
@@ -695,15 +704,24 @@ class VoiceRecorder {
       debugPrint('[VoiceRecorder] No solicitando transcripción: respuesta en curso');
       return;
     }
+    if (!force && _chunkCount <= _lastSubmittedChunk) {
+      debugPrint('[VoiceRecorder] No hay audio nuevo desde el último envío (chunk $_chunkCount, último enviado $_lastSubmittedChunk)');
+      return;
+    }
 
     debugPrint('[VoiceRecorder] Enviando solicitud de transcripción...');
     _responseInFlight = true;
+    _lastSubmittedChunk = _chunkCount;
     _safeSend({
       'type': 'response.create',
       'response': {
         'modalities': ['text'],
       },
     }, level: 'debug', logPayload: true);
+  }
+
+  void _maybeRequestTranscription() {
+    _requestTranscription();
   }
 
   void _safeSend(Map<String, dynamic> payload,
@@ -804,6 +822,7 @@ class VoiceRecorder {
     _chunkCount = 0;
     _sessionId = null;
     _responseInFlight = false;
+    _lastSubmittedChunk = 0;
   }
 
   void _log(String message, {String level = 'info', Object? error}) {

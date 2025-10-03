@@ -26,7 +26,7 @@ class _RealtimeSessionDetails {
 }
 
 class VoiceRecorder {
-  static const _defaultModel = 'gpt-4o-mini-transcribe-realtime';
+  static const _defaultModel = 'gpt-4o-mini-realtime-preview-2024-12-17';
   html.MediaStream? _inputStream;
   html.MediaStreamTrack? _audioTrack;
   html.MediaRecorder? _mediaRecorder;
@@ -282,7 +282,7 @@ class VoiceRecorder {
         : offer.sdp!;
 
     _log(
-      'Intercambiando SDP con OpenAI (model: ${session.model}, offer ${localSdp.length} chars)...',
+      'Intercambiando SDP con OpenAI (model: ${session.model}, offer ${localSdp.length} chars):\n${localSdp.split('\n').take(5).join('\n')}…',
       level: 'debug',
     );
     final answerSdp = await _exchangeSdp(localSdp, session);
@@ -352,7 +352,7 @@ class VoiceRecorder {
   ) async {
     try {
       final uri = Uri.parse(
-        'https://api.openai.com/v1/realtime?model=${Uri.encodeComponent(session.model)}',
+        'https://api.openai.com/v1/realtime?model=${Uri.encodeComponent(session.model)}&intent=transcription',
       );
       final response = await http.post(
         uri,
@@ -370,6 +370,13 @@ class VoiceRecorder {
       }
 
       final errorDetails = _extractRealtimeError(response.body);
+      final preview = response.body.length > 500
+          ? '${response.body.substring(0, 500)}…'
+          : response.body;
+      _log(
+        'Respuesta SDP: status=${response.statusCode}, body=$preview',
+        level: 'debug',
+      );
       _log(
         'Intercambio SDP falló (${response.statusCode}): $errorDetails',
         level: 'error',

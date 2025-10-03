@@ -137,12 +137,26 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       );
     }
 
+    const sessionIdRaw = sessionJson.id ?? sessionJson.session_id ?? null;
+    const expiresRaw =
+      sessionJson.expires_at ?? sessionJson.expiration_time ?? sessionJson.expire_time ?? null;
+
     const payload = {
-      sessionId: sessionJson.id ?? null,
-      expiresAt: sessionJson.expires_at ?? sessionJson.expiration_time ?? null,
+      sessionId:
+        sessionIdRaw == null || sessionIdRaw === ''
+          ? null
+          : typeof sessionIdRaw === 'string'
+            ? sessionIdRaw
+            : String(sessionIdRaw),
+      expiresAt:
+        expiresRaw == null || expiresRaw === ''
+          ? null
+          : typeof expiresRaw === 'string'
+            ? expiresRaw
+            : String(expiresRaw),
       clientSecret,
       iceServers: Array.isArray(sessionJson.ice_servers) ? sessionJson.ice_servers : [],
-      model: sessionJson.model ?? model,
+      model: typeof sessionJson.model === 'string' && sessionJson.model.length > 0 ? sessionJson.model : model,
     };
 
     return new Response(JSON.stringify(payload), {

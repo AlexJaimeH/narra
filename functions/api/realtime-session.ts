@@ -33,7 +33,6 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       typeof jsonPayload?.sdp === 'string' ? (jsonPayload.sdp as string) : undefined;
 
     if (offerSdp) {
-      // Create ephemeral session first
       const sessionResponse = await fetch('https://api.openai.com/v1/realtime/sessions', {
         method: 'POST',
         headers: {
@@ -65,19 +64,20 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       }
 
       const sessionJson = JSON.parse(sessionBody) as Record<string, unknown>;
-      let clientSecret: string | undefined;
-      if (typeof sessionJson.client_secret === 'string') {
-        clientSecret = sessionJson.client_secret;
+      const sessionSecretRaw = sessionJson['client_secret'];
+      let clientSecret = '';
+      if (typeof sessionSecretRaw === 'string') {
+        clientSecret = sessionSecretRaw;
       } else if (
-        sessionJson.client_secret &&
-        typeof sessionJson.client_secret === 'object' &&
-        'value' in sessionJson.client_secret &&
-        typeof (sessionJson.client_secret as any).value === 'string'
+        sessionSecretRaw != null &&
+        typeof sessionSecretRaw === 'object' &&
+        'value' in sessionSecretRaw &&
+        typeof (sessionSecretRaw as any).value === 'string'
       ) {
-        clientSecret = (sessionJson.client_secret as any).value as string;
+        clientSecret = (sessionSecretRaw as any).value as string;
       }
 
-      if (!clientSecret || clientSecret.length === 0) {
+      if (!clientSecret) {
         return new Response(
           JSON.stringify({
             error: 'Realtime session missing client_secret',
@@ -129,7 +129,6 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       );
     }
 
-    // No SDP provided: allow clients to fetch the raw session payload if they need it
     const sessionResponse = await fetch('https://api.openai.com/v1/realtime/sessions', {
       method: 'POST',
       headers: {

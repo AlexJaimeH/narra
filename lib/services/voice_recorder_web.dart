@@ -10,7 +10,6 @@ typedef OnText = void Function(String text);
 typedef OnRecorderLog = void Function(String level, String message);
 
 class VoiceRecorder {
-  static const _model = 'gpt-4o-mini-transcribe-realtime';
   html.MediaStream? _inputStream;
   html.MediaStreamTrack? _audioTrack;
   html.MediaRecorder? _mediaRecorder;
@@ -67,9 +66,7 @@ class VoiceRecorder {
     _log('Micrófono listo: ${_audioTrack?.label ?? 'sin etiqueta'}');
 
     _initializeMediaRecorder(stream);
-
-    final sessionSecret = await _createRealtimeSession();
-    await _initializePeerConnection(sessionSecret);
+    await _initializePeerConnection();
 
     try {
       await _eventsChannelReadyCompleter!.future
@@ -211,7 +208,7 @@ class VoiceRecorder {
     await stop();
   }
 
-  Future<void> _initializePeerConnection(String sessionSecret) async {
+  Future<void> _initializePeerConnection() async {
     final configuration = {
       'iceServers': [
         {'urls': 'stun:stun.l.google.com:19302'},
@@ -260,26 +257,11 @@ class VoiceRecorder {
 
     _log('Intercambiando SDP vía backend (SDP ${localSdp.length} chars)...',
         level: 'debug');
-    final response = await http.post(
-      Uri.parse('https://api.openai.com/v1/realtime?model=$_model'),
-      headers: {
-        'Authorization': 'Bearer $sessionSecret',
-        'Content-Type': 'application/sdp',
-        'Accept': 'application/sdp',
-        'OpenAI-Beta': 'realtime=v1',
-      },
-      body: localSdp,
-    );
-
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception(
-        'OpenAI Realtime respondió ${response.statusCode}: ${response.body}',
-      );
-    }
+    final answerSdp = await _exchangeSdp(localSdp);
 
     await pc.setRemoteDescription({
       'type': 'answer',
-      'sdp': response.body,
+      'sdp': answerSdp,
     });
   }
 
@@ -336,13 +318,13 @@ class VoiceRecorder {
     }
   }
 
-  Future<String> _createRealtimeSession() async {
+  Future<String> _exchangeSdp(String offerSdp) async {
     try {
-      _log('Creando sesión Realtime...', level: 'debug');
+      _log('Solicitando intercambio SDP via backend...', level: 'debug');
       final response = await http.post(
         Uri.parse('/api/realtime-session'),
         headers: const {'Content-Type': 'application/json'},
-        body: jsonEncode({'action': 'create_session'}),
+        body: jsonEncode({'sdp': offerSdp}),
       );
 
       final body = response.body;
@@ -354,8 +336,9 @@ class VoiceRecorder {
       }
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
-        if (data != null && data['answer'] is String) {
-          return data['answer'] as String;
+        final answer = data?['answer'];
+        if (answer is String && answer.isNotEmpty) {
+          return answer;
         }
         if (body.trim().isNotEmpty) {
           return body;
@@ -366,7 +349,7 @@ class VoiceRecorder {
           level: 'error');
       throw Exception('Intercambio SDP falló: $body');
     } catch (error) {
-      _log('No se pudo crear sesión Realtime', level: 'error', error: error);
+      _log('No se pudo intercambiar SDP', level: 'error', error: error);
       rethrow;
     }
   }

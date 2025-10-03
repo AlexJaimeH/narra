@@ -422,14 +422,19 @@ class VoiceRecorder {
         iceServers.add({'urls': 'stun:stun.l.google.com:19302'});
       }
 
-      final model = (data['model'] as String?)?.trim();
+      final rawModel = data['model'] ?? data['model_id'];
+      final model = rawModel == null ? null : rawModel.toString().trim();
+      final rawSessionId = data['sessionId'] ?? data['session_id'];
+      final sessionId = rawSessionId == null ? null : rawSessionId.toString();
+      final rawExpiresAt = data['expiresAt'] ?? data['expires_at'];
+      final expiresAt = rawExpiresAt == null ? null : rawExpiresAt.toString();
 
       return _RealtimeSessionDetails(
         clientSecret: clientSecret,
         iceServers: iceServers,
         model: model != null && model.isNotEmpty ? model : _defaultModel,
-        sessionId: (data['sessionId'] ?? data['session_id']) as String?,
-        expiresAt: (data['expiresAt'] ?? data['expires_at']) as String?,
+        sessionId: sessionId?.isNotEmpty == true ? sessionId : null,
+        expiresAt: expiresAt?.isNotEmpty == true ? expiresAt : null,
       );
     } catch (error) {
       _log('No se pudo obtener sesión Realtime', level: 'error', error: error);

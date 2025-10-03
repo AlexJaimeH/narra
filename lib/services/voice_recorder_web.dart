@@ -133,10 +133,10 @@ class VoiceRecorder {
       _log('Respuesta activa cancelada: $_activeResponseId', level: 'debug');
       debugPrint('[VoiceRecorder] Respuesta cancelada: $_activeResponseId');
       _activeResponseId = null;
-      _responseInFlight = false;
     }
 
     _safeSend({'type': 'input_audio_buffer.commit'}, level: 'debug');
+    _safeSend({'type': 'input_audio_buffer.clear'}, level: 'debug');
 
     try {
       _mediaRecorder?.pause();
@@ -202,7 +202,6 @@ class VoiceRecorder {
         'response_id': _activeResponseId,
       });
       _activeResponseId = null;
-      _responseInFlight = false;
     }
 
     try {
@@ -674,7 +673,7 @@ class VoiceRecorder {
       'session': {
         'modalities': ['text'],
         'instructions':
-            'Eres un transcriptor en español. Devuelve exclusivamente, y tal cual, el texto que habla el usuario.',
+            'Eres un transcriptor multilingüe. Devuelve únicamente el texto exacto que escuchas, en el mismo idioma y sin comentarios, etiquetas, resúmenes ni traducciones.',
       },
     }, level: 'debug', logPayload: true);
   }
@@ -701,8 +700,6 @@ class VoiceRecorder {
       'type': 'response.create',
       'response': {
         'modalities': ['text'],
-        'instructions':
-            'Transcribe en español únicamente lo que escucha el micrófono. No agregues notas ni etiquetas.',
       },
     }, level: 'debug', logPayload: true);
   }

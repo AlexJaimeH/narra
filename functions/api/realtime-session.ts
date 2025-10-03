@@ -104,7 +104,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         },
       );
 
-      final answerBody = await answerResponse.text();
+      const answerBody = await answerResponse.text();
 
       if (answerResponse.status >= 200 && answerResponse.status < 300) {
         return new Response(

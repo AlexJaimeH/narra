@@ -257,7 +257,7 @@ class VoiceRecorder {
 
     _log('Intercambiando SDP vía backend (SDP ${localSdp.length} chars)...',
         level: 'debug');
-    final answerSdp = await _fetchRemoteAnswer(localSdp);
+    final answerSdp = await _exchangeSdp(localSdp);
 
     await pc.setRemoteDescription({
       'type': 'answer',
@@ -318,12 +318,13 @@ class VoiceRecorder {
     }
   }
 
-  Future<String> _fetchRemoteAnswer(String localSdp) async {
+  Future<String> _exchangeSdp(String offerSdp) async {
     try {
+      _log('Solicitando intercambio SDP via backend...', level: 'debug');
       final response = await http.post(
         Uri.parse('/api/realtime-session'),
         headers: const {'Content-Type': 'application/json'},
-        body: jsonEncode({'sdp': localSdp}),
+        body: jsonEncode({'sdp': offerSdp}),
       );
 
       final body = response.body;
@@ -335,8 +336,9 @@ class VoiceRecorder {
       }
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
-        if (data != null && data['answer'] is String) {
-          return data['answer'] as String;
+        final answer = data?['answer'];
+        if (answer is String && answer.isNotEmpty) {
+          return answer;
         }
         if (body.trim().isNotEmpty) {
           return body;
@@ -347,7 +349,7 @@ class VoiceRecorder {
           level: 'error');
       throw Exception('Intercambio SDP falló: $body');
     } catch (error) {
-      _log('No se pudo obtener respuesta SDP', level: 'error', error: error);
+      _log('No se pudo intercambiar SDP', level: 'error', error: error);
       rethrow;
     }
   }

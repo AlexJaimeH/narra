@@ -135,6 +135,7 @@ class VoiceRecorder {
       _log('Respuesta activa cancelada: $_activeResponseId', level: 'debug');
       debugPrint('[VoiceRecorder] Respuesta cancelada: $_activeResponseId');
       _activeResponseId = null;
+      _responseInFlight = false;
     }
 
     _safeSend({'type': 'input_audio_buffer.commit'}, level: 'debug');
@@ -204,6 +205,7 @@ class VoiceRecorder {
         'response_id': _activeResponseId,
       });
       _activeResponseId = null;
+      _responseInFlight = false;
     }
 
     try {

@@ -9,7 +9,7 @@ interface Env {
   OPENAI_API_KEY: string;
 }
 
-const DEFAULT_MODEL = 'gpt-4o-mini-transcribe-realtime';
+const DEFAULT_MODEL = 'gpt-4o-mini-realtime-preview-2024-12-17';
 const DEFAULT_MODALITIES = ['text'];
 const DEFAULT_INSTRUCTIONS =
   'Eres un transcriptor en español. Devuelve exclusivamente el discurso del usuario como texto claro y sin instrucciones adicionales.';
@@ -65,6 +65,13 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       model,
       modalities,
       instructions,
+      intent: 'transcription',
+      input_audio_format: 'pcm16',
+      output_audio_format: 'pcm16',
+      input_audio_transcription: {
+        model: 'gpt-4o-mini-transcribe',
+      },
+      voice: 'none',
     };
 
     if (normalizedPayload.voice && typeof normalizedPayload.voice === 'string') {

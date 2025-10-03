@@ -40,6 +40,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   bool _isRecorderConnecting = false;
   final List<String> _recorderLogs = [];
   static const int _maxRecorderLogs = 200;
+  final Map<String, void Function(void Function())> _sheetStateUpdater = {};
 
   bool _hasChanges = false;
   bool _isLoading = false;
@@ -874,6 +875,16 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       _liveTranscript = buffer.toString();
       _lastTranscriptChunk = chunk;
     });
+    
+    // Actualizar el bottom sheet si está abierto
+    final sheetUpdater = _sheetStateUpdater['dictation'];
+    if (sheetUpdater != null) {
+      sheetUpdater(() {});
+    }
+    
+    // Log para debugging
+    debugPrint('[Transcripción] Chunk recibido: "$chunk"');
+    debugPrint('[Transcripción] Total: "${_liveTranscript.substring(_liveTranscript.length > 100 ? _liveTranscript.length - 100 : 0)}"');
   }
 
   int _computeOverlap(String existing, String chunk) {
@@ -890,6 +901,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   }
 
   Future<void> _startRecording({bool resetTranscript = false}) async {
+    debugPrint('[Dictado] Iniciando grabación, resetTranscript=$resetTranscript');
+    
     if (resetTranscript) {
       setState(() {
         _liveTranscript = '';
@@ -911,6 +924,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
     final recorder = VoiceRecorder();
     try {
+      debugPrint('[Dictado] Iniciando VoiceRecorder...');
       await recorder.start(
         onText: _handleTranscriptChunk,
         onLog: _appendRecorderLog,
@@ -918,7 +932,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       if (!mounted) {
         await recorder.dispose();
         _isRecorderConnecting = false;
-
         return;
       }
       setState(() {
@@ -927,6 +940,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         _isPaused = false;
         _isRecorderConnecting = false;
       });
+      
+      debugPrint('[Dictado] Grabación iniciada exitosamente');
 
       if (resetTranscript) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -937,6 +952,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         );
       }
     } catch (e) {
+      debugPrint('[Dictado] Error iniciando grabación: $e');
       await recorder.dispose();
 
       if (!mounted) {
@@ -957,15 +973,21 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   }
 
   Future<void> _togglePauseResume() async {
-    if (_isRecorderConnecting) return;
+    if (_isRecorderConnecting) {
+      debugPrint('[Dictado] Toggle bloqueado: conectando...');
+      return;
+    }
 
     final recorder = _recorder;
     if (recorder == null) {
+      debugPrint('[Dictado] No hay recorder, iniciando grabación');
       await _startRecording(resetTranscript: false);
       return;
     }
 
     if (_isPaused) {
+      // Reanudar
+      debugPrint('[Dictado] Reanudando grabación...');
       if (mounted) {
         setState(() => _isRecorderConnecting = true);
       } else {
@@ -984,7 +1006,9 @@ class _StoryEditorPageState extends State<StoryEditorPage>
             _isRecorderConnecting = false;
           });
           _appendRecorderLog('info', 'Grabación reanudada');
+          debugPrint('[Dictado] Grabación reanudada exitosamente');
         } else {
+          debugPrint('[Dictado] No se pudo reanudar, reiniciando sesión');
           await recorder.dispose();
           setState(() {
             _recorder = null;
@@ -997,6 +1021,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           await _startRecording(resetTranscript: false);
         }
       } catch (e) {
+        debugPrint('[Dictado] Error al reanudar: $e');
         if (mounted) {
           setState(() => _isRecorderConnecting = false);
           _appendRecorderLog('error', 'No se pudo reanudar: $e');
@@ -1012,20 +1037,25 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       return;
     }
 
+    // Pausar
+    debugPrint('[Dictado] Pausando grabación...');
+    setState(() => _isRecorderConnecting = true);
     try {
       await recorder.pause();
       if (mounted) {
         setState(() {
           _isPaused = true;
           _isRecording = false;
+          _isRecorderConnecting = false;
         });
       }
-
       _appendRecorderLog('info', 'Grabación pausada');
+      debugPrint('[Dictado] Grabación pausada exitosamente');
     } catch (e) {
+      debugPrint('[Dictado] Error al pausar: $e');
       if (mounted) {
+        setState(() => _isRecorderConnecting = false);
         _appendRecorderLog('error', 'No se pudo pausar: $e');
-
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('No se pudo pausar: $e')),
         );
@@ -1104,73 +1134,81 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       isDismissible: false,
       enableDrag: false,
       builder: (sheetContext) {
-        return Padding(
-          padding: EdgeInsets.fromLTRB(
-            16,
-            16,
-            16,
-            24 + MediaQuery.of(sheetContext).viewInsets.bottom,
-          ),
-          child: SafeArea(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+        return StatefulBuilder(
+          builder: (builderContext, setSheetState) {
+            // Actualizar el estado del bottom sheet cuando cambie la transcripción
+            if (!_sheetStateUpdater.containsKey('dictation')) {
+              _sheetStateUpdater['dictation'] = setSheetState;
+            }
+            
+            return Padding(
+              padding: EdgeInsets.fromLTRB(
+                16,
+                16,
+                16,
+                24 + MediaQuery.of(sheetContext).viewInsets.bottom,
+              ),
+              child: SafeArea(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(
-                      _isRecorderConnecting
-                          ? Icons.hourglass_top
-                          : (_isRecording && !_isPaused
-                              ? Icons.mic
-                              : Icons.play_arrow),
-                      color: _isRecorderConnecting
-                          ? Theme.of(context).colorScheme.outline
-                          : (_isRecording && !_isPaused
-                              ? Colors.red
-                              : Theme.of(context).colorScheme.primary),
+                    Row(
+                      children: [
+                        Icon(
+                          _isRecorderConnecting
+                              ? Icons.hourglass_top
+                              : (_isRecording && !_isPaused
+                                  ? Icons.mic
+                                  : Icons.play_arrow),
+                          color: _isRecorderConnecting
+                              ? Theme.of(context).colorScheme.outline
+                              : (_isRecording && !_isPaused
+                                  ? Colors.red
+                                  : Theme.of(context).colorScheme.primary),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(_recorderStatusLabel),
+                        const Spacer(),
+                        IconButton(
+                          tooltip: _isRecorderConnecting
+                              ? 'Preparando...'
+                              : (_isPaused ? 'Reanudar' : 'Pausar'),
+                          onPressed: _isRecorderConnecting
+                              ? null
+                              : () async {
+                                  FocusScope.of(sheetContext)
+                                      .requestFocus(FocusNode());
+                                  await _togglePauseResume();
+                                  setSheetState(() {});
+                                },
+                          icon: Icon(
+                            _isPaused || !_isRecording
+                                ? Icons.play_arrow
+                                : Icons.pause,
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 8),
-                    Text(_recorderStatusLabel),
-                    const Spacer(),
-                    IconButton(
-                      tooltip: _isRecorderConnecting
-                          ? 'Preparando...'
-                          : (_isPaused ? 'Reanudar' : 'Pausar'),
-                      onPressed: _isRecorderConnecting
-                          ? null
-                          : () async {
-                              FocusScope.of(sheetContext)
-                                  .requestFocus(FocusNode());
-                              await _togglePauseResume();
-                            },
-                      icon: Icon(
-                        _isPaused || !_isRecording
-                            ? Icons.play_arrow
-                            : Icons.pause,
+                    const SizedBox(height: 12),
+                    Container(
+                      constraints: const BoxConstraints(maxHeight: 260),
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color:
+                            Theme.of(context).colorScheme.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: SingleChildScrollView(
+                        child: Text(
+                          _liveTranscript.isEmpty
+                              ? 'Empieza a hablar…'
+                              : _liveTranscript,
+                          style: Theme.of(context).textTheme.bodyLarge,
+                        ),
                       ),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Container(
-                  constraints: const BoxConstraints(maxHeight: 260),
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color:
-                        Theme.of(context).colorScheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: SingleChildScrollView(
-                    child: Text(
-                      _liveTranscript.isEmpty
-                          ? 'Empieza a hablar…'
-                          : _liveTranscript,
-                      style: Theme.of(context).textTheme.bodyLarge,
-                    ),
-                  ),
-                ),
                 if (_recorderLogs.isNotEmpty) ...[
                   const SizedBox(height: 12),
                   Text(
@@ -1272,9 +1310,14 @@ class _StoryEditorPageState extends State<StoryEditorPage>
               ],
             ),
           ),
+            );
+          },
         );
       },
     );
+
+    // Limpiar el updater del bottom sheet
+    _sheetStateUpdater.remove('dictation');
 
     if (_recorder != null) {
       await _finalizeRecording(discard: true);

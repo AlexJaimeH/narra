@@ -48,6 +48,7 @@ class VoiceRecorder {
   String? _sessionId;
 
   Future<void> start({OnText? onText, OnRecorderLog? onLog}) async {
+    debugPrint('[VoiceRecorder] Iniciando grabación...');
     _onText = onText;
     _onLog = onLog;
 
@@ -82,11 +83,13 @@ class VoiceRecorder {
     }
     _audioTrack = tracks.first;
     _log('Micrófono listo: ${_audioTrack?.label ?? 'sin etiqueta'}');
+    debugPrint('[VoiceRecorder] Micrófono: ${_audioTrack?.label}');
 
     _initializeMediaRecorder(stream);
 
     final session = await _createRealtimeSession();
     _sessionId = session.sessionId;
+    debugPrint('[VoiceRecorder] Sesión creada: ${session.sessionId}, modelo: ${session.model}');
     await _initializePeerConnection(session);
 
     try {
@@ -103,17 +106,22 @@ class VoiceRecorder {
     }
 
     _log('Conectado. Comienza a hablar cuando quieras.');
+    debugPrint('[VoiceRecorder] Conexión establecida, listo para transcribir');
   }
 
   Future<bool> pause() async {
     _log('Pausando grabación...');
+    debugPrint('[VoiceRecorder] Pausando grabación, estado actual: isPaused=$_isPaused, isRecording=$_channelOpen');
+    
     _isPaused = true;
 
     try {
       _audioTrack?.enabled = false;
+      debugPrint('[VoiceRecorder] Pista de audio deshabilitada');
     } catch (error) {
       _log('No se pudo deshabilitar la pista de audio',
           level: 'warning', error: error);
+      debugPrint('[VoiceRecorder] Error deshabilitando audio: $error');
     }
 
     if (_activeResponseId != null) {
@@ -122,6 +130,7 @@ class VoiceRecorder {
         'response_id': _activeResponseId,
       });
       _log('Respuesta activa cancelada: $_activeResponseId', level: 'debug');
+      debugPrint('[VoiceRecorder] Respuesta cancelada: $_activeResponseId');
       _activeResponseId = null;
     }
 
@@ -129,28 +138,37 @@ class VoiceRecorder {
 
     try {
       _mediaRecorder?.pause();
+      debugPrint('[VoiceRecorder] MediaRecorder pausado');
     } catch (error) {
       _log('MediaRecorder.pause falló', level: 'warning', error: error);
+      debugPrint('[VoiceRecorder] Error pausando MediaRecorder: $error');
     }
 
+    debugPrint('[VoiceRecorder] Pausa completada exitosamente');
     return true;
   }
 
   Future<bool> resume() async {
     _log('Reanudando grabación...');
+    debugPrint('[VoiceRecorder] Reanudando grabación, estado actual: isPaused=$_isPaused, channelOpen=$_channelOpen');
+    
     _isPaused = false;
 
     try {
       _audioTrack?.enabled = true;
+      debugPrint('[VoiceRecorder] Pista de audio habilitada');
     } catch (error) {
       _log('No se pudo activar la pista de audio',
           level: 'warning', error: error);
+      debugPrint('[VoiceRecorder] Error habilitando audio: $error');
     }
 
     try {
       _mediaRecorder?.resume();
+      debugPrint('[VoiceRecorder] MediaRecorder reanudado');
     } catch (error) {
       _log('MediaRecorder.resume falló', level: 'warning', error: error);
+      debugPrint('[VoiceRecorder] Error reanudando MediaRecorder: $error');
     }
 
     if (_peerConnection?.connectionState != 'connected') {
@@ -158,9 +176,11 @@ class VoiceRecorder {
         'PeerConnection no está conectado (${_peerConnection?.connectionState})',
         level: 'warning',
       );
+      debugPrint('[VoiceRecorder] PeerConnection estado: ${_peerConnection?.connectionState}');
     }
 
     _requestTranscription(force: true);
+    debugPrint('[VoiceRecorder] Reanudación completada, transcripción solicitada');
     return true;
   }
 
@@ -258,9 +278,14 @@ class VoiceRecorder {
       _channelOpen = true;
       final sessionLabel = _sessionId != null ? ' ($_sessionId)' : '';
       _log('Canal de eventos abierto$sessionLabel');
+      debugPrint('[VoiceRecorder] Canal de eventos abierto, configurando sesión...');
       _eventsChannelReadyCompleter?.complete();
       _sendSessionConfiguration();
-      _requestTranscription(force: true);
+      // Pequeño delay para asegurar que la configuración se aplique
+      Future.delayed(const Duration(milliseconds: 100), () {
+        debugPrint('[VoiceRecorder] Solicitando primera transcripción...');
+        _requestTranscription(force: true);
+      });
     });
 
     dataChannel.onClose.listen((_) {
@@ -393,6 +418,7 @@ class VoiceRecorder {
   Future<_RealtimeSessionDetails> _createRealtimeSession() async {
     try {
       _log('Solicitando sesión Realtime...', level: 'debug');
+      debugPrint('[VoiceRecorder] Solicitando sesión a /api/realtime-session');
       final response = await http.post(
         Uri.parse('/api/realtime-session'),
         headers: const {'Content-Type': 'application/json'},
@@ -400,9 +426,11 @@ class VoiceRecorder {
       );
 
       final body = response.body;
+      debugPrint('[VoiceRecorder] Respuesta sesión: ${response.statusCode}');
       if (response.statusCode < 200 || response.statusCode >= 300) {
         _log('Sesión Realtime falló (${response.statusCode}): $body',
             level: 'error');
+        debugPrint('[VoiceRecorder] Error sesión: $body');
         throw Exception(
           'No se pudo crear sesión Realtime (${response.statusCode})',
         );
@@ -411,8 +439,10 @@ class VoiceRecorder {
       final data = jsonDecode(body) as Map<String, dynamic>;
       final clientSecret = (data['clientSecret'] ?? data['client_secret']) as String?;
       if (clientSecret == null || clientSecret.isEmpty) {
+        debugPrint('[VoiceRecorder] Error: No se recibió client_secret');
         throw Exception('Respuesta Realtime sin client_secret');
       }
+      debugPrint('[VoiceRecorder] Sesión obtenida con client_secret');
 
       final rawIceServers = data['iceServers'] ?? data['ice_servers'];
       final iceServers = <Map<String, dynamic>>[];
@@ -510,6 +540,8 @@ class VoiceRecorder {
     final type = payload['type'] as String?;
     if (type == null) return;
 
+    debugPrint('[VoiceRecorder] Evento recibido: $type');
+
     switch (type) {
       case 'response.created':
         final response = payload['response'];
@@ -519,12 +551,39 @@ class VoiceRecorder {
         _activeResponseId = id;
         _log('Respuesta creada (${id ?? 'desconocida'})', level: 'debug');
         break;
+      case 'response.output_item.added':
+        debugPrint('[VoiceRecorder] Output item añadido');
+        break;
+      case 'response.content_part.added':
+        debugPrint('[VoiceRecorder] Content part añadido');
+        break;
+      case 'response.content_part.done':
+        debugPrint('[VoiceRecorder] Content part completado');
+        break;
+      case 'response.audio_transcript.delta':
+        debugPrint('[VoiceRecorder] Transcripción de audio recibida');
+        final transcript = payload['delta'] as String?;
+        if (transcript != null && transcript.isNotEmpty) {
+          _emitDelta(transcript);
+        }
+        break;
+      case 'response.audio_transcript.done':
+        debugPrint('[VoiceRecorder] Transcripción de audio completada');
+        final transcript = payload['transcript'] as String?;
+        if (transcript != null && transcript.isNotEmpty) {
+          _emitDelta(transcript);
+        }
+        break;
       case 'response.output_text.delta':
+      case 'response.text.delta':
       case 'response.delta':
+        debugPrint('[VoiceRecorder] Delta de texto recibido');
         _emitDelta(payload['delta']);
         break;
       case 'response.output_text.done':
+      case 'response.text.done':
       case 'response.completed':
+      case 'response.done':
         final response = payload['response'];
         final finishedId = response is Map
             ? response['id'] as String?
@@ -554,6 +613,11 @@ class VoiceRecorder {
             : payload['message']?.toString();
         _log('Realtime error: ${message ?? payload.toString()}',
             level: 'error');
+        debugPrint('[VoiceRecorder] ERROR: ${message ?? payload.toString()}');
+        break;
+      case 'rate_limits.updated':
+        debugPrint('[VoiceRecorder] Rate limits actualizado: ${payload['rate_limits']}');
+        _log('Rate limits actualizado', level: 'debug');
         break;
       default:
         if (type.startsWith('response.output_text')) {
@@ -569,12 +633,14 @@ class VoiceRecorder {
 
     if (delta is String) {
       if (delta.isNotEmpty) {
+        debugPrint('[VoiceRecorder] Emitiendo texto: "$delta"');
         _onText?.call(delta);
       }
       return;
     }
 
     if (delta is Map<String, dynamic>) {
+      debugPrint('[VoiceRecorder] Delta Map recibido: $delta');
       if (delta['text'] is String) {
         _emitDelta(delta['text']);
         return;
@@ -589,6 +655,7 @@ class VoiceRecorder {
     }
 
     if (delta is List) {
+      debugPrint('[VoiceRecorder] Delta List recibido con ${delta.length} elementos');
       for (final element in delta) {
         _emitDelta(element);
       }
@@ -607,10 +674,18 @@ class VoiceRecorder {
   }
 
   void _requestTranscription({bool force = false}) {
-    if (!_channelOpen || _stopping) return;
-    if (!force && (_isPaused || _activeResponseId != null)) {
+    debugPrint('[VoiceRecorder] requestTranscription - channelOpen=$_channelOpen, stopping=$_stopping, force=$force, isPaused=$_isPaused, activeResponseId=$_activeResponseId');
+    
+    if (!_channelOpen || _stopping) {
+      debugPrint('[VoiceRecorder] No solicitando transcripción: channelOpen=$_channelOpen, stopping=$_stopping');
       return;
     }
+    if (!force && (_isPaused || _activeResponseId != null)) {
+      debugPrint('[VoiceRecorder] No solicitando transcripción: isPaused=$_isPaused, activeResponseId=$_activeResponseId');
+      return;
+    }
+    
+    debugPrint('[VoiceRecorder] Enviando solicitud de transcripción...');
     _safeSend({
       'type': 'response.create',
       'response': {

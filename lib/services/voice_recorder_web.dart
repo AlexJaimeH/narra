@@ -352,7 +352,7 @@ class VoiceRecorder {
   ) async {
     try {
       final uri = Uri.parse(
-        'https://api.openai.com/v1/realtime?model=${Uri.encodeComponent(session.model)}',
+        'https://api.openai.com/v1/realtime?model=${Uri.encodeComponent(session.model)}&intent=transcription',
       );
       final response = await http.post(
         uri,

@@ -46,6 +46,7 @@ class VoiceRecorder {
   String? _activeResponseId;
   int _chunkCount = 0;
   String? _sessionId;
+  bool _responseInFlight = false;
 
   Future<void> start({OnText? onText, OnRecorderLog? onLog}) async {
     debugPrint('[VoiceRecorder] Iniciando grabación...');
@@ -132,6 +133,7 @@ class VoiceRecorder {
       _log('Respuesta activa cancelada: $_activeResponseId', level: 'debug');
       debugPrint('[VoiceRecorder] Respuesta cancelada: $_activeResponseId');
       _activeResponseId = null;
+      _responseInFlight = false;
     }
 
     _safeSend({'type': 'input_audio_buffer.commit'}, level: 'debug');
@@ -200,6 +202,7 @@ class VoiceRecorder {
         'response_id': _activeResponseId,
       });
       _activeResponseId = null;
+      _responseInFlight = false;
     }
 
     try {
@@ -591,6 +594,7 @@ class VoiceRecorder {
         if (finishedId == null || finishedId == _activeResponseId) {
           _activeResponseId = null;
         }
+        _responseInFlight = false;
         _log('Respuesta completada (${finishedId ?? 'desconocida'})',
             level: 'debug');
         if (!_stopping && !_isPaused) {
@@ -602,6 +606,7 @@ class VoiceRecorder {
         if (canceledId == _activeResponseId) {
           _activeResponseId = null;
         }
+        _responseInFlight = false;
         _log('Respuesta cancelada (${canceledId ?? 'desconocida'})',
             level: 'debug');
         break;
@@ -614,6 +619,7 @@ class VoiceRecorder {
         _log('Realtime error: ${message ?? payload.toString()}',
             level: 'error');
         debugPrint('[VoiceRecorder] ERROR: ${message ?? payload.toString()}');
+        _responseInFlight = false;
         break;
       case 'rate_limits.updated':
         debugPrint('[VoiceRecorder] Rate limits actualizado: ${payload['rate_limits']}');
@@ -684,8 +690,13 @@ class VoiceRecorder {
       debugPrint('[VoiceRecorder] No solicitando transcripción: isPaused=$_isPaused, activeResponseId=$_activeResponseId');
       return;
     }
-    
+    if (_responseInFlight) {
+      debugPrint('[VoiceRecorder] No solicitando transcripción: respuesta en curso');
+      return;
+    }
+
     debugPrint('[VoiceRecorder] Enviando solicitud de transcripción...');
+    _responseInFlight = true;
     _safeSend({
       'type': 'response.create',
       'response': {
@@ -793,6 +804,7 @@ class VoiceRecorder {
     _activeResponseId = null;
     _chunkCount = 0;
     _sessionId = null;
+    _responseInFlight = false;
   }
 
   void _log(String message, {String level = 'info', Object? error}) {

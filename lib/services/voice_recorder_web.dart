@@ -138,9 +138,6 @@ class VoiceRecorder {
       _responseInFlight = false;
     }
 
-    _safeSend({'type': 'input_audio_buffer.commit'}, level: 'debug');
-    _safeSend({'type': 'input_audio_buffer.clear'}, level: 'debug');
-
     try {
       _mediaRecorder?.pause();
       debugPrint('[VoiceRecorder] MediaRecorder pausado');
@@ -683,7 +680,9 @@ class VoiceRecorder {
             'Eres un transcriptor multilingüe. Devuelve únicamente el texto exacto que escuchas, en el mismo idioma y sin comentarios, etiquetas, resúmenes ni traducciones.',
         'turn_detection': {
           'type': 'server_vad',
-          'silence_duration': 0.6,
+          'threshold': 0.5,
+          'prefix_padding_ms': 300,
+          'silence_duration_ms': 500,
         },
       },
     }, level: 'debug', logPayload: true);

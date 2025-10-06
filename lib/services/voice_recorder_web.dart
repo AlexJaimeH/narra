@@ -675,23 +675,6 @@ class VoiceRecorder {
           _maybeRequestTranscription(force: true);
         }
         break;
-      case 'input_audio_buffer.speech_started':
-        _speechDetected = true;
-        _log('Detección de voz iniciada', level: 'debug');
-        if (!_stopping && !_isPaused) {
-          _maybeRequestTranscription(force: true);
-        }
-        break;
-      case 'input_audio_buffer.speech_stopped':
-        _speechDetected = false;
-        _log('Detección de voz detenida', level: 'debug');
-        break;
-      case 'input_audio_buffer.committed':
-        _log('Segmento de audio comprometido', level: 'debug');
-        if (!_stopping && !_isPaused && !_responseInFlight) {
-          _maybeRequestTranscription(force: true);
-        }
-        break;
       case 'response.error':
       case 'error':
         final errorObj = payload['error'];
@@ -842,7 +825,7 @@ class VoiceRecorder {
       'session': {
         'modalities': ['text', 'audio'],
         'instructions':
-            'Transcribe en tiempo real exactamente lo que escucha del usuario y devuelve una cadena vacía si no hay voz nueva.',
+            'Devuelve solamente las palabras pronunciadas por la persona usuaria, exactamente como se escuchan y sin añadir saludos, explicaciones ni traducciones. Si no hay voz disponible responde con una cadena vacía.',
         'temperature': 0,
         'turn_detection': {
           'type': 'server_vad',
@@ -898,8 +881,7 @@ class VoiceRecorder {
       'response': {
         'modalities': ['text'],
         'conversation': 'none',
-        'instructions':
-            'Transcribe exactamente la voz más reciente del usuario en texto plano y no devuelvas nada si no hay audio nuevo.',
+        'instructions': '',
         'temperature': 0,
         'metadata': {
           'purpose': 'dictation',

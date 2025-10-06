@@ -10,9 +10,9 @@ interface Env {
 }
 
 const DEFAULT_MODEL = 'gpt-4o-realtime-preview-2024-10-01';
-const DEFAULT_MODALITIES = ['text', 'audio'];
+const DEFAULT_MODALITIES = ['text'];
 const DEFAULT_INSTRUCTIONS =
-  'Eres un transcriptor en español. Devuelve exclusivamente el discurso del usuario como texto claro y sin instrucciones adicionales.';
+  'Eres un motor de transcripción en tiempo real. Devuelve únicamente y con total fidelidad las palabras que pronuncia el usuario, en el mismo idioma detectado y sin añadir comentarios, saludos ni reformulaciones. Si no hay voz disponible, responde con una cadena vacía.';
 
 export const onRequestOptions: PagesFunction<Env> = async () => {
   return new Response(null, { status: 204, headers: CORS_HEADERS });

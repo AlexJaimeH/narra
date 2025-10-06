@@ -113,6 +113,7 @@ class VoiceRecorder {
 
     _log('Pausando grabación...');
     _isPaused = true;
+    _speechDetected = false;
 
     try {
       _audioTrack?.enabled = false;
@@ -137,6 +138,7 @@ class VoiceRecorder {
 
     _log('Reanudando grabación...');
     _isPaused = false;
+    _speechDetected = false;
 
     try {
       _audioTrack?.enabled = true;

@@ -10,6 +10,10 @@ interface Env {
 }
 
 const DEFAULT_MODEL = 'gpt-4o-mini-transcribe';
+const ALLOWED_TRANSCRIPTION_MODELS = new Set([
+  'gpt-4o-mini-transcribe',
+  'whisper-1',
+]);
 const DEFAULT_MODALITIES = ['text'];
 const DEFAULT_INSTRUCTIONS =
   'Transcribe exactamente las palabras del usuario en su idioma original. No respondas ni agregues comentarios, devuelve una cadena vacía si no hay audio nuevo.';
@@ -49,9 +53,19 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
     const normalizedPayload = jsonPayload && typeof jsonPayload === 'object' ? jsonPayload : {};
 
-    const model = typeof normalizedPayload.model === 'string' && normalizedPayload.model.trim().length > 0
-      ? (normalizedPayload.model as string)
-      : DEFAULT_MODEL;
+    const resolveModel = (value: unknown) => {
+      if (typeof value !== 'string' || value.trim().length === 0) {
+        return DEFAULT_MODEL;
+      }
+      const trimmed = value.trim();
+      if (!ALLOWED_TRANSCRIPTION_MODELS.has(trimmed)) {
+        return DEFAULT_MODEL;
+      }
+      // Whisper-1 no soporta sesiones Realtime; hacemos fallback al modelo primario.
+      return trimmed === 'whisper-1' ? DEFAULT_MODEL : trimmed;
+    };
+
+    const model = resolveModel(normalizedPayload.model);
 
     const modalities = Array.isArray(normalizedPayload.modalities)
       ? (normalizedPayload.modalities as string[])

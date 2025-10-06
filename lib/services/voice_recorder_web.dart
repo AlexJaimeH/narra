@@ -138,9 +138,6 @@ class VoiceRecorder {
       _responseInFlight = false;
     }
 
-    _safeSend({'type': 'input_audio_buffer.commit'}, level: 'debug');
-    _safeSend({'type': 'input_audio_buffer.clear'}, level: 'debug');
-
     try {
       _mediaRecorder?.pause();
       debugPrint('[VoiceRecorder] MediaRecorder pausado');
@@ -580,8 +577,15 @@ class VoiceRecorder {
       case 'response.output_text.delta':
       case 'response.text.delta':
       case 'response.delta':
-        debugPrint('[VoiceRecorder] Delta de texto recibido');
-        _emitDelta(payload['delta']);
+        final delta = payload['delta'];
+        if (delta != null) {
+          _emitDelta(delta);
+        } else {
+          final text = payload['text'] ?? payload['output_text'];
+          if (text != null) {
+            _emitDelta(text);
+          }
+        }
         break;
       case 'response.output_text.done':
       case 'response.text.done':
@@ -591,6 +595,11 @@ class VoiceRecorder {
         final finishedId = response is Map
             ? response['id'] as String?
             : payload['response_id'] as String?;
+        final finalText =
+            payload['output_text'] ?? payload['text'] ?? payload['content'];
+        if (finalText != null) {
+          _emitDelta(finalText);
+        }
         if (finishedId == null || finishedId == _activeResponseId) {
           _activeResponseId = null;
         }
@@ -632,11 +641,7 @@ class VoiceRecorder {
         _log('Rate limits actualizado', level: 'debug');
         break;
       default:
-        if (type.startsWith('response.output_text')) {
-          _emitDelta(payload['delta']);
-        } else {
-          _log('Evento recibido: $type', level: 'debug');
-        }
+        _log('Evento recibido: $type', level: 'debug');
     }
   }
 
@@ -683,7 +688,9 @@ class VoiceRecorder {
             'Eres un transcriptor multilingüe. Devuelve únicamente el texto exacto que escuchas, en el mismo idioma y sin comentarios, etiquetas, resúmenes ni traducciones.',
         'turn_detection': {
           'type': 'server_vad',
-          'silence_duration': 0.6,
+          'threshold': 0.5,
+          'prefix_padding_ms': 300,
+          'silence_duration_ms': 500,
         },
       },
     }, level: 'debug', logPayload: true);
@@ -716,6 +723,8 @@ class VoiceRecorder {
       'type': 'response.create',
       'response': {
         'modalities': ['text'],
+        'instructions':
+            'Transcribe la voz del usuario en tiempo real. Devuelve únicamente la transcripción exacta, en el mismo idioma y sin añadidos.',
       },
     }, level: 'debug', logPayload: true);
   }

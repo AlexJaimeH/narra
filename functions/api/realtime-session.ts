@@ -9,10 +9,10 @@ interface Env {
   OPENAI_API_KEY: string;
 }
 
-const DEFAULT_MODEL = 'gpt-4o-realtime-preview-2024-10-01';
-const DEFAULT_MODALITIES = ['text', 'audio'];
+const DEFAULT_MODEL = 'gpt-4o-mini-transcribe';
+const DEFAULT_MODALITIES = ['text'];
 const DEFAULT_INSTRUCTIONS =
-  'Eres un transcriptor en español. Devuelve exclusivamente el discurso del usuario como texto claro y sin instrucciones adicionales.';
+  'Transcribe exactamente las palabras del usuario en su idioma original. No respondas ni agregues comentarios, devuelve una cadena vacía si no hay audio nuevo.';
 
 export const onRequestOptions: PagesFunction<Env> = async () => {
   return new Response(null, { status: 204, headers: CORS_HEADERS });

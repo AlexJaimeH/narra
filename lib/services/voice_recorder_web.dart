@@ -577,8 +577,7 @@ class VoiceRecorder {
       case 'response.output_text.delta':
       case 'response.text.delta':
       case 'response.delta':
-        debugPrint('[VoiceRecorder] Delta de texto recibido');
-        _emitDelta(payload['delta']);
+        debugPrint('[VoiceRecorder] Delta de texto recibido (omitido)');
         break;
       case 'response.output_text.done':
       case 'response.text.done':
@@ -629,11 +628,7 @@ class VoiceRecorder {
         _log('Rate limits actualizado', level: 'debug');
         break;
       default:
-        if (type.startsWith('response.output_text')) {
-          _emitDelta(payload['delta']);
-        } else {
-          _log('Evento recibido: $type', level: 'debug');
-        }
+        _log('Evento recibido: $type', level: 'debug');
     }
   }
 
@@ -715,6 +710,8 @@ class VoiceRecorder {
       'type': 'response.create',
       'response': {
         'modalities': ['text'],
+        'instructions':
+            'Transcribe la voz del usuario en tiempo real. Devuelve únicamente la transcripción exacta, en el mismo idioma y sin añadidos.',
       },
     }, level: 'debug', logPayload: true);
   }

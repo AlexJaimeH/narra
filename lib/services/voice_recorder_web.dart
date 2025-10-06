@@ -47,7 +47,13 @@ class VoiceRecorder {
   int _chunkCount = 0;
   String? _sessionId;
   bool _responseInFlight = false;
-  int _lastSubmittedChunk = 0;
+  bool _speechDetected = false;
+  final Map<String, StringBuffer> _responseBuffers = {};
+  final List<String> _completedSegments = [];
+  int _committedSegments = 0;
+  int _lastRequestedSegment = 0;
+  bool _pendingCommitWhileInFlight = false;
+  String? _lastEmittedTranscript;
 
   Future<void> start({OnText? onText, OnRecorderLog? onLog}) async {
     debugPrint('[VoiceRecorder] Iniciando grabación...');
@@ -60,8 +66,14 @@ class VoiceRecorder {
     _activeResponseId = null;
     _recordedChunks.clear();
     _chunkCount = 0;
-    _lastSubmittedChunk = 0;
+    _responseBuffers.clear();
+    _completedSegments.clear();
+    _committedSegments = 0;
+    _lastRequestedSegment = 0;
+    _pendingCommitWhileInFlight = false;
+    _lastEmittedTranscript = null;
     _eventsChannelReadyCompleter = Completer<void>();
+    _emitTranscript('');
 
     _log('Preparando sesión de transcripción...');
     final devices = html.window.navigator.mediaDevices;
@@ -92,7 +104,8 @@ class VoiceRecorder {
 
     final session = await _createRealtimeSession();
     _sessionId = session.sessionId;
-    debugPrint('[VoiceRecorder] Sesión creada: ${session.sessionId}, modelo: ${session.model}');
+    debugPrint(
+        '[VoiceRecorder] Sesión creada: ${session.sessionId}, modelo: ${session.model}');
     await _initializePeerConnection(session);
 
     try {
@@ -114,9 +127,11 @@ class VoiceRecorder {
 
   Future<bool> pause() async {
     _log('Pausando grabación...');
-    debugPrint('[VoiceRecorder] Pausando grabación, estado actual: isPaused=$_isPaused, isRecording=$_channelOpen');
-    
+    debugPrint(
+        '[VoiceRecorder] Pausando grabación, estado actual: isPaused=$_isPaused, isRecording=$_channelOpen');
+
     _isPaused = true;
+    _speechDetected = false;
 
     try {
       _audioTrack?.enabled = false;
@@ -138,9 +153,6 @@ class VoiceRecorder {
       _responseInFlight = false;
     }
 
-    _safeSend({'type': 'input_audio_buffer.commit'}, level: 'debug');
-    _safeSend({'type': 'input_audio_buffer.clear'}, level: 'debug');
-
     try {
       _mediaRecorder?.pause();
       debugPrint('[VoiceRecorder] MediaRecorder pausado');
@@ -155,9 +167,11 @@ class VoiceRecorder {
 
   Future<bool> resume() async {
     _log('Reanudando grabación...');
-    debugPrint('[VoiceRecorder] Reanudando grabación, estado actual: isPaused=$_isPaused, channelOpen=$_channelOpen');
-    
+    debugPrint(
+        '[VoiceRecorder] Reanudando grabación, estado actual: isPaused=$_isPaused, channelOpen=$_channelOpen');
+
     _isPaused = false;
+    _speechDetected = false;
 
     try {
       _audioTrack?.enabled = true;
@@ -181,11 +195,13 @@ class VoiceRecorder {
         'PeerConnection no está conectado (${_peerConnection?.connectionState})',
         level: 'warning',
       );
-      debugPrint('[VoiceRecorder] PeerConnection estado: ${_peerConnection?.connectionState}');
+      debugPrint(
+          '[VoiceRecorder] PeerConnection estado: ${_peerConnection?.connectionState}');
     }
 
     _maybeRequestTranscription();
-    debugPrint('[VoiceRecorder] Reanudación completada, verificación de transcripción');
+    debugPrint(
+        '[VoiceRecorder] Reanudación completada, verificación de transcripción');
     return true;
   }
 
@@ -255,7 +271,8 @@ class VoiceRecorder {
     await stop();
   }
 
-  Future<void> _initializePeerConnection(_RealtimeSessionDetails session) async {
+  Future<void> _initializePeerConnection(
+      _RealtimeSessionDetails session) async {
     final iceServers = session.iceServers.isNotEmpty
         ? session.iceServers
         : [
@@ -284,10 +301,10 @@ class VoiceRecorder {
       _channelOpen = true;
       final sessionLabel = _sessionId != null ? ' ($_sessionId)' : '';
       _log('Canal de eventos abierto$sessionLabel');
-      debugPrint('[VoiceRecorder] Canal de eventos abierto, configurando sesión...');
+      debugPrint(
+          '[VoiceRecorder] Canal de eventos abierto, configurando sesión...');
       _eventsChannelReadyCompleter?.complete();
       _sendSessionConfiguration();
-      Future.delayed(const Duration(milliseconds: 100), _maybeRequestTranscription);
     });
 
     dataChannel.onClose.listen((_) {
@@ -355,7 +372,9 @@ class VoiceRecorder {
         _chunkCount += 1;
         _log('Chunk $_chunkCount recibido (${bytes.length} bytes)',
             level: 'debug');
-        _maybeRequestTranscription();
+        if (_speechDetected) {
+          _maybeRequestTranscription();
+        }
       }
     });
 
@@ -440,7 +459,8 @@ class VoiceRecorder {
       }
 
       final data = jsonDecode(body) as Map<String, dynamic>;
-      final clientSecret = (data['clientSecret'] ?? data['client_secret']) as String?;
+      final clientSecret =
+          (data['clientSecret'] ?? data['client_secret']) as String?;
       if (clientSecret == null || clientSecret.isEmpty) {
         debugPrint('[VoiceRecorder] Error: No se recibió client_secret');
         throw Exception('Respuesta Realtime sin client_secret');
@@ -547,70 +567,112 @@ class VoiceRecorder {
 
     switch (type) {
       case 'response.created':
-        final response = payload['response'];
-        final id = response is Map
-            ? response['id'] as String?
-            : payload['response_id'] as String?;
-        _activeResponseId = id;
-        _log('Respuesta creada (${id ?? 'desconocida'})', level: 'debug');
+        final responseId = _extractResponseId(payload);
+        if (responseId != null) {
+          _activeResponseId = responseId;
+          _responseBuffers[responseId] = StringBuffer();
+        }
+        _log('Respuesta creada (${responseId ?? 'desconocida'})',
+            level: 'debug');
         break;
       case 'response.output_item.added':
         debugPrint('[VoiceRecorder] Output item añadido');
         break;
       case 'response.content_part.added':
         debugPrint('[VoiceRecorder] Content part añadido');
+        final responseId = _extractResponseId(payload);
+        if (responseId != null && payload.containsKey('content')) {
+          _appendResponseDelta(responseId, payload['content']);
+        }
         break;
       case 'response.content_part.done':
         debugPrint('[VoiceRecorder] Content part completado');
         break;
       case 'response.audio_transcript.delta':
         debugPrint('[VoiceRecorder] Transcripción de audio recibida');
-        final transcript = payload['delta'] as String?;
-        if (transcript != null && transcript.isNotEmpty) {
-          _emitDelta(transcript);
+        final responseId = _extractResponseId(payload);
+        if (responseId != null) {
+          _appendResponseDelta(responseId, payload['delta']);
         }
         break;
       case 'response.audio_transcript.done':
         debugPrint('[VoiceRecorder] Transcripción de audio completada');
-        final transcript = payload['transcript'] as String?;
-        if (transcript != null && transcript.isNotEmpty) {
-          _emitDelta(transcript);
+        final responseId = _extractResponseId(payload);
+        if (responseId != null) {
+          _finalizeResponseText(responseId, finalText: payload['transcript']);
         }
         break;
       case 'response.output_text.delta':
       case 'response.text.delta':
       case 'response.delta':
-        debugPrint('[VoiceRecorder] Delta de texto recibido');
-        _emitDelta(payload['delta']);
+        final responseId = _extractResponseId(payload);
+        if (responseId != null) {
+          final delta =
+              payload['delta'] ?? payload['text'] ?? payload['output_text'];
+          if (delta != null) {
+            _appendResponseDelta(responseId, delta);
+          }
+        }
         break;
       case 'response.output_text.done':
       case 'response.text.done':
       case 'response.completed':
       case 'response.done':
-        final response = payload['response'];
-        final finishedId = response is Map
-            ? response['id'] as String?
-            : payload['response_id'] as String?;
-        if (finishedId == null || finishedId == _activeResponseId) {
+        final responseId = _extractResponseId(payload);
+        final finishedId = responseId ?? _activeResponseId;
+        final finalText =
+            payload['output_text'] ?? payload['text'] ?? payload['content'];
+        if (finishedId != null) {
+          _finalizeResponseText(finishedId, finalText: finalText);
+        }
+        if (finishedId == _activeResponseId) {
           _activeResponseId = null;
         }
         _responseInFlight = false;
         _log('Respuesta completada (${finishedId ?? 'desconocida'})',
             level: 'debug');
-        if (!_stopping && !_isPaused) {
-          _maybeRequestTranscription();
+        final hasNewCommits = _committedSegments > _lastRequestedSegment ||
+            _pendingCommitWhileInFlight;
+        _pendingCommitWhileInFlight = false;
+        if (!_stopping && !_isPaused && hasNewCommits) {
+          _maybeRequestTranscription(force: true);
         }
         break;
       case 'response.canceled':
         final canceledId = payload['response_id'] as String?;
+        if (canceledId != null) {
+          _responseBuffers.remove(canceledId);
+        }
         if (canceledId == _activeResponseId) {
           _activeResponseId = null;
         }
         _responseInFlight = false;
         _log('Respuesta cancelada (${canceledId ?? 'desconocida'})',
             level: 'debug');
-        if (!_stopping && !_isPaused) {
-          _maybeRequestTranscription();
+        if (!_stopping &&
+            !_isPaused &&
+            (_committedSegments > _lastRequestedSegment ||
+                _pendingCommitWhileInFlight)) {
+          _pendingCommitWhileInFlight = false;
+          _maybeRequestTranscription(force: true);
+        }
+        break;
+      case 'input_audio_buffer.speech_started':
+        _speechDetected = true;
+        _log('Detección de voz iniciada', level: 'debug');
+        break;
+      case 'input_audio_buffer.speech_stopped':
+        _speechDetected = false;
+        _log('Detección de voz detenida', level: 'debug');
+        break;
+      case 'input_audio_buffer.committed':
+        _committedSegments += 1;
+        _log('Segmento de audio comprometido (#$_committedSegments)',
+            level: 'debug');
+        if (_responseInFlight) {
+          _pendingCommitWhileInFlight = true;
+        } else if (!_stopping && !_isPaused) {
+          _maybeRequestTranscription(force: true);
         }
         break;
       case 'response.error':
@@ -623,105 +685,215 @@ class VoiceRecorder {
             level: 'error');
         debugPrint('[VoiceRecorder] ERROR: ${message ?? payload.toString()}');
         _responseInFlight = false;
-        if (!_stopping && !_isPaused) {
-          _maybeRequestTranscription();
+        final hasPending = _committedSegments > _lastRequestedSegment ||
+            _pendingCommitWhileInFlight;
+        _pendingCommitWhileInFlight = false;
+        if (!_stopping && !_isPaused && hasPending) {
+          _maybeRequestTranscription(force: true);
         }
         break;
       case 'rate_limits.updated':
-        debugPrint('[VoiceRecorder] Rate limits actualizado: ${payload['rate_limits']}');
+        debugPrint(
+            '[VoiceRecorder] Rate limits actualizado: ${payload['rate_limits']}');
         _log('Rate limits actualizado', level: 'debug');
         break;
       default:
-        if (type.startsWith('response.output_text')) {
-          _emitDelta(payload['delta']);
-        } else {
-          _log('Evento recibido: $type', level: 'debug');
-        }
+        _log('Evento recibido: $type', level: 'debug');
     }
   }
 
-  void _emitDelta(dynamic delta) {
-    if (delta == null) return;
-
-    if (delta is String) {
-      if (delta.isNotEmpty) {
-        debugPrint('[VoiceRecorder] Emitiendo texto: "$delta"');
-        _onText?.call(delta);
+  String? _extractResponseId(Map<String, dynamic> payload) {
+    final response = payload['response'];
+    if (response is Map<String, dynamic>) {
+      final id = response['id'];
+      if (id is String && id.isNotEmpty) {
+        return id;
       }
-      return;
     }
+    final responseId = payload['response_id'];
+    if (responseId is String && responseId.isNotEmpty) {
+      return responseId;
+    }
+    return _activeResponseId;
+  }
 
-    if (delta is Map<String, dynamic>) {
-      debugPrint('[VoiceRecorder] Delta Map recibido: $delta');
-      if (delta['text'] is String) {
-        _emitDelta(delta['text']);
+  void _appendResponseDelta(String responseId, dynamic delta) {
+    if (delta == null) return;
+    final buffer =
+        _responseBuffers.putIfAbsent(responseId, () => StringBuffer());
+
+    void writeDynamic(dynamic value) {
+      if (value == null) return;
+      if (value is String) {
+        if (value.isEmpty) return;
+        buffer.write(value);
         return;
       }
-      final content = delta['content'];
-      if (content is List) {
-        for (final element in content) {
-          _emitDelta(element);
+      if (value is Map<String, dynamic>) {
+        if (value['text'] != null) {
+          writeDynamic(value['text']);
+          return;
+        }
+        if (value['output_text'] != null) {
+          writeDynamic(value['output_text']);
+          return;
+        }
+        if (value['content'] != null) {
+          writeDynamic(value['content']);
+          return;
         }
       }
-      return;
-    }
-
-    if (delta is List) {
-      debugPrint('[VoiceRecorder] Delta List recibido con ${delta.length} elementos');
-      for (final element in delta) {
-        _emitDelta(element);
+      if (value is Iterable) {
+        for (final element in value) {
+          writeDynamic(element);
+        }
       }
     }
+
+    writeDynamic(delta);
+    _notifyTranscriptUpdate();
+  }
+
+  void _finalizeResponseText(String responseId, {dynamic finalText}) {
+    final buffer = _responseBuffers.remove(responseId);
+    var text = _stringFromDynamic(finalText) ?? buffer?.toString();
+    text = text?.trim();
+    if (text != null && text.isNotEmpty) {
+      if (_completedSegments.isEmpty || _completedSegments.last != text) {
+        _completedSegments.add(text);
+      } else {
+        _completedSegments[_completedSegments.length - 1] = text;
+      }
+    }
+    _notifyTranscriptUpdate();
+  }
+
+  String? _stringFromDynamic(dynamic value) {
+    if (value == null) return null;
+    if (value is String) {
+      return value;
+    }
+    if (value is Map<String, dynamic>) {
+      return _stringFromDynamic(
+          value['text'] ?? value['output_text'] ?? value['content']);
+    }
+    if (value is Iterable) {
+      final buffer = StringBuffer();
+      for (final element in value) {
+        final str = _stringFromDynamic(element);
+        if (str != null) {
+          buffer.write(str);
+        }
+      }
+      return buffer.isEmpty ? null : buffer.toString();
+    }
+    return value.toString();
+  }
+
+  void _notifyTranscriptUpdate() {
+    final pieces = <String>[];
+    for (final segment in _completedSegments) {
+      final trimmed = segment.trim();
+      if (trimmed.isNotEmpty) {
+        pieces.add(trimmed);
+      }
+    }
+    for (final entry in _responseBuffers.entries) {
+      final current = entry.value.toString().trim();
+      if (current.isNotEmpty) {
+        pieces.add(current);
+      }
+    }
+    final transcript =
+        pieces.isEmpty ? '' : pieces.join(pieces.length > 1 ? ' ' : '');
+    _emitTranscript(transcript);
+  }
+
+  void _emitTranscript(String transcript) {
+    if (_lastEmittedTranscript == transcript) {
+      return;
+    }
+    _lastEmittedTranscript = transcript;
+    debugPrint(
+        '[VoiceRecorder] Emitiendo texto actualizado (${transcript.length} chars)');
+    _onText?.call(transcript);
   }
 
   void _sendSessionConfiguration() {
     _safeSend({
       'type': 'session.update',
       'session': {
-        'modalities': ['text'],
+        'modalities': ['text', 'audio'],
         'instructions':
-            'Eres un transcriptor multilingüe. Devuelve únicamente el texto exacto que escuchas, en el mismo idioma y sin comentarios, etiquetas, resúmenes ni traducciones.',
+            'Transcribe en tiempo real exactamente lo que escucha del usuario y devuelve una cadena vacía si no hay voz nueva.',
+        'temperature': 0,
         'turn_detection': {
           'type': 'server_vad',
-          'silence_duration': 0.6,
+          'threshold': 0.5,
+          'prefix_padding_ms': 300,
+          'silence_duration_ms': 500,
         },
       },
     }, level: 'debug', logPayload: true);
   }
 
   void _requestTranscription({bool force = false}) {
-    debugPrint('[VoiceRecorder] requestTranscription - channelOpen=$_channelOpen, stopping=$_stopping, force=$force, isPaused=$_isPaused, activeResponseId=$_activeResponseId');
+    debugPrint(
+        '[VoiceRecorder] requestTranscription - channelOpen=$_channelOpen, stopping=$_stopping, force=$force, isPaused=$_isPaused, activeResponseId=$_activeResponseId');
 
     if (!_channelOpen || _stopping) {
-      debugPrint('[VoiceRecorder] No solicitando transcripción: channelOpen=$_channelOpen, stopping=$_stopping');
+      debugPrint(
+          '[VoiceRecorder] No solicitando transcripción: channelOpen=$_channelOpen, stopping=$_stopping');
       return;
     }
     if (!force && (_isPaused || _activeResponseId != null)) {
-      debugPrint('[VoiceRecorder] No solicitando transcripción: isPaused=$_isPaused, activeResponseId=$_activeResponseId');
+      debugPrint(
+          '[VoiceRecorder] No solicitando transcripción: isPaused=$_isPaused, activeResponseId=$_activeResponseId');
       return;
     }
     if (_responseInFlight) {
-      debugPrint('[VoiceRecorder] No solicitando transcripción: respuesta en curso');
+      debugPrint(
+          '[VoiceRecorder] No solicitando transcripción: respuesta en curso');
       return;
     }
-    if (!force && _chunkCount <= _lastSubmittedChunk) {
-      debugPrint('[VoiceRecorder] No hay audio nuevo desde el último envío (chunk $_chunkCount, último enviado $_lastSubmittedChunk)');
+    if (!force && !_speechDetected) {
+      debugPrint('[VoiceRecorder] VAD sin voz detectada, omitiendo solicitud');
+      return;
+    }
+    if (_committedSegments == 0) {
+      debugPrint('[VoiceRecorder] No hay audio comprometido todavía');
+      return;
+    }
+    if (_committedSegments <= _lastRequestedSegment) {
+      debugPrint(
+          '[VoiceRecorder] No hay audio nuevo desde el último envío (comprometidos=$_committedSegments, último=$_lastRequestedSegment)');
       return;
     }
 
-    debugPrint('[VoiceRecorder] Enviando solicitud de transcripción...');
+    final targetSegments = _committedSegments;
+    debugPrint(
+        '[VoiceRecorder] Enviando solicitud de transcripción (segmentos=$targetSegments)...');
     _responseInFlight = true;
-    _lastSubmittedChunk = _chunkCount;
+    _lastRequestedSegment = targetSegments;
+    _pendingCommitWhileInFlight = false;
     _safeSend({
       'type': 'response.create',
       'response': {
         'modalities': ['text'],
+        'conversation': 'none',
+        'instructions':
+            'Transcribe exactamente la voz más reciente del usuario en texto plano y no devuelvas nada si no hay audio nuevo.',
+        'temperature': 0,
+        'metadata': {
+          'purpose': 'dictation',
+          'commits_requested': targetSegments,
+        },
       },
     }, level: 'debug', logPayload: true);
   }
 
-  void _maybeRequestTranscription() {
-    _requestTranscription();
+  void _maybeRequestTranscription({bool force = false}) {
+    _requestTranscription(force: force);
   }
 
   void _safeSend(Map<String, dynamic> payload,
@@ -822,7 +994,13 @@ class VoiceRecorder {
     _chunkCount = 0;
     _sessionId = null;
     _responseInFlight = false;
-    _lastSubmittedChunk = 0;
+    _speechDetected = false;
+    _responseBuffers.clear();
+    _completedSegments.clear();
+    _committedSegments = 0;
+    _lastRequestedSegment = 0;
+    _pendingCommitWhileInFlight = false;
+    _lastEmittedTranscript = null;
   }
 
   void _log(String message, {String level = 'info', Object? error}) {

@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 import 'dart:typed_data' as typed;
 
 import 'package:flutter/material.dart';
@@ -34,7 +33,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   VoiceRecorder? _recorder;
 
   String _liveTranscript = '';
-  String? _lastTranscriptChunk;
   bool _isPaused = false;
 
   bool _isRecorderConnecting = false;
@@ -843,108 +841,32 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   }
 
   void _handleTranscriptChunk(String text) {
-    if (text.trim().isEmpty) return;
+    final sanitized = text;
 
-    final chunk = text;
-    if (chunk == _lastTranscriptChunk) {
+    if (!mounted) {
+      _liveTranscript = sanitized;
       return;
     }
 
-    final addition = _extractTranscriptAddition(_liveTranscript, chunk);
-    if (addition.isEmpty) {
-      _lastTranscriptChunk = chunk;
+    if (_liveTranscript == sanitized) {
       return;
     }
-
-    if (!mounted) return;
 
     setState(() {
-      _liveTranscript = '$_liveTranscript$addition';
-      _lastTranscriptChunk = chunk;
+      _liveTranscript = sanitized;
     });
 
     final sheetUpdater = _sheetStateUpdater['dictation'];
     sheetUpdater?.call(() {});
 
-    debugPrint('[Transcripción] Chunk recibido: "$chunk"');
-    final tailStart =
-        _liveTranscript.length > 100 ? _liveTranscript.length - 100 : 0;
+    if (sanitized.isEmpty) {
+      debugPrint('[Transcripción] Transcript vacío');
+      return;
+    }
+
+    final tailStart = sanitized.length > 160 ? sanitized.length - 160 : 0;
     debugPrint(
-        '[Transcripción] Total: "${_liveTranscript.substring(tailStart)}"');
-  }
-
-  String _extractTranscriptAddition(String existing, String chunk) {
-    final normalizedExisting = existing.trimRight();
-    final overlap = _computeOverlap(normalizedExisting, chunk);
-    if (overlap >= chunk.length) {
-      return '';
-    }
-
-    var addition = chunk.substring(overlap);
-    if (addition.isEmpty) {
-      return '';
-    }
-
-    if (_needsTranscriptSpacer(existing, addition)) {
-      addition = ' $addition';
-    }
-
-    return addition;
-  }
-
-  bool _needsTranscriptSpacer(String existing, String addition) {
-    if (existing.isEmpty) return false;
-    if (RegExp(r'\s$').hasMatch(existing)) return false;
-    if (addition.isEmpty) return false;
-
-    final firstCodePoint = addition.runes.first;
-    if (_isWhitespaceCodePoint(firstCodePoint)) {
-      return false;
-    }
-
-    if (_attachesToPreviousToken(firstCodePoint)) {
-      return false;
-    }
-
-    return true;
-  }
-
-  bool _isWhitespaceCodePoint(int codePoint) =>
-      codePoint == 0x20 || // space
-      codePoint == 0x0A || // line feed
-      codePoint == 0x0D || // carriage return
-      codePoint == 0x09; // tab
-
-  bool _attachesToPreviousToken(int codePoint) {
-    switch (codePoint) {
-      case 0x2C: // ,
-      case 0x2E: // .
-      case 0x3A: // :
-      case 0x3B: // ;
-      case 0x3F: // ?
-      case 0x21: // !
-      case 0x29: // )
-      case 0x5D: // ]
-      case 0x7D: // }
-      case 0x25: // %
-      case 0xBB: // »
-        return true;
-      default:
-        return false;
-    }
-  }
-
-  int _computeOverlap(String existing, String chunk) {
-    if (existing.isEmpty || chunk.isEmpty) return 0;
-    final maxLen = math.min(200, math.min(existing.length, chunk.length));
-    for (var len = maxLen; len > 0; len--) {
-      final suffix = existing.substring(existing.length - len);
-      final prefix = chunk.substring(0, len);
-      if (suffix == prefix) {
-        return len;
-      }
-    }
-    return 0;
+        '[Transcripción] Total actualizado: "${sanitized.substring(tailStart)}"');
   }
 
   Future<void> _startRecording({bool resetTranscript = false}) async {
@@ -954,10 +876,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     if (resetTranscript) {
       setState(() {
         _liveTranscript = '';
-        _lastTranscriptChunk = null;
       });
-    } else {
-      _lastTranscriptChunk = null;
     }
 
     if (mounted) {
@@ -1373,7 +1292,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
     setState(() {
       _liveTranscript = '';
-      _lastTranscriptChunk = null;
       _isPaused = false;
     });
   }

@@ -577,7 +577,15 @@ class VoiceRecorder {
       case 'response.output_text.delta':
       case 'response.text.delta':
       case 'response.delta':
-        debugPrint('[VoiceRecorder] Delta de texto recibido (omitido)');
+        final delta = payload['delta'];
+        if (delta != null) {
+          _emitDelta(delta);
+        } else {
+          final text = payload['text'] ?? payload['output_text'];
+          if (text != null) {
+            _emitDelta(text);
+          }
+        }
         break;
       case 'response.output_text.done':
       case 'response.text.done':
@@ -587,6 +595,11 @@ class VoiceRecorder {
         final finishedId = response is Map
             ? response['id'] as String?
             : payload['response_id'] as String?;
+        final finalText =
+            payload['output_text'] ?? payload['text'] ?? payload['content'];
+        if (finalText != null) {
+          _emitDelta(finalText);
+        }
         if (finishedId == null || finishedId == _activeResponseId) {
           _activeResponseId = null;
         }

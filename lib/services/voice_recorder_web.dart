@@ -675,6 +675,23 @@ class VoiceRecorder {
           _maybeRequestTranscription(force: true);
         }
         break;
+      case 'input_audio_buffer.speech_started':
+        _speechDetected = true;
+        _log('Detección de voz iniciada', level: 'debug');
+        if (!_stopping && !_isPaused) {
+          _maybeRequestTranscription(force: true);
+        }
+        break;
+      case 'input_audio_buffer.speech_stopped':
+        _speechDetected = false;
+        _log('Detección de voz detenida', level: 'debug');
+        break;
+      case 'input_audio_buffer.committed':
+        _log('Segmento de audio comprometido', level: 'debug');
+        if (!_stopping && !_isPaused && !_responseInFlight) {
+          _maybeRequestTranscription(force: true);
+        }
+        break;
       case 'response.error':
       case 'error':
         final errorObj = payload['error'];

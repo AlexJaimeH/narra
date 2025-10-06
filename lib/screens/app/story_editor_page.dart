@@ -843,17 +843,14 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   }
 
   void _handleTranscriptChunk(String text) {
-    final chunk = text.trim();
-    if (chunk.isEmpty) return;
+    if (text.trim().isEmpty) return;
 
-    final trimmedExisting = _liveTranscript.trimRight();
-    if (chunk == _lastTranscriptChunk || trimmedExisting.endsWith(chunk)) {
-      _lastTranscriptChunk = chunk;
+    final chunk = text;
+    if (chunk == _lastTranscriptChunk) {
       return;
     }
 
-    final overlap = _computeOverlap(trimmedExisting, chunk);
-    final addition = chunk.substring(overlap).trimLeft();
+    final addition = _extractTranscriptAddition(_liveTranscript, chunk);
     if (addition.isEmpty) {
       _lastTranscriptChunk = chunk;
       return;
@@ -862,29 +859,79 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     if (!mounted) return;
 
     setState(() {
-      final buffer = StringBuffer(_liveTranscript);
-      final needsSpaceBefore = _liveTranscript.isNotEmpty &&
-          !RegExp(r'\s$').hasMatch(_liveTranscript);
-      if (needsSpaceBefore) {
-        buffer.write(' ');
-      }
-      buffer.write(addition);
-      if (!RegExp(r'\s$').hasMatch(addition)) {
-        buffer.write(' ');
-      }
-      _liveTranscript = buffer.toString();
+      _liveTranscript = '$_liveTranscript$addition';
       _lastTranscriptChunk = chunk;
     });
-    
-    // Actualizar el bottom sheet si está abierto
+
     final sheetUpdater = _sheetStateUpdater['dictation'];
-    if (sheetUpdater != null) {
-      sheetUpdater(() {});
-    }
-    
-    // Log para debugging
+    sheetUpdater?.call(() {});
+
     debugPrint('[Transcripción] Chunk recibido: "$chunk"');
-    debugPrint('[Transcripción] Total: "${_liveTranscript.substring(_liveTranscript.length > 100 ? _liveTranscript.length - 100 : 0)}"');
+    final tailStart =
+        _liveTranscript.length > 100 ? _liveTranscript.length - 100 : 0;
+    debugPrint(
+        '[Transcripción] Total: "${_liveTranscript.substring(tailStart)}"');
+  }
+
+  String _extractTranscriptAddition(String existing, String chunk) {
+    final normalizedExisting = existing.trimRight();
+    final overlap = _computeOverlap(normalizedExisting, chunk);
+    if (overlap >= chunk.length) {
+      return '';
+    }
+
+    var addition = chunk.substring(overlap);
+    if (addition.isEmpty) {
+      return '';
+    }
+
+    if (_needsTranscriptSpacer(existing, addition)) {
+      addition = ' $addition';
+    }
+
+    return addition;
+  }
+
+  bool _needsTranscriptSpacer(String existing, String addition) {
+    if (existing.isEmpty) return false;
+    if (RegExp(r'\s$').hasMatch(existing)) return false;
+    if (addition.isEmpty) return false;
+
+    final firstCodePoint = addition.runes.first;
+    if (_isWhitespaceCodePoint(firstCodePoint)) {
+      return false;
+    }
+
+    if (_attachesToPreviousToken(firstCodePoint)) {
+      return false;
+    }
+
+    return true;
+  }
+
+  bool _isWhitespaceCodePoint(int codePoint) =>
+      codePoint == 0x20 || // space
+      codePoint == 0x0A || // line feed
+      codePoint == 0x0D || // carriage return
+      codePoint == 0x09; // tab
+
+  bool _attachesToPreviousToken(int codePoint) {
+    switch (codePoint) {
+      case 0x2C: // ,
+      case 0x2E: // .
+      case 0x3A: // :
+      case 0x3B: // ;
+      case 0x3F: // ?
+      case 0x21: // !
+      case 0x29: // )
+      case 0x5D: // ]
+      case 0x7D: // }
+      case 0x25: // %
+      case 0xBB: // »
+        return true;
+      default:
+        return false;
+    }
   }
 
   int _computeOverlap(String existing, String chunk) {
@@ -901,8 +948,9 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   }
 
   Future<void> _startRecording({bool resetTranscript = false}) async {
-    debugPrint('[Dictado] Iniciando grabación, resetTranscript=$resetTranscript');
-    
+    debugPrint(
+        '[Dictado] Iniciando grabación, resetTranscript=$resetTranscript');
+
     if (resetTranscript) {
       setState(() {
         _liveTranscript = '';
@@ -940,7 +988,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         _isPaused = false;
         _isRecorderConnecting = false;
       });
-      
+
       debugPrint('[Dictado] Grabación iniciada exitosamente');
 
       if (resetTranscript) {
@@ -1140,176 +1188,170 @@ class _StoryEditorPageState extends State<StoryEditorPage>
             if (!_sheetStateUpdater.containsKey('dictation')) {
               _sheetStateUpdater['dictation'] = setSheetState;
             }
-            
-            return Padding(
-              padding: EdgeInsets.fromLTRB(
-                16,
-                16,
-                16,
-                24 + MediaQuery.of(sheetContext).viewInsets.bottom,
-              ),
-              child: SafeArea(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(
-                          _isRecorderConnecting
-                              ? Icons.hourglass_top
-                              : (_isRecording && !_isPaused
-                                  ? Icons.mic
-                                  : Icons.play_arrow),
-                          color: _isRecorderConnecting
-                              ? Theme.of(context).colorScheme.outline
-                              : (_isRecording && !_isPaused
-                                  ? Colors.red
-                                  : Theme.of(context).colorScheme.primary),
+
+            return PopScope(
+              canPop: false,
+              onPopInvoked: (didPop) async {
+                if (didPop) return;
+                final shouldClose = await _handleDictationDismiss(sheetContext);
+                if (shouldClose && sheetContext.mounted) {
+                  Navigator.pop(sheetContext, null);
+                }
+              },
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  16,
+                  16,
+                  16,
+                  24 + MediaQuery.of(sheetContext).viewInsets.bottom,
+                ),
+                child: SafeArea(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            _isRecorderConnecting
+                                ? Icons.hourglass_top
+                                : (_isRecording && !_isPaused
+                                    ? Icons.mic
+                                    : Icons.play_arrow),
+                            color: _isRecorderConnecting
+                                ? Theme.of(context).colorScheme.outline
+                                : (_isRecording && !_isPaused
+                                    ? Colors.red
+                                    : Theme.of(context).colorScheme.primary),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(_recorderStatusLabel),
+                          const Spacer(),
+                          IconButton(
+                            tooltip: _isRecorderConnecting
+                                ? 'Preparando...'
+                                : (_isPaused ? 'Reanudar' : 'Pausar'),
+                            onPressed: _isRecorderConnecting
+                                ? null
+                                : () async {
+                                    FocusScope.of(sheetContext)
+                                        .requestFocus(FocusNode());
+                                    await _togglePauseResume();
+                                    setSheetState(() {});
+                                  },
+                            icon: Icon(
+                              _isPaused || !_isRecording
+                                  ? Icons.play_arrow
+                                  : Icons.pause,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Container(
+                        constraints: const BoxConstraints(maxHeight: 260),
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .surfaceContainerHighest,
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        const SizedBox(width: 8),
-                        Text(_recorderStatusLabel),
-                        const Spacer(),
-                        IconButton(
-                          tooltip: _isRecorderConnecting
-                              ? 'Preparando...'
-                              : (_isPaused ? 'Reanudar' : 'Pausar'),
-                          onPressed: _isRecorderConnecting
-                              ? null
-                              : () async {
-                                  FocusScope.of(sheetContext)
-                                      .requestFocus(FocusNode());
-                                  await _togglePauseResume();
-                                  setSheetState(() {});
-                                },
-                          icon: Icon(
-                            _isPaused || !_isRecording
-                                ? Icons.play_arrow
-                                : Icons.pause,
+                        child: SingleChildScrollView(
+                          child: Text(
+                            _liveTranscript.isEmpty
+                                ? 'Empieza a hablar…'
+                                : _liveTranscript,
+                            style: Theme.of(context).textTheme.bodyLarge,
+                          ),
+                        ),
+                      ),
+                      if (_recorderLogs.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        Text(
+                          'Eventos recientes (logs)',
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                        ),
+                        const SizedBox(height: 6),
+                        Container(
+                          constraints: const BoxConstraints(maxHeight: 110),
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .outline
+                                  .withValues(alpha: 0.3),
+                            ),
+                          ),
+                          child: SingleChildScrollView(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: _recentRecorderLogs().map((log) {
+                                return Padding(
+                                  padding: const EdgeInsets.only(bottom: 4),
+                                  child: Text(
+                                    log,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.copyWith(
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onSurface
+                                              .withValues(alpha: 0.7),
+                                        ),
+                                  ),
+                                );
+                              }).toList(),
+                            ),
                           ),
                         ),
                       ],
-                    ),
-                    const SizedBox(height: 12),
-                    Container(
-                      constraints: const BoxConstraints(maxHeight: 260),
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color:
-                            Theme.of(context).colorScheme.surfaceContainerHighest,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: SingleChildScrollView(
-                        child: Text(
-                          _liveTranscript.isEmpty
-                              ? 'Empieza a hablar…'
-                              : _liveTranscript,
-                          style: Theme.of(context).textTheme.bodyLarge,
-                        ),
-                      ),
-                    ),
-                if (_recorderLogs.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Text(
-                    'Eventos recientes (logs)',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                  ),
-                  const SizedBox(height: 6),
-                  Container(
-                    constraints: const BoxConstraints(maxHeight: 110),
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color:
-                          Theme.of(context).colorScheme.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .outline
-                            .withValues(alpha: 0.3),
-                      ),
-                    ),
-                    child: SingleChildScrollView(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: _recentRecorderLogs().map((log) {
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 4),
-                            child: Text(
-                              log,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
-                                  ?.copyWith(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSurface
-                                        .withValues(alpha: 0.7),
-                                  ),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    ElevatedButton.icon(
-                      onPressed: _isRecorderConnecting ||
-                              _liveTranscript.trim().isEmpty
-                          ? null
-                          : () async {
-                              final text = _liveTranscript.trim();
-                              await _finalizeRecording();
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          ElevatedButton.icon(
+                            onPressed: _isRecorderConnecting ||
+                                    _liveTranscript.trim().isEmpty
+                                ? null
+                                : () async {
+                                    final text = _liveTranscript.trim();
+                                    await _finalizeRecording();
+                                    if (sheetContext.mounted) {
+                                      Navigator.pop(sheetContext, text);
+                                    }
+                                  },
+                            icon: const Icon(Icons.add),
+                            label: const Text('Agregar a la historia'),
+                          ),
+                          const SizedBox(width: 12),
+                          TextButton(
+                            onPressed: () async {
+                              final shouldClose =
+                                  await _handleDictationDismiss(sheetContext);
+                              if (!shouldClose) return;
                               if (sheetContext.mounted) {
-                                Navigator.pop(sheetContext, text);
+                                Navigator.pop(sheetContext, null);
                               }
                             },
-                      icon: const Icon(Icons.add),
-                      label: const Text('Agregar a la historia'),
-                    ),
-                    const SizedBox(width: 12),
-                    TextButton(
-                      onPressed: () async {
-                        if (_liveTranscript.trim().isNotEmpty) {
-                          final confirm = await showDialog<bool>(
-                            context: sheetContext,
-                            builder: (ctx) => AlertDialog(
-                              title: const Text('¿Descartar dictado?'),
-                              content: const Text(
-                                  'Si cierras ahora, se perderá el fragmento grabado.'),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(ctx, false),
-                                  child: const Text('Cancelar'),
-                                ),
-                                ElevatedButton(
-                                  onPressed: () => Navigator.pop(ctx, true),
-                                  child: const Text('Descartar'),
-                                ),
-                              ],
-                            ),
-                          );
-                          if (confirm != true) return;
-                        }
-                        await _finalizeRecording(discard: true);
-                        if (sheetContext.mounted) {
-                          Navigator.pop(sheetContext, null);
-                        }
-                      },
-                      child: const Text('Cerrar'),
-                    ),
-                  ],
+                            child: const Text('Cerrar'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-              ],
-            ),
-          ),
+              ),
             );
           },
         );
@@ -1334,6 +1376,40 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       _lastTranscriptChunk = null;
       _isPaused = false;
     });
+  }
+
+  Future<bool> _handleDictationDismiss(BuildContext sheetContext) async {
+    if (_liveTranscript.trim().isEmpty) {
+      await _finalizeRecording(discard: true);
+      return true;
+    }
+
+    final confirm = await showDialog<bool>(
+      context: sheetContext,
+      builder: (ctx) => AlertDialog(
+        title: const Text('¿Descartar dictado?'),
+        content: const Text(
+          'Si cierras ahora, se perderá el fragmento grabado.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Descartar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      await _finalizeRecording(discard: true);
+      return true;
+    }
+
+    return false;
   }
 
   Future<void> _showTranscriptPlacementDialog(String transcript) async {

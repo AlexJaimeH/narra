@@ -823,7 +823,7 @@ class VoiceRecorder {
     _safeSend({
       'type': 'session.update',
       'session': {
-        'modalities': ['text'],
+        'modalities': ['text', 'audio'],
         'instructions':
             'Devuelve solamente las palabras pronunciadas por la persona usuaria, exactamente como se escuchan y sin añadir saludos, explicaciones ni traducciones. Si no hay voz disponible responde con una cadena vacía.',
         'temperature': 0,

@@ -36,7 +36,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       if (!formData.get('model')) formData.append('model', model);
       if (!formData.get('language')) formData.append('language', language);
       if (prompt && !formData.get('prompt')) formData.append('prompt', prompt);
-      if (!formData.get('response_format')) formData.append('response_format', 'json');
+      if (!formData.get('response_format')) {
+        formData.append('response_format', 'verbose_json');
+      }
     } else {
       const arrayBuffer = await request.arrayBuffer();
       const type = request.headers.get('Content-Type') || 'audio/webm';
@@ -63,7 +65,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       formData.append('model', model);
       formData.append('language', language);
       if (prompt) formData.append('prompt', prompt);
-      formData.append('response_format', 'json');
+      formData.append('response_format', 'verbose_json');
     }
 
     const attempt = async (m: string) => {
@@ -72,7 +74,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         fd.append(k, v);
       }
       fd.set('model', m);
-      if (!fd.get('response_format')) fd.set('response_format', 'json');
+      if (!fd.get('response_format')) {
+        fd.set('response_format', 'verbose_json');
+      }
       const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${openaiApiKey}` },

@@ -66,5 +66,5 @@ Si no tienes una API key:
 La API Realtime de OpenAI tiene costos asociados. Verifica los precios actuales en:
 https://openai.com/api/pricing/
 
-El modelo `gpt-4o-realtime-preview-2024-10-01` es el que se usa para la transcripción en tiempo real.
+La app usa el modelo `gpt-4o-mini-transcribe` (con fallback automático a `whisper-1`) para transcribir audio del usuario.
 

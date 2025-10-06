@@ -24,7 +24,11 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     }
 
     const url = new URL(request.url);
-    const model = url.searchParams.get('model') || 'gpt-4o-mini-transcribe';
+    const allowedModels = new Set(['gpt-4o-mini-transcribe', 'whisper-1']);
+    const requestedModel = url.searchParams.get('model');
+    const model = requestedModel != null && allowedModels.has(requestedModel)
+      ? requestedModel
+      : 'gpt-4o-mini-transcribe';
     const language = url.searchParams.get('language') || 'es';
     const prompt = url.searchParams.get('prompt');
 

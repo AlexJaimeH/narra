@@ -9,14 +9,16 @@ interface Env {
   OPENAI_API_KEY: string;
 }
 
-const DEFAULT_MODEL = 'gpt-4o-mini-transcribe';
+const DEFAULT_MODEL = 'gpt-4o-transcribe-latest';
 const ALLOWED_TRANSCRIPTION_MODELS = new Set([
+  'gpt-4o-transcribe-latest',
+  'gpt-4o-transcribe',
   'gpt-4o-mini-transcribe',
   'whisper-1',
 ]);
 const DEFAULT_MODALITIES = ['text'];
 const DEFAULT_INSTRUCTIONS =
-  'Transcribe exactamente las palabras habladas por la persona en el idioma original (español, inglés, portugués, francés, italiano, alemán, etc.). No traduzcas, no agregues texto adicional y responde con una cadena vacía cuando no haya audio nuevo.';
+  'Transcribe literalmente el audio en el idioma original, sin traducir ni añadir contenido que no se haya pronunciado. Devuelve una cadena vacía cuando no haya audio nuevo.';
 
 export const onRequestOptions: PagesFunction<Env> = async () => {
   return new Response(null, { status: 204, headers: CORS_HEADERS });

@@ -24,11 +24,19 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     }
 
     const url = new URL(request.url);
-    const allowedModels = new Set(['gpt-4o-mini-transcribe', 'whisper-1']);
+    const allowedModels = new Set([
+      'gpt-4o-transcribe-latest',
+      'gpt-4o-transcribe',
+      'gpt-4o-mini-transcribe',
+      'whisper-1',
+    ]);
+    const defaultModel = 'gpt-4o-transcribe-latest';
     const requestedModel = url.searchParams.get('model');
-    const model = requestedModel != null && allowedModels.has(requestedModel)
-      ? requestedModel
-      : 'gpt-4o-mini-transcribe';
+    const model =
+      requestedModel != null && allowedModels.has(requestedModel)
+        ? requestedModel
+        : defaultModel;
+    const fallbackQuery = url.searchParams.get('fallback');
     const languageParam = url.searchParams.get('language');
     const language =
       languageParam != null && languageParam.trim().length > 0
@@ -80,6 +88,32 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       formData.append('response_format', 'verbose_json');
     }
 
+    const attemptOrder: string[] = [];
+    const pushModel = (candidate: string | null | undefined) => {
+      if (!candidate) return;
+      const trimmed = candidate.trim();
+      if (!allowedModels.has(trimmed)) return;
+      if (!attemptOrder.includes(trimmed)) {
+        attemptOrder.push(trimmed);
+      }
+    };
+
+    pushModel(model);
+
+    if (fallbackQuery) {
+      for (const part of fallbackQuery.split(',')) {
+        pushModel(part);
+      }
+    }
+
+    pushModel('gpt-4o-transcribe');
+    pushModel('gpt-4o-mini-transcribe');
+    pushModel('whisper-1');
+
+    if (attemptOrder.length === 0) {
+      attemptOrder.push(defaultModel);
+    }
+
     const attempt = async (m: string) => {
       const fd = new FormData();
       for (const [k, v] of (formData as any).entries()) {
@@ -97,13 +131,29 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       return res;
     };
 
-    let openaiRes = await attempt(model);
-    if (openaiRes.status >= 400) {
-      // Fallbacks for compatibility
-      openaiRes = await attempt('gpt-4o-mini-transcribe');
-      if (openaiRes.status >= 400) {
-        openaiRes = await attempt('whisper-1');
+    let openaiRes: Response | null = null;
+    for (const candidate of attemptOrder) {
+      openaiRes = await attempt(candidate);
+      if (openaiRes.status < 400) {
+        break;
       }
+    }
+
+    if (!openaiRes) {
+      return new Response('Transcription attempt failed: no model attempted', {
+        status: 502,
+      });
+    }
+
+    if (openaiRes.status >= 400) {
+      const failureBody = await openaiRes.text();
+      return new Response(
+        `OpenAI transcription failed (${openaiRes.status}): ${failureBody}`,
+        {
+          status: openaiRes.status,
+          headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+        },
+      );
     }
 
     const body = await openaiRes.text();

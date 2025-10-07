@@ -9,11 +9,11 @@ interface Env {
   OPENAI_API_KEY: string;
 }
 
-const DEFAULT_MODEL = 'gpt-4o-transcribe-latest';
+const DEFAULT_MODEL = 'gpt-4o-mini-transcribe';
 const ALLOWED_TRANSCRIPTION_MODELS = new Set([
+  'gpt-4o-mini-transcribe',
   'gpt-4o-transcribe-latest',
   'gpt-4o-transcribe',
-  'gpt-4o-mini-transcribe',
   'whisper-1',
 ]);
 const DEFAULT_MODALITIES = ['text'];

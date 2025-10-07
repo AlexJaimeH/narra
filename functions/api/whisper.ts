@@ -25,12 +25,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
     const url = new URL(request.url);
     const allowedModels = new Set([
+      'gpt-4o-mini-transcribe',
       'gpt-4o-transcribe-latest',
       'gpt-4o-transcribe',
-      'gpt-4o-mini-transcribe',
       'whisper-1',
     ]);
-    const defaultModel = 'gpt-4o-transcribe-latest';
+    const defaultModel = 'gpt-4o-mini-transcribe';
     const requestedModel = url.searchParams.get('model');
     const model =
       requestedModel != null && allowedModels.has(requestedModel)
@@ -106,6 +106,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       }
     }
 
+    pushModel('gpt-4o-transcribe-latest');
     pushModel('gpt-4o-transcribe');
     pushModel('gpt-4o-mini-transcribe');
     pushModel('whisper-1');

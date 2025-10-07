@@ -26,9 +26,21 @@ class _TranscriptSegment {
   final double end;
 }
 
+class _PendingAudioSlice {
+  const _PendingAudioSlice({
+    required this.bytes,
+    required this.startChunkIndex,
+    required this.endChunkIndex,
+  });
+
+  final Uint8List bytes;
+  final int startChunkIndex;
+  final int endChunkIndex;
+}
+
 class VoiceRecorder {
-  static const _primaryModel = 'gpt-4o-transcribe-latest';
-  static const _fallbackModel = 'gpt-4o-mini-transcribe';
+  static const _primaryModel = 'gpt-4o-mini-transcribe';
+  static const _fallbackModel = 'gpt-4o-transcribe-latest';
   static const _transcriptionDebounce = Duration(milliseconds: 180);
   static const _preferredTimeslices = <int>[320, 480, 640, 1000];
   static const _chunkOverlapCount = 1;
@@ -68,7 +80,7 @@ class VoiceRecorder {
   int _transcribedChunkCount = 0;
   Uint8List? _cachedRecentAudio;
   int _cachedRecentStartIndex = 0;
-  int _cachedRecentChunkCount = 0;
+  int _cachedRecentEndIndex = 0;
 
   Completer<void>? _stopCompleter;
 
@@ -257,8 +269,8 @@ class VoiceRecorder {
     _orderedSegments.clear();
     _transcribedChunkCount = 0;
     _cachedRecentAudio = null;
-    _cachedRecentChunkCount = 0;
     _cachedRecentStartIndex = 0;
+    _cachedRecentEndIndex = 0;
     _hasPendingTranscription = false;
     _pendingForceFull = false;
     _transcriptionTimer?.cancel();
@@ -399,15 +411,15 @@ class VoiceRecorder {
   }
 
   Future<void> _transcribeLatest({bool forceFull = false}) async {
-    final audioBytes = _audioBytesForTranscription(forceFull: forceFull);
-    if (audioBytes.isEmpty) {
+    final slice = _audioSliceForTranscription(forceFull: forceFull);
+    if (slice == null || slice.bytes.isEmpty) {
       return;
     }
 
     final prompt = _buildPrompt();
     final uri = Uri.parse('/api/whisper').replace(queryParameters: {
       'model': _primaryModel,
-      'fallback': _fallbackModel,
+      'fallback': '$_fallbackModel,whisper-1',
       if (prompt.isNotEmpty) 'prompt': prompt,
     });
 
@@ -417,13 +429,13 @@ class VoiceRecorder {
 
     request.files.add(http.MultipartFile.fromBytes(
       'file',
-      audioBytes,
+      slice.bytes,
       filename: 'audio.webm',
       contentType: MediaType('audio', 'webm'),
     ));
 
     _log(
-      'Enviando audio (${audioBytes.length} bytes) para transcribir...',
+      'Enviando audio (${slice.bytes.length} bytes) para transcribir...',
       level: 'debug',
     );
 
@@ -453,16 +465,19 @@ class VoiceRecorder {
       return;
     }
 
-    final processedChunks = _audioChunks.length;
     final updated = _applyTranscriptionPayload(payload, forceFull: forceFull);
     if (updated) {
       _emitTranscript(_transcriptBuffer);
     }
 
-    _transcribedChunkCount = processedChunks;
+    _transcribedChunkCount = slice.endChunkIndex;
+    if (_audioChunks.length > _transcribedChunkCount) {
+      _hasPendingTranscription = true;
+    }
+
     _cachedRecentAudio = null;
-    _cachedRecentChunkCount = 0;
     _cachedRecentStartIndex = 0;
+    _cachedRecentEndIndex = 0;
   }
 
   bool _applyTranscriptionPayload(
@@ -606,28 +621,33 @@ class VoiceRecorder {
     return buffer.toString();
   }
 
-  Uint8List _audioBytesForTranscription({bool forceFull = false}) {
+  _PendingAudioSlice? _audioSliceForTranscription({bool forceFull = false}) {
     if (_audioChunks.isEmpty) {
-      return Uint8List(0);
+      return null;
     }
 
-    if (!forceFull && _audioChunks.length <= _transcribedChunkCount) {
-      return Uint8List(0);
+    final currentEndIndex = _audioChunks.length;
+    if (!forceFull && currentEndIndex <= _transcribedChunkCount) {
+      return null;
     }
 
     final startIndex = forceFull
         ? 0
         : math.max(0, _transcribedChunkCount - _chunkOverlapCount);
 
-    if (_cachedRecentAudio != null &&
-        !forceFull &&
+    if (!forceFull &&
+        _cachedRecentAudio != null &&
         _cachedRecentStartIndex == startIndex &&
-        _cachedRecentChunkCount == _audioChunks.length) {
-      return _cachedRecentAudio!;
+        _cachedRecentEndIndex == currentEndIndex) {
+      return _PendingAudioSlice(
+        bytes: _cachedRecentAudio!,
+        startChunkIndex: startIndex,
+        endChunkIndex: currentEndIndex,
+      );
     }
 
     final builder = BytesBuilder(copy: false);
-    for (var i = startIndex; i < _audioChunks.length; i++) {
+    for (var i = startIndex; i < currentEndIndex; i++) {
       builder.add(_audioChunks[i]);
     }
 
@@ -635,10 +655,14 @@ class VoiceRecorder {
     if (!forceFull) {
       _cachedRecentAudio = bytes;
       _cachedRecentStartIndex = startIndex;
-      _cachedRecentChunkCount = _audioChunks.length;
+      _cachedRecentEndIndex = currentEndIndex;
     }
 
-    return bytes;
+    return _PendingAudioSlice(
+      bytes: bytes,
+      startChunkIndex: startIndex,
+      endChunkIndex: currentEndIndex,
+    );
   }
 
   List<_TranscriptSegment> _segmentsFromPayload(Map<String, dynamic> payload) {
@@ -778,8 +802,8 @@ class VoiceRecorder {
     _lastEmittedTranscript = null;
     _transcribedChunkCount = 0;
     _cachedRecentAudio = null;
-    _cachedRecentChunkCount = 0;
     _cachedRecentStartIndex = 0;
+    _cachedRecentEndIndex = 0;
   }
 
   Future<Uint8List?> _blobToBytes(html.Blob blob) async {

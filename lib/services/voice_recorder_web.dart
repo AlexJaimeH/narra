@@ -43,8 +43,6 @@ class VoiceRecorder {
   static const _fallbackModel = 'gpt-4o-transcribe-latest';
   static const _transcriptionDebounce = Duration(milliseconds: 180);
   static const _preferredTimeslices = <int>[320, 480, 640, 1000];
-  static const _maxChunksPerUpload = 12;
-  static const _contextChunks = 3;
 
   OnText? _onText;
   OnRecorderLog? _onLog;
@@ -260,10 +258,6 @@ class VoiceRecorder {
     _audioChunks.clear();
     _cachedCombinedAudio = null;
     _cachedCombinedAudioChunkCount = 0;
-    _cachedRecentAudio = null;
-    _cachedRecentStartIndex = 0;
-    _cachedRecentEndIndex = 0;
-    _cachedRecentIncludesHeader = false;
     _transcriptBuffer = '';
     _lastEmittedTranscript = null;
     _segmentTexts.clear();
@@ -484,6 +478,11 @@ class VoiceRecorder {
       _hasPendingTranscription = true;
     }
 
+    _transcribedChunkCount = slice.endChunkIndex;
+    if (_audioChunks.length > _transcribedChunkCount) {
+      _hasPendingTranscription = true;
+    }
+
     _cachedRecentAudio = null;
     _cachedRecentStartIndex = 0;
     _cachedRecentEndIndex = 0;
@@ -605,26 +604,10 @@ class VoiceRecorder {
       return null;
     }
 
-    if (forceFull || _transcribedChunkCount == 0) {
-      final bytes = _combinedAudioBytes();
-      return _PendingAudioSlice(
-        bytes: bytes,
-        startChunkIndex: 0,
-        endChunkIndex: currentEndIndex,
-      );
-    }
-
-    final context = math.min(_contextChunks, _transcribedChunkCount);
-    var startChunkIndex = math.max(0, _transcribedChunkCount - context);
-
-    if (currentEndIndex - startChunkIndex > _maxChunksPerUpload) {
-      startChunkIndex = math.max(0, currentEndIndex - _maxChunksPerUpload);
-    }
-
-    final bytes = _combinedAudioRange(startChunkIndex, currentEndIndex);
+    final bytes = _combinedAudioBytes();
     return _PendingAudioSlice(
       bytes: bytes,
-      startChunkIndex: startChunkIndex,
+      startChunkIndex: 0,
       endChunkIndex: currentEndIndex,
     );
   }
@@ -654,6 +637,24 @@ class VoiceRecorder {
 
       final rawId = entry['id'];
       final id = rawId == null ? 'segment-$index' : rawId.toString();
+      final noSpeechProb = _asNullableDouble(entry['no_speech_prob']);
+      if (noSpeechProb != null && noSpeechProb >= 0.8) {
+        _log(
+          'Segmento $id descartado por no_speech_prob=$noSpeechProb',
+          level: 'debug',
+        );
+        continue;
+      }
+
+      final avgLogProb = _asNullableDouble(entry['avg_logprob']);
+      if (avgLogProb != null && avgLogProb < -1.2) {
+        _log(
+          'Segmento $id descartado por avg_logprob=$avgLogProb',
+          level: 'debug',
+        );
+        continue;
+      }
+
       final start = _parseTimestamp(entry['start'], index.toDouble());
       final end = _parseTimestamp(entry['end'], start);
 
@@ -755,6 +756,19 @@ class VoiceRecorder {
     return fallback;
   }
 
+  double? _asNullableDouble(dynamic value) {
+    if (value is num) {
+      return value.toDouble();
+    }
+    if (value is String) {
+      final parsed = double.tryParse(value);
+      if (parsed != null) {
+        return parsed;
+      }
+    }
+    return null;
+  }
+
   Uint8List _combinedAudioBytes() {
     if (_audioChunks.isEmpty) {
       return Uint8List(0);
@@ -847,10 +861,6 @@ class VoiceRecorder {
     _audioChunks.clear();
     _cachedCombinedAudio = null;
     _cachedCombinedAudioChunkCount = 0;
-    _cachedRecentAudio = null;
-    _cachedRecentStartIndex = 0;
-    _cachedRecentEndIndex = 0;
-    _cachedRecentIncludesHeader = false;
     _segmentTexts.clear();
     _lastFullTranscript = null;
     _transcriptBuffer = '';

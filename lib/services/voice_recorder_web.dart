@@ -41,8 +41,8 @@ class _PendingAudioSlice {
 class VoiceRecorder {
   static const _primaryModel = 'gpt-4o-mini-transcribe';
   static const _fallbackModel = 'gpt-4o-transcribe-latest';
-  static const _transcriptionDebounce = Duration(milliseconds: 180);
-  static const _preferredTimeslices = <int>[320, 480, 640, 1000];
+  static const _transcriptionDebounce = Duration(milliseconds: 120);
+  static const _preferredTimeslices = <int>[240, 360, 520, 800];
 
   OnText? _onText;
   OnRecorderLog? _onLog;
@@ -98,57 +98,11 @@ class VoiceRecorder {
         },
       });
 
-      _inputStream = stream;
-      final tracks = stream.getAudioTracks();
-      if (tracks.isEmpty) {
-        _log('No se encontró un micrófono activo', level: 'error');
-        await _disposeInternal();
-        throw Exception('Micrófono no disponible');
+      final error = await _initializeRecorderFromStream(stream);
+      if (error != null) {
+        throw Exception(error);
       }
 
-      _audioTrack = tracks.first;
-      debugPrint('[VoiceRecorder] Micrófono: ${_audioTrack?.label}');
-
-      _mediaRecorder = _createMediaRecorder(stream);
-      if (_mediaRecorder == null) {
-        await _disposeInternal();
-        throw Exception('MediaRecorder no soportado en este navegador');
-      }
-
-      _attachRecorderListeners(_mediaRecorder!);
-
-      var started = false;
-      for (final slice in _preferredTimeslices) {
-        try {
-          _mediaRecorder!.start(slice);
-          started = true;
-          break;
-        } catch (error) {
-          _log(
-            'MediaRecorder.start($slice) falló, probando siguiente valor',
-            level: 'warning',
-            error: error,
-          );
-        }
-      }
-
-      if (!started) {
-        try {
-          _mediaRecorder!.start();
-          started = true;
-        } catch (error) {
-          _log('MediaRecorder.start sin timeslice falló',
-              level: 'error', error: error);
-        }
-      }
-
-      if (!started) {
-        await _disposeInternal();
-        throw Exception('No se pudo iniciar la grabación: MediaRecorder falló');
-      }
-
-      _isRecording = true;
-      _isPaused = false;
       _log('Grabación iniciada');
     } catch (error) {
       _log('No se pudo iniciar la grabación', level: 'error', error: error);
@@ -165,46 +119,66 @@ class VoiceRecorder {
     _log('Pausando grabación...');
     _isPaused = true;
 
+    final completer = Completer<void>();
+    _stopCompleter = completer;
+
     try {
-      _audioTrack?.enabled = false;
+      _mediaRecorder?.stop();
     } catch (error) {
-      _log('No se pudo deshabilitar la pista de audio',
+      _log('MediaRecorder.stop al pausar falló',
           level: 'warning', error: error);
     }
 
     try {
-      _mediaRecorder?.pause();
-    } catch (error) {
-      _log('MediaRecorder.pause falló', level: 'warning', error: error);
+      await completer.future.timeout(const Duration(seconds: 3));
+    } catch (_) {
+      // ignore timeout: algunos navegadores tardan en cerrar el stream
+      // y aún así entregan los últimos datos correctamente.
     }
 
+    _stopCompleter = null;
+
+    _releaseCurrentStream();
+    _mediaRecorder = null;
+    _isRecording = false;
+
+    _markPendingTranscription();
     return true;
   }
 
   Future<bool> resume() async {
-    if (!_isRecording || !_isPaused) {
+    if (!_isPaused) {
       return _isRecording;
     }
 
     _log('Reanudando grabación...');
-    _isPaused = false;
 
-    try {
-      _audioTrack?.enabled = true;
-    } catch (error) {
-      _log('No se pudo habilitar la pista de audio',
-          level: 'warning', error: error);
-    }
-
-    try {
-      _mediaRecorder?.resume();
-    } catch (error) {
-      _log('MediaRecorder.resume falló', level: 'warning', error: error);
+    final devices = html.window.navigator.mediaDevices;
+    if (devices == null) {
+      _log('El navegador no soporta mediaDevices', level: 'error');
       return false;
     }
 
-    _markPendingTranscription();
-    return true;
+    try {
+      final stream = await devices.getUserMedia({
+        'audio': {
+          'echoCancellation': true,
+          'noiseSuppression': true,
+        },
+      });
+
+      final error = await _initializeRecorderFromStream(stream);
+      if (error != null) {
+        _log('No se pudo reanudar la grabación: $error', level: 'error');
+        return false;
+      }
+
+      _log('Grabación reanudada');
+      return true;
+    } catch (error) {
+      _log('No se pudo reanudar la grabación', level: 'error', error: error);
+      return false;
+    }
   }
 
   Future<Uint8List?> stop() async {
@@ -291,6 +265,94 @@ class VoiceRecorder {
     } catch (_) {
       return null;
     }
+  }
+
+  Future<String?> _initializeRecorderFromStream(html.MediaStream stream) async {
+    _inputStream = stream;
+
+    final tracks = stream.getAudioTracks();
+    if (tracks.isEmpty) {
+      _log('No se encontró un micrófono activo', level: 'error');
+      _releaseStream(stream);
+      _inputStream = null;
+      return 'Micrófono no disponible';
+    }
+
+    _audioTrack = tracks.first;
+    debugPrint('[VoiceRecorder] Micrófono: ${_audioTrack?.label}');
+
+    final recorder = _createMediaRecorder(stream);
+    if (recorder == null) {
+      _log('MediaRecorder no soportado en este navegador', level: 'error');
+      _releaseStream(stream);
+      _audioTrack = null;
+      _inputStream = null;
+      return 'MediaRecorder no soportado en este navegador';
+    }
+
+    _mediaRecorder = recorder;
+    _attachRecorderListeners(recorder);
+
+    final started = _startRecorder(recorder);
+    if (!started) {
+      _mediaRecorder = null;
+      _releaseStream(stream);
+      _audioTrack = null;
+      _inputStream = null;
+      return 'No se pudo iniciar la grabación: MediaRecorder falló';
+    }
+
+    _isRecording = true;
+    _isPaused = false;
+    return null;
+  }
+
+  bool _startRecorder(html.MediaRecorder recorder) {
+    var started = false;
+    for (final slice in _preferredTimeslices) {
+      try {
+        recorder.start(slice);
+        started = true;
+        break;
+      } catch (error) {
+        _log(
+          'MediaRecorder.start($slice) falló, probando siguiente valor',
+          level: 'warning',
+          error: error,
+        );
+      }
+    }
+
+    if (!started) {
+      try {
+        recorder.start();
+        started = true;
+      } catch (error) {
+        _log('MediaRecorder.start sin timeslice falló',
+            level: 'error', error: error);
+      }
+    }
+
+    return started;
+  }
+
+  void _releaseStream(html.MediaStream stream) {
+    try {
+      for (final track in stream.getTracks()) {
+        track.stop();
+      }
+    } catch (_) {
+      // ignore
+    }
+  }
+
+  void _releaseCurrentStream() {
+    final stream = _inputStream;
+    if (stream != null) {
+      _releaseStream(stream);
+    }
+    _inputStream = null;
+    _audioTrack = null;
   }
 
   void _attachRecorderListeners(html.MediaRecorder recorder) {
@@ -472,10 +534,6 @@ class VoiceRecorder {
     if (_audioChunks.length > _transcribedChunkCount) {
       _hasPendingTranscription = true;
     }
-
-    _cachedRecentAudio = null;
-    _cachedRecentStartIndex = 0;
-    _cachedRecentEndIndex = 0;
   }
 
   bool _applyTranscriptionPayload(
@@ -532,15 +590,56 @@ class VoiceRecorder {
     return _appendFullTranscript(transcriptCandidate, forceFull: forceFull);
   }
 
-  void _emitTranscript(String transcript) {
-    if (_lastEmittedTranscript == transcript) {
+  void _appendToTranscript(String addition) {
+    final cleaned = addition.trim();
+    if (cleaned.isEmpty) {
       return;
     }
 
-    _lastEmittedTranscript = transcript;
-    _onText?.call(transcript);
-    debugPrint(
-        '[VoiceRecorder] Emitiendo transcripción (${transcript.length} chars)');
+    if (_transcriptBuffer.isEmpty) {
+      _transcriptBuffer = cleaned;
+      _log('Transcript inicial establecido: "$_transcriptBuffer"',
+          level: 'debug');
+      return;
+    }
+
+    final needsSpace = _needsSpaceBetween(_transcriptBuffer, cleaned);
+    final appendedText = needsSpace ? ' $cleaned' : cleaned;
+    _transcriptBuffer += appendedText;
+    _log('Transcript actualizado con "$appendedText" => "$_transcriptBuffer"',
+        level: 'debug');
+  }
+
+  bool _needsSpaceBetween(String existing, String addition) {
+    if (existing.isEmpty) {
+      return false;
+    }
+
+    final lastChar = existing.codeUnitAt(existing.length - 1);
+    final firstChar = addition.codeUnitAt(0);
+
+    const whitespace = <int>[32, 9, 10, 13];
+    if (whitespace.contains(lastChar)) {
+      return false;
+    }
+
+    const punctuation = <int>[44, 46, 33, 63, 58, 59];
+    if (punctuation.contains(firstChar)) {
+      return false;
+    }
+
+    return true;
+  }
+
+  int _longestCommonPrefixLength(String a, String b) {
+    final minLength = a.length < b.length ? a.length : b.length;
+    var index = 0;
+
+    while (index < minLength && a.codeUnitAt(index) == b.codeUnitAt(index)) {
+      index++;
+    }
+
+    return index;
   }
 
   _PendingAudioSlice? _audioSliceForTranscription({bool forceFull = false}) {
@@ -724,6 +823,8 @@ class VoiceRecorder {
     if (whitespace.contains(lastChar)) {
       return false;
     }
+    return fallback;
+  }
 
     const punctuation = <int>[44, 46, 33, 63, 58, 59];
     if (punctuation.contains(firstChar)) {

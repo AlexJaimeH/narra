@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:math' as math;
 import 'dart:typed_data' as typed;
 
 import 'package:flutter/material.dart';
@@ -28,6 +30,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _contentController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  final ScrollController _transcriptScrollController = ScrollController();
 
   bool _isRecording = false;
   VoiceRecorder? _recorder;
@@ -106,6 +109,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     _titleController.dispose();
     _contentController.dispose();
     _scrollController.dispose();
+    _transcriptScrollController.dispose();
     super.dispose();
   }
 
@@ -840,6 +844,30 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     _contentController.selection = TextSelection.collapsed(offset: caret);
   }
 
+  void _scrollTranscriptToBottom() {
+    if (!_transcriptScrollController.hasClients) {
+      return;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_transcriptScrollController.hasClients) {
+        return;
+      }
+
+      final position = _transcriptScrollController.position;
+      final target = position.maxScrollExtent;
+      if (position.pixels >= target) {
+        return;
+      }
+
+      _transcriptScrollController.animateTo(
+        target,
+        duration: const Duration(milliseconds: 160),
+        curve: Curves.easeOut,
+      );
+    });
+  }
+
   void _handleTranscriptChunk(String text) {
     final sanitized = text;
 
@@ -857,7 +885,11 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     });
 
     final sheetUpdater = _sheetStateUpdater['dictation'];
-    sheetUpdater?.call(() {});
+    sheetUpdater?.call(() {
+      _scrollTranscriptToBottom();
+    });
+
+    _scrollTranscriptToBottom();
 
     if (sanitized.isEmpty) {
       debugPrint('[Transcripción] Transcript vacío');
@@ -1108,6 +1140,13 @@ class _StoryEditorPageState extends State<StoryEditorPage>
               _sheetStateUpdater['dictation'] = setSheetState;
             }
 
+            final maxSheetHeight =
+                MediaQuery.of(builderContext).size.height * 0.7;
+            final transcriptMaxHeight = math.min(
+              math.max(180.0, maxSheetHeight - 160),
+              maxSheetHeight,
+            );
+
             return PopScope(
               canPop: false,
               onPopInvoked: (didPop) async {
@@ -1125,149 +1164,119 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                   24 + MediaQuery.of(sheetContext).viewInsets.bottom,
                 ),
                 child: SafeArea(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(
-                            _isRecorderConnecting
-                                ? Icons.hourglass_top
-                                : (_isRecording && !_isPaused
-                                    ? Icons.mic
-                                    : Icons.play_arrow),
-                            color: _isRecorderConnecting
-                                ? Theme.of(context).colorScheme.outline
-                                : (_isRecording && !_isPaused
-                                    ? Colors.red
-                                    : Theme.of(context).colorScheme.primary),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(_recorderStatusLabel),
-                          const Spacer(),
-                          IconButton(
-                            tooltip: _isRecorderConnecting
-                                ? 'Preparando...'
-                                : (_isPaused ? 'Reanudar' : 'Pausar'),
-                            onPressed: _isRecorderConnecting
-                                ? null
-                                : () async {
-                                    FocusScope.of(sheetContext)
-                                        .requestFocus(FocusNode());
-                                    await _togglePauseResume();
-                                    setSheetState(() {});
-                                  },
-                            icon: Icon(
-                              _isPaused || !_isRecording
-                                  ? Icons.play_arrow
-                                  : Icons.pause,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxHeight: maxSheetHeight),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              _isRecorderConnecting
+                                  ? Icons.hourglass_top
+                                  : (_isRecording && !_isPaused
+                                      ? Icons.mic
+                                      : Icons.play_arrow),
+                              color: _isRecorderConnecting
+                                  ? Theme.of(context).colorScheme.outline
+                                  : (_isRecording && !_isPaused
+                                      ? Colors.red
+                                      : Theme.of(context).colorScheme.primary),
                             ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      Container(
-                        constraints: const BoxConstraints(maxHeight: 260),
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .surfaceContainerHighest,
-                          borderRadius: BorderRadius.circular(12),
+                            const SizedBox(width: 8),
+                            Text(_recorderStatusLabel),
+                            const Spacer(),
+                            IconButton(
+                              tooltip: _isRecorderConnecting
+                                  ? 'Preparando...'
+                                  : (_isPaused ? 'Reanudar' : 'Pausar'),
+                              onPressed: _isRecorderConnecting
+                                  ? null
+                                  : () async {
+                                      FocusScope.of(sheetContext)
+                                          .requestFocus(FocusNode());
+                                      await _togglePauseResume();
+                                      setSheetState(() {});
+                                    },
+                              icon: Icon(
+                                _isPaused || !_isRecording
+                                    ? Icons.play_arrow
+                                    : Icons.pause,
+                              ),
+                            ),
+                          ],
                         ),
-                        child: SingleChildScrollView(
-                          child: Text(
-                            _liveTranscript.isEmpty
-                                ? 'Empieza a hablar…'
-                                : _liveTranscript,
-                            style: Theme.of(context).textTheme.bodyLarge,
-                          ),
-                        ),
-                      ),
-                      if (_recorderLogs.isNotEmpty) ...[
                         const SizedBox(height: 12),
-                        Text(
-                          'Eventos recientes (logs)',
-                          style:
-                              Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                        ),
-                        const SizedBox(height: 6),
-                        Container(
-                          constraints: const BoxConstraints(maxHeight: 110),
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .surfaceContainerHighest,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
+                        ConstrainedBox(
+                          constraints:
+                              BoxConstraints(maxHeight: transcriptMaxHeight),
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
                               color: Theme.of(context)
                                   .colorScheme
-                                  .outline
-                                  .withValues(alpha: 0.3),
+                                  .surfaceContainerHighest,
+                              borderRadius: BorderRadius.circular(12),
                             ),
-                          ),
-                          child: SingleChildScrollView(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: _recentRecorderLogs().map((log) {
-                                return Padding(
-                                  padding: const EdgeInsets.only(bottom: 4),
-                                  child: Text(
-                                    log,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodySmall
-                                        ?.copyWith(
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .onSurface
-                                              .withValues(alpha: 0.7),
-                                        ),
-                                  ),
-                                );
-                              }).toList(),
+                            child: Scrollbar(
+                              controller: _transcriptScrollController,
+                              thumbVisibility: true,
+                              child: SingleChildScrollView(
+                                controller: _transcriptScrollController,
+                                child: Text(
+                                  _liveTranscript.isEmpty
+                                      ? 'Empieza a hablar…'
+                                      : _liveTranscript,
+                                  style: Theme.of(context).textTheme.bodyLarge,
+                                ),
+                              ),
                             ),
                           ),
                         ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: _isRecorderConnecting ||
+                                        _liveTranscript.trim().isEmpty
+                                    ? null
+                                    : () {
+                                        final text = _liveTranscript.trim();
+                                        unawaited(
+                                          _finalizeRecording().catchError(
+                                            (error, stackTrace) {
+                                              debugPrint(
+                                                  '[Dictado] Error al finalizar: $error');
+                                            },
+                                          ),
+                                        );
+                                        if (sheetContext.mounted) {
+                                          Navigator.pop(sheetContext, text);
+                                        }
+                                      },
+                                icon: const Icon(Icons.add),
+                                label: const Text('Agregar a la historia'),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            TextButton(
+                              onPressed: () async {
+                                final shouldClose =
+                                    await _handleDictationDismiss(sheetContext);
+                                if (!shouldClose) return;
+                                if (sheetContext.mounted) {
+                                  Navigator.pop(sheetContext, null);
+                                }
+                              },
+                              child: const Text('Cerrar'),
+                            ),
+                          ],
+                        ),
                       ],
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          ElevatedButton.icon(
-                            onPressed: _isRecorderConnecting ||
-                                    _liveTranscript.trim().isEmpty
-                                ? null
-                                : () async {
-                                    final text = _liveTranscript.trim();
-                                    await _finalizeRecording();
-                                    if (sheetContext.mounted) {
-                                      Navigator.pop(sheetContext, text);
-                                    }
-                                  },
-                            icon: const Icon(Icons.add),
-                            label: const Text('Agregar a la historia'),
-                          ),
-                          const SizedBox(width: 12),
-                          TextButton(
-                            onPressed: () async {
-                              final shouldClose =
-                                  await _handleDictationDismiss(sheetContext);
-                              if (!shouldClose) return;
-                              if (sheetContext.mounted) {
-                                Navigator.pop(sheetContext, null);
-                              }
-                            },
-                            child: const Text('Cerrar'),
-                          ),
-                        ],
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               ),
@@ -1298,7 +1307,11 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
   Future<bool> _handleDictationDismiss(BuildContext sheetContext) async {
     if (_liveTranscript.trim().isEmpty) {
-      await _finalizeRecording(discard: true);
+      unawaited(
+        _finalizeRecording(discard: true).catchError((error, stackTrace) {
+          debugPrint('[Dictado] Error al descartar: $error');
+        }),
+      );
       return true;
     }
 
@@ -1323,7 +1336,11 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     );
 
     if (confirm == true) {
-      await _finalizeRecording(discard: true);
+      unawaited(
+        _finalizeRecording(discard: true).catchError((error, stackTrace) {
+          debugPrint('[Dictado] Error al descartar: $error');
+        }),
+      );
       return true;
     }
 

@@ -12,19 +12,30 @@ import 'package:http_parser/http_parser.dart';
 typedef OnText = void Function(String text);
 typedef OnRecorderLog = void Function(String level, String message);
 
-class _TokenOverlap {
-  const _TokenOverlap(this.size, this.replaceCount);
+class _TranscriptSegment {
+  const _TranscriptSegment({
+    required this.id,
+    required this.text,
+    required this.start,
+    required this.end,
+  });
 
-  final int size;
-  final int replaceCount;
+  final String id;
+  final String text;
+  final double start;
+  final double end;
 }
 
 class VoiceRecorder {
   static const _primaryModel = 'gpt-4o-transcribe-latest';
   static const _fallbackModel = 'gpt-4o-mini-transcribe';
-  static const _transcriptionDebounce = Duration(milliseconds: 220);
+  static const _transcriptionDebounce = Duration(milliseconds: 180);
   static const _preferredTimeslices = <int>[320, 480, 640, 1000];
   static const _chunkOverlapCount = 1;
+  static const _transcriptionGuidance =
+      'You are a streaming speech recognizer. Transcribe the spoken audio verbatim in '
+      "the speaker's language. Do not translate, summarize, or invent words. If there is "
+      'silence or uncertain audio, return an empty string instead of a guess.';
 
   OnText? _onText;
   OnRecorderLog? _onLog;
@@ -47,9 +58,12 @@ class VoiceRecorder {
   Timer? _transcriptionTimer;
   Future<void>? _ongoingTranscription;
 
-  final List<String> _transcriptTokens = <String>[];
   String _transcriptBuffer = '';
   String? _lastEmittedTranscript;
+
+  final Map<String, _TranscriptSegment> _segmentsById =
+      <String, _TranscriptSegment>{};
+  final List<_TranscriptSegment> _orderedSegments = <_TranscriptSegment>[];
 
   int _transcribedChunkCount = 0;
   Uint8List? _cachedRecentAudio;
@@ -237,9 +251,10 @@ class VoiceRecorder {
     _audioChunks.clear();
     _cachedCombinedAudio = null;
     _cachedCombinedAudioChunkCount = 0;
-    _transcriptTokens.clear();
     _transcriptBuffer = '';
     _lastEmittedTranscript = null;
+    _segmentsById.clear();
+    _orderedSegments.clear();
     _transcribedChunkCount = 0;
     _cachedRecentAudio = null;
     _cachedRecentChunkCount = 0;
@@ -439,7 +454,7 @@ class VoiceRecorder {
     }
 
     final processedChunks = _audioChunks.length;
-    final updated = _applyTranscriptionPayload(payload);
+    final updated = _applyTranscriptionPayload(payload, forceFull: forceFull);
     if (updated) {
       _emitTranscript(_transcriptBuffer);
     }
@@ -450,56 +465,116 @@ class VoiceRecorder {
     _cachedRecentStartIndex = 0;
   }
 
-  bool _applyTranscriptionPayload(Map<String, dynamic> payload) {
-    final candidate = _candidateFromPayload(payload);
-    if (candidate == null) {
-      return false;
-    }
+  bool _applyTranscriptionPayload(
+    Map<String, dynamic> payload, {
+    required bool forceFull,
+  }) {
+    final incomingSegments = _segmentsFromPayload(payload);
 
-    final tokens = _tokenize(candidate);
-    if (tokens.isEmpty) {
-      return false;
-    }
-
-    final overlap = _tokensOverlap(_transcriptTokens, tokens);
-    final overlapSize = overlap.size;
-    final replaceCount = math.min(overlap.replaceCount, overlapSize);
-
-    if (overlapSize >= tokens.length && replaceCount == 0) {
-      return false;
-    }
-
-    if (replaceCount > 0 && _transcriptTokens.isNotEmpty) {
-      final removeCount = math.min(replaceCount, _transcriptTokens.length);
-      _transcriptTokens.removeRange(
-        _transcriptTokens.length - removeCount,
-        _transcriptTokens.length,
+    if (incomingSegments.isEmpty) {
+      final fallbackText = _sanitizeTranscript(
+        (payload['text'] as String?) ?? '',
       );
-    }
-
-    final appendStart = math.max(0, overlapSize - replaceCount);
-    if (appendStart > tokens.length) {
-      return false;
-    }
-
-    final tokensToAppend = tokens.sublist(appendStart);
-    if (tokensToAppend.isEmpty) {
-      if (replaceCount > 0) {
-        final replacementStart = math.max(0, overlapSize - replaceCount);
-        final replacementTokens =
-            tokens.sublist(replacementStart, math.min(overlapSize, tokens.length));
-        if (replacementTokens.isEmpty) {
-          return false;
-        }
-        _transcriptTokens.addAll(replacementTokens);
-        _transcriptBuffer = _transcriptTokens.join(' ');
-        return true;
+      if (fallbackText.isEmpty) {
+        return false;
       }
+
+      if (_segmentsById.length == 1 &&
+          _orderedSegments.length == 1 &&
+          _orderedSegments.first.id == '_fallback' &&
+          _orderedSegments.first.text == fallbackText) {
+        return false;
+      }
+
+      _segmentsById
+        ..clear()
+        ..['_fallback'] = _TranscriptSegment(
+          id: '_fallback',
+          text: fallbackText,
+          start: 0,
+          end: 0,
+        );
+      _orderedSegments
+        ..clear()
+        ..add(_segmentsById['_fallback']!);
+      _transcriptBuffer = fallbackText;
+      return true;
+    }
+
+    // Remove any fallback-only segment once we have structured segments.
+    if (_segmentsById.containsKey('_fallback')) {
+      _segmentsById.remove('_fallback');
+      _orderedSegments.removeWhere((segment) => segment.id == '_fallback');
+    }
+
+    final previousSegments = forceFull
+        ? Map<String, _TranscriptSegment>.from(_segmentsById)
+        : _segmentsById;
+
+    if (forceFull) {
+      _segmentsById.clear();
+      _orderedSegments.clear();
+    }
+
+    var changed = false;
+    final seen = <String>{};
+
+    for (final segment in incomingSegments) {
+      seen.add(segment.id);
+      final previous = previousSegments[segment.id];
+      if (previous == null) {
+        _segmentsById[segment.id] = segment;
+        _orderedSegments.add(segment);
+        changed = true;
+        continue;
+      }
+
+      if (previous.text != segment.text ||
+          previous.start != segment.start ||
+          previous.end != segment.end) {
+        _segmentsById[segment.id] = segment;
+        final index = _orderedSegments
+            .indexWhere((existing) => existing.id == segment.id);
+        if (index >= 0) {
+          _orderedSegments[index] = segment;
+        } else {
+          _orderedSegments.add(segment);
+        }
+        changed = true;
+      }
+    }
+
+    if (forceFull && previousSegments.isNotEmpty) {
+      final toRemove = previousSegments.keys
+          .where((id) => !seen.contains(id))
+          .toList(growable: false);
+      if (toRemove.isNotEmpty) {
+        for (final id in toRemove) {
+          _segmentsById.remove(id);
+          _orderedSegments.removeWhere((segment) => segment.id == id);
+        }
+        changed = true;
+      }
+    }
+
+    if (!changed) {
       return false;
     }
 
-    _transcriptTokens.addAll(tokensToAppend);
-    _transcriptBuffer = _transcriptTokens.join(' ');
+    _orderedSegments.sort((a, b) {
+      final startComparison = a.start.compareTo(b.start);
+      if (startComparison != 0) {
+        return startComparison;
+      }
+      final endComparison = a.end.compareTo(b.end);
+      if (endComparison != 0) {
+        return endComparison;
+      }
+      return a.id.compareTo(b.id);
+    });
+
+    _transcriptBuffer =
+        _orderedSegments.map((segment) => segment.text).join(' ');
     return true;
   }
 
@@ -515,16 +590,20 @@ class VoiceRecorder {
   }
 
   String _buildPrompt() {
-    if (_transcriptTokens.isEmpty) {
-      return '';
+    final buffer = StringBuffer(_transcriptionGuidance);
+    if (_transcriptBuffer.isEmpty) {
+      return buffer.toString();
     }
 
-    const maxTokens = 32;
-    final startIndex = _transcriptTokens.length > maxTokens
-        ? _transcriptTokens.length - maxTokens
-        : 0;
-    final slice = _transcriptTokens.sublist(startIndex);
-    return slice.join(' ');
+    final tokens = _transcriptBuffer.split(RegExp(r'\s+'));
+    const maxTokens = 48;
+    final slice = tokens.length > maxTokens
+        ? tokens.sublist(tokens.length - maxTokens)
+        : tokens;
+
+    buffer.write('\nConfirmed context: ');
+    buffer.write(slice.join(' '));
+    return buffer.toString();
   }
 
   Uint8List _audioBytesForTranscription({bool forceFull = false}) {
@@ -562,75 +641,84 @@ class VoiceRecorder {
     return bytes;
   }
 
-  String? _candidateFromPayload(Map<String, dynamic> payload) {
-    final segments = payload['segments'];
-    if (segments is List && segments.isNotEmpty) {
-      final buffer = StringBuffer();
-      for (final entry in segments) {
-        if (entry is! Map<String, dynamic>) {
-          continue;
-        }
-        final textValue = entry['text'];
-        if (textValue is! String) {
-          continue;
-        }
-        final sanitized = textValue.trim();
-        if (sanitized.isEmpty) {
-          continue;
-        }
-        if (buffer.isNotEmpty) {
-          buffer.write(' ');
-        }
-        buffer.write(sanitized);
-      }
-      final candidate = buffer.toString().trim();
-      if (candidate.isNotEmpty) {
-        return candidate;
-      }
+  List<_TranscriptSegment> _segmentsFromPayload(Map<String, dynamic> payload) {
+    final segmentsField = payload['segments'];
+    if (segmentsField is! List) {
+      return const <_TranscriptSegment>[];
     }
 
-    final text = payload['text'];
-    if (text is String && text.trim().isNotEmpty) {
-      return text.trim();
+    final parsed = <_TranscriptSegment>[];
+    for (var index = 0; index < segmentsField.length; index++) {
+      final entry = segmentsField[index];
+      if (entry is! Map<String, dynamic>) {
+        continue;
+      }
+
+      final rawText = entry['text'];
+      if (rawText is! String) {
+        continue;
+      }
+
+      final sanitized = _sanitizeTranscript(rawText);
+      if (sanitized.isEmpty) {
+        continue;
+      }
+
+      final noSpeechProb = _asDouble(entry['no_speech_prob']);
+      if (noSpeechProb != null && noSpeechProb >= 0.6) {
+        continue;
+      }
+
+      final confidence = _asDouble(entry['confidence']);
+      if (confidence != null && confidence < 0.2) {
+        continue;
+      }
+
+      final rawId = entry['id'];
+      final id = rawId == null ? 'segment-$index' : rawId.toString();
+      final start = _parseTimestamp(entry['start'], index.toDouble());
+      final end = _parseTimestamp(entry['end'], start);
+
+      parsed.add(
+        _TranscriptSegment(
+          id: id,
+          text: sanitized,
+          start: start,
+          end: end,
+        ),
+      );
     }
 
+    return parsed;
+  }
+
+  String _sanitizeTranscript(String value) {
+    final normalized = value.replaceAll('\n', ' ');
+    final collapsed = normalized.replaceAll(RegExp(r'\s+'), ' ').trim();
+    return collapsed;
+  }
+
+  double _parseTimestamp(dynamic value, double fallback) {
+    if (value is num) {
+      return value.toDouble();
+    }
+    if (value is String) {
+      final parsed = double.tryParse(value);
+      if (parsed != null) {
+        return parsed;
+      }
+    }
+    return fallback;
+  }
+
+  double? _asDouble(dynamic value) {
+    if (value is num) {
+      return value.toDouble();
+    }
+    if (value is String) {
+      return double.tryParse(value);
+    }
     return null;
-  }
-
-  List<String> _tokenize(String text) {
-    final normalized = text.replaceAll('\n', ' ').trim();
-    if (normalized.isEmpty) {
-      return const <String>[];
-    }
-    return normalized.split(RegExp(r'\s+'));
-  }
-
-  _TokenOverlap _tokensOverlap(List<String> existing, List<String> incoming) {
-    final maxOverlap = math.min(existing.length, incoming.length);
-    for (var size = maxOverlap; size > 0; size--) {
-      var matches = true;
-      var replaceCount = 0;
-      for (var i = 0; i < size; i++) {
-        final existingToken = existing[existing.length - size + i];
-        final incomingToken = incoming[i];
-        if (existingToken == incomingToken) {
-          continue;
-        }
-        final isLast = i == size - 1;
-        if (isLast &&
-            (incomingToken.startsWith(existingToken) ||
-                existingToken.startsWith(incomingToken))) {
-          replaceCount = size - i;
-          continue;
-        }
-        matches = false;
-        break;
-      }
-      if (matches) {
-        return _TokenOverlap(size, replaceCount);
-      }
-    }
-    return const _TokenOverlap(0, 0);
   }
 
   Uint8List _combinedAudioBytes() {
@@ -684,7 +772,8 @@ class VoiceRecorder {
     _audioChunks.clear();
     _cachedCombinedAudio = null;
     _cachedCombinedAudioChunkCount = 0;
-    _transcriptTokens.clear();
+    _segmentsById.clear();
+    _orderedSegments.clear();
     _transcriptBuffer = '';
     _lastEmittedTranscript = null;
     _transcribedChunkCount = 0;

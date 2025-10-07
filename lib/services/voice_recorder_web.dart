@@ -27,6 +27,11 @@ class _TranscriptionSegment {
 class VoiceRecorder {
   static const _primaryModel = 'gpt-4o-mini-transcribe';
   static const _transcriptionDebounce = Duration(milliseconds: 600);
+  static const _promptInstructions =
+      'Transcribe exactamente las palabras habladas por la persona en el '
+      'idioma original (español, inglés, portugués, francés, italiano, '
+      'alemán, etc.). No traduzcas ni agregues texto y devuelve una cadena '
+      'vacía cuando no haya audio nuevo.';
 
   OnText? _onText;
   OnRecorderLog? _onLog;
@@ -113,7 +118,6 @@ class VoiceRecorder {
 
     _log('Pausando grabación...');
     _isPaused = true;
-    _speechDetected = false;
 
     try {
       _audioTrack?.enabled = false;
@@ -138,7 +142,6 @@ class VoiceRecorder {
 
     _log('Reanudando grabación...');
     _isPaused = false;
-    _speechDetected = false;
 
     try {
       _audioTrack?.enabled = true;
@@ -386,6 +389,15 @@ class VoiceRecorder {
     var updated = false;
     final segments = payload['segments'];
     if (segments is List) {
+      if (segments.isEmpty) {
+        if (_segments.isNotEmpty) {
+          _segments.clear();
+          return true;
+        }
+        return false;
+      }
+
+      final seenIds = <int>{};
       for (final entry in segments) {
         if (entry is! Map<String, dynamic>) {
           continue;
@@ -402,6 +414,14 @@ class VoiceRecorder {
         final endSeconds =
             (entry['end'] is num) ? (entry['end'] as num).toDouble() : null;
 
+        if (text.trim().isEmpty) {
+          if (_segments.remove(id) != null) {
+            updated = true;
+          }
+          continue;
+        }
+
+        seenIds.add(id);
         final existing = _segments[id];
         if (existing == null) {
           _segments[id] = _TranscriptionSegment(
@@ -410,15 +430,23 @@ class VoiceRecorder {
             endSeconds: endSeconds ?? 0,
           );
           updated = true;
-        } else if (existing.text != text) {
-          existing.text = text;
-          if (endSeconds != null) {
+        } else {
+          if (existing.text != text) {
+            existing.text = text;
+            updated = true;
+          }
+          if (endSeconds != null && existing.endSeconds != endSeconds) {
             existing.endSeconds = endSeconds;
           }
-          updated = true;
-        } else if (endSeconds != null && existing.endSeconds != endSeconds) {
-          existing.endSeconds = endSeconds;
         }
+      }
+
+      final toRemove = _segments.keys
+          .where((existingId) => !seenIds.contains(existingId))
+          .toList(growable: false);
+      for (final id in toRemove) {
+        _segments.remove(id);
+        updated = true;
       }
 
       return updated;
@@ -470,16 +498,23 @@ class VoiceRecorder {
   }
 
   String _buildPrompt() {
+    final buffer = StringBuffer(_promptInstructions);
+
     final current = _normalizedTranscript();
     if (current.isEmpty) {
-      return '';
+      return buffer.toString();
     }
 
-    const maxPromptLength = 200;
-    if (current.length <= maxPromptLength) {
-      return current;
-    }
-    return current.substring(current.length - maxPromptLength);
+    const maxPromptLength = 160;
+    final context = current.length <= maxPromptLength
+        ? current
+        : current.substring(current.length - maxPromptLength);
+
+    buffer
+      ..write('\nContexto: ')
+      ..write(context);
+
+    return buffer.toString();
   }
 
   Uint8List _combinedAudioBytes() {

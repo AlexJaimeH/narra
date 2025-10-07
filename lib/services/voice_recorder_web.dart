@@ -43,6 +43,8 @@ class VoiceRecorder {
   static const _fallbackModel = 'gpt-4o-transcribe-latest';
   static const _transcriptionDebounce = Duration(milliseconds: 180);
   static const _preferredTimeslices = <int>[320, 480, 640, 1000];
+  static const _maxChunksPerUpload = 12;
+  static const _contextChunks = 3;
   static const _transcriptionGuidance =
       'You are a streaming speech recognizer. Transcribe the spoken audio verbatim in '
       "the speaker's language. Do not translate, summarize, or invent words. If there is "
@@ -58,6 +60,9 @@ class VoiceRecorder {
   final List<Uint8List> _audioChunks = <Uint8List>[];
   Uint8List? _cachedCombinedAudio;
   int _cachedCombinedAudioChunkCount = 0;
+  Uint8List? _cachedRecentAudio;
+  int _cachedRecentStartIndex = 0;
+  int _cachedRecentEndIndex = 0;
 
   bool _isRecording = false;
   bool _isPaused = false;
@@ -258,6 +263,9 @@ class VoiceRecorder {
     _audioChunks.clear();
     _cachedCombinedAudio = null;
     _cachedCombinedAudioChunkCount = 0;
+    _cachedRecentAudio = null;
+    _cachedRecentStartIndex = 0;
+    _cachedRecentEndIndex = 0;
     _transcriptBuffer = '';
     _lastEmittedTranscript = null;
     _emittedSegmentIds.clear();
@@ -313,6 +321,9 @@ class VoiceRecorder {
       _audioChunks.add(bytes);
       _cachedCombinedAudio = null;
       _cachedCombinedAudioChunkCount = 0;
+      _cachedRecentAudio = null;
+      _cachedRecentStartIndex = 0;
+      _cachedRecentEndIndex = 0;
 
       _log('Chunk de audio capturado (${bytes.length} bytes)', level: 'debug');
       _markPendingTranscription();
@@ -467,6 +478,11 @@ class VoiceRecorder {
       _hasPendingTranscription = true;
     }
 
+    _transcribedChunkCount = slice.endChunkIndex;
+    if (_audioChunks.length > _transcribedChunkCount) {
+      _hasPendingTranscription = true;
+    }
+
     _cachedRecentAudio = null;
     _cachedRecentStartIndex = 0;
     _cachedRecentEndIndex = 0;
@@ -574,10 +590,26 @@ class VoiceRecorder {
       return null;
     }
 
-    final bytes = _combinedAudioBytes();
+    if (forceFull || _transcribedChunkCount == 0) {
+      final bytes = _combinedAudioBytes();
+      return _PendingAudioSlice(
+        bytes: bytes,
+        startChunkIndex: 0,
+        endChunkIndex: currentEndIndex,
+      );
+    }
+
+    final context = math.min(_contextChunks, _transcribedChunkCount);
+    var startChunkIndex = math.max(0, _transcribedChunkCount - context);
+
+    if (currentEndIndex - startChunkIndex > _maxChunksPerUpload) {
+      startChunkIndex = math.max(0, currentEndIndex - _maxChunksPerUpload);
+    }
+
+    final bytes = _combinedAudioRange(startChunkIndex, currentEndIndex);
     return _PendingAudioSlice(
       bytes: bytes,
-      startChunkIndex: 0,
+      startChunkIndex: startChunkIndex,
       endChunkIndex: currentEndIndex,
     );
   }
@@ -722,7 +754,33 @@ class VoiceRecorder {
 
     _cachedCombinedAudio = builder.toBytes();
     _cachedCombinedAudioChunkCount = _audioChunks.length;
+    _cachedRecentAudio = _cachedCombinedAudio;
+    _cachedRecentStartIndex = 0;
+    _cachedRecentEndIndex = _audioChunks.length;
     return _cachedCombinedAudio!;
+  }
+
+  Uint8List _combinedAudioRange(int startChunkIndex, int endChunkIndex) {
+    if (startChunkIndex <= 0 && endChunkIndex == _audioChunks.length) {
+      return _combinedAudioBytes();
+    }
+
+    if (_cachedRecentAudio != null &&
+        _cachedRecentStartIndex == startChunkIndex &&
+        _cachedRecentEndIndex == endChunkIndex) {
+      return _cachedRecentAudio!;
+    }
+
+    final builder = BytesBuilder(copy: false);
+    for (var index = startChunkIndex; index < endChunkIndex; index++) {
+      builder.add(_audioChunks[index]);
+    }
+
+    final bytes = builder.takeBytes();
+    _cachedRecentAudio = bytes;
+    _cachedRecentStartIndex = startChunkIndex;
+    _cachedRecentEndIndex = endChunkIndex;
+    return bytes;
   }
 
   Future<void> _disposeInternal() async {
@@ -756,6 +814,9 @@ class VoiceRecorder {
     _audioChunks.clear();
     _cachedCombinedAudio = null;
     _cachedCombinedAudioChunkCount = 0;
+    _cachedRecentAudio = null;
+    _cachedRecentStartIndex = 0;
+    _cachedRecentEndIndex = 0;
     _emittedSegmentIds.clear();
     _lastFullTranscript = null;
     _transcriptBuffer = '';

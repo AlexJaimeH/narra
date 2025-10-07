@@ -479,6 +479,20 @@ class VoiceRecorder {
     if (_audioChunks.length > _transcribedChunkCount) {
       _hasPendingTranscription = true;
     }
+
+    _transcribedChunkCount = slice.endChunkIndex;
+    if (_audioChunks.length > _transcribedChunkCount) {
+      _hasPendingTranscription = true;
+    }
+
+    _transcribedChunkCount = slice.endChunkIndex;
+    if (_audioChunks.length > _transcribedChunkCount) {
+      _hasPendingTranscription = true;
+    }
+
+    _cachedRecentAudio = null;
+    _cachedRecentStartIndex = 0;
+    _cachedRecentEndIndex = 0;
   }
 
   bool _applyTranscriptionPayload(

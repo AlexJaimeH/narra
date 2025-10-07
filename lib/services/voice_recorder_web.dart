@@ -45,10 +45,6 @@ class VoiceRecorder {
   static const _preferredTimeslices = <int>[320, 480, 640, 1000];
   static const _maxChunksPerUpload = 12;
   static const _contextChunks = 3;
-  static const _transcriptionGuidance =
-      'You are a streaming speech recognizer. Transcribe the spoken audio verbatim in '
-      "the speaker's language. Do not translate, summarize, or invent words. If there is "
-      'silence or uncertain audio, return an empty string instead of a guess.';
 
   OnText? _onText;
   OnRecorderLog? _onLog;
@@ -78,7 +74,7 @@ class VoiceRecorder {
   String _transcriptBuffer = '';
   String? _lastEmittedTranscript;
 
-  final Set<String> _emittedSegmentIds = <String>{};
+  final Map<String, String> _segmentTexts = <String, String>{};
   String? _lastFullTranscript;
 
   int _transcribedChunkCount = 0;
@@ -270,7 +266,7 @@ class VoiceRecorder {
     _cachedRecentIncludesHeader = false;
     _transcriptBuffer = '';
     _lastEmittedTranscript = null;
-    _emittedSegmentIds.clear();
+    _segmentTexts.clear();
     _lastFullTranscript = null;
     _transcribedChunkCount = 0;
     _hasPendingTranscription = false;
@@ -421,11 +417,9 @@ class VoiceRecorder {
       return;
     }
 
-    final prompt = _buildPrompt();
     final uri = Uri.parse('/api/whisper').replace(queryParameters: {
       'model': _primaryModel,
       'fallback': '$_fallbackModel,whisper-1',
-      if (prompt.isNotEmpty) 'prompt': prompt,
     });
 
     final request = http.MultipartRequest('POST', uri)
@@ -500,7 +494,7 @@ class VoiceRecorder {
     required bool forceFull,
   }) {
     if (forceFull) {
-      _emittedSegmentIds.clear();
+      _segmentTexts.clear();
       _lastFullTranscript = null;
     }
 
@@ -521,12 +515,15 @@ class VoiceRecorder {
 
     if (incomingSegments.isNotEmpty) {
       for (final segment in incomingSegments) {
-        if (_emittedSegmentIds.contains(segment.id)) {
+        final previous = _segmentTexts[segment.id] ?? '';
+        final addition = _diffAppend(previous, segment.text);
+        if (addition.isEmpty) {
+          _segmentTexts[segment.id] = segment.text;
           continue;
         }
 
-        _appendToTranscript(segment.text);
-        _emittedSegmentIds.add(segment.id);
+        _appendToTranscript(addition);
+        _segmentTexts[segment.id] = segment.text;
         appended = true;
       }
 
@@ -568,23 +565,6 @@ class VoiceRecorder {
     _onText?.call(transcript);
     debugPrint(
         '[VoiceRecorder] Emitiendo transcripción (${transcript.length} chars)');
-  }
-
-  String _buildPrompt() {
-    final buffer = StringBuffer(_transcriptionGuidance);
-    if (_transcriptBuffer.isEmpty) {
-      return buffer.toString();
-    }
-
-    final tokens = _transcriptBuffer.split(RegExp(r'\s+'));
-    const maxTokens = 48;
-    final slice = tokens.length > maxTokens
-        ? tokens.sublist(tokens.length - maxTokens)
-        : tokens;
-
-    buffer.write('\nConfirmed context: ');
-    buffer.write(slice.join(' '));
-    return buffer.toString();
   }
 
   _PendingAudioSlice? _audioSliceForTranscription({bool forceFull = false}) {
@@ -840,7 +820,7 @@ class VoiceRecorder {
     _cachedRecentStartIndex = 0;
     _cachedRecentEndIndex = 0;
     _cachedRecentIncludesHeader = false;
-    _emittedSegmentIds.clear();
+    _segmentTexts.clear();
     _lastFullTranscript = null;
     _transcriptBuffer = '';
     _lastEmittedTranscript = null;

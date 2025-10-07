@@ -17,8 +17,6 @@ const ALLOWED_TRANSCRIPTION_MODELS = new Set([
   'whisper-1',
 ]);
 const DEFAULT_MODALITIES = ['text'];
-const DEFAULT_INSTRUCTIONS =
-  'Transcribe literalmente el audio en el idioma original, sin traducir ni añadir contenido que no se haya pronunciado. Devuelve una cadena vacía cuando no haya audio nuevo.';
 
 export const onRequestOptions: PagesFunction<Env> = async () => {
   return new Response(null, { status: 204, headers: CORS_HEADERS });
@@ -73,14 +71,14 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       ? (normalizedPayload.modalities as string[])
       : DEFAULT_MODALITIES;
 
-    const instructions = typeof normalizedPayload.instructions === 'string'
-      ? (normalizedPayload.instructions as string)
-      : DEFAULT_INSTRUCTIONS;
+    const instructionsRaw =
+      typeof normalizedPayload.instructions === 'string'
+        ? normalizedPayload.instructions.trim()
+        : '';
 
     const sessionRequest: Record<string, unknown> = {
       model,
       modalities,
-      instructions,
       input_audio_format: 'pcm16',
       output_audio_format: 'pcm16',
       turn_detection: {
@@ -91,6 +89,10 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       },
     };
 
+    if (instructionsRaw.length > 0) {
+      sessionRequest.instructions = instructionsRaw;
+    }
+
     if (normalizedPayload.voice && typeof normalizedPayload.voice === 'string') {
       sessionRequest.voice = normalizedPayload.voice;
     } else {
@@ -100,7 +102,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     if (normalizedPayload.temperature != null) {
       sessionRequest.temperature = normalizedPayload.temperature;
     } else {
-      sessionRequest.temperature = 0.8;
+      sessionRequest.temperature = 0;
     }
 
     const sessionResponse = await fetch('https://api.openai.com/v1/realtime/sessions', {

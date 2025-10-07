@@ -1,8 +1,8 @@
 import 'dart:async';
-import 'dart:collection';
 import 'dart:convert';
 import 'dart:html' as html;
 import 'dart:js_util' as js_util;
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
@@ -12,21 +12,42 @@ import 'package:http_parser/http_parser.dart';
 typedef OnText = void Function(String text);
 typedef OnRecorderLog = void Function(String level, String message);
 
-class _TranscriptionSegment {
-  _TranscriptionSegment({
+class _TranscriptSegment {
+  const _TranscriptSegment({
     required this.id,
     required this.text,
-    required this.endSeconds,
+    required this.start,
+    required this.end,
   });
 
-  final int id;
-  String text;
-  double endSeconds;
+  final String id;
+  final String text;
+  final double start;
+  final double end;
+}
+
+class _PendingAudioSlice {
+  const _PendingAudioSlice({
+    required this.bytes,
+    required this.startChunkIndex,
+    required this.endChunkIndex,
+  });
+
+  final Uint8List bytes;
+  final int startChunkIndex;
+  final int endChunkIndex;
 }
 
 class VoiceRecorder {
   static const _primaryModel = 'gpt-4o-mini-transcribe';
-  static const _transcriptionDebounce = Duration(milliseconds: 600);
+  static const _fallbackModel = 'gpt-4o-transcribe-latest';
+  static const _transcriptionDebounce = Duration(milliseconds: 180);
+  static const _preferredTimeslices = <int>[320, 480, 640, 1000];
+  static const _chunkOverlapCount = 1;
+  static const _transcriptionGuidance =
+      'You are a streaming speech recognizer. Transcribe the spoken audio verbatim in '
+      "the speaker's language. Do not translate, summarize, or invent words. If there is "
+      'silence or uncertain audio, return an empty string instead of a guess.';
 
   OnText? _onText;
   OnRecorderLog? _onLog;
@@ -45,12 +66,21 @@ class VoiceRecorder {
 
   bool _transcribing = false;
   bool _hasPendingTranscription = false;
+  bool _pendingForceFull = false;
   Timer? _transcriptionTimer;
   Future<void>? _ongoingTranscription;
 
-  final SplayTreeMap<int, _TranscriptionSegment> _segments =
-      SplayTreeMap<int, _TranscriptionSegment>();
+  String _transcriptBuffer = '';
   String? _lastEmittedTranscript;
+
+  final Map<String, _TranscriptSegment> _segmentsById =
+      <String, _TranscriptSegment>{};
+  final List<_TranscriptSegment> _orderedSegments = <_TranscriptSegment>[];
+
+  int _transcribedChunkCount = 0;
+  Uint8List? _cachedRecentAudio;
+  int _cachedRecentStartIndex = 0;
+  int _cachedRecentEndIndex = 0;
 
   Completer<void>? _stopCompleter;
 
@@ -61,41 +91,70 @@ class VoiceRecorder {
     _resetState();
     _emitTranscript('');
 
-    final devices = html.window.navigator.mediaDevices;
-    if (devices == null) {
-      _log('El navegador no soporta mediaDevices', level: 'error');
-      throw Exception('Navegador sin soporte de mediaDevices');
-    }
-
-    _log('Solicitando acceso al micrófono...');
-    final stream = await devices.getUserMedia({
-      'audio': {
-        'echoCancellation': true,
-        'noiseSuppression': true,
-      },
-    });
-
-    _inputStream = stream;
-    final tracks = stream.getAudioTracks();
-    if (tracks.isEmpty) {
-      _log('No se encontró un micrófono activo', level: 'error');
-      await _disposeInternal();
-      throw Exception('Micrófono no disponible');
-    }
-
-    _audioTrack = tracks.first;
-    debugPrint('[VoiceRecorder] Micrófono: ${_audioTrack?.label}');
-
-    _mediaRecorder = _createMediaRecorder(stream);
-    if (_mediaRecorder == null) {
-      await _disposeInternal();
-      throw Exception('MediaRecorder no soportado en este navegador');
-    }
-
-    _attachRecorderListeners(_mediaRecorder!);
-
     try {
-      _mediaRecorder!.start(1500);
+      final devices = html.window.navigator.mediaDevices;
+      if (devices == null) {
+        _log('El navegador no soporta mediaDevices', level: 'error');
+        throw Exception('Navegador sin soporte de mediaDevices');
+      }
+
+      _log('Solicitando acceso al micrófono...');
+      final stream = await devices.getUserMedia({
+        'audio': {
+          'echoCancellation': true,
+          'noiseSuppression': true,
+        },
+      });
+
+      _inputStream = stream;
+      final tracks = stream.getAudioTracks();
+      if (tracks.isEmpty) {
+        _log('No se encontró un micrófono activo', level: 'error');
+        await _disposeInternal();
+        throw Exception('Micrófono no disponible');
+      }
+
+      _audioTrack = tracks.first;
+      debugPrint('[VoiceRecorder] Micrófono: ${_audioTrack?.label}');
+
+      _mediaRecorder = _createMediaRecorder(stream);
+      if (_mediaRecorder == null) {
+        await _disposeInternal();
+        throw Exception('MediaRecorder no soportado en este navegador');
+      }
+
+      _attachRecorderListeners(_mediaRecorder!);
+
+      var started = false;
+      for (final slice in _preferredTimeslices) {
+        try {
+          _mediaRecorder!.start(slice);
+          started = true;
+          break;
+        } catch (error) {
+          _log(
+            'MediaRecorder.start($slice) falló, probando siguiente valor',
+            level: 'warning',
+            error: error,
+          );
+        }
+      }
+
+      if (!started) {
+        try {
+          _mediaRecorder!.start();
+          started = true;
+        } catch (error) {
+          _log('MediaRecorder.start sin timeslice falló',
+              level: 'error', error: error);
+        }
+      }
+
+      if (!started) {
+        await _disposeInternal();
+        throw Exception('No se pudo iniciar la grabación: MediaRecorder falló');
+      }
+
       _isRecording = true;
       _isPaused = false;
       _log('Grabación iniciada');
@@ -113,7 +172,6 @@ class VoiceRecorder {
 
     _log('Pausando grabación...');
     _isPaused = true;
-    _speechDetected = false;
 
     try {
       _audioTrack?.enabled = false;
@@ -138,7 +196,6 @@ class VoiceRecorder {
 
     _log('Reanudando grabación...');
     _isPaused = false;
-    _speechDetected = false;
 
     try {
       _audioTrack?.enabled = true;
@@ -184,7 +241,7 @@ class VoiceRecorder {
       // ignore timeout: recorder might already be stopped.
     }
 
-    await _runTranscription(immediate: true);
+    await _runTranscription(immediate: true, forceFull: true);
     if (_ongoingTranscription != null) {
       await _ongoingTranscription;
     }
@@ -206,9 +263,16 @@ class VoiceRecorder {
     _audioChunks.clear();
     _cachedCombinedAudio = null;
     _cachedCombinedAudioChunkCount = 0;
-    _segments.clear();
+    _transcriptBuffer = '';
     _lastEmittedTranscript = null;
+    _segmentsById.clear();
+    _orderedSegments.clear();
+    _transcribedChunkCount = 0;
+    _cachedRecentAudio = null;
+    _cachedRecentStartIndex = 0;
+    _cachedRecentEndIndex = 0;
     _hasPendingTranscription = false;
+    _pendingForceFull = false;
     _transcriptionTimer?.cancel();
     _transcriptionTimer = null;
     _ongoingTranscription = null;
@@ -296,41 +360,66 @@ class VoiceRecorder {
         Timer(_transcriptionDebounce, () => _runTranscription());
   }
 
-  Future<void> _runTranscription({bool immediate = false}) {
+  Future<void> _runTranscription({
+    bool immediate = false,
+    bool forceFull = false,
+  }) {
+    if (forceFull) {
+      _pendingForceFull = true;
+    }
+
     if (_transcribing) {
+      if (!immediate) {
+        _hasPendingTranscription = true;
+      }
       return _ongoingTranscription ?? Future.value();
     }
 
-    if (!_hasPendingTranscription && !immediate) {
+    if (!_hasPendingTranscription && !immediate && !_pendingForceFull) {
       return Future.value();
     }
 
+    final shouldForceFull = _pendingForceFull;
+    _pendingForceFull = false;
     _hasPendingTranscription = false;
     _transcribing = true;
 
-    final future = _transcribeLatest();
+    final future = _transcribeLatest(forceFull: shouldForceFull);
     _ongoingTranscription = future;
     return future.whenComplete(() {
       _transcribing = false;
       _ongoingTranscription = null;
 
-      if (_hasPendingTranscription && !_stopping) {
-        _transcriptionTimer?.cancel();
+      final shouldForceRunAgain = _pendingForceFull ||
+          (_hasPendingTranscription && (!_stopping || _pendingForceFull));
+
+      if (!shouldForceRunAgain) {
+        return;
+      }
+
+      _transcriptionTimer?.cancel();
+
+      if (_pendingForceFull) {
+        scheduleMicrotask(() {
+          _runTranscription(immediate: true);
+        });
+      } else {
         _transcriptionTimer =
             Timer(_transcriptionDebounce, () => _runTranscription());
       }
     });
   }
 
-  Future<void> _transcribeLatest() async {
-    final audioBytes = _combinedAudioBytes();
-    if (audioBytes.isEmpty) {
+  Future<void> _transcribeLatest({bool forceFull = false}) async {
+    final slice = _audioSliceForTranscription(forceFull: forceFull);
+    if (slice == null || slice.bytes.isEmpty) {
       return;
     }
 
     final prompt = _buildPrompt();
     final uri = Uri.parse('/api/whisper').replace(queryParameters: {
       'model': _primaryModel,
+      'fallback': '$_fallbackModel,whisper-1',
       if (prompt.isNotEmpty) 'prompt': prompt,
     });
 
@@ -340,13 +429,13 @@ class VoiceRecorder {
 
     request.files.add(http.MultipartFile.fromBytes(
       'file',
-      audioBytes,
+      slice.bytes,
       filename: 'audio.webm',
       contentType: MediaType('audio', 'webm'),
     ));
 
     _log(
-      'Enviando audio para transcribir (${audioBytes.length} bytes)...',
+      'Enviando audio (${slice.bytes.length} bytes) para transcribir...',
       level: 'debug',
     );
 
@@ -376,86 +465,132 @@ class VoiceRecorder {
       return;
     }
 
-    final updated = _applyTranscriptionPayload(payload);
+    final updated = _applyTranscriptionPayload(payload, forceFull: forceFull);
     if (updated) {
-      _emitTranscript(_normalizedTranscript());
+      _emitTranscript(_transcriptBuffer);
     }
+
+    _transcribedChunkCount = slice.endChunkIndex;
+    if (_audioChunks.length > _transcribedChunkCount) {
+      _hasPendingTranscription = true;
+    }
+
+    _cachedRecentAudio = null;
+    _cachedRecentStartIndex = 0;
+    _cachedRecentEndIndex = 0;
   }
 
-  bool _applyTranscriptionPayload(Map<String, dynamic> payload) {
-    var updated = false;
-    final segments = payload['segments'];
-    if (segments is List) {
-      for (final entry in segments) {
-        if (entry is! Map<String, dynamic>) {
-          continue;
-        }
+  bool _applyTranscriptionPayload(
+    Map<String, dynamic> payload, {
+    required bool forceFull,
+  }) {
+    final incomingSegments = _segmentsFromPayload(payload);
 
-        final idValue = entry['id'];
-        final textValue = entry['text'];
-        if (idValue is! num || textValue is! String) {
-          continue;
-        }
-
-        final id = idValue.toInt();
-        final text = textValue;
-        final endSeconds =
-            (entry['end'] is num) ? (entry['end'] as num).toDouble() : null;
-
-        final existing = _segments[id];
-        if (existing == null) {
-          _segments[id] = _TranscriptionSegment(
-            id: id,
-            text: text,
-            endSeconds: endSeconds ?? 0,
-          );
-          updated = true;
-        } else if (existing.text != text) {
-          existing.text = text;
-          if (endSeconds != null) {
-            existing.endSeconds = endSeconds;
-          }
-          updated = true;
-        } else if (endSeconds != null && existing.endSeconds != endSeconds) {
-          existing.endSeconds = endSeconds;
-        }
+    if (incomingSegments.isEmpty) {
+      final fallbackText = _sanitizeTranscript(
+        (payload['text'] as String?) ?? '',
+      );
+      if (fallbackText.isEmpty) {
+        return false;
       }
 
-      return updated;
+      if (_segmentsById.length == 1 &&
+          _orderedSegments.length == 1 &&
+          _orderedSegments.first.id == '_fallback' &&
+          _orderedSegments.first.text == fallbackText) {
+        return false;
+      }
+
+      _segmentsById
+        ..clear()
+        ..['_fallback'] = _TranscriptSegment(
+          id: '_fallback',
+          text: fallbackText,
+          start: 0,
+          end: 0,
+        );
+      _orderedSegments
+        ..clear()
+        ..add(_segmentsById['_fallback']!);
+      _transcriptBuffer = fallbackText;
+      return true;
     }
 
-    final text = payload['text'];
-    if (text is String) {
-      final normalized = text.trim();
-      final previous = _normalizedTranscript();
-      if (normalized != previous) {
-        _segments
-          ..clear()
-          ..[0] = _TranscriptionSegment(
-            id: 0,
-            text: normalized,
-            endSeconds: double.nan,
-          );
-        updated = true;
+    // Remove any fallback-only segment once we have structured segments.
+    if (_segmentsById.containsKey('_fallback')) {
+      _segmentsById.remove('_fallback');
+      _orderedSegments.removeWhere((segment) => segment.id == '_fallback');
+    }
+
+    final previousSegments = forceFull
+        ? Map<String, _TranscriptSegment>.from(_segmentsById)
+        : _segmentsById;
+
+    if (forceFull) {
+      _segmentsById.clear();
+      _orderedSegments.clear();
+    }
+
+    var changed = false;
+    final seen = <String>{};
+
+    for (final segment in incomingSegments) {
+      seen.add(segment.id);
+      final previous = previousSegments[segment.id];
+      if (previous == null) {
+        _segmentsById[segment.id] = segment;
+        _orderedSegments.add(segment);
+        changed = true;
+        continue;
+      }
+
+      if (previous.text != segment.text ||
+          previous.start != segment.start ||
+          previous.end != segment.end) {
+        _segmentsById[segment.id] = segment;
+        final index = _orderedSegments
+            .indexWhere((existing) => existing.id == segment.id);
+        if (index >= 0) {
+          _orderedSegments[index] = segment;
+        } else {
+          _orderedSegments.add(segment);
+        }
+        changed = true;
       }
     }
 
-    return updated;
-  }
-
-  String _normalizedTranscript() {
-    if (_segments.isEmpty) {
-      return '';
+    if (forceFull && previousSegments.isNotEmpty) {
+      final toRemove = previousSegments.keys
+          .where((id) => !seen.contains(id))
+          .toList(growable: false);
+      if (toRemove.isNotEmpty) {
+        for (final id in toRemove) {
+          _segmentsById.remove(id);
+          _orderedSegments.removeWhere((segment) => segment.id == id);
+        }
+        changed = true;
+      }
     }
 
-    final buffer = StringBuffer();
-    for (final segment in _segments.values) {
-      buffer.write(segment.text);
+    if (!changed) {
+      return false;
     }
 
-    final raw = buffer.toString();
-    final collapsed = raw.replaceAll(RegExp(r'\s+'), ' ').trim();
-    return collapsed;
+    _orderedSegments.sort((a, b) {
+      final startComparison = a.start.compareTo(b.start);
+      if (startComparison != 0) {
+        return startComparison;
+      }
+      final endComparison = a.end.compareTo(b.end);
+      if (endComparison != 0) {
+        return endComparison;
+      }
+      return a.id.compareTo(b.id);
+    });
+
+    _transcriptBuffer =
+        _orderedSegments.map((segment) => segment.text).join(' ');
+    return true;
   }
 
   void _emitTranscript(String transcript) {
@@ -470,16 +605,144 @@ class VoiceRecorder {
   }
 
   String _buildPrompt() {
-    final current = _normalizedTranscript();
-    if (current.isEmpty) {
-      return '';
+    final buffer = StringBuffer(_transcriptionGuidance);
+    if (_transcriptBuffer.isEmpty) {
+      return buffer.toString();
     }
 
-    const maxPromptLength = 200;
-    if (current.length <= maxPromptLength) {
-      return current;
+    final tokens = _transcriptBuffer.split(RegExp(r'\s+'));
+    const maxTokens = 48;
+    final slice = tokens.length > maxTokens
+        ? tokens.sublist(tokens.length - maxTokens)
+        : tokens;
+
+    buffer.write('\nConfirmed context: ');
+    buffer.write(slice.join(' '));
+    return buffer.toString();
+  }
+
+  _PendingAudioSlice? _audioSliceForTranscription({bool forceFull = false}) {
+    if (_audioChunks.isEmpty) {
+      return null;
     }
-    return current.substring(current.length - maxPromptLength);
+
+    final currentEndIndex = _audioChunks.length;
+    if (!forceFull && currentEndIndex <= _transcribedChunkCount) {
+      return null;
+    }
+
+    final startIndex = forceFull
+        ? 0
+        : math.max(0, _transcribedChunkCount - _chunkOverlapCount);
+
+    if (!forceFull &&
+        _cachedRecentAudio != null &&
+        _cachedRecentStartIndex == startIndex &&
+        _cachedRecentEndIndex == currentEndIndex) {
+      return _PendingAudioSlice(
+        bytes: _cachedRecentAudio!,
+        startChunkIndex: startIndex,
+        endChunkIndex: currentEndIndex,
+      );
+    }
+
+    final builder = BytesBuilder(copy: false);
+    for (var i = startIndex; i < currentEndIndex; i++) {
+      builder.add(_audioChunks[i]);
+    }
+
+    final bytes = builder.toBytes();
+    if (!forceFull) {
+      _cachedRecentAudio = bytes;
+      _cachedRecentStartIndex = startIndex;
+      _cachedRecentEndIndex = currentEndIndex;
+    }
+
+    return _PendingAudioSlice(
+      bytes: bytes,
+      startChunkIndex: startIndex,
+      endChunkIndex: currentEndIndex,
+    );
+  }
+
+  List<_TranscriptSegment> _segmentsFromPayload(Map<String, dynamic> payload) {
+    final segmentsField = payload['segments'];
+    if (segmentsField is! List) {
+      return const <_TranscriptSegment>[];
+    }
+
+    final parsed = <_TranscriptSegment>[];
+    for (var index = 0; index < segmentsField.length; index++) {
+      final entry = segmentsField[index];
+      if (entry is! Map<String, dynamic>) {
+        continue;
+      }
+
+      final rawText = entry['text'];
+      if (rawText is! String) {
+        continue;
+      }
+
+      final sanitized = _sanitizeTranscript(rawText);
+      if (sanitized.isEmpty) {
+        continue;
+      }
+
+      final noSpeechProb = _asDouble(entry['no_speech_prob']);
+      if (noSpeechProb != null && noSpeechProb >= 0.6) {
+        continue;
+      }
+
+      final confidence = _asDouble(entry['confidence']);
+      if (confidence != null && confidence < 0.2) {
+        continue;
+      }
+
+      final rawId = entry['id'];
+      final id = rawId == null ? 'segment-$index' : rawId.toString();
+      final start = _parseTimestamp(entry['start'], index.toDouble());
+      final end = _parseTimestamp(entry['end'], start);
+
+      parsed.add(
+        _TranscriptSegment(
+          id: id,
+          text: sanitized,
+          start: start,
+          end: end,
+        ),
+      );
+    }
+
+    return parsed;
+  }
+
+  String _sanitizeTranscript(String value) {
+    final normalized = value.replaceAll('\n', ' ');
+    final collapsed = normalized.replaceAll(RegExp(r'\s+'), ' ').trim();
+    return collapsed;
+  }
+
+  double _parseTimestamp(dynamic value, double fallback) {
+    if (value is num) {
+      return value.toDouble();
+    }
+    if (value is String) {
+      final parsed = double.tryParse(value);
+      if (parsed != null) {
+        return parsed;
+      }
+    }
+    return fallback;
+  }
+
+  double? _asDouble(dynamic value) {
+    if (value is num) {
+      return value.toDouble();
+    }
+    if (value is String) {
+      return double.tryParse(value);
+    }
+    return null;
   }
 
   Uint8List _combinedAudioBytes() {
@@ -507,6 +770,7 @@ class VoiceRecorder {
     _transcriptionTimer = null;
     _ongoingTranscription = null;
     _hasPendingTranscription = false;
+    _pendingForceFull = false;
     _transcribing = false;
     _isRecording = false;
     _isPaused = false;
@@ -532,8 +796,14 @@ class VoiceRecorder {
     _audioChunks.clear();
     _cachedCombinedAudio = null;
     _cachedCombinedAudioChunkCount = 0;
-    _segments.clear();
+    _segmentsById.clear();
+    _orderedSegments.clear();
+    _transcriptBuffer = '';
     _lastEmittedTranscript = null;
+    _transcribedChunkCount = 0;
+    _cachedRecentAudio = null;
+    _cachedRecentStartIndex = 0;
+    _cachedRecentEndIndex = 0;
   }
 
   Future<Uint8List?> _blobToBytes(html.Blob blob) async {

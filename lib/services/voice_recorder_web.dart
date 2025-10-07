@@ -43,7 +43,6 @@ class VoiceRecorder {
   static const _fallbackModel = 'gpt-4o-transcribe-latest';
   static const _transcriptionDebounce = Duration(milliseconds: 180);
   static const _preferredTimeslices = <int>[320, 480, 640, 1000];
-  static const _chunkOverlapCount = 1;
   static const _transcriptionGuidance =
       'You are a streaming speech recognizer. Transcribe the spoken audio verbatim in '
       "the speaker's language. Do not translate, summarize, or invent words. If there is "
@@ -73,14 +72,10 @@ class VoiceRecorder {
   String _transcriptBuffer = '';
   String? _lastEmittedTranscript;
 
-  final Map<String, _TranscriptSegment> _segmentsById =
-      <String, _TranscriptSegment>{};
-  final List<_TranscriptSegment> _orderedSegments = <_TranscriptSegment>[];
+  final Set<String> _emittedSegmentIds = <String>{};
+  String? _lastFullTranscript;
 
   int _transcribedChunkCount = 0;
-  Uint8List? _cachedRecentAudio;
-  int _cachedRecentStartIndex = 0;
-  int _cachedRecentEndIndex = 0;
 
   Completer<void>? _stopCompleter;
 
@@ -265,12 +260,9 @@ class VoiceRecorder {
     _cachedCombinedAudioChunkCount = 0;
     _transcriptBuffer = '';
     _lastEmittedTranscript = null;
-    _segmentsById.clear();
-    _orderedSegments.clear();
+    _emittedSegmentIds.clear();
+    _lastFullTranscript = null;
     _transcribedChunkCount = 0;
-    _cachedRecentAudio = null;
-    _cachedRecentStartIndex = 0;
-    _cachedRecentEndIndex = 0;
     _hasPendingTranscription = false;
     _pendingForceFull = false;
     _transcriptionTimer?.cancel();
@@ -431,7 +423,7 @@ class VoiceRecorder {
       'file',
       slice.bytes,
       filename: 'audio.webm',
-      contentType: MediaType('audio', 'webm'),
+      contentType: MediaType('audio', 'webm', {'codecs': 'opus'}),
     ));
 
     _log(
@@ -484,112 +476,63 @@ class VoiceRecorder {
     Map<String, dynamic> payload, {
     required bool forceFull,
   }) {
-    final incomingSegments = _segmentsFromPayload(payload);
-
-    if (incomingSegments.isEmpty) {
-      final fallbackText = _sanitizeTranscript(
-        (payload['text'] as String?) ?? '',
-      );
-      if (fallbackText.isEmpty) {
-        return false;
-      }
-
-      if (_segmentsById.length == 1 &&
-          _orderedSegments.length == 1 &&
-          _orderedSegments.first.id == '_fallback' &&
-          _orderedSegments.first.text == fallbackText) {
-        return false;
-      }
-
-      _segmentsById
-        ..clear()
-        ..['_fallback'] = _TranscriptSegment(
-          id: '_fallback',
-          text: fallbackText,
-          start: 0,
-          end: 0,
-        );
-      _orderedSegments
-        ..clear()
-        ..add(_segmentsById['_fallback']!);
-      _transcriptBuffer = fallbackText;
-      return true;
-    }
-
-    // Remove any fallback-only segment once we have structured segments.
-    if (_segmentsById.containsKey('_fallback')) {
-      _segmentsById.remove('_fallback');
-      _orderedSegments.removeWhere((segment) => segment.id == '_fallback');
-    }
-
-    final previousSegments = forceFull
-        ? Map<String, _TranscriptSegment>.from(_segmentsById)
-        : _segmentsById;
-
     if (forceFull) {
-      _segmentsById.clear();
-      _orderedSegments.clear();
+      _emittedSegmentIds.clear();
+      _lastFullTranscript = null;
     }
 
-    var changed = false;
-    final seen = <String>{};
-
-    for (final segment in incomingSegments) {
-      seen.add(segment.id);
-      final previous = previousSegments[segment.id];
-      if (previous == null) {
-        _segmentsById[segment.id] = segment;
-        _orderedSegments.add(segment);
-        changed = true;
-        continue;
-      }
-
-      if (previous.text != segment.text ||
-          previous.start != segment.start ||
-          previous.end != segment.end) {
-        _segmentsById[segment.id] = segment;
-        final index = _orderedSegments
-            .indexWhere((existing) => existing.id == segment.id);
-        if (index >= 0) {
-          _orderedSegments[index] = segment;
-        } else {
-          _orderedSegments.add(segment);
+    final incomingSegments = _segmentsFromPayload(payload)
+      ..sort((a, b) {
+        final startComparison = a.start.compareTo(b.start);
+        if (startComparison != 0) {
+          return startComparison;
         }
-        changed = true;
-      }
-    }
-
-    if (forceFull && previousSegments.isNotEmpty) {
-      final toRemove = previousSegments.keys
-          .where((id) => !seen.contains(id))
-          .toList(growable: false);
-      if (toRemove.isNotEmpty) {
-        for (final id in toRemove) {
-          _segmentsById.remove(id);
-          _orderedSegments.removeWhere((segment) => segment.id == id);
+        final endComparison = a.end.compareTo(b.end);
+        if (endComparison != 0) {
+          return endComparison;
         }
-        changed = true;
+        return a.id.compareTo(b.id);
+      });
+
+    var appended = false;
+
+    if (incomingSegments.isNotEmpty) {
+      for (final segment in incomingSegments) {
+        if (_emittedSegmentIds.contains(segment.id)) {
+          continue;
+        }
+
+        _appendToTranscript(segment.text);
+        _emittedSegmentIds.add(segment.id);
+        appended = true;
       }
+
+      if (appended) {
+        _lastFullTranscript = null;
+      }
+      return appended;
     }
 
-    if (!changed) {
+    final fallbackText = _sanitizeTranscript(
+      (payload['text'] as String?) ?? '',
+    );
+
+    if (fallbackText.isEmpty) {
       return false;
     }
 
-    _orderedSegments.sort((a, b) {
-      final startComparison = a.start.compareTo(b.start);
-      if (startComparison != 0) {
-        return startComparison;
-      }
-      final endComparison = a.end.compareTo(b.end);
-      if (endComparison != 0) {
-        return endComparison;
-      }
-      return a.id.compareTo(b.id);
-    });
+    if (_lastFullTranscript == fallbackText) {
+      return false;
+    }
 
-    _transcriptBuffer =
-        _orderedSegments.map((segment) => segment.text).join(' ');
+    final addition = _diffAppend(_transcriptBuffer, fallbackText);
+    if (addition.isEmpty) {
+      _lastFullTranscript = fallbackText;
+      return false;
+    }
+
+    _appendToTranscript(addition);
+    _lastFullTranscript = fallbackText;
     return true;
   }
 
@@ -631,36 +574,10 @@ class VoiceRecorder {
       return null;
     }
 
-    final startIndex = forceFull
-        ? 0
-        : math.max(0, _transcribedChunkCount - _chunkOverlapCount);
-
-    if (!forceFull &&
-        _cachedRecentAudio != null &&
-        _cachedRecentStartIndex == startIndex &&
-        _cachedRecentEndIndex == currentEndIndex) {
-      return _PendingAudioSlice(
-        bytes: _cachedRecentAudio!,
-        startChunkIndex: startIndex,
-        endChunkIndex: currentEndIndex,
-      );
-    }
-
-    final builder = BytesBuilder(copy: false);
-    for (var i = startIndex; i < currentEndIndex; i++) {
-      builder.add(_audioChunks[i]);
-    }
-
-    final bytes = builder.toBytes();
-    if (!forceFull) {
-      _cachedRecentAudio = bytes;
-      _cachedRecentStartIndex = startIndex;
-      _cachedRecentEndIndex = currentEndIndex;
-    }
-
+    final bytes = _combinedAudioBytes();
     return _PendingAudioSlice(
       bytes: bytes,
-      startChunkIndex: startIndex,
+      startChunkIndex: 0,
       endChunkIndex: currentEndIndex,
     );
   }
@@ -688,16 +605,6 @@ class VoiceRecorder {
         continue;
       }
 
-      final noSpeechProb = _asDouble(entry['no_speech_prob']);
-      if (noSpeechProb != null && noSpeechProb >= 0.6) {
-        continue;
-      }
-
-      final confidence = _asDouble(entry['confidence']);
-      if (confidence != null && confidence < 0.2) {
-        continue;
-      }
-
       final rawId = entry['id'];
       final id = rawId == null ? 'segment-$index' : rawId.toString();
       final start = _parseTimestamp(entry['start'], index.toDouble());
@@ -722,6 +629,69 @@ class VoiceRecorder {
     return collapsed;
   }
 
+  void _appendToTranscript(String addition) {
+    final cleaned = addition.trim();
+    if (cleaned.isEmpty) {
+      return;
+    }
+
+    if (_transcriptBuffer.isEmpty) {
+      _transcriptBuffer = cleaned;
+      return;
+    }
+
+    final needsSpace = _needsSpaceBetween(_transcriptBuffer, cleaned);
+    _transcriptBuffer += needsSpace ? ' $cleaned' : cleaned;
+  }
+
+  String _diffAppend(String existing, String incoming) {
+    if (incoming.isEmpty || incoming == existing) {
+      return '';
+    }
+
+    if (existing.isEmpty) {
+      return incoming;
+    }
+
+    if (incoming.startsWith(existing)) {
+      return incoming.substring(existing.length).trimLeft();
+    }
+
+    final maxOverlap =
+        existing.length < incoming.length ? existing.length : incoming.length;
+
+    for (var overlap = maxOverlap; overlap > 0; overlap--) {
+      final suffix = existing.substring(existing.length - overlap);
+      final prefix = incoming.substring(0, overlap);
+      if (suffix == prefix) {
+        return incoming.substring(overlap).trimLeft();
+      }
+    }
+
+    return '';
+  }
+
+  bool _needsSpaceBetween(String existing, String addition) {
+    if (existing.isEmpty) {
+      return false;
+    }
+
+    final lastChar = existing.codeUnitAt(existing.length - 1);
+    final firstChar = addition.codeUnitAt(0);
+
+    const whitespace = <int>[32, 9, 10, 13];
+    if (whitespace.contains(lastChar)) {
+      return false;
+    }
+
+    const punctuation = <int>[44, 46, 33, 63, 58, 59];
+    if (punctuation.contains(firstChar)) {
+      return false;
+    }
+
+    return true;
+  }
+
   double _parseTimestamp(dynamic value, double fallback) {
     if (value is num) {
       return value.toDouble();
@@ -733,16 +703,6 @@ class VoiceRecorder {
       }
     }
     return fallback;
-  }
-
-  double? _asDouble(dynamic value) {
-    if (value is num) {
-      return value.toDouble();
-    }
-    if (value is String) {
-      return double.tryParse(value);
-    }
-    return null;
   }
 
   Uint8List _combinedAudioBytes() {
@@ -796,14 +756,11 @@ class VoiceRecorder {
     _audioChunks.clear();
     _cachedCombinedAudio = null;
     _cachedCombinedAudioChunkCount = 0;
-    _segmentsById.clear();
-    _orderedSegments.clear();
+    _emittedSegmentIds.clear();
+    _lastFullTranscript = null;
     _transcriptBuffer = '';
     _lastEmittedTranscript = null;
     _transcribedChunkCount = 0;
-    _cachedRecentAudio = null;
-    _cachedRecentStartIndex = 0;
-    _cachedRecentEndIndex = 0;
   }
 
   Future<Uint8List?> _blobToBytes(html.Blob blob) async {

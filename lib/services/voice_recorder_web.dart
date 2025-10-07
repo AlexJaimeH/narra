@@ -72,9 +72,6 @@ class VoiceRecorder {
   String _transcriptBuffer = '';
   String? _lastEmittedTranscript;
 
-  final Map<String, String> _segmentTexts = <String, String>{};
-  String? _lastFullTranscript;
-
   int _transcribedChunkCount = 0;
 
   Completer<void>? _stopCompleter;
@@ -260,8 +257,6 @@ class VoiceRecorder {
     _cachedCombinedAudioChunkCount = 0;
     _transcriptBuffer = '';
     _lastEmittedTranscript = null;
-    _segmentTexts.clear();
-    _lastFullTranscript = null;
     _transcribedChunkCount = 0;
     _hasPendingTranscription = false;
     _pendingForceFull = false;
@@ -478,11 +473,6 @@ class VoiceRecorder {
       _hasPendingTranscription = true;
     }
 
-    _transcribedChunkCount = slice.endChunkIndex;
-    if (_audioChunks.length > _transcribedChunkCount) {
-      _hasPendingTranscription = true;
-    }
-
     _cachedRecentAudio = null;
     _cachedRecentStartIndex = 0;
     _cachedRecentEndIndex = 0;
@@ -492,11 +482,6 @@ class VoiceRecorder {
     Map<String, dynamic> payload, {
     required bool forceFull,
   }) {
-    if (forceFull) {
-      _segmentTexts.clear();
-      _lastFullTranscript = null;
-    }
-
     final incomingSegments = _segmentsFromPayload(payload)
       ..sort((a, b) {
         final startComparison = a.start.compareTo(b.start);
@@ -510,8 +495,6 @@ class VoiceRecorder {
         return a.id.compareTo(b.id);
       });
 
-    var appended = false;
-
     if (incomingSegments.isNotEmpty) {
       final segmentSummaries = incomingSegments
           .map(
@@ -523,64 +506,30 @@ class VoiceRecorder {
         'Segmentos recibidos (${incomingSegments.length}): $segmentSummaries',
         level: 'debug',
       );
-
-      for (final segment in incomingSegments) {
-        final previous = _segmentTexts[segment.id] ?? '';
-        final addition = _diffAppend(previous, segment.text);
-        if (addition.isEmpty) {
-          _log(
-            'Segmento ${segment.id} sin novedades (prev=${previous.length}, nuevo=${segment.text.length})',
-            level: 'debug',
-          );
-          _segmentTexts[segment.id] = segment.text;
-          continue;
-        }
-
-        _log(
-          'Segmento ${segment.id} añadió "$addition" (rango ${segment.start}-${segment.end})',
-          level: 'debug',
-        );
-        _appendToTranscript(addition);
-        _segmentTexts[segment.id] = segment.text;
-        appended = true;
-      }
-
-      if (appended) {
-        _log('Segmentos actualizados, transcript parcial: "$_transcriptBuffer"',
-            level: 'debug');
-        _lastFullTranscript = null;
-      }
-      return appended;
     }
 
-    final fallbackText = _sanitizeTranscript(
+    var transcriptCandidate = _sanitizeTranscript(
       (payload['text'] as String?) ?? '',
     );
 
-    if (fallbackText.isNotEmpty) {
-      _log('Texto completo recibido: "$fallbackText"', level: 'debug');
-    } else {
-      _log('Texto completo vacío en respuesta, no se actualiza.', level: 'debug');
+    if (transcriptCandidate.isEmpty && incomingSegments.isNotEmpty) {
+      transcriptCandidate = _sanitizeTranscript(
+        incomingSegments.map((segment) => segment.text).join(' '),
+      );
+      if (transcriptCandidate.isNotEmpty) {
+        _log(
+          'Transcript derivado de segmentos: "$transcriptCandidate"',
+          level: 'debug',
+        );
+      }
     }
 
-    if (fallbackText.isEmpty) {
+    if (transcriptCandidate.isEmpty) {
+      _log('Respuesta sin texto utilizable, se omite.', level: 'debug');
       return false;
     }
 
-    if (_lastFullTranscript == fallbackText) {
-      return false;
-    }
-
-    final addition = _diffAppend(_transcriptBuffer, fallbackText);
-    if (addition.isEmpty) {
-      _lastFullTranscript = fallbackText;
-      return false;
-    }
-
-    _log('Añadiendo diff de texto completo: "$addition"', level: 'debug');
-    _appendToTranscript(addition);
-    _lastFullTranscript = fallbackText;
-    return true;
+    return _appendFullTranscript(transcriptCandidate, forceFull: forceFull);
   }
 
   void _emitTranscript(String transcript) {
@@ -610,6 +559,72 @@ class VoiceRecorder {
       startChunkIndex: 0,
       endChunkIndex: currentEndIndex,
     );
+  }
+
+  bool _appendFullTranscript(String nextTranscript, {required bool forceFull}) {
+    if (forceFull) {
+      if (_transcriptBuffer == nextTranscript) {
+        _log('Transcripción final sin cambios, se mantiene el texto actual.',
+            level: 'debug');
+        return false;
+      }
+
+      _transcriptBuffer = nextTranscript;
+      _log('Transcript reemplazado tras forceFull => "$_transcriptBuffer"',
+          level: 'debug');
+      return true;
+    }
+
+    if (_transcriptBuffer.isEmpty) {
+      _appendToTranscript(nextTranscript);
+      return true;
+    }
+
+    if (_transcriptBuffer == nextTranscript) {
+      _log('Transcripción idéntica a la previa, sin cambios.', level: 'debug');
+      return false;
+    }
+
+    if (nextTranscript.startsWith(_transcriptBuffer)) {
+      final addition =
+          nextTranscript.substring(_transcriptBuffer.length).trimLeft();
+      if (addition.isEmpty) {
+        _log('Respuesta solo repite texto previo, se omite.', level: 'debug');
+        return false;
+      }
+
+      _appendToTranscript(addition);
+      return true;
+    }
+
+    final prefixLength =
+        _longestCommonPrefixLength(_transcriptBuffer, nextTranscript);
+    if (prefixLength < _transcriptBuffer.length) {
+      if (nextTranscript.length >= _transcriptBuffer.length) {
+        _log(
+          'Transcripción corregida por el modelo (prefix=$prefixLength, previo=${_transcriptBuffer.length}, nuevo=${nextTranscript.length}). Se reemplaza el texto previo para mantener fidelidad.',
+          level: 'info',
+        );
+        _transcriptBuffer = nextTranscript;
+        return true;
+      }
+
+      _log(
+        'Transcripción nueva más corta que la previa (prefix=$prefixLength). Se ignora para no perder texto.',
+        level: 'warning',
+      );
+      return false;
+    }
+
+    final addition = nextTranscript.substring(prefixLength).trimLeft();
+    if (addition.isEmpty) {
+      _log('Texto restante vacío tras calcular diff, se omite.',
+          level: 'debug');
+      return false;
+    }
+
+    _appendToTranscript(addition);
+    return true;
   }
 
   List<_TranscriptSegment> _segmentsFromPayload(Map<String, dynamic> payload) {
@@ -685,41 +700,16 @@ class VoiceRecorder {
 
     if (_transcriptBuffer.isEmpty) {
       _transcriptBuffer = cleaned;
-      _log('Transcript inicial establecido: "$_transcriptBuffer"', level: 'debug');
+      _log('Transcript inicial establecido: "$_transcriptBuffer"',
+          level: 'debug');
       return;
     }
 
     final needsSpace = _needsSpaceBetween(_transcriptBuffer, cleaned);
     final appendedText = needsSpace ? ' $cleaned' : cleaned;
     _transcriptBuffer += appendedText;
-    _log('Transcript actualizado con "$appendedText" => "$_transcriptBuffer"', level: 'debug');
-  }
-
-  String _diffAppend(String existing, String incoming) {
-    if (incoming.isEmpty || incoming == existing) {
-      return '';
-    }
-
-    if (existing.isEmpty) {
-      return incoming;
-    }
-
-    if (incoming.startsWith(existing)) {
-      return incoming.substring(existing.length).trimLeft();
-    }
-
-    final maxOverlap =
-        existing.length < incoming.length ? existing.length : incoming.length;
-
-    for (var overlap = maxOverlap; overlap > 0; overlap--) {
-      final suffix = existing.substring(existing.length - overlap);
-      final prefix = incoming.substring(0, overlap);
-      if (suffix == prefix) {
-        return incoming.substring(overlap).trimLeft();
-      }
-    }
-
-    return '';
+    _log('Transcript actualizado con "$appendedText" => "$_transcriptBuffer"',
+        level: 'debug');
   }
 
   bool _needsSpaceBetween(String existing, String addition) {
@@ -741,6 +731,17 @@ class VoiceRecorder {
     }
 
     return true;
+  }
+
+  int _longestCommonPrefixLength(String a, String b) {
+    final minLength = a.length < b.length ? a.length : b.length;
+    var index = 0;
+
+    while (index < minLength && a.codeUnitAt(index) == b.codeUnitAt(index)) {
+      index++;
+    }
+
+    return index;
   }
 
   double _parseTimestamp(dynamic value, double fallback) {
@@ -861,8 +862,6 @@ class VoiceRecorder {
     _audioChunks.clear();
     _cachedCombinedAudio = null;
     _cachedCombinedAudioChunkCount = 0;
-    _segmentTexts.clear();
-    _lastFullTranscript = null;
     _transcriptBuffer = '';
     _lastEmittedTranscript = null;
     _transcribedChunkCount = 0;

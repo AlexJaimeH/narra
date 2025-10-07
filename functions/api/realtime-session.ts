@@ -10,9 +10,13 @@ interface Env {
 }
 
 const DEFAULT_MODEL = 'gpt-4o-mini-transcribe';
+const ALLOWED_TRANSCRIPTION_MODELS = new Set([
+  'gpt-4o-mini-transcribe',
+  'gpt-4o-transcribe-latest',
+  'gpt-4o-transcribe',
+  'whisper-1',
+]);
 const DEFAULT_MODALITIES = ['text'];
-const DEFAULT_INSTRUCTIONS =
-  'Transcribe exactamente las palabras del usuario en su idioma original. No respondas ni agregues comentarios, devuelve una cadena vacía si no hay audio nuevo.';
 
 export const onRequestOptions: PagesFunction<Env> = async () => {
   return new Response(null, { status: 204, headers: CORS_HEADERS });
@@ -49,22 +53,32 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
     const normalizedPayload = jsonPayload && typeof jsonPayload === 'object' ? jsonPayload : {};
 
-    const model = typeof normalizedPayload.model === 'string' && normalizedPayload.model.trim().length > 0
-      ? (normalizedPayload.model as string)
-      : DEFAULT_MODEL;
+    const resolveModel = (value: unknown) => {
+      if (typeof value !== 'string' || value.trim().length === 0) {
+        return DEFAULT_MODEL;
+      }
+      const trimmed = value.trim();
+      if (!ALLOWED_TRANSCRIPTION_MODELS.has(trimmed)) {
+        return DEFAULT_MODEL;
+      }
+      // Whisper-1 no soporta sesiones Realtime; hacemos fallback al modelo primario.
+      return trimmed === 'whisper-1' ? DEFAULT_MODEL : trimmed;
+    };
+
+    const model = resolveModel(normalizedPayload.model);
 
     const modalities = Array.isArray(normalizedPayload.modalities)
       ? (normalizedPayload.modalities as string[])
       : DEFAULT_MODALITIES;
 
-    const instructions = typeof normalizedPayload.instructions === 'string'
-      ? (normalizedPayload.instructions as string)
-      : DEFAULT_INSTRUCTIONS;
+    const instructionsRaw =
+      typeof normalizedPayload.instructions === 'string'
+        ? normalizedPayload.instructions.trim()
+        : '';
 
     const sessionRequest: Record<string, unknown> = {
       model,
       modalities,
-      instructions,
       input_audio_format: 'pcm16',
       output_audio_format: 'pcm16',
       turn_detection: {
@@ -75,6 +89,10 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       },
     };
 
+    if (instructionsRaw.length > 0) {
+      sessionRequest.instructions = instructionsRaw;
+    }
+
     if (normalizedPayload.voice && typeof normalizedPayload.voice === 'string') {
       sessionRequest.voice = normalizedPayload.voice;
     } else {
@@ -84,7 +102,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     if (normalizedPayload.temperature != null) {
       sessionRequest.temperature = normalizedPayload.temperature;
     } else {
-      sessionRequest.temperature = 0.8;
+      sessionRequest.temperature = 0;
     }
 
     const sessionResponse = await fetch('https://api.openai.com/v1/realtime/sessions', {

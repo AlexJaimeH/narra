@@ -29,7 +29,11 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     const model = requestedModel != null && allowedModels.has(requestedModel)
       ? requestedModel
       : 'gpt-4o-mini-transcribe';
-    const language = url.searchParams.get('language') || 'es';
+    const languageParam = url.searchParams.get('language');
+    const language =
+      languageParam != null && languageParam.trim().length > 0
+        ? languageParam
+        : null;
     const prompt = url.searchParams.get('prompt');
 
     const contentType = request.headers.get('content-type') || '';
@@ -38,7 +42,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     if (contentType.includes('multipart/form-data')) {
       formData = await request.formData();
       if (!formData.get('model')) formData.append('model', model);
-      if (!formData.get('language')) formData.append('language', language);
+      if (language != null && !formData.get('language')) {
+        formData.append('language', language);
+      }
       if (prompt && !formData.get('prompt')) formData.append('prompt', prompt);
       if (!formData.get('response_format')) {
         formData.append('response_format', 'verbose_json');
@@ -67,7 +73,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       formData = new FormData();
       formData.append('file', file);
       formData.append('model', model);
-      formData.append('language', language);
+      if (language != null) {
+        formData.append('language', language);
+      }
       if (prompt) formData.append('prompt', prompt);
       formData.append('response_format', 'verbose_json');
     }

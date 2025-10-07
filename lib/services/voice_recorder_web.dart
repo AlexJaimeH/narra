@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:html' as html;
 import 'dart:js_util' as js_util;
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
@@ -465,6 +466,10 @@ class VoiceRecorder {
     if (_audioChunks.length > _transcribedChunkCount) {
       _hasPendingTranscription = true;
     }
+
+    _cachedRecentAudio = null;
+    _cachedRecentStartIndex = 0;
+    _cachedRecentEndIndex = 0;
   }
 
   bool _applyTranscriptionPayload(

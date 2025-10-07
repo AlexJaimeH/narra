@@ -63,6 +63,7 @@ class VoiceRecorder {
   Uint8List? _cachedRecentAudio;
   int _cachedRecentStartIndex = 0;
   int _cachedRecentEndIndex = 0;
+  bool _cachedRecentIncludesHeader = false;
 
   bool _isRecording = false;
   bool _isPaused = false;
@@ -266,6 +267,7 @@ class VoiceRecorder {
     _cachedRecentAudio = null;
     _cachedRecentStartIndex = 0;
     _cachedRecentEndIndex = 0;
+    _cachedRecentIncludesHeader = false;
     _transcriptBuffer = '';
     _lastEmittedTranscript = null;
     _emittedSegmentIds.clear();
@@ -471,6 +473,11 @@ class VoiceRecorder {
     final updated = _applyTranscriptionPayload(payload, forceFull: forceFull);
     if (updated) {
       _emitTranscript(_transcriptBuffer);
+    }
+
+    _transcribedChunkCount = slice.endChunkIndex;
+    if (_audioChunks.length > _transcribedChunkCount) {
+      _hasPendingTranscription = true;
     }
 
     _transcribedChunkCount = slice.endChunkIndex;
@@ -757,29 +764,44 @@ class VoiceRecorder {
     _cachedRecentAudio = _cachedCombinedAudio;
     _cachedRecentStartIndex = 0;
     _cachedRecentEndIndex = _audioChunks.length;
+    _cachedRecentIncludesHeader = true;
     return _cachedCombinedAudio!;
   }
 
   Uint8List _combinedAudioRange(int startChunkIndex, int endChunkIndex) {
-    if (startChunkIndex <= 0 && endChunkIndex == _audioChunks.length) {
+    if (_audioChunks.isEmpty) {
+      return Uint8List(0);
+    }
+
+    final normalizedStart = startChunkIndex <= 0 ? 0 : startChunkIndex;
+    final normalizedEnd = math.max(normalizedStart, math.min(endChunkIndex, _audioChunks.length));
+    final includeHeader = normalizedStart > 0;
+
+    if (!includeHeader && normalizedStart == 0 && normalizedEnd == _audioChunks.length) {
       return _combinedAudioBytes();
     }
 
     if (_cachedRecentAudio != null &&
-        _cachedRecentStartIndex == startChunkIndex &&
-        _cachedRecentEndIndex == endChunkIndex) {
+        _cachedRecentStartIndex == normalizedStart &&
+        _cachedRecentEndIndex == normalizedEnd &&
+        _cachedRecentIncludesHeader == includeHeader) {
       return _cachedRecentAudio!;
     }
 
     final builder = BytesBuilder(copy: false);
-    for (var index = startChunkIndex; index < endChunkIndex; index++) {
+    if (includeHeader) {
+      builder.add(_audioChunks.first);
+    }
+
+    for (var index = normalizedStart; index < normalizedEnd; index++) {
       builder.add(_audioChunks[index]);
     }
 
     final bytes = builder.takeBytes();
     _cachedRecentAudio = bytes;
-    _cachedRecentStartIndex = startChunkIndex;
-    _cachedRecentEndIndex = endChunkIndex;
+    _cachedRecentStartIndex = normalizedStart;
+    _cachedRecentEndIndex = normalizedEnd;
+    _cachedRecentIncludesHeader = includeHeader;
     return bytes;
   }
 
@@ -817,6 +839,7 @@ class VoiceRecorder {
     _cachedRecentAudio = null;
     _cachedRecentStartIndex = 0;
     _cachedRecentEndIndex = 0;
+    _cachedRecentIncludesHeader = false;
     _emittedSegmentIds.clear();
     _lastFullTranscript = null;
     _transcriptBuffer = '';

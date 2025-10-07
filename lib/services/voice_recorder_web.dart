@@ -464,19 +464,19 @@ class VoiceRecorder {
       return;
     }
 
+    final rawText = payload['text'];
+    final normalizedText =
+        rawText is String ? rawText.replaceAll('\n', ' ') : null;
+    final segmentsField = payload['segments'];
+    final segmentCount = segmentsField is List ? segmentsField.length : 0;
+    _log(
+      'Respuesta OpenAI recibida (text: ${normalizedText == null ? 'null' : '"$normalizedText"'}, segments: $segmentCount)',
+      level: 'debug',
+    );
+
     final updated = _applyTranscriptionPayload(payload, forceFull: forceFull);
     if (updated) {
       _emitTranscript(_transcriptBuffer);
-    }
-
-    _transcribedChunkCount = slice.endChunkIndex;
-    if (_audioChunks.length > _transcribedChunkCount) {
-      _hasPendingTranscription = true;
-    }
-
-    _transcribedChunkCount = slice.endChunkIndex;
-    if (_audioChunks.length > _transcribedChunkCount) {
-      _hasPendingTranscription = true;
     }
 
     _transcribedChunkCount = slice.endChunkIndex;
@@ -514,20 +514,41 @@ class VoiceRecorder {
     var appended = false;
 
     if (incomingSegments.isNotEmpty) {
+      final segmentSummaries = incomingSegments
+          .map(
+            (segment) =>
+                '${segment.id}[${segment.start.toStringAsFixed(2)}-${segment.end.toStringAsFixed(2)}]: "${segment.text}"',
+          )
+          .join(' | ');
+      _log(
+        'Segmentos recibidos (${incomingSegments.length}): $segmentSummaries',
+        level: 'debug',
+      );
+
       for (final segment in incomingSegments) {
         final previous = _segmentTexts[segment.id] ?? '';
         final addition = _diffAppend(previous, segment.text);
         if (addition.isEmpty) {
+          _log(
+            'Segmento ${segment.id} sin novedades (prev=${previous.length}, nuevo=${segment.text.length})',
+            level: 'debug',
+          );
           _segmentTexts[segment.id] = segment.text;
           continue;
         }
 
+        _log(
+          'Segmento ${segment.id} añadió "$addition" (rango ${segment.start}-${segment.end})',
+          level: 'debug',
+        );
         _appendToTranscript(addition);
         _segmentTexts[segment.id] = segment.text;
         appended = true;
       }
 
       if (appended) {
+        _log('Segmentos actualizados, transcript parcial: "$_transcriptBuffer"',
+            level: 'debug');
         _lastFullTranscript = null;
       }
       return appended;
@@ -536,6 +557,12 @@ class VoiceRecorder {
     final fallbackText = _sanitizeTranscript(
       (payload['text'] as String?) ?? '',
     );
+
+    if (fallbackText.isNotEmpty) {
+      _log('Texto completo recibido: "$fallbackText"', level: 'debug');
+    } else {
+      _log('Texto completo vacío en respuesta, no se actualiza.', level: 'debug');
+    }
 
     if (fallbackText.isEmpty) {
       return false;
@@ -551,6 +578,7 @@ class VoiceRecorder {
       return false;
     }
 
+    _log('Añadiendo diff de texto completo: "$addition"', level: 'debug');
     _appendToTranscript(addition);
     _lastFullTranscript = fallbackText;
     return true;
@@ -656,11 +684,14 @@ class VoiceRecorder {
 
     if (_transcriptBuffer.isEmpty) {
       _transcriptBuffer = cleaned;
+      _log('Transcript inicial establecido: "$_transcriptBuffer"', level: 'debug');
       return;
     }
 
     final needsSpace = _needsSpaceBetween(_transcriptBuffer, cleaned);
-    _transcriptBuffer += needsSpace ? ' $cleaned' : cleaned;
+    final appendedText = needsSpace ? ' $cleaned' : cleaned;
+    _transcriptBuffer += appendedText;
+    _log('Transcript actualizado con "$appendedText" => "$_transcriptBuffer"', level: 'debug');
   }
 
   String _diffAppend(String existing, String incoming) {

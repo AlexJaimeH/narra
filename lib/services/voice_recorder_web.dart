@@ -146,6 +146,14 @@ class VoiceRecorder {
   static const _fallbackModel = 'gpt-4o-transcribe-latest';
   static const _transcriptionDebounce = Duration(milliseconds: 8);
   static const _preferredTimeslices = <int>[36, 60, 96, 140, 200];
+  static const Set<String> _supportedLanguages = {
+    'es',
+    'en',
+    'pt',
+    'fr',
+    'it',
+    'de',
+  };
 
   OnText? _onText;
   OnRecorderLog? _onLog;
@@ -161,6 +169,7 @@ class VoiceRecorder {
   int _cachedRecentStartIndex = 0;
   int _cachedRecentEndIndex = 0;
   bool _cachedRecentIncludesHeader = false;
+  String? _languageHint;
 
   bool _isRecording = false;
   bool _isPaused = false;
@@ -194,6 +203,10 @@ class VoiceRecorder {
     _onLevel = onLevel;
     _transcript.emitReset(_onText);
     _onLevel?.call(0);
+    _languageHint = _detectPreferredLanguage();
+    if (_languageHint != null) {
+      _log('Idioma preferido detectado: $_languageHint', level: 'debug');
+    }
 
     try {
       final devices = html.window.navigator.mediaDevices;
@@ -359,6 +372,41 @@ class VoiceRecorder {
     _transcribing = false;
     _stopping = false;
     _stopCompleter = null;
+    _languageHint = null;
+  }
+
+  String? _detectPreferredLanguage() {
+    final navigator = html.window.navigator;
+    final languages = navigator.languages;
+    if (languages != null) {
+      for (final dynamic entry in languages) {
+        final resolved = _normalizeLanguage(entry?.toString());
+        if (resolved != null) {
+          return resolved;
+        }
+      }
+    }
+
+    return _normalizeLanguage(navigator.language);
+  }
+
+  String? _normalizeLanguage(String? raw) {
+    if (raw == null) {
+      return null;
+    }
+
+    final normalized = raw.trim().toLowerCase();
+    if (normalized.isEmpty) {
+      return null;
+    }
+
+    for (final code in _supportedLanguages) {
+      if (normalized == code || normalized.startsWith('$code-')) {
+        return code;
+      }
+    }
+
+    return null;
   }
 
   html.MediaRecorder? _createMediaRecorder(html.MediaStream stream) {
@@ -541,7 +589,7 @@ class VoiceRecorder {
           js_util.callMethod(context, 'createMediaStreamSource', [stream]);
       final analyser = js_util.callMethod(context, 'createAnalyser', const []);
       js_util.setProperty(analyser, 'fftSize', 512);
-      js_util.setProperty(analyser, 'smoothingTimeConstant', 0.35);
+      js_util.setProperty(analyser, 'smoothingTimeConstant', 0.22);
       js_util.callMethod(source, 'connect', [analyser]);
 
       final binCount = js_util.getProperty(analyser, 'frequencyBinCount');
@@ -552,7 +600,7 @@ class VoiceRecorder {
       _audioAnalyser = analyser;
       _levelDataBuffer = Uint8List(count > 0 ? count : 512);
       _levelTimer = Timer.periodic(
-        const Duration(milliseconds: 24),
+        const Duration(milliseconds: 16),
         (_) => _emitAudioLevel(),
       );
     } catch (error) {
@@ -587,10 +635,7 @@ class VoiceRecorder {
     final rms = math.sqrt(sum / buffer.length);
     final level = (rms * 1.35).clamp(0.0, 1.0);
     final previous = _lastEmittedLevel;
-    final eased = (previous * 0.4) + (level * 0.6);
-    if ((eased - previous).abs() < 0.003) {
-      return;
-    }
+    final eased = (previous * 0.28) + (level * 0.72);
 
     _lastEmittedLevel = eased;
     onLevel(eased);
@@ -698,7 +743,7 @@ class VoiceRecorder {
       return;
     }
 
-    if (!forceFull && slice.bytes.length < 5500) {
+    if (!forceFull && slice.bytes.length < 12000) {
       _log(
         'Transcripción pospuesta: acumulando más audio (${slice.bytes.length} bytes)',
         level: 'debug',
@@ -716,6 +761,11 @@ class VoiceRecorder {
       ..fields['response_format'] = 'verbose_json'
       ..fields['temperature'] = '0'
       ..fields['language'] = 'es';
+
+    final languageHint = _languageHint ?? _detectPreferredLanguage();
+    if (languageHint != null) {
+      request.fields['language'] = languageHint;
+    }
 
     request.files.add(http.MultipartFile.fromBytes(
       'file',

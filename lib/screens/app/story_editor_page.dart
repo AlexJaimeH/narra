@@ -48,7 +48,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   static const int _maxRecorderLogs = 200;
   final Map<String, void Function(void Function())> _sheetStateUpdater = {};
 
-  static const int _visualizerBarCount = 48;
+  static const int _visualizerBarCount = 72;
   final Queue<double> _levelHistory = ListQueue<double>(_visualizerBarCount)
     ..addAll(List<double>.filled(_visualizerBarCount, 0.0));
   DateTime? _recordingStartedAt;
@@ -858,12 +858,17 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   }
 
   void _updateRecordingDuration(Duration duration) {
-    if (mounted) {
-      setState(() {
+    final sheetUpdated = _refreshDictationSheet(
+      mutateState: () => _recordingDuration = duration,
+    );
+    if (!sheetUpdated) {
+      if (mounted) {
+        setState(() {
+          _recordingDuration = duration;
+        });
+      } else {
         _recordingDuration = duration;
-      });
-    } else {
-      _recordingDuration = duration;
+      }
     }
   }
 
@@ -912,15 +917,30 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   void _handleMicLevel(double level) {
     final clamped = level.clamp(0.0, 1.0);
     final previous = _levelHistory.isEmpty ? clamped : _levelHistory.last;
-    final smoothed = (previous * 0.45) + (clamped * 0.55);
+    final smoothed = (previous * 0.35) + (clamped * 0.65);
     if (_levelHistory.length >= _visualizerBarCount) {
       _levelHistory.removeFirst();
     }
     _levelHistory.add(smoothed);
 
-    if (mounted) {
+    final sheetUpdated = _refreshDictationSheet();
+    if (!sheetUpdated && mounted) {
       setState(() {});
     }
+  }
+
+  bool _refreshDictationSheet({VoidCallback? mutateState}) {
+    mutateState?.call();
+    final updater = _sheetStateUpdater['dictation'];
+    if (updater != null) {
+      try {
+        updater(() {});
+        return true;
+      } catch (_) {
+        // Ignore errors when the sheet is closing.
+      }
+    }
+    return false;
   }
 
   void _stopPlayback({bool resetPosition = true}) {
@@ -1145,7 +1165,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                         child: Align(
                           alignment: Alignment.bottomCenter,
                           child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 60),
+                            duration: const Duration(milliseconds: 45),
                             curve: Curves.easeOutCubic,
                             width: barWidth,
                             height: targetHeight,

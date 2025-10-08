@@ -5,12 +5,12 @@ import 'dart:js_util' as js_util;
 import 'dart:math' as math;
 import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 
 typedef OnText = void Function(String text);
 typedef OnRecorderLog = void Function(String level, String message);
+typedef OnLevel = void Function(double level);
 
 class _TranscriptSegment {
   const _TranscriptSegment({
@@ -53,7 +53,6 @@ class _TranscriptAccumulator {
     _value = '';
     _lastEmitted = '';
     callback?.call('');
-    debugPrint('[VoiceRecorder] Emitiendo transcripción (0 chars)');
   }
 
   bool apply(
@@ -61,66 +60,24 @@ class _TranscriptAccumulator {
     required bool forceFull,
     required void Function(String level, String message) log,
   }) {
-    if (forceFull) {
-      if (_value == nextTranscript) {
-        log('debug',
-            'Transcripción final sin cambios, se mantiene el texto actual.');
-        return false;
-      }
-
-      _value = nextTranscript;
-      log('debug', 'Transcript reemplazado tras forceFull => "$_value"');
-      return true;
+    final cleaned = nextTranscript.trim();
+    if (_value == cleaned) {
+      final message = forceFull
+          ? 'Transcripción final sin cambios, se mantiene el texto actual.'
+          : 'Transcripción idéntica a la previa, sin cambios.';
+      log('debug', message);
+      return false;
     }
 
+    _value = cleaned;
     if (_value.isEmpty) {
-      return appendAddition(nextTranscript, log: log);
+      log('debug', 'Transcript limpiado tras recibir texto vacío.');
+    } else if (forceFull) {
+      log('debug', 'Transcript reemplazado tras forceFull => "$cleaned"');
+    } else {
+      log('debug', 'Transcript reemplazado con "$cleaned"');
     }
-
-    if (_value == nextTranscript) {
-      log('debug', 'Transcripción idéntica a la previa, sin cambios.');
-      return false;
-    }
-
-    if (nextTranscript.startsWith(_value)) {
-      final additionText =
-          nextTranscript.substring(_value.length).trimLeft();
-      if (additionText.isEmpty) {
-        log('debug', 'Respuesta solo repite texto previo, se omite.');
-        return false;
-      }
-
-      return appendAddition(additionText, log: log);
-    }
-
-    final prefixLength = _longestCommonPrefixLength(_value, nextTranscript);
-    if (prefixLength < _value.length) {
-      if (nextTranscript.length >= _value.length) {
-        log(
-          'info',
-          'Transcripción corregida por el modelo (prefix=$prefixLength, '
-              'previo=${_value.length}, nuevo=${nextTranscript.length}). '
-              'Se reemplaza el texto previo para mantener fidelidad.',
-        );
-        _value = nextTranscript;
-        return true;
-      }
-
-      log(
-        'warning',
-        'Transcripción nueva más corta que la previa (prefix=$prefixLength). '
-            'Se ignora para no perder texto.',
-      );
-      return false;
-    }
-
-    final additionText = nextTranscript.substring(prefixLength).trimLeft();
-    if (additionText.isEmpty) {
-      log('debug', 'Texto restante vacío tras calcular diff, se omite.');
-      return false;
-    }
-
-    return appendAddition(additionText, log: log);
+    return true;
   }
 
   bool emitIfChanged(OnText? callback) {
@@ -130,8 +87,6 @@ class _TranscriptAccumulator {
 
     _lastEmitted = _value;
     callback?.call(_value);
-    debugPrint(
-        '[VoiceRecorder] Emitiendo transcripción (${_value.length} chars)');
     return true;
   }
 
@@ -184,30 +139,19 @@ class _TranscriptAccumulator {
 
     return true;
   }
-
-  static int _longestCommonPrefixLength(String a, String b) {
-    final minLength = a.length < b.length ? a.length : b.length;
-    var index = 0;
-
-    while (index < minLength && a.codeUnitAt(index) == b.codeUnitAt(index)) {
-      index++;
-    }
-
-    return index;
-  }
 }
 
 class VoiceRecorder {
   static const _primaryModel = 'gpt-4o-mini-transcribe';
   static const _fallbackModel = 'gpt-4o-transcribe-latest';
-  static const _transcriptionDebounce = Duration(milliseconds: 120);
-  static const _preferredTimeslices = <int>[240, 360, 520, 800];
+  static const _transcriptionDebounce = Duration(milliseconds: 8);
+  static const _preferredTimeslices = <int>[60, 90, 140, 200, 260];
 
   OnText? _onText;
   OnRecorderLog? _onLog;
+  OnLevel? _onLevel;
 
   html.MediaStream? _inputStream;
-  html.MediaStreamTrack? _audioTrack;
   html.MediaRecorder? _mediaRecorder;
 
   final List<Uint8List> _audioChunks = <Uint8List>[];
@@ -234,12 +178,22 @@ class VoiceRecorder {
 
   Completer<void>? _stopCompleter;
 
-  Future<void> start({OnText? onText, OnRecorderLog? onLog}) async {
+  Object? _audioContext;
+  Object? _audioAnalyser;
+  Object? _audioSourceNode;
+  Timer? _levelTimer;
+  Uint8List? _levelDataBuffer;
+  double _lastEmittedLevel = 0;
+
+  Future<void> start(
+      {OnText? onText, OnRecorderLog? onLog, OnLevel? onLevel}) async {
     _onText = onText;
     _onLog = onLog;
 
     _resetState();
+    _onLevel = onLevel;
     _transcript.emitReset(_onText);
+    _onLevel?.call(0);
 
     try {
       final devices = html.window.navigator.mediaDevices;
@@ -299,6 +253,8 @@ class VoiceRecorder {
     _releaseCurrentStream();
     _mediaRecorder = null;
     _isRecording = false;
+    _teardownLevelMonitoring();
+    _onLevel?.call(0);
 
     _markPendingTranscription();
     return true;
@@ -370,6 +326,8 @@ class VoiceRecorder {
       await _ongoingTranscription;
     }
 
+    _onLevel?.call(0);
+
     final audioBytes = _combinedAudioBytes();
     await _disposeInternal();
 
@@ -384,6 +342,10 @@ class VoiceRecorder {
   }
 
   void _resetState() {
+    _teardownLevelMonitoring();
+    _onLevel = null;
+    _levelDataBuffer = null;
+    _lastEmittedLevel = 0;
     _audioChunks.clear();
     _cachedCombinedAudio = null;
     _cachedCombinedAudioChunkCount = 0;
@@ -435,26 +397,22 @@ class VoiceRecorder {
       return 'Micrófono no disponible';
     }
 
-    _audioTrack = tracks.first;
-    debugPrint('[VoiceRecorder] Micrófono: ${_audioTrack?.label}');
-
     final recorder = _createMediaRecorder(stream);
     if (recorder == null) {
       _log('MediaRecorder no soportado en este navegador', level: 'error');
       _releaseStream(stream);
-      _audioTrack = null;
       _inputStream = null;
       return 'MediaRecorder no soportado en este navegador';
     }
 
     _mediaRecorder = recorder;
     _attachRecorderListeners(recorder);
+    _setupLevelMonitoring(stream);
 
     final started = _startRecorder(recorder);
     if (!started) {
       _mediaRecorder = null;
       _releaseStream(stream);
-      _audioTrack = null;
       _inputStream = null;
       return 'No se pudo iniciar la grabación: MediaRecorder falló';
     }
@@ -509,7 +467,6 @@ class VoiceRecorder {
       _releaseStream(stream);
     }
     _inputStream = null;
-    _audioTrack = null;
   }
 
   void _attachRecorderListeners(html.MediaRecorder recorder) {
@@ -559,14 +516,128 @@ class VoiceRecorder {
     });
   }
 
+  void _setupLevelMonitoring(html.MediaStream stream) {
+    _teardownLevelMonitoring();
+    if (_onLevel == null) {
+      return;
+    }
+
+    try {
+      Object? ctor;
+      if (js_util.hasProperty(html.window, 'AudioContext')) {
+        ctor = js_util.getProperty(html.window, 'AudioContext');
+      }
+      if (ctor == null &&
+          js_util.hasProperty(html.window, 'webkitAudioContext')) {
+        ctor = js_util.getProperty(html.window, 'webkitAudioContext');
+      }
+
+      if (ctor == null) {
+        throw UnsupportedError('AudioContext no disponible');
+      }
+
+      final context = js_util.callConstructor(ctor, const []);
+      final source =
+          js_util.callMethod(context, 'createMediaStreamSource', [stream]);
+      final analyser = js_util.callMethod(context, 'createAnalyser', const []);
+      js_util.setProperty(analyser, 'fftSize', 512);
+      js_util.setProperty(analyser, 'smoothingTimeConstant', 0.6);
+      js_util.callMethod(source, 'connect', [analyser]);
+
+      final binCount = js_util.getProperty(analyser, 'frequencyBinCount');
+      final count = binCount is int ? binCount : int.tryParse('$binCount') ?? 0;
+
+      _audioContext = context;
+      _audioSourceNode = source;
+      _audioAnalyser = analyser;
+      _levelDataBuffer = Uint8List(count > 0 ? count : 512);
+      _levelTimer = Timer.periodic(
+        const Duration(milliseconds: 48),
+        (_) => _emitAudioLevel(),
+      );
+    } catch (error) {
+      _teardownLevelMonitoring();
+      _log(
+        'No se pudo iniciar el visualizador de audio',
+        level: 'warning',
+        error: error,
+      );
+    }
+  }
+
+  void _emitAudioLevel() {
+    final analyser = _audioAnalyser;
+    final buffer = _levelDataBuffer;
+    final onLevel = _onLevel;
+    if (analyser == null || buffer == null || onLevel == null) {
+      return;
+    }
+
+    try {
+      js_util.callMethod(analyser, 'getByteTimeDomainData', [buffer]);
+    } catch (_) {
+      return;
+    }
+    var sum = 0.0;
+    for (var i = 0; i < buffer.length; i++) {
+      final normalized = (buffer[i] - 128) / 128.0;
+      sum += normalized * normalized;
+    }
+
+    final rms = math.sqrt(sum / buffer.length);
+    final level = rms.clamp(0.0, 1.0);
+    if ((level - _lastEmittedLevel).abs() < 0.01) {
+      return;
+    }
+
+    _lastEmittedLevel = level;
+    onLevel(level);
+  }
+
+  void _teardownLevelMonitoring() {
+    _levelTimer?.cancel();
+    _levelTimer = null;
+    _levelDataBuffer = null;
+    _lastEmittedLevel = 0;
+
+    final source = _audioSourceNode;
+    if (source != null) {
+      try {
+        js_util.callMethod(source, 'disconnect', const []);
+      } catch (_) {}
+    }
+    _audioSourceNode = null;
+    _audioAnalyser = null;
+
+    final context = _audioContext;
+    _audioContext = null;
+    if (context != null) {
+      try {
+        final closeResult = js_util.callMethod(context, 'close', const []);
+        if (closeResult is Future) {
+          closeResult.catchError((_) {});
+        } else if (closeResult != null) {
+          try {
+            js_util.promiseToFuture(closeResult).catchError((_) {});
+          } catch (_) {}
+        }
+      } catch (_) {}
+    }
+  }
+
   void _markPendingTranscription() {
     if (_stopping) {
       return;
     }
     _hasPendingTranscription = true;
     _transcriptionTimer?.cancel();
-    _transcriptionTimer =
-        Timer(_transcriptionDebounce, () => _runTranscription());
+
+    if (_transcribing) {
+      _transcriptionTimer =
+          Timer(_transcriptionDebounce, () => _runTranscription());
+    } else {
+      _runTranscription(immediate: true);
+    }
   }
 
   Future<void> _runTranscription({
@@ -697,6 +768,24 @@ class VoiceRecorder {
     Map<String, dynamic> payload, {
     required bool forceFull,
   }) {
+    final segmentsField = payload['segments'];
+    final hasSegments = segmentsField is List && segmentsField.isNotEmpty;
+    var hasConfidentSegment = false;
+    if (segmentsField is List) {
+      for (final entry in segmentsField) {
+        if (entry is! Map<String, dynamic>) {
+          hasConfidentSegment = true;
+          break;
+        }
+
+        final noSpeechProb = _asNullableDouble(entry['no_speech_prob']);
+        if (noSpeechProb == null || noSpeechProb < 0.8) {
+          hasConfidentSegment = true;
+          break;
+        }
+      }
+    }
+
     final incomingSegments = _segmentsFromPayload(payload)
       ..sort((a, b) {
         final startComparison = a.start.compareTo(b.start);
@@ -737,9 +826,12 @@ class VoiceRecorder {
           level: 'debug',
         );
       }
-
-      _appendToTranscript(addition);
-      return true;
+    } else if (!hasConfidentSegment && hasSegments) {
+      _log(
+        'Todos los segmentos fueron marcados como silencio (no_speech_prob>=0.8). Se descarta la actualización.',
+        level: 'debug',
+      );
+      return false;
     }
 
     if (transcriptCandidate.isEmpty) {
@@ -893,10 +985,13 @@ class VoiceRecorder {
     }
 
     final normalizedStart = startChunkIndex <= 0 ? 0 : startChunkIndex;
-    final normalizedEnd = math.max(normalizedStart, math.min(endChunkIndex, _audioChunks.length));
+    final normalizedEnd =
+        math.max(normalizedStart, math.min(endChunkIndex, _audioChunks.length));
     final includeHeader = normalizedStart > 0;
 
-    if (!includeHeader && normalizedStart == 0 && normalizedEnd == _audioChunks.length) {
+    if (!includeHeader &&
+        normalizedStart == 0 &&
+        normalizedEnd == _audioChunks.length) {
       return _combinedAudioBytes();
     }
 
@@ -925,6 +1020,10 @@ class VoiceRecorder {
   }
 
   Future<void> _disposeInternal() async {
+    _teardownLevelMonitoring();
+    _onLevel = null;
+    _levelDataBuffer = null;
+    _lastEmittedLevel = 0;
     _transcriptionTimer?.cancel();
     _transcriptionTimer = null;
     _ongoingTranscription = null;
@@ -950,7 +1049,6 @@ class VoiceRecorder {
       // ignore
     }
 
-    _audioTrack = null;
     _inputStream = null;
     _audioChunks.clear();
     _cachedCombinedAudio = null;
@@ -995,7 +1093,6 @@ class VoiceRecorder {
   void _log(String message, {String level = 'info', Object? error}) {
     final detail = error == null ? message : '$message: $error';
     _onLog?.call(level, detail);
-    debugPrint('[VoiceRecorder][$level] $detail');
   }
 
   // ignore: unused_element

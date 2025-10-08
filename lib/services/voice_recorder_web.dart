@@ -342,8 +342,6 @@ class VoiceRecorder {
 
     _onLevel?.call(0);
 
-    _onLevel?.call(0);
-
     final audioBytes = _combinedAudioBytes();
     await _disposeInternal();
 
@@ -379,6 +377,9 @@ class VoiceRecorder {
     _languageHints = const <String>[];
   }
 
+  String? get _languageHint =>
+      _languageHints.isNotEmpty ? _languageHints.first : null;
+
   List<String> _detectPreferredLanguages() {
     final navigator = html.window.navigator;
     final unique = <String>{};
@@ -400,6 +401,15 @@ class VoiceRecorder {
 
     addLanguage(navigator.language);
     return resolved;
+  }
+
+  String? _detectPreferredLanguage() {
+    final detected = _detectPreferredLanguages();
+    if (detected.isNotEmpty) {
+      return detected.first;
+    }
+
+    return _normalizeLanguageCode(html.window.navigator.language);
   }
 
   String? _normalizeLanguageCode(String? raw) {
@@ -841,6 +851,23 @@ class VoiceRecorder {
         : _detectPreferredLanguages();
     if (languages.isNotEmpty) {
       _languageHints = languages;
+    }
+    request.fields['prompt'] = _buildTranscriptionPrompt(languages);
+
+    final previousHint = _languageHint;
+    var languages = _languageHints;
+    if (languages.isEmpty) {
+      languages = _detectPreferredLanguages();
+      if (languages.isEmpty) {
+        final fallbackLanguage = previousHint ?? _detectPreferredLanguage();
+        if (fallbackLanguage != null) {
+          languages = <String>[fallbackLanguage];
+        }
+      }
+
+      if (languages.isNotEmpty) {
+        _languageHints = languages;
+      }
     }
     request.fields['prompt'] = _buildTranscriptionPrompt(languages);
 

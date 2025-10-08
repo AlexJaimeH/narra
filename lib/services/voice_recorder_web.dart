@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:html' as html;
 import 'dart:js_util' as js_util;
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
@@ -201,6 +202,10 @@ class VoiceRecorder {
   final List<Uint8List> _audioChunks = <Uint8List>[];
   Uint8List? _cachedCombinedAudio;
   int _cachedCombinedAudioChunkCount = 0;
+  Uint8List? _cachedRecentAudio;
+  int _cachedRecentStartIndex = 0;
+  int _cachedRecentEndIndex = 0;
+  bool _cachedRecentIncludesHeader = false;
 
   bool _isRecording = false;
   bool _isPaused = false;
@@ -511,6 +516,9 @@ class VoiceRecorder {
       _audioChunks.add(bytes);
       _cachedCombinedAudio = null;
       _cachedCombinedAudioChunkCount = 0;
+      _cachedRecentAudio = null;
+      _cachedRecentStartIndex = 0;
+      _cachedRecentEndIndex = 0;
 
       _log('Chunk de audio capturado (${bytes.length} bytes)', level: 'debug');
       _markPendingTranscription();
@@ -718,6 +726,9 @@ class VoiceRecorder {
           level: 'debug',
         );
       }
+
+      _appendToTranscript(addition);
+      return true;
     }
 
     if (transcriptCandidate.isEmpty) {
@@ -858,7 +869,48 @@ class VoiceRecorder {
 
     _cachedCombinedAudio = builder.toBytes();
     _cachedCombinedAudioChunkCount = _audioChunks.length;
+    _cachedRecentAudio = _cachedCombinedAudio;
+    _cachedRecentStartIndex = 0;
+    _cachedRecentEndIndex = _audioChunks.length;
+    _cachedRecentIncludesHeader = true;
     return _cachedCombinedAudio!;
+  }
+
+  Uint8List _combinedAudioRange(int startChunkIndex, int endChunkIndex) {
+    if (_audioChunks.isEmpty) {
+      return Uint8List(0);
+    }
+
+    final normalizedStart = startChunkIndex <= 0 ? 0 : startChunkIndex;
+    final normalizedEnd = math.max(normalizedStart, math.min(endChunkIndex, _audioChunks.length));
+    final includeHeader = normalizedStart > 0;
+
+    if (!includeHeader && normalizedStart == 0 && normalizedEnd == _audioChunks.length) {
+      return _combinedAudioBytes();
+    }
+
+    if (_cachedRecentAudio != null &&
+        _cachedRecentStartIndex == normalizedStart &&
+        _cachedRecentEndIndex == normalizedEnd &&
+        _cachedRecentIncludesHeader == includeHeader) {
+      return _cachedRecentAudio!;
+    }
+
+    final builder = BytesBuilder(copy: false);
+    if (includeHeader) {
+      builder.add(_audioChunks.first);
+    }
+
+    for (var index = normalizedStart; index < normalizedEnd; index++) {
+      builder.add(_audioChunks[index]);
+    }
+
+    final bytes = builder.takeBytes();
+    _cachedRecentAudio = bytes;
+    _cachedRecentStartIndex = normalizedStart;
+    _cachedRecentEndIndex = normalizedEnd;
+    _cachedRecentIncludesHeader = includeHeader;
+    return bytes;
   }
 
   Future<void> _disposeInternal() async {

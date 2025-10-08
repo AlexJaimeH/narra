@@ -412,9 +412,10 @@ class VoiceRecorder {
     return _normalizeLanguageCode(html.window.navigator.language);
   }
 
-  List<String> _resolveLanguageHints(String? previousHint) {
-    if (_languageHints.isNotEmpty) {
-      return _languageHints;
+  List<String> _resolveLanguageHints({String? fallbackHint}) {
+    var cached = _languageHints;
+    if (cached.isNotEmpty) {
+      return cached;
     }
 
     final detected = _detectPreferredLanguages();
@@ -423,14 +424,15 @@ class VoiceRecorder {
       return detected;
     }
 
-    final fallbackLanguage = previousHint ?? _detectPreferredLanguage();
-    if (fallbackLanguage != null) {
-      final fallbackHints = <String>[fallbackLanguage];
-      _languageHints = fallbackHints;
-      return fallbackHints;
+    final fallback = fallbackHint ?? _detectPreferredLanguage();
+    if (fallback != null) {
+      cached = <String>[fallback];
+    } else {
+      cached = const <String>[];
     }
 
-    return const <String>[];
+    _languageHints = cached;
+    return cached;
   }
 
   String? _normalizeLanguageCode(String? raw) {
@@ -452,17 +454,18 @@ class VoiceRecorder {
     return null;
   }
 
-  String _buildTranscriptionPrompt(List<String> languages) {
+  String _buildTranscriptionPrompt([List<String>? languages]) {
+    final hints = languages ?? _languageHints;
     final buffer = StringBuffer(
       'Transcribe exactly what the speaker says, keeping punctuation and the original language of every word. ',
     )..write(
         'Do not translate, summarize, or invent text; when there is only silence or noise, return an empty result.',
       );
 
-    if (languages.isNotEmpty) {
+    if (hints.isNotEmpty) {
       buffer
         ..write(' Possible languages in this session include: ')
-        ..write(languages.join(', '))
+        ..write(hints.join(', '))
         ..write('.');
     }
 
@@ -895,6 +898,10 @@ class VoiceRecorder {
     final previousHint = _languageHint;
     final languages = _resolveLanguageHints(previousHint);
     request.fields['prompt'] = _buildTranscriptionPrompt(languages);
+
+    request.fields['prompt'] = _buildTranscriptionPrompt(
+      _resolveLanguageHints(),
+    );
 
     request.files.add(http.MultipartFile.fromBytes(
       'file',

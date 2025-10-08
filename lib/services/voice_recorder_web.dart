@@ -144,8 +144,8 @@ class _TranscriptAccumulator {
 class VoiceRecorder {
   static const _primaryModel = 'gpt-4o-mini-transcribe';
   static const _fallbackModel = 'gpt-4o-transcribe-latest';
-  static const _transcriptionDebounce = Duration(milliseconds: 8);
-  static const _preferredTimeslices = <int>[36, 60, 96, 140, 200];
+  static const _transcriptionDebounce = Duration(milliseconds: 4);
+  static const _preferredTimeslices = <int>[24, 40, 60, 90, 140];
   static const Set<String> _supportedLanguages = {
     'es',
     'en',
@@ -169,7 +169,7 @@ class VoiceRecorder {
   int _cachedRecentStartIndex = 0;
   int _cachedRecentEndIndex = 0;
   bool _cachedRecentIncludesHeader = false;
-  String? _languageHint;
+  List<String> _languageHints = const <String>[];
 
   bool _isRecording = false;
   bool _isPaused = false;
@@ -193,6 +193,7 @@ class VoiceRecorder {
   Timer? _levelTimer;
   Uint8List? _levelDataBuffer;
   double _lastEmittedLevel = 0;
+  bool _hasDetectedSpeech = false;
 
   Future<void> start(
       {OnText? onText, OnRecorderLog? onLog, OnLevel? onLevel}) async {
@@ -203,9 +204,12 @@ class VoiceRecorder {
     _onLevel = onLevel;
     _transcript.emitReset(_onText);
     _onLevel?.call(0);
-    _languageHint = _detectPreferredLanguage();
-    if (_languageHint != null) {
-      _log('Idioma preferido detectado: $_languageHint', level: 'debug');
+    _languageHints = _detectPreferredLanguages();
+    if (_languageHints.isNotEmpty) {
+      _log(
+        'Idiomas preferidos detectados: ${_languageHints.join(', ')}',
+        level: 'debug',
+      );
     }
 
     try {
@@ -269,7 +273,7 @@ class VoiceRecorder {
     _teardownLevelMonitoring();
     _onLevel?.call(0);
 
-    _markPendingTranscription();
+    await _ensureTranscription(forceFull: true);
     return true;
   }
 
@@ -334,10 +338,9 @@ class VoiceRecorder {
       // ignore timeout: recorder might already be stopped.
     }
 
-    await _runTranscription(immediate: true, forceFull: true);
-    if (_ongoingTranscription != null) {
-      await _ongoingTranscription;
-    }
+    await _ensureTranscription(forceFull: true);
+
+    _onLevel?.call(0);
 
     _onLevel?.call(0);
 
@@ -359,6 +362,7 @@ class VoiceRecorder {
     _onLevel = null;
     _levelDataBuffer = null;
     _lastEmittedLevel = 0;
+    _hasDetectedSpeech = false;
     _audioChunks.clear();
     _cachedCombinedAudio = null;
     _cachedCombinedAudioChunkCount = 0;
@@ -372,25 +376,33 @@ class VoiceRecorder {
     _transcribing = false;
     _stopping = false;
     _stopCompleter = null;
-    _languageHint = null;
+    _languageHints = const <String>[];
   }
 
-  String? _detectPreferredLanguage() {
+  List<String> _detectPreferredLanguages() {
     final navigator = html.window.navigator;
-    final languages = navigator.languages;
-    if (languages != null) {
-      for (final dynamic entry in languages) {
-        final resolved = _normalizeLanguage(entry?.toString());
-        if (resolved != null) {
-          return resolved;
-        }
+    final unique = <String>{};
+    final resolved = <String>[];
+
+    void addLanguage(String? raw) {
+      final normalized = _normalizeLanguageCode(raw);
+      if (normalized != null && unique.add(normalized)) {
+        resolved.add(normalized);
       }
     }
 
-    return _normalizeLanguage(navigator.language);
+    final languages = navigator.languages;
+    if (languages != null) {
+      for (final dynamic entry in languages) {
+        addLanguage(entry?.toString());
+      }
+    }
+
+    addLanguage(navigator.language);
+    return resolved;
   }
 
-  String? _normalizeLanguage(String? raw) {
+  String? _normalizeLanguageCode(String? raw) {
     if (raw == null) {
       return null;
     }
@@ -407,6 +419,23 @@ class VoiceRecorder {
     }
 
     return null;
+  }
+
+  String _buildTranscriptionPrompt(List<String> languages) {
+    final buffer = StringBuffer(
+      'Transcribe exactly what the speaker says, keeping punctuation and the original language of every word. ',
+    )..write(
+        'Do not translate, summarize, or invent text; when there is only silence or noise, return an empty result.',
+      );
+
+    if (languages.isNotEmpty) {
+      buffer
+        ..write(' Possible languages in this session include: ')
+        ..write(languages.join(', '))
+        ..write('.');
+    }
+
+    return buffer.toString();
   }
 
   html.MediaRecorder? _createMediaRecorder(html.MediaStream stream) {
@@ -638,6 +667,9 @@ class VoiceRecorder {
     final eased = (previous * 0.28) + (level * 0.72);
 
     _lastEmittedLevel = eased;
+    if (!_hasDetectedSpeech && eased > 0.055) {
+      _hasDetectedSpeech = true;
+    }
     onLevel(eased);
   }
 
@@ -680,8 +712,8 @@ class VoiceRecorder {
     _transcriptionTimer?.cancel();
 
     if (_transcribing) {
-      _transcriptionTimer =
-          Timer(_transcriptionDebounce, () => _runTranscription());
+      _transcriptionTimer = Timer(
+          _transcriptionDebounce, () => _runTranscription(immediate: true));
     } else {
       _runTranscription(immediate: true);
     }
@@ -731,10 +763,35 @@ class VoiceRecorder {
           _runTranscription(immediate: true);
         });
       } else {
-        _transcriptionTimer =
-            Timer(_transcriptionDebounce, () => _runTranscription());
+        _transcriptionTimer = Timer(
+          _transcriptionDebounce,
+          () => _runTranscription(immediate: true),
+        );
       }
     });
+  }
+
+  Future<void> _ensureTranscription({bool forceFull = false}) async {
+    final active = _ongoingTranscription;
+    if (active != null) {
+      try {
+        await active;
+      } catch (_) {
+        // ignore previous transcription failures before forcing a refresh
+      }
+    }
+
+    _hasPendingTranscription = true;
+    await _runTranscription(immediate: true, forceFull: forceFull);
+
+    final followUp = _ongoingTranscription;
+    if (followUp != null) {
+      try {
+        await followUp;
+      } catch (_) {
+        // ignore failures bubbling from the forced transcription
+      }
+    }
   }
 
   Future<void> _transcribeLatest({bool forceFull = false}) async {
@@ -743,9 +800,21 @@ class VoiceRecorder {
       return;
     }
 
-    if (!forceFull && slice.bytes.length < 12000) {
+    if (!forceFull && _transcript.value.isEmpty && !_hasDetectedSpeech) {
       _log(
-        'Transcripción pospuesta: acumulando más audio (${slice.bytes.length} bytes)',
+        'Transcripción pospuesta: esperando detección de voz.',
+        level: 'debug',
+      );
+      _hasPendingTranscription = true;
+      return;
+    }
+
+    final hasTranscript = _transcript.value.isNotEmpty;
+    final minBytes =
+        forceFull ? 0 : (_hasDetectedSpeech || hasTranscript ? 7200 : 12000);
+    if (!forceFull && slice.bytes.length < minBytes) {
+      _log(
+        'Transcripción pospuesta: acumulando más audio (${slice.bytes.length} bytes < $minBytes bytes mínimos)',
         level: 'debug',
       );
       _hasPendingTranscription = true;
@@ -766,6 +835,14 @@ class VoiceRecorder {
     if (languageHint != null) {
       request.fields['language'] = languageHint;
     }
+
+    final languages = _languageHints.isNotEmpty
+        ? _languageHints
+        : _detectPreferredLanguages();
+    if (languages.isNotEmpty) {
+      _languageHints = languages;
+    }
+    request.fields['prompt'] = _buildTranscriptionPrompt(languages);
 
     request.files.add(http.MultipartFile.fromBytes(
       'file',
@@ -1086,6 +1163,7 @@ class VoiceRecorder {
     _onLevel = null;
     _levelDataBuffer = null;
     _lastEmittedLevel = 0;
+    _hasDetectedSpeech = false;
     _transcriptionTimer?.cancel();
     _transcriptionTimer = null;
     _ongoingTranscription = null;

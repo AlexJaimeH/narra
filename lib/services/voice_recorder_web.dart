@@ -83,13 +83,14 @@ class _TranscriptAccumulator {
     }
 
     if (nextTranscript.startsWith(_value)) {
-      final addition = nextTranscript.substring(_value.length).trimLeft();
-      if (addition.isEmpty) {
+      final additionText =
+          nextTranscript.substring(_value.length).trimLeft();
+      if (additionText.isEmpty) {
         log('debug', 'Respuesta solo repite texto previo, se omite.');
         return false;
       }
 
-      return appendAddition(addition, log: log);
+      return appendAddition(additionText, log: log);
     }
 
     final prefixLength = _longestCommonPrefixLength(_value, nextTranscript);
@@ -113,13 +114,13 @@ class _TranscriptAccumulator {
       return false;
     }
 
-    final addition = nextTranscript.substring(prefixLength).trimLeft();
-    if (addition.isEmpty) {
+    final additionText = nextTranscript.substring(prefixLength).trimLeft();
+    if (additionText.isEmpty) {
       log('debug', 'Texto restante vacío tras calcular diff, se omite.');
       return false;
     }
 
-    return appendAddition(addition, log: log);
+    return appendAddition(additionText, log: log);
   }
 
   bool emitIfChanged(OnText? callback) {
@@ -135,17 +136,17 @@ class _TranscriptAccumulator {
   }
 
   bool appendAddition(
-    String addition, {
+    String additionText, {
     required void Function(String, String) log,
   }) {
-    return _appendInternal(addition, log: log);
+    return _appendInternal(additionText, log: log);
   }
 
   bool _appendInternal(
-    String addition, {
+    String additionText, {
     required void Function(String, String) log,
   }) {
-    final cleaned = addition.trim();
+    final cleaned = additionText.trim();
     if (cleaned.isEmpty) {
       return false;
     }
@@ -163,13 +164,13 @@ class _TranscriptAccumulator {
     return true;
   }
 
-  static bool _needsSpaceBetween(String existing, String addition) {
+  static bool _needsSpaceBetween(String existing, String additionText) {
     if (existing.isEmpty) {
       return false;
     }
 
     final lastChar = existing.codeUnitAt(existing.length - 1);
-    final firstChar = addition.codeUnitAt(0);
+    final firstChar = additionText.codeUnitAt(0);
 
     const whitespace = <int>[32, 9, 10, 13];
     if (whitespace.contains(lastChar)) {
@@ -998,8 +999,8 @@ class VoiceRecorder {
   }
 
   // ignore: unused_element
-  void _appendToTranscript(String addition) {
-    final sanitized = _sanitizeTranscript(addition);
+  void _appendToTranscript(String additionText) {
+    final sanitized = _sanitizeTranscript(additionText);
     if (sanitized.isEmpty) {
       return;
     }

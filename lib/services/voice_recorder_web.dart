@@ -838,7 +838,21 @@ class VoiceRecorder {
 
     final request = http.MultipartRequest('POST', uri)
       ..fields['response_format'] = 'verbose_json'
-      ..fields['temperature'] = '0';
+      ..fields['temperature'] = '0'
+      ..fields['language'] = 'es';
+
+    final languageHint = _languageHint ?? _detectPreferredLanguage();
+    if (languageHint != null) {
+      request.fields['language'] = languageHint;
+    }
+
+    final languages = _languageHints.isNotEmpty
+        ? _languageHints
+        : _detectPreferredLanguages();
+    if (languages.isNotEmpty) {
+      _languageHints = languages;
+    }
+    request.fields['prompt'] = _buildTranscriptionPrompt(languages);
 
     final previousHint = _languageHint;
     var languages = _languageHints;

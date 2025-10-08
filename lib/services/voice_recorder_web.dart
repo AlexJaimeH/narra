@@ -61,66 +61,24 @@ class _TranscriptAccumulator {
     required bool forceFull,
     required void Function(String level, String message) log,
   }) {
-    if (forceFull) {
-      if (_value == nextTranscript) {
-        log('debug',
-            'Transcripción final sin cambios, se mantiene el texto actual.');
-        return false;
-      }
-
-      _value = nextTranscript;
-      log('debug', 'Transcript reemplazado tras forceFull => "$_value"');
-      return true;
+    final cleaned = nextTranscript.trim();
+    if (_value == cleaned) {
+      final message = forceFull
+          ? 'Transcripción final sin cambios, se mantiene el texto actual.'
+          : 'Transcripción idéntica a la previa, sin cambios.';
+      log('debug', message);
+      return false;
     }
 
+    _value = cleaned;
     if (_value.isEmpty) {
-      return appendAddition(nextTranscript, log: log);
+      log('debug', 'Transcript limpiado tras recibir texto vacío.');
+    } else if (forceFull) {
+      log('debug', 'Transcript reemplazado tras forceFull => "$cleaned"');
+    } else {
+      log('debug', 'Transcript reemplazado con "$cleaned"');
     }
-
-    if (_value == nextTranscript) {
-      log('debug', 'Transcripción idéntica a la previa, sin cambios.');
-      return false;
-    }
-
-    if (nextTranscript.startsWith(_value)) {
-      final additionText =
-          nextTranscript.substring(_value.length).trimLeft();
-      if (additionText.isEmpty) {
-        log('debug', 'Respuesta solo repite texto previo, se omite.');
-        return false;
-      }
-
-      return appendAddition(additionText, log: log);
-    }
-
-    final prefixLength = _longestCommonPrefixLength(_value, nextTranscript);
-    if (prefixLength < _value.length) {
-      if (nextTranscript.length >= _value.length) {
-        log(
-          'info',
-          'Transcripción corregida por el modelo (prefix=$prefixLength, '
-              'previo=${_value.length}, nuevo=${nextTranscript.length}). '
-              'Se reemplaza el texto previo para mantener fidelidad.',
-        );
-        _value = nextTranscript;
-        return true;
-      }
-
-      log(
-        'warning',
-        'Transcripción nueva más corta que la previa (prefix=$prefixLength). '
-            'Se ignora para no perder texto.',
-      );
-      return false;
-    }
-
-    final additionText = nextTranscript.substring(prefixLength).trimLeft();
-    if (additionText.isEmpty) {
-      log('debug', 'Texto restante vacío tras calcular diff, se omite.');
-      return false;
-    }
-
-    return appendAddition(additionText, log: log);
+    return true;
   }
 
   bool emitIfChanged(OnText? callback) {
@@ -185,16 +143,6 @@ class _TranscriptAccumulator {
     return true;
   }
 
-  static int _longestCommonPrefixLength(String a, String b) {
-    final minLength = a.length < b.length ? a.length : b.length;
-    var index = 0;
-
-    while (index < minLength && a.codeUnitAt(index) == b.codeUnitAt(index)) {
-      index++;
-    }
-
-    return index;
-  }
 }
 
 class VoiceRecorder {
@@ -737,9 +685,6 @@ class VoiceRecorder {
           level: 'debug',
         );
       }
-
-      _appendToTranscript(addition);
-      return true;
     }
 
     if (transcriptCandidate.isEmpty) {

@@ -145,7 +145,7 @@ class VoiceRecorder {
   static const _primaryModel = 'gpt-4o-mini-transcribe';
   static const _fallbackModel = 'gpt-4o-transcribe-latest';
   static const _transcriptionDebounce = Duration(milliseconds: 8);
-  static const _preferredTimeslices = <int>[60, 90, 140, 200, 260];
+  static const _preferredTimeslices = <int>[36, 60, 96, 140, 200];
 
   OnText? _onText;
   OnRecorderLog? _onLog;
@@ -541,7 +541,7 @@ class VoiceRecorder {
           js_util.callMethod(context, 'createMediaStreamSource', [stream]);
       final analyser = js_util.callMethod(context, 'createAnalyser', const []);
       js_util.setProperty(analyser, 'fftSize', 512);
-      js_util.setProperty(analyser, 'smoothingTimeConstant', 0.6);
+      js_util.setProperty(analyser, 'smoothingTimeConstant', 0.35);
       js_util.callMethod(source, 'connect', [analyser]);
 
       final binCount = js_util.getProperty(analyser, 'frequencyBinCount');
@@ -552,7 +552,7 @@ class VoiceRecorder {
       _audioAnalyser = analyser;
       _levelDataBuffer = Uint8List(count > 0 ? count : 512);
       _levelTimer = Timer.periodic(
-        const Duration(milliseconds: 48),
+        const Duration(milliseconds: 24),
         (_) => _emitAudioLevel(),
       );
     } catch (error) {
@@ -585,13 +585,15 @@ class VoiceRecorder {
     }
 
     final rms = math.sqrt(sum / buffer.length);
-    final level = rms.clamp(0.0, 1.0);
-    if ((level - _lastEmittedLevel).abs() < 0.01) {
+    final level = (rms * 1.35).clamp(0.0, 1.0);
+    final previous = _lastEmittedLevel;
+    final eased = (previous * 0.4) + (level * 0.6);
+    if ((eased - previous).abs() < 0.003) {
       return;
     }
 
-    _lastEmittedLevel = level;
-    onLevel(level);
+    _lastEmittedLevel = eased;
+    onLevel(eased);
   }
 
   void _teardownLevelMonitoring() {
@@ -696,6 +698,15 @@ class VoiceRecorder {
       return;
     }
 
+    if (!forceFull && slice.bytes.length < 5500) {
+      _log(
+        'Transcripción pospuesta: acumulando más audio (${slice.bytes.length} bytes)',
+        level: 'debug',
+      );
+      _hasPendingTranscription = true;
+      return;
+    }
+
     final uri = Uri.parse('/api/whisper').replace(queryParameters: {
       'model': _primaryModel,
       'fallback': '$_fallbackModel,whisper-1',
@@ -703,7 +714,8 @@ class VoiceRecorder {
 
     final request = http.MultipartRequest('POST', uri)
       ..fields['response_format'] = 'verbose_json'
-      ..fields['temperature'] = '0';
+      ..fields['temperature'] = '0'
+      ..fields['language'] = 'es';
 
     request.files.add(http.MultipartFile.fromBytes(
       'file',

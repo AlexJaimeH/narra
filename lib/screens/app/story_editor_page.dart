@@ -8,6 +8,7 @@ import 'dart:html' as html;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:narra/services/story_service_new.dart';
@@ -47,13 +48,13 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   static const int _maxRecorderLogs = 200;
   final Map<String, void Function(void Function())> _sheetStateUpdater = {};
 
-  static const int _visualizerBarCount = 24;
+  static const int _visualizerBarCount = 48;
   final Queue<double> _levelHistory = ListQueue<double>(_visualizerBarCount)
     ..addAll(List<double>.filled(_visualizerBarCount, 0.0));
   DateTime? _recordingStartedAt;
   Duration _recordingAccumulated = Duration.zero;
   Duration _recordingDuration = Duration.zero;
-  Timer? _recordingTicker;
+  Ticker? _recordingTicker;
 
   typed.Uint8List? _recordedAudioBytes;
   bool _recordedAudioUploaded = false;
@@ -129,7 +130,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   @override
   void dispose() {
     _recorder?.dispose();
-    _recordingTicker?.cancel();
+    _recordingTicker?.dispose();
     _recordingTicker = null;
     _disposePlaybackAudio();
     _tabController.dispose();
@@ -866,24 +867,36 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     }
   }
 
-  void _startDurationTicker() {
-    _recordingTicker?.cancel();
-    _recordingTicker = Timer.periodic(const Duration(milliseconds: 120), (_) {
+  void _ensureRecordingTicker() {
+    _recordingTicker ??= createTicker((_) {
       _updateRecordingDuration(_currentRecordingDuration());
     });
+  }
+
+  void _startDurationTicker() {
+    _ensureRecordingTicker();
+    _updateRecordingDuration(_currentRecordingDuration());
+    final ticker = _recordingTicker;
+    if (ticker != null && !ticker.isActive) {
+      ticker.start();
+    }
   }
 
   void _pauseDurationTicker() {
     _recordingAccumulated = _currentRecordingDuration();
     _recordingStartedAt = null;
-    _recordingTicker?.cancel();
-    _recordingTicker = null;
+    final ticker = _recordingTicker;
+    if (ticker != null && ticker.isActive) {
+      ticker.stop();
+    }
     _updateRecordingDuration(_recordingAccumulated);
   }
 
   void _stopDurationTicker({bool reset = false}) {
-    _recordingTicker?.cancel();
-    _recordingTicker = null;
+    final ticker = _recordingTicker;
+    if (ticker != null && ticker.isActive) {
+      ticker.stop();
+    }
     if (reset) {
       _recordingAccumulated = Duration.zero;
       _recordingStartedAt = null;
@@ -898,10 +911,12 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
   void _handleMicLevel(double level) {
     final clamped = level.clamp(0.0, 1.0);
+    final previous = _levelHistory.isEmpty ? clamped : _levelHistory.last;
+    final smoothed = (previous * 0.45) + (clamped * 0.55);
     if (_levelHistory.length >= _visualizerBarCount) {
       _levelHistory.removeFirst();
     }
-    _levelHistory.add(clamped);
+    _levelHistory.add(smoothed);
 
     if (mounted) {
       setState(() {});
@@ -1059,39 +1074,108 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
   Widget _buildWaveformBars(BuildContext context) {
     final levels = _levelHistory.toList(growable: false);
-    final barColor = _isRecording && !_isPaused
-        ? Colors.red
-        : Theme.of(context)
-            .colorScheme
-            .primary
-            .withValues(alpha: _isPaused ? 0.4 : 0.7);
+    final theme = Theme.of(context);
+    final isActive = _isRecording && !_isPaused;
+    final baseColor = isActive ? Colors.redAccent : theme.colorScheme.primary;
+    final softAlpha = _isPaused ? 0.25 : 0.55;
+    final highlightAlpha = math.min(1.0, softAlpha + 0.1);
+    final gradient = LinearGradient(
+      begin: Alignment.bottomCenter,
+      end: Alignment.topCenter,
+      colors: [
+        baseColor.withValues(alpha: 0.9),
+        baseColor.withValues(alpha: softAlpha),
+      ],
+    );
+    final shimmerColor = baseColor.withValues(alpha: isActive ? 0.2 : 0.12);
 
     return SizedBox(
-      height: 40,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: List<Widget>.generate(levels.length * 2 - 1, (index) {
-          if (index.isOdd) {
-            return const SizedBox(width: 2);
-          }
-          final double value = levels[index ~/ 2].clamp(0.0, 1.0).toDouble();
-          final height = 6 + value * 28;
-          return Expanded(
-            child: Align(
-              alignment: Alignment.bottomCenter,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 100),
-                curve: Curves.easeOut,
-                width: 4,
-                height: height,
-                decoration: BoxDecoration(
-                  color: barColor,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-          );
-        }),
+      height: 56,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color:
+              theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final barCount = levels.length;
+              if (barCount == 0) {
+                return const SizedBox.expand();
+              }
+
+              const spacing = 1.8;
+              final totalSpacing = spacing * (barCount - 1);
+              final barWidth = math.max(
+                2.0,
+                (constraints.maxWidth - totalSpacing) / barCount,
+              );
+
+              return Stack(
+                fit: StackFit.expand,
+                children: [
+                  Align(
+                    alignment: Alignment.bottomCenter,
+                    child: Container(
+                      height: 2,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            shimmerColor,
+                            baseColor.withValues(alpha: highlightAlpha),
+                            shimmerColor,
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                  ),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: List.generate(barCount, (index) {
+                      final double value =
+                          levels[index].clamp(0.0, 1.0).toDouble();
+                      final targetHeight = 8 + value * 36;
+                      return Padding(
+                        padding: EdgeInsets.only(
+                          right: index == barCount - 1 ? 0 : spacing,
+                        ),
+                        child: Align(
+                          alignment: Alignment.bottomCenter,
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 60),
+                            curve: Curves.easeOutCubic,
+                            width: barWidth,
+                            height: targetHeight,
+                            decoration: BoxDecoration(
+                              gradient: gradient,
+                              borderRadius: BorderRadius.circular(
+                                barWidth.clamp(1.8, 6.0),
+                              ),
+                              boxShadow: isActive
+                                  ? [
+                                      BoxShadow(
+                                        color:
+                                            baseColor.withValues(alpha: 0.16),
+                                        blurRadius: 6,
+                                        spreadRadius: 0,
+                                        offset: const Offset(0, 1.2),
+                                      ),
+                                    ]
+                                  : null,
+                            ),
+                          ),
+                        ),
+                      );
+                    }),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
       ),
     );
   }

@@ -342,6 +342,8 @@ class VoiceRecorder {
 
     _onLevel?.call(0);
 
+    _onLevel?.call(0);
+
     final audioBytes = _combinedAudioBytes();
     await _disposeInternal();
 
@@ -826,7 +828,13 @@ class VoiceRecorder {
 
     final request = http.MultipartRequest('POST', uri)
       ..fields['response_format'] = 'verbose_json'
-      ..fields['temperature'] = '0';
+      ..fields['temperature'] = '0'
+      ..fields['language'] = 'es';
+
+    final languageHint = _languageHint ?? _detectPreferredLanguage();
+    if (languageHint != null) {
+      request.fields['language'] = languageHint;
+    }
 
     final languages = _languageHints.isNotEmpty
         ? _languageHints

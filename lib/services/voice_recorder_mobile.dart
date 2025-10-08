@@ -4,9 +4,14 @@ import 'dart:typed_data';
 
 typedef OnText = void Function(String text);
 typedef OnRecorderLog = void Function(String level, String message);
+typedef OnLevel = void Function(double level);
 
 class VoiceRecorder {
-  Future<void> start({OnText? onText, OnRecorderLog? onLog}) async {
+  Future<void> start({
+    OnText? onText,
+    OnRecorderLog? onLog,
+    OnLevel? onLevel,
+  }) async {
     // TODO: Implement with a cross-platform audio recorder plugin and dart:io for bytes.
     throw UnimplementedError('Recording on mobile pending implementation');
   }

@@ -61,66 +61,24 @@ class _TranscriptAccumulator {
     required bool forceFull,
     required void Function(String level, String message) log,
   }) {
-    if (forceFull) {
-      if (_value == nextTranscript) {
-        log('debug',
-            'Transcripción final sin cambios, se mantiene el texto actual.');
-        return false;
-      }
-
-      _value = nextTranscript;
-      log('debug', 'Transcript reemplazado tras forceFull => "$_value"');
-      return true;
+    final cleaned = nextTranscript.trim();
+    if (_value == cleaned) {
+      final message = forceFull
+          ? 'Transcripción final sin cambios, se mantiene el texto actual.'
+          : 'Transcripción idéntica a la previa, sin cambios.';
+      log('debug', message);
+      return false;
     }
 
+    _value = cleaned;
     if (_value.isEmpty) {
-      return appendAddition(nextTranscript, log: log);
+      log('debug', 'Transcript limpiado tras recibir texto vacío.');
+    } else if (forceFull) {
+      log('debug', 'Transcript reemplazado tras forceFull => "$cleaned"');
+    } else {
+      log('debug', 'Transcript reemplazado con "$cleaned"');
     }
-
-    if (_value == nextTranscript) {
-      log('debug', 'Transcripción idéntica a la previa, sin cambios.');
-      return false;
-    }
-
-    if (nextTranscript.startsWith(_value)) {
-      final additionText =
-          nextTranscript.substring(_value.length).trimLeft();
-      if (additionText.isEmpty) {
-        log('debug', 'Respuesta solo repite texto previo, se omite.');
-        return false;
-      }
-
-      return appendAddition(additionText, log: log);
-    }
-
-    final prefixLength = _longestCommonPrefixLength(_value, nextTranscript);
-    if (prefixLength < _value.length) {
-      if (nextTranscript.length >= _value.length) {
-        log(
-          'info',
-          'Transcripción corregida por el modelo (prefix=$prefixLength, '
-              'previo=${_value.length}, nuevo=${nextTranscript.length}). '
-              'Se reemplaza el texto previo para mantener fidelidad.',
-        );
-        _value = nextTranscript;
-        return true;
-      }
-
-      log(
-        'warning',
-        'Transcripción nueva más corta que la previa (prefix=$prefixLength). '
-            'Se ignora para no perder texto.',
-      );
-      return false;
-    }
-
-    final additionText = nextTranscript.substring(prefixLength).trimLeft();
-    if (additionText.isEmpty) {
-      log('debug', 'Texto restante vacío tras calcular diff, se omite.');
-      return false;
-    }
-
-    return appendAddition(additionText, log: log);
+    return true;
   }
 
   bool emitIfChanged(OnText? callback) {
@@ -185,23 +143,13 @@ class _TranscriptAccumulator {
     return true;
   }
 
-  static int _longestCommonPrefixLength(String a, String b) {
-    final minLength = a.length < b.length ? a.length : b.length;
-    var index = 0;
-
-    while (index < minLength && a.codeUnitAt(index) == b.codeUnitAt(index)) {
-      index++;
-    }
-
-    return index;
-  }
 }
 
 class VoiceRecorder {
   static const _primaryModel = 'gpt-4o-mini-transcribe';
   static const _fallbackModel = 'gpt-4o-transcribe-latest';
-  static const _transcriptionDebounce = Duration(milliseconds: 120);
-  static const _preferredTimeslices = <int>[240, 360, 520, 800];
+  static const _transcriptionDebounce = Duration(milliseconds: 40);
+  static const _preferredTimeslices = <int>[120, 180, 260, 400, 640];
 
   OnText? _onText;
   OnRecorderLog? _onLog;
@@ -565,8 +513,13 @@ class VoiceRecorder {
     }
     _hasPendingTranscription = true;
     _transcriptionTimer?.cancel();
-    _transcriptionTimer =
-        Timer(_transcriptionDebounce, () => _runTranscription());
+
+    if (_transcribing) {
+      _transcriptionTimer =
+          Timer(_transcriptionDebounce, () => _runTranscription());
+    } else {
+      _runTranscription(immediate: true);
+    }
   }
 
   Future<void> _runTranscription({
@@ -697,6 +650,24 @@ class VoiceRecorder {
     Map<String, dynamic> payload, {
     required bool forceFull,
   }) {
+    final segmentsField = payload['segments'];
+    final hasSegments = segmentsField is List && segmentsField.isNotEmpty;
+    var hasConfidentSegment = false;
+    if (segmentsField is List) {
+      for (final entry in segmentsField) {
+        if (entry is! Map<String, dynamic>) {
+          hasConfidentSegment = true;
+          break;
+        }
+
+        final noSpeechProb = _asNullableDouble(entry['no_speech_prob']);
+        if (noSpeechProb == null || noSpeechProb < 0.8) {
+          hasConfidentSegment = true;
+          break;
+        }
+      }
+    }
+
     final incomingSegments = _segmentsFromPayload(payload)
       ..sort((a, b) {
         final startComparison = a.start.compareTo(b.start);
@@ -737,9 +708,12 @@ class VoiceRecorder {
           level: 'debug',
         );
       }
-
-      _appendToTranscript(addition);
-      return true;
+    } else if (!hasConfidentSegment && hasSegments) {
+      _log(
+        'Todos los segmentos fueron marcados como silencio (no_speech_prob>=0.8). Se descarta la actualización.',
+        level: 'debug',
+      );
+      return false;
     }
 
     if (transcriptCandidate.isEmpty) {

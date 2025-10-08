@@ -148,8 +148,8 @@ class _TranscriptAccumulator {
 class VoiceRecorder {
   static const _primaryModel = 'gpt-4o-mini-transcribe';
   static const _fallbackModel = 'gpt-4o-transcribe-latest';
-  static const _transcriptionDebounce = Duration(milliseconds: 120);
-  static const _preferredTimeslices = <int>[240, 360, 520, 800];
+  static const _transcriptionDebounce = Duration(milliseconds: 40);
+  static const _preferredTimeslices = <int>[120, 180, 260, 400, 640];
 
   OnText? _onText;
   OnRecorderLog? _onLog;
@@ -513,8 +513,13 @@ class VoiceRecorder {
     }
     _hasPendingTranscription = true;
     _transcriptionTimer?.cancel();
-    _transcriptionTimer =
-        Timer(_transcriptionDebounce, () => _runTranscription());
+
+    if (_transcribing) {
+      _transcriptionTimer =
+          Timer(_transcriptionDebounce, () => _runTranscription());
+    } else {
+      _runTranscription(immediate: true);
+    }
   }
 
   Future<void> _runTranscription({
@@ -645,6 +650,24 @@ class VoiceRecorder {
     Map<String, dynamic> payload, {
     required bool forceFull,
   }) {
+    final segmentsField = payload['segments'];
+    final hasSegments = segmentsField is List && segmentsField.isNotEmpty;
+    var hasConfidentSegment = false;
+    if (segmentsField is List) {
+      for (final entry in segmentsField) {
+        if (entry is! Map<String, dynamic>) {
+          hasConfidentSegment = true;
+          break;
+        }
+
+        final noSpeechProb = _asNullableDouble(entry['no_speech_prob']);
+        if (noSpeechProb == null || noSpeechProb < 0.8) {
+          hasConfidentSegment = true;
+          break;
+        }
+      }
+    }
+
     final incomingSegments = _segmentsFromPayload(payload)
       ..sort((a, b) {
         final startComparison = a.start.compareTo(b.start);
@@ -685,6 +708,12 @@ class VoiceRecorder {
           level: 'debug',
         );
       }
+    } else if (!hasConfidentSegment && hasSegments) {
+      _log(
+        'Todos los segmentos fueron marcados como silencio (no_speech_prob>=0.8). Se descarta la actualización.',
+        level: 'debug',
+      );
+      return false;
     }
 
     if (transcriptCandidate.isEmpty) {

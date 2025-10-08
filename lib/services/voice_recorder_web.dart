@@ -219,9 +219,7 @@ class VoiceRecorder {
 
   final _TranscriptAccumulator _transcript = _TranscriptAccumulator();
 
-  int _transcribedChunkCount = 0;
-
-  int _transcribedChunkCount = 0;
+  int _uploadedChunkTail = 0;
 
   Completer<void>? _stopCompleter;
 
@@ -379,7 +377,7 @@ class VoiceRecorder {
     _cachedCombinedAudio = null;
     _cachedCombinedAudioChunkCount = 0;
     _transcript.reset();
-    _transcribedChunkCount = 0;
+    _uploadedChunkTail = 0;
     _hasPendingTranscription = false;
     _pendingForceFull = false;
     _transcriptionTimer?.cancel();
@@ -678,8 +676,8 @@ class VoiceRecorder {
       _transcript.emitIfChanged(_onText);
     }
 
-    _transcribedChunkCount = slice.endChunkIndex;
-    if (_audioChunks.length > _transcribedChunkCount) {
+    _uploadedChunkTail = slice.endChunkIndex;
+    if (_audioChunks.length > _uploadedChunkTail) {
       _hasPendingTranscription = true;
     }
   }
@@ -751,7 +749,7 @@ class VoiceRecorder {
     }
 
     final currentEndIndex = _audioChunks.length;
-    if (!forceFull && currentEndIndex <= _transcribedChunkCount) {
+    if (!forceFull && currentEndIndex <= _uploadedChunkTail) {
       return null;
     }
 
@@ -947,7 +945,7 @@ class VoiceRecorder {
     _cachedCombinedAudio = null;
     _cachedCombinedAudioChunkCount = 0;
     _transcript.reset();
-    _transcribedChunkCount = 0;
+    _uploadedChunkTail = 0;
   }
 
   Future<Uint8List?> _blobToBytes(html.Blob blob) async {

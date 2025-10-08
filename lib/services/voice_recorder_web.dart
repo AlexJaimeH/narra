@@ -412,6 +412,27 @@ class VoiceRecorder {
     return _normalizeLanguageCode(html.window.navigator.language);
   }
 
+  List<String> _resolveLanguageHints(String? previousHint) {
+    if (_languageHints.isNotEmpty) {
+      return _languageHints;
+    }
+
+    final detected = _detectPreferredLanguages();
+    if (detected.isNotEmpty) {
+      _languageHints = detected;
+      return detected;
+    }
+
+    final fallbackLanguage = previousHint ?? _detectPreferredLanguage();
+    if (fallbackLanguage != null) {
+      final fallbackHints = <String>[fallbackLanguage];
+      _languageHints = fallbackHints;
+      return fallbackHints;
+    }
+
+    return const <String>[];
+  }
+
   String? _normalizeLanguageCode(String? raw) {
     if (raw == null) {
       return null;
@@ -869,6 +890,10 @@ class VoiceRecorder {
         _languageHints = languages;
       }
     }
+    request.fields['prompt'] = _buildTranscriptionPrompt(languages);
+
+    final previousHint = _languageHint;
+    final languages = _resolveLanguageHints(previousHint);
     request.fields['prompt'] = _buildTranscriptionPrompt(languages);
 
     request.files.add(http.MultipartFile.fromBytes(

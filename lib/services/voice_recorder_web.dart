@@ -38,6 +38,154 @@ class _PendingAudioSlice {
   final int endChunkIndex;
 }
 
+class _TranscriptAccumulator {
+  String _value = '';
+  String? _lastEmitted;
+
+  String get value => _value;
+
+  void reset() {
+    _value = '';
+    _lastEmitted = null;
+  }
+
+  void emitReset(OnText? callback) {
+    _value = '';
+    _lastEmitted = '';
+    callback?.call('');
+    debugPrint('[VoiceRecorder] Emitiendo transcripción (0 chars)');
+  }
+
+  bool apply(
+    String nextTranscript, {
+    required bool forceFull,
+    required void Function(String level, String message) log,
+  }) {
+    if (forceFull) {
+      if (_value == nextTranscript) {
+        log('debug',
+            'Transcripción final sin cambios, se mantiene el texto actual.');
+        return false;
+      }
+
+      _value = nextTranscript;
+      log('debug', 'Transcript reemplazado tras forceFull => "$_value"');
+      return true;
+    }
+
+    if (_value.isEmpty) {
+      return _append(nextTranscript, log: log);
+    }
+
+    if (_value == nextTranscript) {
+      log('debug', 'Transcripción idéntica a la previa, sin cambios.');
+      return false;
+    }
+
+    if (nextTranscript.startsWith(_value)) {
+      final addition = nextTranscript.substring(_value.length).trimLeft();
+      if (addition.isEmpty) {
+        log('debug', 'Respuesta solo repite texto previo, se omite.');
+        return false;
+      }
+
+      return _append(addition, log: log);
+    }
+
+    final prefixLength = _longestCommonPrefixLength(_value, nextTranscript);
+    if (prefixLength < _value.length) {
+      if (nextTranscript.length >= _value.length) {
+        log(
+          'info',
+          'Transcripción corregida por el modelo (prefix=$prefixLength, '
+              'previo=${_value.length}, nuevo=${nextTranscript.length}). '
+              'Se reemplaza el texto previo para mantener fidelidad.',
+        );
+        _value = nextTranscript;
+        return true;
+      }
+
+      log(
+        'warning',
+        'Transcripción nueva más corta que la previa (prefix=$prefixLength). '
+            'Se ignora para no perder texto.',
+      );
+      return false;
+    }
+
+    final addition = nextTranscript.substring(prefixLength).trimLeft();
+    if (addition.isEmpty) {
+      log('debug', 'Texto restante vacío tras calcular diff, se omite.');
+      return false;
+    }
+
+    return _append(addition, log: log);
+  }
+
+  bool emitIfChanged(OnText? callback) {
+    if (_lastEmitted == _value) {
+      return false;
+    }
+
+    _lastEmitted = _value;
+    callback?.call(_value);
+    debugPrint(
+        '[VoiceRecorder] Emitiendo transcripción (${_value.length} chars)');
+    return true;
+  }
+
+  bool _append(String addition, {required void Function(String, String) log}) {
+    final cleaned = addition.trim();
+    if (cleaned.isEmpty) {
+      return false;
+    }
+
+    if (_value.isEmpty) {
+      _value = cleaned;
+      log('debug', 'Transcript inicial establecido: "$_value"');
+      return true;
+    }
+
+    final needsSpace = _needsSpaceBetween(_value, cleaned);
+    final appendedText = needsSpace ? ' $cleaned' : cleaned;
+    _value += appendedText;
+    log('debug', 'Transcript actualizado con "$appendedText" => "$_value"');
+    return true;
+  }
+
+  static bool _needsSpaceBetween(String existing, String addition) {
+    if (existing.isEmpty) {
+      return false;
+    }
+
+    final lastChar = existing.codeUnitAt(existing.length - 1);
+    final firstChar = addition.codeUnitAt(0);
+
+    const whitespace = <int>[32, 9, 10, 13];
+    if (whitespace.contains(lastChar)) {
+      return false;
+    }
+
+    const punctuation = <int>[44, 46, 33, 63, 58, 59];
+    if (punctuation.contains(firstChar)) {
+      return false;
+    }
+
+    return true;
+  }
+
+  static int _longestCommonPrefixLength(String a, String b) {
+    final minLength = a.length < b.length ? a.length : b.length;
+    var index = 0;
+
+    while (index < minLength && a.codeUnitAt(index) == b.codeUnitAt(index)) {
+      index++;
+    }
+
+    return index;
+  }
+}
+
 class VoiceRecorder {
   static const _primaryModel = 'gpt-4o-mini-transcribe';
   static const _fallbackModel = 'gpt-4o-transcribe-latest';
@@ -69,8 +217,9 @@ class VoiceRecorder {
   Timer? _transcriptionTimer;
   Future<void>? _ongoingTranscription;
 
-  String _transcriptBuffer = '';
-  String? _lastEmittedTranscript;
+  final _TranscriptAccumulator _transcript = _TranscriptAccumulator();
+
+  int _transcribedChunkCount = 0;
 
   int _transcribedChunkCount = 0;
 
@@ -81,7 +230,7 @@ class VoiceRecorder {
     _onLog = onLog;
 
     _resetState();
-    _emitTranscript('');
+    _transcript.emitReset(_onText);
 
     try {
       final devices = html.window.navigator.mediaDevices;
@@ -229,8 +378,7 @@ class VoiceRecorder {
     _audioChunks.clear();
     _cachedCombinedAudio = null;
     _cachedCombinedAudioChunkCount = 0;
-    _transcriptBuffer = '';
-    _lastEmittedTranscript = null;
+    _transcript.reset();
     _transcribedChunkCount = 0;
     _hasPendingTranscription = false;
     _pendingForceFull = false;
@@ -527,7 +675,7 @@ class VoiceRecorder {
 
     final updated = _applyTranscriptionPayload(payload, forceFull: forceFull);
     if (updated) {
-      _emitTranscript(_transcriptBuffer);
+      _transcript.emitIfChanged(_onText);
     }
 
     _transcribedChunkCount = slice.endChunkIndex;
@@ -580,6 +728,9 @@ class VoiceRecorder {
           level: 'debug',
         );
       }
+
+      _appendToTranscript(addition);
+      return true;
     }
 
     if (transcriptCandidate.isEmpty) {
@@ -587,59 +738,11 @@ class VoiceRecorder {
       return false;
     }
 
-    return _appendFullTranscript(transcriptCandidate, forceFull: forceFull);
-  }
-
-  void _appendToTranscript(String addition) {
-    final cleaned = addition.trim();
-    if (cleaned.isEmpty) {
-      return;
-    }
-
-    if (_transcriptBuffer.isEmpty) {
-      _transcriptBuffer = cleaned;
-      _log('Transcript inicial establecido: "$_transcriptBuffer"',
-          level: 'debug');
-      return;
-    }
-
-    final needsSpace = _needsSpaceBetween(_transcriptBuffer, cleaned);
-    final appendedText = needsSpace ? ' $cleaned' : cleaned;
-    _transcriptBuffer += appendedText;
-    _log('Transcript actualizado con "$appendedText" => "$_transcriptBuffer"',
-        level: 'debug');
-  }
-
-  bool _needsSpaceBetween(String existing, String addition) {
-    if (existing.isEmpty) {
-      return false;
-    }
-
-    final lastChar = existing.codeUnitAt(existing.length - 1);
-    final firstChar = addition.codeUnitAt(0);
-
-    const whitespace = <int>[32, 9, 10, 13];
-    if (whitespace.contains(lastChar)) {
-      return false;
-    }
-
-    const punctuation = <int>[44, 46, 33, 63, 58, 59];
-    if (punctuation.contains(firstChar)) {
-      return false;
-    }
-
-    return true;
-  }
-
-  int _longestCommonPrefixLength(String a, String b) {
-    final minLength = a.length < b.length ? a.length : b.length;
-    var index = 0;
-
-    while (index < minLength && a.codeUnitAt(index) == b.codeUnitAt(index)) {
-      index++;
-    }
-
-    return index;
+    return _transcript.apply(
+      transcriptCandidate,
+      forceFull: forceFull,
+      log: (level, message) => _log(message, level: level),
+    );
   }
 
   _PendingAudioSlice? _audioSliceForTranscription({bool forceFull = false}) {
@@ -658,72 +761,6 @@ class VoiceRecorder {
       startChunkIndex: 0,
       endChunkIndex: currentEndIndex,
     );
-  }
-
-  bool _appendFullTranscript(String nextTranscript, {required bool forceFull}) {
-    if (forceFull) {
-      if (_transcriptBuffer == nextTranscript) {
-        _log('Transcripción final sin cambios, se mantiene el texto actual.',
-            level: 'debug');
-        return false;
-      }
-
-      _transcriptBuffer = nextTranscript;
-      _log('Transcript reemplazado tras forceFull => "$_transcriptBuffer"',
-          level: 'debug');
-      return true;
-    }
-
-    if (_transcriptBuffer.isEmpty) {
-      _appendToTranscript(nextTranscript);
-      return true;
-    }
-
-    if (_transcriptBuffer == nextTranscript) {
-      _log('Transcripción idéntica a la previa, sin cambios.', level: 'debug');
-      return false;
-    }
-
-    if (nextTranscript.startsWith(_transcriptBuffer)) {
-      final addition =
-          nextTranscript.substring(_transcriptBuffer.length).trimLeft();
-      if (addition.isEmpty) {
-        _log('Respuesta solo repite texto previo, se omite.', level: 'debug');
-        return false;
-      }
-
-      _appendToTranscript(addition);
-      return true;
-    }
-
-    final prefixLength =
-        _longestCommonPrefixLength(_transcriptBuffer, nextTranscript);
-    if (prefixLength < _transcriptBuffer.length) {
-      if (nextTranscript.length >= _transcriptBuffer.length) {
-        _log(
-          'Transcripción corregida por el modelo (prefix=$prefixLength, previo=${_transcriptBuffer.length}, nuevo=${nextTranscript.length}). Se reemplaza el texto previo para mantener fidelidad.',
-          level: 'info',
-        );
-        _transcriptBuffer = nextTranscript;
-        return true;
-      }
-
-      _log(
-        'Transcripción nueva más corta que la previa (prefix=$prefixLength). Se ignora para no perder texto.',
-        level: 'warning',
-      );
-      return false;
-    }
-
-    final addition = nextTranscript.substring(prefixLength).trimLeft();
-    if (addition.isEmpty) {
-      _log('Texto restante vacío tras calcular diff, se omite.',
-          level: 'debug');
-      return false;
-    }
-
-    _appendToTranscript(addition);
-    return true;
   }
 
   List<_TranscriptSegment> _segmentsFromPayload(Map<String, dynamic> payload) {
@@ -789,60 +826,6 @@ class VoiceRecorder {
     final normalized = value.replaceAll('\n', ' ');
     final collapsed = normalized.replaceAll(RegExp(r'\s+'), ' ').trim();
     return collapsed;
-  }
-
-  void _appendToTranscript(String addition) {
-    final cleaned = addition.trim();
-    if (cleaned.isEmpty) {
-      return;
-    }
-
-    if (_transcriptBuffer.isEmpty) {
-      _transcriptBuffer = cleaned;
-      _log('Transcript inicial establecido: "$_transcriptBuffer"',
-          level: 'debug');
-      return;
-    }
-
-    final needsSpace = _needsSpaceBetween(_transcriptBuffer, cleaned);
-    final appendedText = needsSpace ? ' $cleaned' : cleaned;
-    _transcriptBuffer += appendedText;
-    _log('Transcript actualizado con "$appendedText" => "$_transcriptBuffer"',
-        level: 'debug');
-  }
-
-  bool _needsSpaceBetween(String existing, String addition) {
-    if (existing.isEmpty) {
-      return false;
-    }
-
-    final lastChar = existing.codeUnitAt(existing.length - 1);
-    final firstChar = addition.codeUnitAt(0);
-
-    const whitespace = <int>[32, 9, 10, 13];
-    if (whitespace.contains(lastChar)) {
-      return false;
-    }
-    return fallback;
-  }
-
-    const punctuation = <int>[44, 46, 33, 63, 58, 59];
-    if (punctuation.contains(firstChar)) {
-      return false;
-    }
-
-    return true;
-  }
-
-  int _longestCommonPrefixLength(String a, String b) {
-    final minLength = a.length < b.length ? a.length : b.length;
-    var index = 0;
-
-    while (index < minLength && a.codeUnitAt(index) == b.codeUnitAt(index)) {
-      index++;
-    }
-
-    return index;
   }
 
   double _parseTimestamp(dynamic value, double fallback) {
@@ -963,8 +946,7 @@ class VoiceRecorder {
     _audioChunks.clear();
     _cachedCombinedAudio = null;
     _cachedCombinedAudioChunkCount = 0;
-    _transcriptBuffer = '';
-    _lastEmittedTranscript = null;
+    _transcript.reset();
     _transcribedChunkCount = 0;
   }
 

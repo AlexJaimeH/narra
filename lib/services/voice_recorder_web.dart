@@ -74,7 +74,7 @@ class _TranscriptAccumulator {
     }
 
     if (_value.isEmpty) {
-      return _append(nextTranscript, log: log);
+      return appendAddition(nextTranscript, log: log);
     }
 
     if (_value == nextTranscript) {
@@ -89,7 +89,7 @@ class _TranscriptAccumulator {
         return false;
       }
 
-      return _append(addition, log: log);
+      return appendAddition(addition, log: log);
     }
 
     final prefixLength = _longestCommonPrefixLength(_value, nextTranscript);
@@ -119,7 +119,7 @@ class _TranscriptAccumulator {
       return false;
     }
 
-    return _append(addition, log: log);
+    return appendAddition(addition, log: log);
   }
 
   bool emitIfChanged(OnText? callback) {
@@ -134,7 +134,17 @@ class _TranscriptAccumulator {
     return true;
   }
 
-  bool _append(String addition, {required void Function(String, String) log}) {
+  bool appendAddition(
+    String addition, {
+    required void Function(String, String) log,
+  }) {
+    return _appendInternal(addition, log: log);
+  }
+
+  bool _appendInternal(
+    String addition, {
+    required void Function(String, String) log,
+  }) {
     final cleaned = addition.trim();
     if (cleaned.isEmpty) {
       return false;
@@ -985,5 +995,22 @@ class VoiceRecorder {
     final detail = error == null ? message : '$message: $error';
     _onLog?.call(level, detail);
     debugPrint('[VoiceRecorder][$level] $detail');
+  }
+
+  // ignore: unused_element
+  void _appendToTranscript(String addition) {
+    final sanitized = _sanitizeTranscript(addition);
+    if (sanitized.isEmpty) {
+      return;
+    }
+
+    final updated = _transcript.appendAddition(
+      sanitized,
+      log: (level, message) => _log(message, level: level),
+    );
+
+    if (updated) {
+      _transcript.emitIfChanged(_onText);
+    }
   }
 }

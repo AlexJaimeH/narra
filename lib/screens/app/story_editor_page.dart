@@ -1,9 +1,14 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:math' as math;
 import 'dart:typed_data' as typed;
 
+// ignore: avoid_web_libraries_in_flutter
+import 'dart:html' as html;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:narra/services/story_service_new.dart';
@@ -42,6 +47,26 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   final List<String> _recorderLogs = [];
   static const int _maxRecorderLogs = 200;
   final Map<String, void Function(void Function())> _sheetStateUpdater = {};
+
+  static const int _visualizerBarCount = 72;
+  final Queue<double> _levelHistory = ListQueue<double>(_visualizerBarCount)
+    ..addAll(List<double>.filled(_visualizerBarCount, 0.0));
+  DateTime? _recordingStartedAt;
+  Duration _recordingAccumulated = Duration.zero;
+  Duration _recordingDuration = Duration.zero;
+  Ticker? _recordingTicker;
+
+  typed.Uint8List? _recordedAudioBytes;
+  bool _recordedAudioUploaded = false;
+
+  html.AudioElement? _playbackAudio;
+  StreamSubscription<html.Event>? _playbackEndedSub;
+  StreamSubscription<html.Event>? _playbackTimeUpdateSub;
+  StreamSubscription<html.Event>? _playbackMetadataSub;
+  double _playbackProgressSeconds = 0;
+  double? _playbackDurationSeconds;
+  bool _isPlaybackPlaying = false;
+  String? _recordingObjectUrl;
 
   bool _hasChanges = false;
   bool _isLoading = false;
@@ -105,6 +130,9 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   @override
   void dispose() {
     _recorder?.dispose();
+    _recordingTicker?.dispose();
+    _recordingTicker = null;
+    _disposePlaybackAudio();
     _tabController.dispose();
     _titleController.dispose();
     _contentController.dispose();
@@ -795,10 +823,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   void _appendRecorderLog(String level, String message) {
     final timestamp = DateTime.now().toIso8601String();
     final entry = '[$timestamp][$level] $message';
-    if (kDebugMode) {
-      debugPrint(entry);
-    }
-
     _recorderLogs.add(entry);
     if (_recorderLogs.length > _maxRecorderLogs) {
       _recorderLogs.removeRange(
@@ -817,6 +841,426 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       return List<String>.from(_recorderLogs);
     }
     return _recorderLogs.sublist(_recorderLogs.length - maxItems);
+  }
+
+  void _resetLevelHistory() {
+    _levelHistory
+      ..clear()
+      ..addAll(List<double>.filled(_visualizerBarCount, 0.0));
+  }
+
+  Duration _currentRecordingDuration() {
+    if (_recordingStartedAt == null) {
+      return _recordingAccumulated;
+    }
+    final elapsed = DateTime.now().difference(_recordingStartedAt!);
+    return _recordingAccumulated + elapsed;
+  }
+
+  void _updateRecordingDuration(Duration duration) {
+    final sheetUpdated = _refreshDictationSheet(
+      mutateState: () => _recordingDuration = duration,
+    );
+    if (!sheetUpdated) {
+      if (mounted) {
+        setState(() {
+          _recordingDuration = duration;
+        });
+      } else {
+        _recordingDuration = duration;
+      }
+    }
+  }
+
+  void _ensureRecordingTicker() {
+    _recordingTicker ??= createTicker((_) {
+      _updateRecordingDuration(_currentRecordingDuration());
+    });
+  }
+
+  void _startDurationTicker() {
+    _ensureRecordingTicker();
+    _updateRecordingDuration(_currentRecordingDuration());
+    final ticker = _recordingTicker;
+    if (ticker != null && !ticker.isActive) {
+      ticker.start();
+    }
+  }
+
+  void _pauseDurationTicker() {
+    _recordingAccumulated = _currentRecordingDuration();
+    _recordingStartedAt = null;
+    final ticker = _recordingTicker;
+    if (ticker != null && ticker.isActive) {
+      ticker.stop();
+    }
+    _updateRecordingDuration(_recordingAccumulated);
+  }
+
+  void _stopDurationTicker({bool reset = false}) {
+    final ticker = _recordingTicker;
+    if (ticker != null && ticker.isActive) {
+      ticker.stop();
+    }
+    if (reset) {
+      _recordingAccumulated = Duration.zero;
+      _recordingStartedAt = null;
+      _updateRecordingDuration(Duration.zero);
+      return;
+    }
+
+    _recordingAccumulated = _currentRecordingDuration();
+    _recordingStartedAt = null;
+    _updateRecordingDuration(_recordingAccumulated);
+  }
+
+  void _handleMicLevel(double level) {
+    final clamped = level.clamp(0.0, 1.0);
+    final previous = _levelHistory.isEmpty ? clamped : _levelHistory.last;
+    final smoothed = (previous * 0.35) + (clamped * 0.65);
+    if (_levelHistory.length >= _visualizerBarCount) {
+      _levelHistory.removeFirst();
+    }
+    _levelHistory.add(smoothed);
+
+    final sheetUpdated = _refreshDictationSheet();
+    if (!sheetUpdated && mounted) {
+      setState(() {});
+    }
+  }
+
+  bool _refreshDictationSheet({VoidCallback? mutateState}) {
+    mutateState?.call();
+    final updater = _sheetStateUpdater['dictation'];
+    if (updater != null) {
+      try {
+        updater(() {});
+        return true;
+      } catch (_) {
+        // Ignore errors when the sheet is closing.
+      }
+    }
+    return false;
+  }
+
+  void _stopPlayback({bool resetPosition = true}) {
+    final audio = _playbackAudio;
+    if (audio == null) {
+      if (resetPosition) {
+        _playbackProgressSeconds = 0;
+      }
+      _isPlaybackPlaying = false;
+      return;
+    }
+
+    audio.pause();
+    if (resetPosition) {
+      audio.currentTime = 0;
+    }
+
+    if (mounted) {
+      setState(() {
+        _isPlaybackPlaying = false;
+        if (resetPosition) {
+          _playbackProgressSeconds = 0;
+        }
+      });
+    } else {
+      _isPlaybackPlaying = false;
+      if (resetPosition) {
+        _playbackProgressSeconds = 0;
+      }
+    }
+  }
+
+  void _disposePlaybackAudio() {
+    _stopPlayback();
+    _playbackEndedSub?.cancel();
+    _playbackTimeUpdateSub?.cancel();
+    _playbackMetadataSub?.cancel();
+    _playbackEndedSub = null;
+    _playbackTimeUpdateSub = null;
+    _playbackMetadataSub = null;
+
+    final url = _recordingObjectUrl;
+    if (url != null) {
+      html.Url.revokeObjectUrl(url);
+      _recordingObjectUrl = null;
+    }
+
+    _playbackAudio = null;
+    _playbackDurationSeconds = null;
+    _playbackProgressSeconds = 0;
+  }
+
+  Future<void> _preparePlaybackAudio(typed.Uint8List bytes) async {
+    _disposePlaybackAudio();
+
+    final blob = html.Blob([bytes], 'audio/webm');
+    final url = html.Url.createObjectUrl(blob);
+    final audio = html.AudioElement()
+      ..src = url
+      ..preload = 'auto'
+      ..controls = false;
+
+    _recordingObjectUrl = url;
+    _playbackAudio = audio;
+    _isPlaybackPlaying = false;
+    _playbackProgressSeconds = 0;
+    _playbackDurationSeconds = null;
+
+    _playbackEndedSub = audio.onEnded.listen((_) {
+      if (mounted) {
+        setState(() {
+          _isPlaybackPlaying = false;
+          _playbackProgressSeconds = 0;
+        });
+      } else {
+        _isPlaybackPlaying = false;
+        _playbackProgressSeconds = 0;
+      }
+    });
+
+    _playbackTimeUpdateSub = audio.onTimeUpdate.listen((_) {
+      final current = (audio.currentTime ?? 0).toDouble();
+      if (mounted) {
+        setState(() {
+          _playbackProgressSeconds = current;
+        });
+      } else {
+        _playbackProgressSeconds = current;
+      }
+    });
+
+    _playbackMetadataSub = audio.onLoadedMetadata.listen((_) {
+      final duration = audio.duration;
+      if (duration.isFinite && duration > 0) {
+        final seconds = duration.toDouble();
+        if (mounted) {
+          setState(() {
+            _playbackDurationSeconds = seconds;
+          });
+        } else {
+          _playbackDurationSeconds = seconds;
+        }
+      }
+    });
+  }
+
+  Future<void> _togglePlayback() async {
+    final audio = _playbackAudio;
+    if (audio == null) {
+      return;
+    }
+
+    if (_isPlaybackPlaying) {
+      _stopPlayback();
+      return;
+    }
+
+    try {
+      await audio.play();
+      if (mounted) {
+        setState(() {
+          _isPlaybackPlaying = true;
+        });
+      } else {
+        _isPlaybackPlaying = true;
+      }
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo reproducir el audio: $error')),
+      );
+    }
+  }
+
+  void _clearRecordedAudio() {
+    _stopPlayback();
+    _disposePlaybackAudio();
+    _recordedAudioBytes = null;
+    _recordedAudioUploaded = false;
+  }
+
+  String _formatDuration(Duration duration) {
+    final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
+    final hours = duration.inHours;
+    if (hours > 0) {
+      return '${hours.toString().padLeft(2, '0')}:$minutes:$seconds';
+    }
+    return '$minutes:$seconds';
+  }
+
+  Widget _buildWaveformBars(BuildContext context) {
+    final levels = _levelHistory.toList(growable: false);
+    final theme = Theme.of(context);
+    final isActive = _isRecording && !_isPaused;
+    final baseColor = isActive ? Colors.redAccent : theme.colorScheme.primary;
+    final softAlpha = _isPaused ? 0.25 : 0.55;
+    final highlightAlpha = math.min(1.0, softAlpha + 0.1);
+    final gradient = LinearGradient(
+      begin: Alignment.bottomCenter,
+      end: Alignment.topCenter,
+      colors: [
+        baseColor.withValues(alpha: 0.9),
+        baseColor.withValues(alpha: softAlpha),
+      ],
+    );
+    final shimmerColor = baseColor.withValues(alpha: isActive ? 0.2 : 0.12);
+
+    return SizedBox(
+      height: 56,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color:
+              theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final barCount = levels.length;
+              if (barCount == 0) {
+                return const SizedBox.expand();
+              }
+
+              const spacing = 1.8;
+              final totalSpacing = spacing * (barCount - 1);
+              final barWidth = math.max(
+                2.0,
+                (constraints.maxWidth - totalSpacing) / barCount,
+              );
+
+              return Stack(
+                fit: StackFit.expand,
+                children: [
+                  Align(
+                    alignment: Alignment.bottomCenter,
+                    child: Container(
+                      height: 2,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            shimmerColor,
+                            baseColor.withValues(alpha: highlightAlpha),
+                            shimmerColor,
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                  ),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: List.generate(barCount, (index) {
+                      final double value =
+                          levels[index].clamp(0.0, 1.0).toDouble();
+                      final targetHeight = 8 + value * 36;
+                      return Padding(
+                        padding: EdgeInsets.only(
+                          right: index == barCount - 1 ? 0 : spacing,
+                        ),
+                        child: Align(
+                          alignment: Alignment.bottomCenter,
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 45),
+                            curve: Curves.easeOutCubic,
+                            width: barWidth,
+                            height: targetHeight,
+                            decoration: BoxDecoration(
+                              gradient: gradient,
+                              borderRadius: BorderRadius.circular(
+                                barWidth.clamp(1.8, 6.0),
+                              ),
+                              boxShadow: isActive
+                                  ? [
+                                      BoxShadow(
+                                        color:
+                                            baseColor.withValues(alpha: 0.16),
+                                        blurRadius: 6,
+                                        spreadRadius: 0,
+                                        offset: const Offset(0, 1.2),
+                                      ),
+                                    ]
+                                  : null,
+                            ),
+                          ),
+                        ),
+                      );
+                    }),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPlaybackControls(BuildContext context) {
+    final theme = Theme.of(context);
+    final fallbackSeconds = _recordingDuration.inMilliseconds > 0
+        ? _recordingDuration.inMilliseconds / 1000.0
+        : 0.0;
+    final candidateSeconds = _playbackDurationSeconds ?? fallbackSeconds;
+    final totalSeconds = candidateSeconds.isFinite && candidateSeconds > 0
+        ? candidateSeconds
+        : fallbackSeconds;
+    final clampedProgress = totalSeconds <= 0
+        ? 0.0
+        : (_playbackProgressSeconds / totalSeconds).clamp(0.0, 1.0);
+    final totalDuration = totalSeconds <= 0
+        ? _recordingDuration
+        : Duration(milliseconds: (totalSeconds * 1000).round());
+    final currentDuration = Duration(
+      milliseconds: (_playbackProgressSeconds * 1000).round(),
+    );
+
+    final statusLabel = _recordedAudioUploaded
+        ? 'Audio guardado con la historia'
+        : 'Se guardará al guardar la historia';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            IconButton(
+              onPressed:
+                  _playbackAudio == null ? null : () => _togglePlayback(),
+              icon: Icon(_isPlaybackPlaying ? Icons.stop : Icons.play_arrow),
+              tooltip: _isPlaybackPlaying
+                  ? 'Detener reproducción'
+                  : 'Reproducir audio',
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  LinearProgressIndicator(value: clampedProgress),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${_formatDuration(currentDuration)} / ${_formatDuration(totalDuration)}',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          statusLabel,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.outline,
+          ),
+        ),
+      ],
+    );
   }
 
   void _handleAppBarAction(String action) {
@@ -892,24 +1336,24 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     _scrollTranscriptToBottom();
 
     if (sanitized.isEmpty) {
-      debugPrint('[Transcripción] Transcript vacío');
       return;
     }
-
-    final tailStart = sanitized.length > 160 ? sanitized.length - 160 : 0;
-    debugPrint(
-        '[Transcripción] Total actualizado: "${sanitized.substring(tailStart)}"');
   }
 
   Future<void> _startRecording({bool resetTranscript = false}) async {
-    debugPrint(
-        '[Dictado] Iniciando grabación, resetTranscript=$resetTranscript');
-
     if (resetTranscript) {
-      setState(() {
+      if (mounted) {
+        setState(() {
+          _liveTranscript = '';
+        });
+      } else {
         _liveTranscript = '';
-      });
+      }
     }
+
+    _clearRecordedAudio();
+    _resetLevelHistory();
+    _stopDurationTicker(reset: true);
 
     if (mounted) {
       setState(() {
@@ -923,14 +1367,16 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
     final recorder = VoiceRecorder();
     try {
-      debugPrint('[Dictado] Iniciando VoiceRecorder...');
       await recorder.start(
         onText: _handleTranscriptChunk,
         onLog: _appendRecorderLog,
+        onLevel: _handleMicLevel,
       );
       if (!mounted) {
         await recorder.dispose();
         _isRecorderConnecting = false;
+        _isRecording = false;
+        _isPaused = false;
         return;
       }
       setState(() {
@@ -938,9 +1384,11 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         _isRecording = true;
         _isPaused = false;
         _isRecorderConnecting = false;
+        _recordingStartedAt = DateTime.now();
+        _recordingAccumulated = Duration.zero;
+        _recordingDuration = Duration.zero;
       });
-
-      debugPrint('[Dictado] Grabación iniciada exitosamente');
+      _startDurationTicker();
 
       if (resetTranscript) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -951,11 +1399,12 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         );
       }
     } catch (e) {
-      debugPrint('[Dictado] Error iniciando grabación: $e');
       await recorder.dispose();
 
       if (!mounted) {
         _isRecorderConnecting = false;
+        _isRecording = false;
+        _isPaused = false;
         return;
       }
       setState(() {
@@ -973,20 +1422,16 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
   Future<void> _togglePauseResume() async {
     if (_isRecorderConnecting) {
-      debugPrint('[Dictado] Toggle bloqueado: conectando...');
       return;
     }
 
     final recorder = _recorder;
     if (recorder == null) {
-      debugPrint('[Dictado] No hay recorder, iniciando grabación');
       await _startRecording(resetTranscript: false);
       return;
     }
 
     if (_isPaused) {
-      // Reanudar
-      debugPrint('[Dictado] Reanudando grabación...');
       if (mounted) {
         setState(() => _isRecorderConnecting = true);
       } else {
@@ -996,6 +1441,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         final resumed = await recorder.resume();
         if (!mounted) {
           _isRecorderConnecting = false;
+          _isRecording = resumed;
+          _isPaused = !resumed;
           return;
         }
         if (resumed) {
@@ -1003,11 +1450,11 @@ class _StoryEditorPageState extends State<StoryEditorPage>
             _isPaused = false;
             _isRecording = true;
             _isRecorderConnecting = false;
+            _recordingStartedAt = DateTime.now();
           });
+          _startDurationTicker();
           _appendRecorderLog('info', 'Grabación reanudada');
-          debugPrint('[Dictado] Grabación reanudada exitosamente');
         } else {
-          debugPrint('[Dictado] No se pudo reanudar, reiniciando sesión');
           await recorder.dispose();
           setState(() {
             _recorder = null;
@@ -1020,7 +1467,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           await _startRecording(resetTranscript: false);
         }
       } catch (e) {
-        debugPrint('[Dictado] Error al reanudar: $e');
         if (mounted) {
           setState(() => _isRecorderConnecting = false);
           _appendRecorderLog('error', 'No se pudo reanudar: $e');
@@ -1036,11 +1482,10 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       return;
     }
 
-    // Pausar
-    debugPrint('[Dictado] Pausando grabación...');
     setState(() => _isRecorderConnecting = true);
     try {
       await recorder.pause();
+      _pauseDurationTicker();
       if (mounted) {
         setState(() {
           _isPaused = true;
@@ -1049,9 +1494,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         });
       }
       _appendRecorderLog('info', 'Grabación pausada');
-      debugPrint('[Dictado] Grabación pausada exitosamente');
     } catch (e) {
-      debugPrint('[Dictado] Error al pausar: $e');
       if (mounted) {
         setState(() => _isRecorderConnecting = false);
         _appendRecorderLog('error', 'No se pudo pausar: $e');
@@ -1087,34 +1530,39 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
         _isRecorderConnecting = false;
       });
+    } else {
+      _recorder = null;
+      _isRecording = false;
+      _isPaused = false;
+      _isRecorderConnecting = false;
     }
-    _isRecorderConnecting = false;
 
+    _stopDurationTicker(reset: discard);
     if (discard || audioBytes == null || audioBytes.isEmpty) {
+      if (discard) {
+        _clearRecordedAudio();
+        _resetLevelHistory();
+      }
       return;
     }
 
-    if (_currentStory != null) {
-      try {
-        await AudioUploadService.uploadStoryAudio(
-          storyId: _currentStory!.id,
-          audioBytes: audioBytes,
-          fileName: 'voice_${DateTime.now().millisecondsSinceEpoch}.webm',
-        );
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error al guardar el audio: $e')),
-          );
-        }
-      }
-    }
+    _recordedAudioBytes = audioBytes;
+    _recordedAudioUploaded = false;
+    await _preparePlaybackAudio(audioBytes);
+    _resetLevelHistory();
 
     if (mounted) {
+      setState(() {
+        _hasChanges = true;
+      });
       _appendRecorderLog('info', 'Audio listo para insertar');
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('✓ Dictado listo para insertar')),
+        const SnackBar(
+          content: Text('✓ Dictado listo. Se guardará al guardar la historia'),
+        ),
       );
+    } else {
+      _hasChanges = true;
     }
   }
 
@@ -1208,6 +1656,73 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                           ],
                         ),
                         const SizedBox(height: 12),
+                        if (_isRecorderConnecting ||
+                            _isRecording ||
+                            _isPaused ||
+                            _recordedAudioBytes != null)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    AnimatedContainer(
+                                      duration:
+                                          const Duration(milliseconds: 220),
+                                      width: 12,
+                                      height: 12,
+                                      decoration: BoxDecoration(
+                                        color: (_isRecording && !_isPaused)
+                                            ? Colors.red
+                                            : Theme.of(context)
+                                                .colorScheme
+                                                .primary
+                                                .withValues(alpha: 0.6),
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      _formatDuration(_recordingDuration),
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleMedium,
+                                    ),
+                                    if (_isPaused) ...[
+                                      const SizedBox(width: 8),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 4,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .surfaceVariant,
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                        ),
+                                        child: Text(
+                                          'Pausado',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodySmall,
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                _buildWaveformBars(context),
+                                if (_recordedAudioBytes != null) ...[
+                                  const SizedBox(height: 12),
+                                  _buildPlaybackControls(context),
+                                ],
+                              ],
+                            ),
+                          ),
                         ConstrainedBox(
                           constraints:
                               BoxConstraints(maxHeight: transcriptMaxHeight),
@@ -1248,8 +1763,10 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                                         unawaited(
                                           _finalizeRecording().catchError(
                                             (error, stackTrace) {
-                                              debugPrint(
-                                                  '[Dictado] Error al finalizar: $error');
+                                              _appendRecorderLog(
+                                                'error',
+                                                'Error al finalizar: $error',
+                                              );
                                             },
                                           ),
                                         );
@@ -1309,7 +1826,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     if (_liveTranscript.trim().isEmpty) {
       unawaited(
         _finalizeRecording(discard: true).catchError((error, stackTrace) {
-          debugPrint('[Dictado] Error al descartar: $error');
+          _appendRecorderLog('error', 'Error al descartar: $error');
         }),
       );
       return true;
@@ -1338,7 +1855,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     if (confirm == true) {
       unawaited(
         _finalizeRecording(discard: true).catchError((error, stackTrace) {
-          debugPrint('[Dictado] Error al descartar: $error');
+          _appendRecorderLog('error', 'Error al descartar: $error');
         }),
       );
       return true;
@@ -1692,14 +2209,21 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
       // Upload and save photos
       await _uploadAndSavePhotos();
+      final audioUploaded = await _uploadPendingAudio();
 
       setState(() {
-        _hasChanges = false;
+        _hasChanges = !audioUploaded;
         _isSaving = false;
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Borrador guardado')),
+        SnackBar(
+          content: Text(
+            audioUploaded
+                ? 'Borrador guardado'
+                : 'Borrador guardado. Audio pendiente por subir',
+          ),
+        ),
       );
     } catch (e) {
       setState(() => _isSaving = false);
@@ -1766,6 +2290,43 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           }
         }
       }
+    }
+  }
+
+  Future<bool> _uploadPendingAudio() async {
+    if (_currentStory == null) {
+      return true;
+    }
+
+    if (_recordedAudioBytes == null ||
+        _recordedAudioBytes!.isEmpty ||
+        _recordedAudioUploaded) {
+      return true;
+    }
+
+    try {
+      final url = await AudioUploadService.uploadStoryAudio(
+        storyId: _currentStory!.id,
+        audioBytes: _recordedAudioBytes!,
+        fileName: 'voice_${DateTime.now().millisecondsSinceEpoch}.webm',
+      );
+      if (mounted) {
+        setState(() {
+          _recordedAudioUploaded = true;
+        });
+      } else {
+        _recordedAudioUploaded = true;
+      }
+      _appendRecorderLog('info', 'Audio guardado en Supabase: $url');
+      return true;
+    } catch (e) {
+      if (mounted) {
+        _appendRecorderLog('error', 'Error al guardar el audio: $e');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al guardar el audio: $e')),
+        );
+      }
+      return false;
     }
   }
 

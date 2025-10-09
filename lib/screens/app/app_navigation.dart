@@ -628,6 +628,23 @@ class _MobileNavItemState extends State<_MobileNavItem>
           ],
         ),
       ),
+      tooltip: widget.isOpen ? 'Cerrar menú' : 'Abrir menú',
+    );
+
+    if (widget.tooltip != null && widget.tooltip!.isNotEmpty) {
+      navButton = Tooltip(
+        message: widget.tooltip!,
+        waitDuration: const Duration(milliseconds: 300),
+        child: navButton,
+      );
+    }
+
+    return Semantics(
+      button: true,
+      selected: widget.selected,
+      toggled: widget.isOpen,
+      label: widget.tooltip ?? widget.label,
+      child: navButton,
     );
   }
 }

@@ -273,13 +273,15 @@ class _DesktopNav extends StatelessWidget {
             for (var i = 0; i < items.length; i++)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 6),
-                child: _NavItemButton(
-                  label: items[i].label,
-                  icon: items[i].icon,
-                  selected: currentIndex == i,
-                  isOpen: currentIndex == i,
-                  tooltip: items[i].label,
-                  onTap: () => onItemSelected(i),
+                child: Tooltip(
+                  message: items[i].label,
+                  waitDuration: const Duration(milliseconds: 300),
+                  child: _NavItemButton(
+                    label: items[i].label,
+                    icon: items[i].icon,
+                    selected: currentIndex == i,
+                    onTap: () => onItemSelected(i),
+                  ),
                 ),
               ),
           ],
@@ -347,8 +349,6 @@ class _MobileNav extends StatelessWidget {
                       label: items[i].label,
                       icon: items[i].icon,
                       selected: currentIndex == i,
-                      isOpen: isMenuOpen && currentIndex == i,
-                      tooltip: items[i].label,
                       onTap: () => onItemSelected(i),
                     ),
                   Padding(
@@ -449,16 +449,12 @@ class _NavItemButton extends StatefulWidget {
     required this.icon,
     required this.selected,
     required this.onTap,
-    this.tooltip,
-    this.isOpen = false,
   });
 
   final String label;
   final IconData icon;
   final bool selected;
   final VoidCallback onTap;
-  final String? tooltip;
-  final bool isOpen;
 
   @override
   State<_NavItemButton> createState() => _NavItemButtonState();
@@ -472,7 +468,7 @@ class _NavItemButtonState extends State<_NavItemButton> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    final isActive = widget.selected || widget.isOpen;
+    final isActive = widget.selected;
     final background = isActive
         ? colorScheme.primary.withValues(alpha: 0.14)
         : _isHovering
@@ -513,20 +509,10 @@ class _NavItemButtonState extends State<_NavItemButton> {
       ),
     );
 
-    final tooltip = widget.tooltip;
-    if (tooltip != null && tooltip.isNotEmpty) {
-      navButton = Tooltip(
-        message: tooltip,
-        waitDuration: const Duration(milliseconds: 300),
-        child: navButton,
-      );
-    }
-
     return Semantics(
       button: true,
       selected: widget.selected,
-      label: tooltip ?? widget.label,
-      toggled: widget.isOpen ? true : null,
+      label: widget.label,
       child: navButton,
     );
   }
@@ -538,15 +524,11 @@ class _MobileNavItem extends StatefulWidget {
     required this.icon,
     required this.selected,
     required this.onTap,
-    this.tooltip,
-    this.isOpen = false,
   });
 
   final String label;
   final IconData icon;
   final bool selected;
-  final bool isOpen;
-  final String? tooltip;
   final VoidCallback onTap;
 
   @override
@@ -563,7 +545,7 @@ class _MobileNavItemState extends State<_MobileNavItem>
   @override
   void initState() {
     super.initState();
-    if (widget.selected || widget.isOpen) {
+    if (widget.selected) {
       _controller.value = 1;
     }
   }
@@ -571,8 +553,8 @@ class _MobileNavItemState extends State<_MobileNavItem>
   @override
   void didUpdateWidget(covariant _MobileNavItem oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final wasActive = oldWidget.selected || oldWidget.isOpen;
-    final isActive = widget.selected || widget.isOpen;
+    final wasActive = oldWidget.selected;
+    final isActive = widget.selected;
     if (wasActive != isActive) {
       if (isActive) {
         _controller.forward();
@@ -593,8 +575,7 @@ class _MobileNavItemState extends State<_MobileNavItem>
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    final tooltip = widget.tooltip;
-    final isActive = widget.selected || widget.isOpen;
+    final isActive = widget.selected;
 
     Widget navItem = InkWell(
       onTap: widget.onTap,
@@ -647,29 +628,12 @@ class _MobileNavItemState extends State<_MobileNavItem>
           ],
         ),
       ),
-      tooltip: widget.isOpen ? 'Cerrar menú' : 'Abrir menú',
     );
 
     return Semantics(
       button: true,
       selected: widget.selected,
       label: widget.label,
-      child: navButton,
-    );
-
-    if (tooltip != null && tooltip.isNotEmpty) {
-      navItem = Tooltip(
-        message: tooltip,
-        waitDuration: const Duration(milliseconds: 300),
-        child: navItem,
-      );
-    }
-
-    return Semantics(
-      button: true,
-      selected: widget.selected,
-      label: tooltip ?? widget.label,
-      toggled: widget.isOpen ? true : null,
       child: navItem,
     );
   }
@@ -726,6 +690,23 @@ class _AnimatedMenuButtonState extends State<_AnimatedMenuButton>
         color: widget.color,
       ),
       tooltip: widget.isOpen ? 'Cerrar menú' : 'Abrir menú',
+    );
+
+    final tooltip = widget.tooltip;
+    if (tooltip != null && tooltip.isNotEmpty) {
+      navButton = Tooltip(
+        message: tooltip,
+        waitDuration: const Duration(milliseconds: 300),
+        child: navButton,
+      );
+    }
+
+    return Semantics(
+      button: true,
+      selected: widget.selected,
+      label: tooltip ?? widget.label,
+      toggled: widget.isOpen ? true : null,
+      child: navButton,
     );
   }
 }

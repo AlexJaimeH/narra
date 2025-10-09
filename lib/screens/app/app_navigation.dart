@@ -383,21 +383,19 @@ class _CreateStoryButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final double size = compact ? 42 : 48;
 
     return Tooltip(
       message: 'Nueva historia',
       child: FilledButton(
         onPressed: onPressed,
         style: FilledButton.styleFrom(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-          ),
-          padding: compact
-              ? const EdgeInsets.all(12)
-              : const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          shape: const CircleBorder(),
+          padding: EdgeInsets.zero,
+          minimumSize: Size.square(size),
           backgroundColor: colorScheme.primary,
           foregroundColor: colorScheme.onPrimary,
-          elevation: 2,
+          elevation: 3,
         ),
         child: const Icon(Icons.add, size: 20),
       ),
@@ -690,23 +688,6 @@ class _AnimatedMenuButtonState extends State<_AnimatedMenuButton>
         color: widget.color,
       ),
       tooltip: widget.isOpen ? 'Cerrar menú' : 'Abrir menú',
-    );
-
-    final tooltip = widget.tooltip;
-    if (tooltip != null && tooltip.isNotEmpty) {
-      navButton = Tooltip(
-        message: tooltip,
-        waitDuration: const Duration(milliseconds: 300),
-        child: navButton,
-      );
-    }
-
-    return Semantics(
-      button: true,
-      selected: widget.selected,
-      label: tooltip ?? widget.label,
-      toggled: widget.isOpen ? true : null,
-      child: navButton,
     );
   }
 }

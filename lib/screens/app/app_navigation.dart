@@ -691,5 +691,22 @@ class _AnimatedMenuButtonState extends State<_AnimatedMenuButton>
       ),
       tooltip: widget.isOpen ? 'Cerrar menú' : 'Abrir menú',
     );
+
+    final tooltip = widget.tooltip;
+    if (tooltip != null && tooltip.isNotEmpty) {
+      navButton = Tooltip(
+        message: tooltip,
+        waitDuration: const Duration(milliseconds: 300),
+        child: navButton,
+      );
+    }
+
+    return Semantics(
+      button: true,
+      selected: widget.selected,
+      label: tooltip ?? widget.label,
+      toggled: widget.isOpen ? true : null,
+      child: navButton,
+    );
   }
 }

@@ -511,6 +511,7 @@ class _NavItemButtonState extends State<_NavItemButton> {
           ),
         ),
       ),
+      tooltip: widget.isOpen ? 'Cerrar menú' : 'Abrir menú',
     );
 
     return Semantics(

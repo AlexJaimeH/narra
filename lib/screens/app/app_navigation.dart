@@ -5,6 +5,7 @@ import 'stories_list_page.dart';
 import 'people_page.dart';
 import 'subscribers_page.dart';
 import 'settings_page.dart';
+import 'story_editor_page.dart';
 
 class AppNavigation extends StatefulWidget {
   const AppNavigation({super.key});
@@ -91,6 +92,7 @@ class _AppNavigationState extends State<AppNavigation> {
                   isMenuOpen: _isMenuOpen,
                   isScrolled: _isScrolled,
                   onItemSelected: _handleNavigationTap,
+                  onCreateStory: _startNewStory,
                   onToggleMenu: () {
                     setState(() {
                       _isMenuOpen = !_isMenuOpen;
@@ -149,6 +151,18 @@ class _AppNavigationState extends State<AppNavigation> {
       _isMenuOpen = false;
     });
   }
+
+  Future<void> _startNewStory() async {
+    setState(() {
+      _isMenuOpen = false;
+    });
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => const StoryEditorPage(),
+      ),
+    );
+  }
 }
 
 class _NavigationItem {
@@ -188,6 +202,7 @@ class _TopNavigationBar extends StatelessWidget {
     required this.isMenuOpen,
     required this.onToggleMenu,
     required this.isScrolled,
+    required this.onCreateStory,
   });
 
   final List<_NavigationItem> items;
@@ -197,11 +212,11 @@ class _TopNavigationBar extends StatelessWidget {
   final bool isMenuOpen;
   final VoidCallback onToggleMenu;
   final bool isScrolled;
+  final VoidCallback onCreateStory;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final colorScheme = Theme.of(context).colorScheme;
     final double elevation = isScrolled ? 10 : 0;
 
     return Material(
@@ -220,11 +235,13 @@ class _TopNavigationBar extends StatelessWidget {
                   onItemSelected: onItemSelected,
                   isMenuOpen: isMenuOpen,
                   onToggleMenu: onToggleMenu,
+                  onCreateStory: onCreateStory,
                 )
               : _DesktopNav(
                   items: items,
                   currentIndex: currentIndex,
                   onItemSelected: onItemSelected,
+                  onCreateStory: onCreateStory,
                 ),
         ),
       ),
@@ -237,17 +254,16 @@ class _DesktopNav extends StatelessWidget {
     required this.items,
     required this.currentIndex,
     required this.onItemSelected,
+    required this.onCreateStory,
   });
 
   final List<_NavigationItem> items;
   final int currentIndex;
   final ValueChanged<int> onItemSelected;
+  final VoidCallback onCreateStory;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -266,19 +282,7 @@ class _DesktopNav extends StatelessWidget {
               ),
           ],
         ),
-        FilledButton.icon(
-          onPressed: () => onItemSelected(1),
-          icon: const Icon(Icons.add_circle_outline),
-          label: const Text('Nueva historia'),
-          style: FilledButton.styleFrom(
-            backgroundColor: colorScheme.primary,
-            foregroundColor: colorScheme.onPrimary,
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            textStyle: theme.textTheme.labelLarge?.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
+        _CreateStoryButton(onPressed: onCreateStory),
       ],
     );
   }
@@ -291,6 +295,7 @@ class _MobileNav extends StatelessWidget {
     required this.onItemSelected,
     required this.isMenuOpen,
     required this.onToggleMenu,
+    required this.onCreateStory,
   });
 
   final List<_NavigationItem> items;
@@ -298,6 +303,7 @@ class _MobileNav extends StatelessWidget {
   final ValueChanged<int> onItemSelected;
   final bool isMenuOpen;
   final VoidCallback onToggleMenu;
+  final VoidCallback onCreateStory;
 
   @override
   Widget build(BuildContext context) {
@@ -328,8 +334,8 @@ class _MobileNav extends StatelessWidget {
             padding: const EdgeInsets.only(top: 12),
             child: DecoratedBox(
               decoration: BoxDecoration(
-                color: colorScheme.surfaceContainerHighest
-                    .withValues(alpha: 0.3),
+                color:
+                    colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Column(
@@ -343,12 +349,11 @@ class _MobileNav extends StatelessWidget {
                     ),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
-                    child: FilledButton.icon(
-                      onPressed: () => onItemSelected(1),
-                      icon: const Icon(Icons.add_circle_outline),
-                      label: const Text('Nueva historia'),
-                      style: FilledButton.styleFrom(
-                        minimumSize: const Size.fromHeight(48),
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: _CreateStoryButton(
+                        onPressed: onCreateStory,
+                        compact: true,
                       ),
                     ),
                   ),
@@ -358,6 +363,40 @@ class _MobileNav extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _CreateStoryButton extends StatelessWidget {
+  const _CreateStoryButton({
+    required this.onPressed,
+    this.compact = false,
+  });
+
+  final VoidCallback onPressed;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Tooltip(
+      message: 'Nueva historia',
+      child: FilledButton(
+        onPressed: onPressed,
+        style: FilledButton.styleFrom(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          padding: compact
+              ? const EdgeInsets.all(12)
+              : const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          backgroundColor: colorScheme.primary,
+          foregroundColor: colorScheme.onPrimary,
+          elevation: 2,
+        ),
+        child: const Icon(Icons.add, size: 20),
+      ),
     );
   }
 }
@@ -430,9 +469,8 @@ class _NavItemButtonState extends State<_NavItemButton> {
         : _isHovering
             ? colorScheme.primary.withValues(alpha: 0.08)
             : Colors.transparent;
-    final foreground = widget.selected
-        ? colorScheme.primary
-        : colorScheme.onSurfaceVariant;
+    final foreground =
+        widget.selected ? colorScheme.primary : colorScheme.onSurfaceVariant;
 
     return MouseRegion(
       cursor: SystemMouseCursors.click,
@@ -464,6 +502,7 @@ class _NavItemButtonState extends State<_NavItemButton> {
           ),
         ),
       ),
+      tooltip: widget.isOpen ? 'Cerrar menú' : 'Abrir menú',
     );
   }
 }

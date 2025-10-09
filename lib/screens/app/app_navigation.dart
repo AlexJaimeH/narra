@@ -647,6 +647,14 @@ class _MobileNavItemState extends State<_MobileNavItem>
           ],
         ),
       ),
+      tooltip: widget.isOpen ? 'Cerrar menú' : 'Abrir menú',
+    );
+
+    return Semantics(
+      button: true,
+      selected: widget.selected,
+      label: widget.label,
+      child: navButton,
     );
 
     if (tooltip != null && tooltip.isNotEmpty) {

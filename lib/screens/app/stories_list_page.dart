@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:narra/repositories/story_repository.dart';
@@ -83,20 +84,47 @@ class _StoriesListPageState extends State<StoriesListPage>
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color:
-                  colorScheme.surfaceContainerHighest.withValues(alpha: 0.72),
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(
-                color: colorScheme.outlineVariant.withValues(alpha: 0.25),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  colorScheme.primary.withValues(alpha: 0.12),
+                  colorScheme.secondary.withValues(alpha: 0.08),
+                  colorScheme.surface,
+                ],
               ),
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(
+                color: colorScheme.outlineVariant.withValues(alpha: 0.22),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: colorScheme.primary.withValues(alpha: 0.08),
+                  blurRadius: 32,
+                  offset: const Offset(0, 18),
+                ),
+              ],
             ),
             child: Padding(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 22),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: colorScheme.onSurface.withValues(alpha: 0.04),
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        child: Icon(
+                          Icons.menu_book_rounded,
+                          color: colorScheme.primary,
+                          size: 28,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -107,7 +135,7 @@ class _StoriesListPageState extends State<StoriesListPage>
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
-                            const SizedBox(height: 4),
+                            const SizedBox(height: 6),
                             Text(
                               'Administra, busca y publica tus recuerdos con facilidad.',
                               style: theme.textTheme.bodyMedium?.copyWith(
@@ -117,22 +145,44 @@ class _StoriesListPageState extends State<StoriesListPage>
                           ],
                         ),
                       ),
-                      IconButton.filledTonal(
+                      IconButton(
                         onPressed: () => _loadStories(silent: true),
                         tooltip: 'Actualizar historias',
-                        icon: const Icon(Icons.refresh),
+                        icon: const Icon(Icons.refresh_rounded),
+                        style: IconButton.styleFrom(
+                          backgroundColor:
+                              colorScheme.onSurface.withValues(alpha: 0.08),
+                          foregroundColor: colorScheme.primary,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                        ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 20),
                   TextField(
                     controller: _searchController,
                     decoration: InputDecoration(
                       hintText:
                           'Buscar por título, contenido, etiquetas o personas...',
-                      prefixIcon: const Icon(Icons.search),
+                      prefixIcon: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: colorScheme.primary.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: Icon(Icons.search_rounded),
+                        ),
+                      ),
+                      prefixIconConstraints: const BoxConstraints(minWidth: 0),
                       suffixIcon: _searchQuery.isEmpty
-                          ? null
+                          ? IconButton(
+                              onPressed: () => _loadStories(silent: true),
+                              tooltip: 'Actualizar lista',
+                              icon: const Icon(Icons.tune_rounded),
+                            )
                           : IconButton(
                               onPressed: () {
                                 _searchController.clear();
@@ -140,18 +190,35 @@ class _StoriesListPageState extends State<StoriesListPage>
                                   _searchQuery = '';
                                 });
                               },
-                              icon: const Icon(Icons.close),
+                              icon: const Icon(Icons.close_rounded),
                               tooltip: 'Limpiar búsqueda',
                             ),
                       filled: true,
                       fillColor: colorScheme.surface,
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: BorderSide.none,
+                        borderRadius: BorderRadius.circular(20),
+                        borderSide: BorderSide(
+                          color:
+                              colorScheme.outlineVariant.withValues(alpha: 0.2),
+                        ),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        borderSide: BorderSide(
+                          color: colorScheme.outlineVariant
+                              .withValues(alpha: 0.14),
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        borderSide: BorderSide(
+                          color: colorScheme.primary,
+                          width: 1.6,
+                        ),
                       ),
                       contentPadding: const EdgeInsets.symmetric(
                         horizontal: 16,
-                        vertical: 14,
+                        vertical: 16,
                       ),
                     ),
                     onChanged: (value) {
@@ -160,29 +227,47 @@ class _StoriesListPageState extends State<StoriesListPage>
                       });
                     },
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 20),
                   Container(
                     decoration: BoxDecoration(
                       color: colorScheme.surface,
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(22),
                       border: Border.all(
                         color:
-                            colorScheme.outlineVariant.withValues(alpha: 0.3),
+                            colorScheme.outlineVariant.withValues(alpha: 0.24),
                       ),
                     ),
                     child: TabBar(
                       controller: _tabController,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 6,
+                      ),
+                      dividerColor: Colors.transparent,
                       labelStyle: theme.textTheme.labelLarge?.copyWith(
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.2,
                       ),
-                      indicator: BoxDecoration(
-                        color: colorScheme.primary,
-                        borderRadius: BorderRadius.circular(12),
+                      unselectedLabelStyle:
+                          theme.textTheme.labelLarge?.copyWith(
+                        fontWeight: FontWeight.w500,
                       ),
-                      labelColor: colorScheme.onPrimary,
+                      labelColor: colorScheme.primary,
                       unselectedLabelColor: colorScheme.onSurfaceVariant,
-                      overlayColor: MaterialStatePropertyAll(
-                        colorScheme.primary.withValues(alpha: 0.08),
+                      indicatorSize: TabBarIndicatorSize.tab,
+                      indicator: ShapeDecoration(
+                        shape: StadiumBorder(
+                          side: BorderSide(
+                            color: colorScheme.primary,
+                            width: 2,
+                          ),
+                        ),
+                      ),
+                      splashFactory: InkSparkle.splashFactory,
+                      overlayColor: WidgetStateProperty.resolveWith(
+                        (states) => states.contains(WidgetState.pressed)
+                            ? colorScheme.primary.withValues(alpha: 0.08)
+                            : colorScheme.primary.withValues(alpha: 0.04),
                       ),
                       tabs: const [
                         Tab(text: 'Todas'),
@@ -256,11 +341,16 @@ class StoriesTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final filteredStories = stories.where((story) {
-      final matchesFilter =
-          filterStatus == null || story.status == filterStatus;
+      final matchesFilter = switch (filterStatus) {
+        null => true,
+        _ => story.status == filterStatus,
+      };
       final matchesSearch = _matchesSearch(story, searchQuery);
       return matchesFilter && matchesSearch;
     }).toList();
+
+    final mediaQuery = MediaQuery.of(context);
+    final horizontalPadding = mediaQuery.size.width < 640 ? 12.0 : 24.0;
 
     if (filteredStories.isEmpty) {
       return RefreshIndicator(
@@ -285,7 +375,12 @@ class StoriesTab extends StatelessWidget {
       displacement: 80,
       child: ListView.separated(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
+        padding: EdgeInsets.fromLTRB(
+          horizontalPadding,
+          20,
+          horizontalPadding,
+          32,
+        ),
         itemCount: filteredStories.length,
         separatorBuilder: (context, index) => const SizedBox(height: 16),
         itemBuilder: (context, index) {
@@ -293,10 +388,22 @@ class StoriesTab extends StatelessWidget {
           return StoryListCard(
             story: story,
             onActionComplete: onStoriesChanged,
+            accentColor: _cardAccentColor(context, index),
+            isAltBackground: index.isOdd,
           );
         },
       ),
     );
+  }
+
+  Color _cardAccentColor(BuildContext context, int index) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final palette = [
+      colorScheme.primary,
+      colorScheme.tertiary,
+      colorScheme.secondary,
+    ];
+    return palette[index % palette.length];
   }
 
   static bool _matchesSearch(Story story, String query) {
@@ -305,18 +412,20 @@ class StoriesTab extends StatelessWidget {
       return true;
     }
 
+    final tokens =
+        normalizedQuery.split(' ').where((token) => token.isNotEmpty);
+
     final searchableFields = <String>[
       story.title,
       story.excerpt ?? '',
-      story.content ?? '',
-      story.voiceTranscript ?? '',
+      _stripMarkup(story.content),
+      _stripMarkup(story.voiceTranscript),
       if (story.tags != null) story.tags!.join(' '),
+      if (story.storyTags.isNotEmpty)
+        story.storyTags.map((tag) => tag.name).join(' '),
       if (story.people.isNotEmpty)
         story.people.map((person) => person.name).join(' '),
-    ];
-
-    final tokens =
-        normalizedQuery.split(' ').where((token) => token.isNotEmpty);
+    ].map(_normalize).where((field) => field.isNotEmpty).toList();
 
     for (final token in tokens) {
       final tokenMatches = searchableFields.any(
@@ -330,14 +439,13 @@ class StoriesTab extends StatelessWidget {
     return true;
   }
 
-  static bool _fuzzyContains(String text, String query) {
-    final normalizedText = _normalize(text);
+  static bool _fuzzyContains(String normalizedText, String query) {
     if (normalizedText.contains(query)) {
       return true;
     }
 
     final words = normalizedText
-        .split(RegExp(r'[^a-z0-9áéíóúüñ]+'))
+        .split(RegExp(r'[^a-z0-9]+'))
         .where((word) => word.isNotEmpty);
 
     for (final word in words) {
@@ -350,7 +458,29 @@ class StoriesTab extends StatelessWidget {
   }
 
   static String _normalize(String value) {
-    return value.toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();
+    final lower = value.toLowerCase();
+    final withoutMarkup = lower.replaceAll(RegExp(r'<[^>]+>'), ' ');
+    final withoutDiacritics = _removeDiacritics(withoutMarkup);
+    return withoutDiacritics.replaceAll(RegExp(r'\s+'), ' ').trim();
+  }
+
+  static String _stripMarkup(String? value) {
+    if (value == null || value.isEmpty) {
+      return '';
+    }
+    return value.replaceAll(RegExp(r'<[^>]+>'), ' ');
+  }
+
+  static String _removeDiacritics(String input) {
+    if (input.isEmpty) {
+      return input;
+    }
+    final buffer = StringBuffer();
+    for (final codePoint in input.runes) {
+      final char = String.fromCharCode(codePoint);
+      buffer.write(_diacriticMap[char] ?? char);
+    }
+    return buffer.toString();
   }
 
   static int _levenshtein(String source, String target) {
@@ -384,6 +514,34 @@ class StoriesTab extends StatelessWidget {
     return distance[m][n];
   }
 }
+
+const Map<String, String> _diacriticMap = {
+  'á': 'a',
+  'à': 'a',
+  'ä': 'a',
+  'â': 'a',
+  'ã': 'a',
+  'å': 'a',
+  'é': 'e',
+  'è': 'e',
+  'ë': 'e',
+  'ê': 'e',
+  'í': 'i',
+  'ì': 'i',
+  'ï': 'i',
+  'î': 'i',
+  'ó': 'o',
+  'ò': 'o',
+  'ö': 'o',
+  'ô': 'o',
+  'õ': 'o',
+  'ú': 'u',
+  'ù': 'u',
+  'ü': 'u',
+  'û': 'u',
+  'ñ': 'n',
+  'ç': 'c',
+};
 
 class _EmptyStoriesState extends StatelessWidget {
   const _EmptyStoriesState({
@@ -456,18 +614,20 @@ class _EmptyStoriesState extends StatelessWidget {
             const SizedBox(height: 24),
             FilledButton.icon(
               onPressed: onCreateStory,
-              icon: const Icon(Icons.add),
+              icon: const Icon(Icons.add, size: 20),
               label: const Text('Crear nueva historia'),
               style: FilledButton.styleFrom(
+                backgroundColor: colorScheme.primary,
+                foregroundColor: colorScheme.onPrimary,
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 16,
+                  horizontal: 28,
+                  vertical: 14,
                 ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(18),
-                ),
+                shape: const StadiumBorder(),
+                elevation: 3,
                 textStyle: theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.1,
                 ),
               ),
             ),
@@ -483,10 +643,14 @@ class StoryListCard extends StatelessWidget {
     super.key,
     required this.story,
     required this.onActionComplete,
+    required this.accentColor,
+    required this.isAltBackground,
   });
 
   final Story story;
   final VoidCallback onActionComplete;
+  final Color accentColor;
+  final bool isAltBackground;
 
   @override
   Widget build(BuildContext context) {
@@ -502,173 +666,206 @@ class StoryListCard extends StatelessWidget {
         ? story.excerpt!.trim()
         : _fallbackExcerpt(story.content);
     final statusColors = _statusColors(story.status, colorScheme);
-
-    return InkWell(
-      borderRadius: BorderRadius.circular(24),
-      onTap: () async {
-        await Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (context) => StoryEditorPage(storyId: story.id),
-          ),
-        );
-        onActionComplete();
-      },
-      child: Ink(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(24),
-          color: colorScheme.surface,
-          border: Border.all(
-            color: colorScheme.outlineVariant.withValues(alpha: 0.25),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
-              blurRadius: 18,
-              offset: const Offset(0, 10),
-            ),
-          ],
+    final metadataChips = <Widget>[
+      _MetadataBadge(
+        icon: Icons.calendar_today,
+        label: _formatDate(story.createdAt),
+      ),
+      if (story.wordCount > 0)
+        _MetadataBadge(
+          icon: Icons.text_snippet_outlined,
+          label: '${story.wordCount} palabras',
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (coverUrl != null)
-              ClipRRect(
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(24)),
-                child: AspectRatio(
-                  aspectRatio: 16 / 9,
-                  child: Image.network(
-                    coverUrl,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) => Container(
-                      color: colorScheme.surfaceVariant,
-                      alignment: Alignment.center,
-                      child: Icon(
-                        Icons.image_not_supported_outlined,
-                        size: 42,
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                ),
+      if (story.readingTime > 0)
+        _MetadataBadge(
+          icon: Icons.timer_outlined,
+          label: '${story.readingTime} min de lectura',
+        ),
+    ];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompact = constraints.maxWidth < 640;
+        final horizontalPadding = isCompact ? 16.0 : 20.0;
+        final verticalPadding = isCompact ? 16.0 : 20.0;
+        final titleStyle = (isCompact
+                ? theme.textTheme.titleMedium
+                : theme.textTheme.titleLarge)
+            ?.copyWith(fontWeight: FontWeight.w700);
+
+        final backgroundTint = Color.alphaBlend(
+          accentColor.withValues(alpha: isCompact ? 0.12 : 0.1),
+          colorScheme.surface,
+        );
+        final secondaryTint = Color.alphaBlend(
+          accentColor.withValues(alpha: 0.04),
+          colorScheme.surfaceContainerHighest.withValues(alpha: 0.2),
+        );
+
+        return InkWell(
+          borderRadius: BorderRadius.circular(26),
+          onTap: () async {
+            await Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => StoryEditorPage(storyId: story.id),
               ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          story.title.isEmpty ? 'Sin título' : story.title,
-                          style: theme.textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      _StatusPill(
-                        label: story.status.displayName,
-                        color: statusColors.foreground,
-                        background: statusColors.background,
-                        icon: story.status == StoryStatus.published
-                            ? Icons.check_circle
-                            : Icons.edit_note,
-                      ),
-                    ],
-                  ),
-                  if (excerpt.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    Text(
-                      excerpt,
-                      style: theme.textTheme.bodyMedium,
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                  if (tags.isNotEmpty) ...[
-                    const SizedBox(height: 16),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 6,
-                      children: tags
-                          .map(
-                            (tag) => Chip(
-                              label: Text(tag),
-                              backgroundColor:
-                                  colorScheme.secondaryContainer.withValues(
-                                alpha: 0.8,
-                              ),
-                              labelStyle: theme.textTheme.labelSmall?.copyWith(
-                                color: colorScheme.onSecondaryContainer,
-                                fontWeight: FontWeight.w600,
-                              ),
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 8),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                            ),
-                          )
-                          .toList(),
-                    ),
-                  ],
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      _MetadataBadge(
-                        icon: Icons.calendar_today,
-                        label: _formatDate(story.createdAt),
-                      ),
-                      if (story.wordCount > 0) ...[
-                        const SizedBox(width: 12),
-                        _MetadataBadge(
-                          icon: Icons.text_snippet_outlined,
-                          label: '${story.wordCount} palabras',
-                        ),
-                      ],
-                      if (story.readingTime > 0) ...[
-                        const SizedBox(width: 12),
-                        _MetadataBadge(
-                          icon: Icons.timer_outlined,
-                          label: '${story.readingTime} min de lectura',
-                        ),
-                      ],
-                      const Spacer(),
-                      PopupMenuButton<String>(
-                        tooltip: 'Mostrar opciones',
-                        offset: const Offset(0, 12),
-                        elevation: 6,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        color: colorScheme.surface,
-                        onSelected: (value) =>
-                            _handleStoryAction(context, value),
-                        itemBuilder: (context) => _buildMenuItems(context),
-                        child: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: colorScheme.surfaceContainerHighest
-                                .withValues(alpha: 0.5),
-                            borderRadius: BorderRadius.circular(14),
-                          ),
+            );
+            onActionComplete();
+          },
+          child: Ink(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(26),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: isAltBackground
+                    ? [backgroundTint, colorScheme.surface]
+                    : [colorScheme.surface, backgroundTint],
+              ),
+              border: Border.all(
+                color: accentColor.withValues(alpha: 0.28),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: accentColor.withValues(alpha: 0.12),
+                  blurRadius: 24,
+                  offset: const Offset(0, 18),
+                ),
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 14,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (coverUrl != null)
+                  ClipRRect(
+                    borderRadius:
+                        const BorderRadius.vertical(top: Radius.circular(26)),
+                    child: AspectRatio(
+                      aspectRatio: 16 / 9,
+                      child: Image.network(
+                        coverUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => Container(
+                          color: colorScheme.surfaceContainerHighest,
+                          alignment: Alignment.center,
                           child: Icon(
-                            Icons.more_horiz_rounded,
+                            Icons.image_not_supported_outlined,
+                            size: 42,
                             color: colorScheme.onSurfaceVariant,
                           ),
                         ),
                       ),
+                    ),
+                  ),
+                Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    horizontalPadding,
+                    verticalPadding,
+                    horizontalPadding,
+                    20,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        height: 4,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(24),
+                          gradient: LinearGradient(
+                            colors: [
+                              accentColor,
+                              secondaryTint,
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  story.title.isEmpty
+                                      ? 'Sin título'
+                                      : story.title,
+                                  style: titleStyle,
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  'Actualizada ${_formatDate(story.updatedAt)}',
+                                  style: theme.textTheme.labelMedium?.copyWith(
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              _StatusPill(
+                                label: story.status.displayName,
+                                color: statusColors.foreground,
+                                background: statusColors.background,
+                                icon: story.status == StoryStatus.published
+                                    ? Icons.check_circle
+                                    : Icons.edit_note,
+                              ),
+                              const SizedBox(height: 12),
+                              _StoryActionsButton(
+                                onSelected: (action) =>
+                                    _handleStoryAction(context, action),
+                                itemBuilder: _buildMenuItems,
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      if (excerpt.isNotEmpty) ...[
+                        const SizedBox(height: 14),
+                        Text(
+                          excerpt,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            height: 1.45,
+                          ),
+                          maxLines: isCompact ? 4 : 3,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                      if (tags.isNotEmpty) ...[
+                        const SizedBox(height: 16),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children:
+                              tags.map((tag) => _TagChip(label: tag)).toList(),
+                        ),
+                      ],
+                      if (metadataChips.isNotEmpty) ...[
+                        const SizedBox(height: 18),
+                        Wrap(
+                          spacing: 12,
+                          runSpacing: 10,
+                          children: metadataChips,
+                        ),
+                      ],
                     ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
@@ -789,13 +986,13 @@ class StoryListCard extends StatelessWidget {
     switch (status) {
       case StoryStatus.published:
         return _StatusColors(
-          background: colorScheme.primary.withValues(alpha: 0.15),
-          foreground: colorScheme.primary,
+          background: colorScheme.primaryContainer,
+          foreground: colorScheme.onPrimaryContainer,
         );
       case StoryStatus.draft:
         return _StatusColors(
-          background: colorScheme.tertiaryContainer.withValues(alpha: 0.5),
-          foreground: colorScheme.tertiary,
+          background: colorScheme.secondaryContainer,
+          foreground: colorScheme.onSecondaryContainer,
         );
       case StoryStatus.archived:
         return _StatusColors(
@@ -866,6 +1063,9 @@ class _StatusPill extends StatelessWidget {
       decoration: BoxDecoration(
         color: background,
         borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: color.withValues(alpha: 0.16),
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -905,8 +1105,11 @@ class _MetadataBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.55),
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.2),
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -920,6 +1123,129 @@ class _MetadataBadge extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _StoryActionsButton extends StatefulWidget {
+  const _StoryActionsButton({
+    required this.onSelected,
+    required this.itemBuilder,
+  });
+
+  final Future<void> Function(String action) onSelected;
+  final List<PopupMenuEntry<String>> Function(BuildContext context) itemBuilder;
+
+  @override
+  State<_StoryActionsButton> createState() => _StoryActionsButtonState();
+}
+
+class _StoryActionsButtonState extends State<_StoryActionsButton> {
+  Offset? _tapPosition;
+
+  void _storePosition(TapDownDetails details) {
+    _tapPosition = details.globalPosition;
+  }
+
+  Future<void> _showMenu() async {
+    final overlay = Overlay.of(context);
+    if (overlay == null) return;
+    final overlayBox = overlay.context.findRenderObject() as RenderBox?;
+    final buttonBox = context.findRenderObject() as RenderBox?;
+    if (overlayBox == null) return;
+
+    final tapPosition = _tapPosition ??
+        (buttonBox != null
+            ? buttonBox.localToGlobal(buttonBox.size.center(Offset.zero))
+            : overlayBox.size.center(Offset.zero));
+
+    final position = RelativeRect.fromRect(
+      ui.Rect.fromCenter(center: tapPosition, width: 1, height: 1),
+      Offset.zero & overlayBox.size,
+    );
+
+    final selected = await showMenu<String>(
+      context: context,
+      position: position,
+      items: widget.itemBuilder(context),
+      elevation: 12,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      color: Theme.of(context).colorScheme.surface,
+    );
+
+    _tapPosition = null;
+
+    if (selected != null) {
+      await widget.onSelected(selected);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Semantics(
+      button: true,
+      label: 'Opciones de historia',
+      child: Tooltip(
+        message: 'Opciones de historia',
+        waitDuration: const Duration(milliseconds: 250),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(14),
+            onTapDown: _storePosition,
+            onTap: _showMenu,
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color:
+                    colorScheme.surfaceContainerHighest.withValues(alpha: 0.55),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: colorScheme.outlineVariant.withValues(alpha: 0.18),
+                ),
+              ),
+              child: Icon(
+                Icons.more_horiz_rounded,
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TagChip extends StatelessWidget {
+  const _TagChip({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: colorScheme.secondaryContainer.withValues(alpha: 0.75),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.18),
+        ),
+      ),
+      child: Text(
+        label,
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: colorScheme.onSecondaryContainer,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }

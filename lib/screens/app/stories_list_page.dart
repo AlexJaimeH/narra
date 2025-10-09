@@ -162,34 +162,52 @@ class _StoriesListPageState extends State<StoriesListPage>
                     },
                   ),
                   const SizedBox(height: 16),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: colorScheme.surface,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color:
-                            colorScheme.outlineVariant.withValues(alpha: 0.3),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(18),
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: colorScheme.surface,
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(
+                          color:
+                              colorScheme.outlineVariant.withValues(alpha: 0.32),
+                        ),
                       ),
-                    ),
-                    child: TabBar(
-                      controller: _tabController,
-                      labelStyle: theme.textTheme.labelLarge?.copyWith(
-                        fontWeight: FontWeight.w600,
+                      child: TabBar(
+                        controller: _tabController,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 4,
+                        ),
+                        dividerColor: Colors.transparent,
+                        labelStyle: theme.textTheme.labelLarge?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                        indicatorPadding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                        ),
+                        indicator: BoxDecoration(
+                          color: colorScheme.primaryContainer,
+                          borderRadius: BorderRadius.circular(14),
+                          boxShadow: [
+                            BoxShadow(
+                              color: colorScheme.primary.withValues(alpha: 0.18),
+                              blurRadius: 16,
+                              offset: const Offset(0, 6),
+                            ),
+                          ],
+                        ),
+                        labelColor: colorScheme.onPrimaryContainer,
+                        unselectedLabelColor: colorScheme.onSurfaceVariant,
+                        overlayColor: WidgetStatePropertyAll(
+                          colorScheme.primary.withValues(alpha: 0.08),
+                        ),
+                        tabs: const [
+                          Tab(text: 'Todas'),
+                          Tab(text: 'Borradores'),
+                          Tab(text: 'Publicadas'),
+                        ],
                       ),
-                      indicator: BoxDecoration(
-                        color: colorScheme.primary,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      labelColor: colorScheme.onPrimary,
-                      unselectedLabelColor: colorScheme.onSurfaceVariant,
-                      overlayColor: MaterialStatePropertyAll(
-                        colorScheme.primary.withValues(alpha: 0.08),
-                      ),
-                      tabs: const [
-                        Tab(text: 'Todas'),
-                        Tab(text: 'Borradores'),
-                        Tab(text: 'Publicadas'),
-                      ],
                     ),
                   ),
                 ],
@@ -594,7 +612,7 @@ class StoryListCard extends StatelessWidget {
             ?.copyWith(fontWeight: FontWeight.w700);
 
         return InkWell(
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(26),
           onTap: () async {
             await Navigator.of(context).push(
               MaterialPageRoute(
@@ -605,23 +623,21 @@ class StoryListCard extends StatelessWidget {
           },
           child: Ink(
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(24),
-              gradient: LinearGradient(
-                colors: [
-                  colorScheme.surface,
-                  colorScheme.surfaceContainerLow.withValues(alpha: 0.9),
-                ],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-              ),
+              borderRadius: BorderRadius.circular(26),
+              color: colorScheme.surface,
               border: Border.all(
-                color: colorScheme.outlineVariant.withValues(alpha: 0.22),
+                color: colorScheme.outlineVariant.withValues(alpha: 0.26),
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  blurRadius: 20,
-                  offset: const Offset(0, 12),
+                  color: Colors.black.withValues(alpha: 0.06),
+                  blurRadius: 26,
+                  offset: const Offset(0, 14),
+                ),
+                BoxShadow(
+                  color: colorScheme.primary.withValues(alpha: 0.04),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
                 ),
               ],
             ),
@@ -631,14 +647,14 @@ class StoryListCard extends StatelessWidget {
                 if (coverUrl != null)
                   ClipRRect(
                     borderRadius:
-                        const BorderRadius.vertical(top: Radius.circular(24)),
+                        const BorderRadius.vertical(top: Radius.circular(26)),
                     child: AspectRatio(
                       aspectRatio: 16 / 9,
-                      child: Image.network(
-                        coverUrl,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => Container(
-                          color: colorScheme.surfaceVariant,
+                        child: Image.network(
+                          coverUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) => Container(
+                          color: colorScheme.surfaceContainerHighest,
                           alignment: Alignment.center,
                           child: Icon(
                             Icons.image_not_supported_outlined,
@@ -860,13 +876,13 @@ class StoryListCard extends StatelessWidget {
     switch (status) {
       case StoryStatus.published:
         return _StatusColors(
-          background: colorScheme.primary.withValues(alpha: 0.15),
-          foreground: colorScheme.primary,
+          background: colorScheme.primaryContainer,
+          foreground: colorScheme.onPrimaryContainer,
         );
       case StoryStatus.draft:
         return _StatusColors(
-          background: colorScheme.tertiaryContainer.withValues(alpha: 0.5),
-          foreground: colorScheme.tertiary,
+          background: colorScheme.secondaryContainer,
+          foreground: colorScheme.onSecondaryContainer,
         );
       case StoryStatus.archived:
         return _StatusColors(
@@ -937,6 +953,9 @@ class _StatusPill extends StatelessWidget {
       decoration: BoxDecoration(
         color: background,
         borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: color.withValues(alpha: 0.16),
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

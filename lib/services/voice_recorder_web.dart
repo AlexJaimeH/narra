@@ -870,38 +870,10 @@ class VoiceRecorder {
       request.fields['language'] = languageHint;
     }
 
-    final languages = _languageHints.isNotEmpty
-        ? _languageHints
-        : _detectPreferredLanguages();
-    if (languages.isNotEmpty) {
-      _languageHints = languages;
-    }
-    request.fields['prompt'] = _buildTranscriptionPrompt(languages);
-
-    final previousHint = _languageHint;
-    var languages = _languageHints;
-    if (languages.isEmpty) {
-      languages = _detectPreferredLanguages();
-      if (languages.isEmpty) {
-        final fallbackLanguage = previousHint ?? _detectPreferredLanguage();
-        if (fallbackLanguage != null) {
-          languages = <String>[fallbackLanguage];
-        }
-      }
-
-      if (languages.isNotEmpty) {
-        _languageHints = languages;
-      }
-    }
-    request.fields['prompt'] = _buildTranscriptionPrompt(languages);
-
-    final previousHint = _languageHint;
-    final languages = _resolveLanguageHints(previousHint);
-    request.fields['prompt'] = _buildTranscriptionPrompt(languages);
-
-    request.fields['prompt'] = _buildTranscriptionPrompt(
-      _resolveLanguageHints(),
+    final languages = _resolveLanguageHints(
+      fallbackHint: languageHint,
     );
+    request.fields['prompt'] = _buildTranscriptionPrompt(languages);
 
     request.files.add(http.MultipartFile.fromBytes(
       'file',

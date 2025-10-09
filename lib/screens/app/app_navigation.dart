@@ -278,6 +278,8 @@ class _DesktopNav extends StatelessWidget {
                   icon: items[i].icon,
                   selected: currentIndex == i,
                   onTap: () => onItemSelected(i),
+                  tooltip: items[i].label,
+                  isOpen: currentIndex == i,
                 ),
               ),
           ],
@@ -445,12 +447,16 @@ class _NavItemButton extends StatefulWidget {
     required this.icon,
     required this.selected,
     required this.onTap,
+    this.tooltip,
+    this.isOpen = false,
   });
 
   final String label;
   final IconData icon;
   final bool selected;
   final VoidCallback onTap;
+  final String? tooltip;
+  final bool isOpen;
 
   @override
   State<_NavItemButton> createState() => _NavItemButtonState();
@@ -472,7 +478,7 @@ class _NavItemButtonState extends State<_NavItemButton> {
     final foreground =
         widget.selected ? colorScheme.primary : colorScheme.onSurfaceVariant;
 
-    return MouseRegion(
+    Widget navButton = MouseRegion(
       cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _isHovering = true),
       onExit: (_) => setState(() => _isHovering = false),
@@ -503,6 +509,22 @@ class _NavItemButtonState extends State<_NavItemButton> {
         ),
       ),
       tooltip: widget.isOpen ? 'Cerrar menú' : 'Abrir menú',
+    );
+
+    if (widget.tooltip != null && widget.tooltip!.isNotEmpty) {
+      navButton = Tooltip(
+        message: widget.tooltip!,
+        waitDuration: const Duration(milliseconds: 300),
+        child: navButton,
+      );
+    }
+
+    return Semantics(
+      button: true,
+      selected: widget.selected,
+      toggled: widget.isOpen,
+      label: widget.tooltip ?? widget.label,
+      child: navButton,
     );
   }
 }

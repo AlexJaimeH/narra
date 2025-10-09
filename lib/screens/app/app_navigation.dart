@@ -273,13 +273,16 @@ class _DesktopNav extends StatelessWidget {
             for (var i = 0; i < items.length; i++)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 6),
-                child: _NavItemButton(
-                  label: items[i].label,
-                  icon: items[i].icon,
-                  selected: currentIndex == i,
-                  onTap: () => onItemSelected(i),
-                  tooltip: items[i].label,
-                  isOpen: currentIndex == i,
+                child: Tooltip(
+                  message: items[i].label,
+                  waitDuration: const Duration(milliseconds: 300),
+                  child: _NavItemButton(
+                    label: items[i].label,
+                    icon: items[i].icon,
+                    selected: currentIndex == i,
+                    onTap: () => onItemSelected(i),
+                    isOpen: currentIndex == i,
+                  ),
                 ),
               ),
           ],
@@ -447,7 +450,6 @@ class _NavItemButton extends StatefulWidget {
     required this.icon,
     required this.selected,
     required this.onTap,
-    this.tooltip,
     this.isOpen = false,
   });
 
@@ -455,7 +457,6 @@ class _NavItemButton extends StatefulWidget {
   final IconData icon;
   final bool selected;
   final VoidCallback onTap;
-  final String? tooltip;
   final bool isOpen;
 
   @override
@@ -508,22 +509,13 @@ class _NavItemButtonState extends State<_NavItemButton> {
           ),
         ),
       ),
-      tooltip: widget.isOpen ? 'Cerrar menú' : 'Abrir menú',
     );
-
-    if (widget.tooltip != null && widget.tooltip!.isNotEmpty) {
-      navButton = Tooltip(
-        message: widget.tooltip!,
-        waitDuration: const Duration(milliseconds: 300),
-        child: navButton,
-      );
-    }
 
     return Semantics(
       button: true,
       selected: widget.selected,
       toggled: widget.isOpen,
-      label: widget.tooltip ?? widget.label,
+      label: widget.label,
       child: navButton,
     );
   }
@@ -636,6 +628,23 @@ class _MobileNavItemState extends State<_MobileNavItem>
           ],
         ),
       ),
+      tooltip: widget.isOpen ? 'Cerrar menú' : 'Abrir menú',
+    );
+
+    if (widget.tooltip != null && widget.tooltip!.isNotEmpty) {
+      navButton = Tooltip(
+        message: widget.tooltip!,
+        waitDuration: const Duration(milliseconds: 300),
+        child: navButton,
+      );
+    }
+
+    return Semantics(
+      button: true,
+      selected: widget.selected,
+      toggled: widget.isOpen,
+      label: widget.tooltip ?? widget.label,
+      child: navButton,
     );
   }
 }

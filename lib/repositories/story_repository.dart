@@ -57,10 +57,12 @@ class StoryRepository {
     final updateMap = <String, dynamic>{};
     if (update.title != null) updateMap['title'] = update.title;
     if (update.content != null) updateMap['content'] = update.content;
-    if (update.storyDate != null) updateMap['story_date'] = update.storyDate!.toIso8601String();
+    if (update.storyDate != null)
+      updateMap['story_date'] = update.storyDate!.toIso8601String();
     if (update.location != null) updateMap['location'] = update.location;
-    if (update.completenessScore != null) updateMap['completeness_score'] = update.completenessScore;
-    
+    if (update.completenessScore != null)
+      updateMap['completeness_score'] = update.completenessScore;
+
     final data = await NarraSupabaseClient.updateStory(id, updateMap);
     return Story.fromMap(data);
   }
@@ -89,7 +91,7 @@ class StoryRepository {
       caption: caption,
       position: position ?? 0,
     );
-    
+
     return StoryPhoto.fromMap(data);
   }
 
@@ -159,7 +161,7 @@ class Story {
   final int readingTime;
   final DateTime createdAt;
   final DateTime updatedAt;
-  
+
   // Related data
   final List<String>? tags; // Simplified tags as strings
   final List<StoryTag> storyTags; // Full tag objects
@@ -195,24 +197,30 @@ class Story {
 
   factory Story.fromMap(Map<String, dynamic> map) {
     try {
+      final rawStatus = (map['status'] as String? ?? '').toLowerCase();
+      final status = StoryStatus.values.firstWhere(
+        (s) => s.name == rawStatus,
+        orElse: () => StoryStatus.draft,
+      );
+
       return Story(
         id: map['id'] as String? ?? '',
         userId: map['user_id'] as String? ?? '',
         title: map['title'] as String? ?? 'Historia sin título',
         content: map['content'] as String?,
-        excerpt: map['excerpt'] as String? ?? _generateExcerpt(map['content'] as String? ?? ''),
-        status: StoryStatus.values.firstWhere(
-          (s) => s.name == (map['status'] as String?),
-          orElse: () => StoryStatus.draft,
-        ),
-        storyDate: map['story_date'] != null 
-            ? DateTime.parse(map['story_date'] as String) 
+        excerpt: map['excerpt'] as String? ??
+            _generateExcerpt(map['content'] as String? ?? ''),
+        status: status,
+        storyDate: map['story_date'] != null
+            ? DateTime.parse(map['story_date'] as String)
             : null,
-        startDate: map['story_date'] != null 
-            ? DateTime.parse(map['story_date'] as String) 
+        startDate: map['story_date'] != null
+            ? DateTime.parse(map['story_date'] as String)
             : null,
         endDate: null,
-        datesPrecision: map.containsKey('dates_precision') ? map['dates_precision'] as String? : null,
+        datesPrecision: map.containsKey('dates_precision')
+            ? map['dates_precision'] as String?
+            : null,
         storyDateText: map['story_date_text'] as String?,
         location: map['location'] as String?,
         isVoiceGenerated: map['is_voice_generated'] as bool? ?? false,
@@ -223,10 +231,10 @@ class Story {
         completenessScore: map['completeness_score'] as int? ?? 0,
         wordCount: map['word_count'] as int? ?? 0,
         readingTime: map['reading_time'] as int? ?? 0,
-        createdAt: map['created_at'] != null 
+        createdAt: map['created_at'] != null
             ? DateTime.parse(map['created_at'] as String)
             : DateTime.now(),
-        updatedAt: map['updated_at'] != null 
+        updatedAt: map['updated_at'] != null
             ? DateTime.parse(map['updated_at'] as String)
             : DateTime.now(),
         tags: map['tags'] != null ? List<String>.from(map['tags']) : null,
@@ -251,7 +259,8 @@ class Story {
       print('Error parsing story: $e');
       print('Story data: $map');
       return Story(
-        id: map['id']?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString(),
+        id: map['id']?.toString() ??
+            DateTime.now().millisecondsSinceEpoch.toString(),
         userId: map['user_id']?.toString() ?? '',
         title: map['title']?.toString() ?? 'Historia corrupta',
         content: map['content']?.toString(),
@@ -302,15 +311,16 @@ class Story {
 
   static String _generateExcerpt(String content) {
     if (content.isEmpty) return '';
-    
+
     // Remove extra whitespace and get first 150 characters
     final cleanContent = content.replaceAll(RegExp(r'\s+'), ' ').trim();
     if (cleanContent.length <= 150) return cleanContent;
-    
+
     // Find last complete word within 150 chars
     final truncated = cleanContent.substring(0, 150);
     final lastSpace = truncated.lastIndexOf(' ');
-    if (lastSpace > 100) { // Only truncate at word boundary if it's not too short
+    if (lastSpace > 100) {
+      // Only truncate at word boundary if it's not too short
       return truncated.substring(0, lastSpace) + '...';
     }
     return truncated + '...';
@@ -391,7 +401,7 @@ class StoryUpdate {
 
   Map<String, dynamic> toMap() {
     final map = <String, dynamic>{};
-    
+
     if (title != null) map['title'] = title;
     if (content != null) map['content'] = content;
     if (status != null) map['status'] = status!.name;
@@ -406,8 +416,9 @@ class StoryUpdate {
     if (isVoiceGenerated != null) map['is_voice_generated'] = isVoiceGenerated;
     if (voiceTranscript != null) map['voice_transcript'] = voiceTranscript;
     if (aiSuggestions != null) map['ai_suggestions'] = aiSuggestions;
-    if (completenessScore != null) map['completeness_score'] = completenessScore;
-    
+    if (completenessScore != null)
+      map['completeness_score'] = completenessScore;
+
     return map;
   }
 }

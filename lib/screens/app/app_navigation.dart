@@ -351,6 +351,8 @@ class _MobileNav extends StatelessWidget {
                       icon: items[i].icon,
                       selected: currentIndex == i,
                       onTap: () => onItemSelected(i),
+                      tooltip: items[i].label,
+                      isOpen: currentIndex == i,
                     ),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
@@ -509,6 +511,7 @@ class _NavItemButtonState extends State<_NavItemButton> {
           ),
         ),
       ),
+      tooltip: widget.isOpen ? 'Cerrar menú' : 'Abrir menú',
     );
 
     return Semantics(
@@ -527,12 +530,16 @@ class _MobileNavItem extends StatefulWidget {
     required this.icon,
     required this.selected,
     required this.onTap,
+    this.tooltip,
+    this.isOpen = false,
   });
 
   final String label;
   final IconData icon;
   final bool selected;
   final VoidCallback onTap;
+  final String? tooltip;
+  final bool isOpen;
 
   @override
   State<_MobileNavItem> createState() => _MobileNavItemState();
@@ -576,7 +583,7 @@ class _MobileNavItemState extends State<_MobileNavItem>
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    return InkWell(
+    Widget navItem = InkWell(
       onTap: widget.onTap,
       borderRadius: BorderRadius.circular(16),
       child: Padding(
@@ -628,24 +635,26 @@ class _MobileNavItemState extends State<_MobileNavItem>
           ],
         ),
       ),
-      tooltip: widget.isOpen ? 'Cerrar menú' : 'Abrir menú',
     );
 
-    if (widget.tooltip != null && widget.tooltip!.isNotEmpty) {
-      navButton = Tooltip(
-        message: widget.tooltip!,
-        waitDuration: const Duration(milliseconds: 300),
-        child: navButton,
-      );
-    }
-
-    return Semantics(
+    navItem = Semantics(
       button: true,
       selected: widget.selected,
       toggled: widget.isOpen,
-      label: widget.tooltip ?? widget.label,
-      child: navButton,
+      label: widget.label,
+      child: navItem,
     );
+
+    final tooltip = widget.tooltip;
+    if (tooltip != null && tooltip.isNotEmpty) {
+      navItem = Tooltip(
+        message: tooltip,
+        waitDuration: const Duration(milliseconds: 300),
+        child: navItem,
+      );
+    }
+
+    return navItem;
   }
 }
 

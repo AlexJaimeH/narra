@@ -998,8 +998,14 @@ class StoryListCard extends StatelessWidget {
                                     const SizedBox(height: 12),
                                     _StoryActionsButton(
                                       onSelected: (action) =>
-                                          _handleStoryAction(context, action),
-                                      itemBuilder: _buildMenuItems,
+                                          _handleStoryAction(
+                                        context,
+                                        story: story,
+                                        onActionComplete: onActionComplete,
+                                        action: action,
+                                      ),
+                                      itemBuilder: (menuContext) =>
+                                          _buildStoryMenuItems(story),
                                     ),
                                   ],
                                 ),
@@ -1041,7 +1047,7 @@ class StoryListCard extends StatelessWidget {
                             ],
                           ],
                         ),
-                      ],
+                      ),
                     ],
                   ),
                 ),
@@ -1053,181 +1059,195 @@ class StoryListCard extends StatelessWidget {
     );
   }
 
-  Future<void> _handleStoryAction(
-    BuildContext context,
-    String action,
-  ) async {
-    final navigator = Navigator.of(context);
-    final messenger = ScaffoldMessenger.of(context);
+  _StatusColors _statusColors(StoryStatus status, ColorScheme colorScheme) {
+    return _storyStatusColors(status, colorScheme);
+  }
 
-    switch (action) {
-      case 'edit':
-        await navigator.push(
-          MaterialPageRoute(
-            builder: (context) => StoryEditorPage(storyId: story.id),
+  static String _formatDate(DateTime date) => _formatStoryDate(date);
+
+  static String _fallbackExcerpt(String? content) =>
+      _fallbackStoryExcerpt(content);
+}
+
+Future<void> _handleStoryAction(
+  BuildContext context, {
+  required Story story,
+  required VoidCallback onActionComplete,
+  required String action,
+}) async {
+  final navigator = Navigator.of(context);
+  final messenger = ScaffoldMessenger.of(context);
+
+  switch (action) {
+    case 'edit':
+      await navigator.push(
+        MaterialPageRoute(
+          builder: (context) => StoryEditorPage(storyId: story.id),
+        ),
+      );
+      onActionComplete();
+      break;
+    case 'publish':
+      try {
+        await StoryServiceNew.publishStory(story.id);
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('Historia publicada exitosamente'),
           ),
         );
         onActionComplete();
-        break;
-      case 'publish':
-        try {
-          await StoryServiceNew.publishStory(story.id);
-          messenger.showSnackBar(
-            const SnackBar(
-              content: Text('Historia publicada exitosamente'),
+      } catch (e) {
+        messenger.showSnackBar(
+          SnackBar(content: Text('Error al publicar historia: $e')),
+        );
+      }
+      break;
+    case 'unpublish':
+      try {
+        await StoryServiceNew.unpublishStory(story.id);
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Historia despublicada')),
+        );
+        onActionComplete();
+      } catch (e) {
+        messenger.showSnackBar(
+          SnackBar(content: Text('Error al despublicar historia: $e')),
+        );
+      }
+      break;
+    case 'delete':
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Eliminar historia'),
+          content: Text(
+            '¿Estás seguro de que deseas eliminar "${story.title}"?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancelar'),
             ),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: const Text('Eliminar'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed == true) {
+        try {
+          await StoryServiceNew.deleteStory(story.id);
+          messenger.showSnackBar(
+            const SnackBar(content: Text('Historia eliminada')),
           );
           onActionComplete();
         } catch (e) {
           messenger.showSnackBar(
-            SnackBar(content: Text('Error al publicar historia: $e')),
+            SnackBar(content: Text('Error al eliminar historia: $e')),
           );
         }
-        break;
-      case 'unpublish':
-        try {
-          await StoryServiceNew.unpublishStory(story.id);
-          messenger.showSnackBar(
-            const SnackBar(content: Text('Historia despublicada')),
-          );
-          onActionComplete();
-        } catch (e) {
-          messenger.showSnackBar(
-            SnackBar(content: Text('Error al despublicar historia: $e')),
-          );
-        }
-        break;
-      case 'delete':
-        final confirmed = await showDialog<bool>(
-          context: context,
-          builder: (dialogContext) => AlertDialog(
-            title: const Text('Eliminar historia'),
-            content: Text(
-              '¿Estás seguro de que deseas eliminar "${story.title}"?',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext, false),
-                child: const Text('Cancelar'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext, true),
-                style: TextButton.styleFrom(foregroundColor: Colors.red),
-                child: const Text('Eliminar'),
-              ),
-            ],
-          ),
-        );
-        if (confirmed == true) {
-          try {
-            await StoryServiceNew.deleteStory(story.id);
-            messenger.showSnackBar(
-              const SnackBar(content: Text('Historia eliminada')),
-            );
-            onActionComplete();
-          } catch (e) {
-            messenger.showSnackBar(
-              SnackBar(content: Text('Error al eliminar historia: $e')),
-            );
-          }
-        }
-        break;
-    }
+      }
+      break;
   }
+}
 
-  List<PopupMenuEntry<String>> _buildMenuItems(BuildContext context) {
-    return [
+List<PopupMenuEntry<String>> _buildStoryMenuItems(Story story) {
+  return [
+    const PopupMenuItem(
+      value: 'edit',
+      child: _PopupMenuRow(
+        icon: Icons.edit_outlined,
+        label: 'Editar',
+      ),
+    ),
+    if (story.status == StoryStatus.draft)
       const PopupMenuItem(
-        value: 'edit',
+        value: 'publish',
         child: _PopupMenuRow(
-          icon: Icons.edit_outlined,
-          label: 'Editar',
+          icon: Icons.publish_outlined,
+          label: 'Publicar',
         ),
       ),
-      if (story.status == StoryStatus.draft)
-        const PopupMenuItem(
-          value: 'publish',
-          child: _PopupMenuRow(
-            icon: Icons.publish_outlined,
-            label: 'Publicar',
-          ),
-        ),
-      if (story.status == StoryStatus.published)
-        const PopupMenuItem(
-          value: 'unpublish',
-          child: _PopupMenuRow(
-            icon: Icons.visibility_off_outlined,
-            label: 'Despublicar',
-          ),
-        ),
+    if (story.status == StoryStatus.published)
       const PopupMenuItem(
-        value: 'delete',
+        value: 'unpublish',
         child: _PopupMenuRow(
-          icon: Icons.delete_outline,
-          label: 'Eliminar',
-          isDestructive: true,
+          icon: Icons.visibility_off_outlined,
+          label: 'Despublicar',
         ),
       ),
-    ];
+    const PopupMenuItem(
+      value: 'delete',
+      child: _PopupMenuRow(
+        icon: Icons.delete_outline,
+        label: 'Eliminar',
+        isDestructive: true,
+      ),
+    ),
+  ];
+}
+
+_StatusColors _storyStatusColors(
+  StoryStatus status,
+  ColorScheme colorScheme,
+) {
+  switch (status) {
+    case StoryStatus.published:
+      return _StatusColors(
+        background: colorScheme.primaryContainer,
+        foreground: colorScheme.onPrimaryContainer,
+      );
+    case StoryStatus.draft:
+      return _StatusColors(
+        background: colorScheme.secondaryContainer,
+        foreground: colorScheme.onSecondaryContainer,
+      );
+    case StoryStatus.archived:
+      return _StatusColors(
+        background: colorScheme.surfaceContainerHighest,
+        foreground: colorScheme.onSurfaceVariant,
+      );
   }
+}
 
-  _StatusColors _statusColors(StoryStatus status, ColorScheme colorScheme) {
-    switch (status) {
-      case StoryStatus.published:
-        return _StatusColors(
-          background: colorScheme.primaryContainer,
-          foreground: colorScheme.onPrimaryContainer,
-        );
-      case StoryStatus.draft:
-        return _StatusColors(
-          background: colorScheme.secondaryContainer,
-          foreground: colorScheme.onSecondaryContainer,
-        );
-      case StoryStatus.archived:
-        return _StatusColors(
-          background: colorScheme.surfaceContainerHighest,
-          foreground: colorScheme.onSurfaceVariant,
-        );
-    }
+String _formatStoryDate(DateTime date) {
+  final now = DateTime.now();
+  final difference = now.difference(date).inDays;
+
+  if (difference == 0) return 'Hoy';
+  if (difference == 1) return 'Ayer';
+  if (difference < 7) return 'Hace $difference días';
+
+  const months = [
+    'ene',
+    'feb',
+    'mar',
+    'abr',
+    'may',
+    'jun',
+    'jul',
+    'ago',
+    'sep',
+    'oct',
+    'nov',
+    'dic',
+  ];
+
+  return '${date.day} ${months[date.month - 1]}';
+}
+
+String _fallbackStoryExcerpt(String? content) {
+  if (content == null || content.isEmpty) {
+    return '';
   }
-
-  static String _formatDate(DateTime date) {
-    final now = DateTime.now();
-    final difference = now.difference(date).inDays;
-
-    if (difference == 0) return 'Hoy';
-    if (difference == 1) return 'Ayer';
-    if (difference < 7) return 'Hace $difference días';
-
-    const months = [
-      'ene',
-      'feb',
-      'mar',
-      'abr',
-      'may',
-      'jun',
-      'jul',
-      'ago',
-      'sep',
-      'oct',
-      'nov',
-      'dic',
-    ];
-
-    return '${date.day} ${months[date.month - 1]}';
-  }
-
-  static String _fallbackExcerpt(String? content) {
-    if (content == null || content.isEmpty) {
-      return '';
-    }
-    final normalized = content.replaceAll(RegExp(r'\s+'), ' ').trim();
-    if (normalized.length <= 160) return normalized;
-    final truncated = normalized.substring(0, 160);
-    final lastSpace = truncated.lastIndexOf(' ');
-    return (lastSpace > 60 ? truncated.substring(0, lastSpace) : truncated) +
-        '...';
-  }
+  final normalized = content.replaceAll(RegExp(r'\s+'), ' ').trim();
+  if (normalized.length <= 160) return normalized;
+  final truncated = normalized.substring(0, 160);
+  final lastSpace = truncated.lastIndexOf(' ');
+  return (lastSpace > 60 ? truncated.substring(0, lastSpace) : truncated) +
+      '...';
 }
 
 class _StatusPill extends StatelessWidget {

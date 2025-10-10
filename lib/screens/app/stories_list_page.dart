@@ -81,14 +81,14 @@ class _StoriesListPageState extends State<StoriesListPage>
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
           child: DecoratedBox(
             decoration: BoxDecoration(
               color: colorScheme.surface,
               borderRadius: BorderRadius.circular(28),
             ),
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -96,7 +96,7 @@ class _StoriesListPageState extends State<StoriesListPage>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Container(
-                        padding: const EdgeInsets.all(12),
+                        padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
                           color: colorScheme.primary.withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(18),
@@ -107,7 +107,7 @@ class _StoriesListPageState extends State<StoriesListPage>
                           size: 28,
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 10),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -141,12 +141,12 @@ class _StoriesListPageState extends State<StoriesListPage>
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
                           ),
-                          padding: const EdgeInsets.all(10),
+                          padding: const EdgeInsets.all(9),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 10),
                   _SearchField(
                     controller: _searchController,
                     hintText:
@@ -161,7 +161,7 @@ class _StoriesListPageState extends State<StoriesListPage>
                     onRefresh: () => _loadStories(silent: true),
                     isQueryEmpty: _searchQuery.isEmpty,
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 10),
                   _StoriesSegmentedControl(
                     controller: _tabController,
                     theme: theme,
@@ -171,7 +171,7 @@ class _StoriesListPageState extends State<StoriesListPage>
             ),
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
         Expanded(
           child: _isLoading
               ? const Center(child: CircularProgressIndicator())
@@ -239,11 +239,11 @@ class _SearchField extends StatelessWidget {
           borderRadius: BorderRadius.circular(26),
           color: colorScheme.surfaceContainerHigh,
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
         child: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(9),
+              padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(18),
                 color: colorScheme.primary.withValues(alpha: 0.12),
@@ -253,7 +253,7 @@ class _SearchField extends StatelessWidget {
                 color: colorScheme.primary,
               ),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 8),
             Expanded(
               child: TextField(
                 controller: controller,
@@ -264,6 +264,8 @@ class _SearchField extends StatelessWidget {
                 decoration: InputDecoration(
                   isCollapsed: true,
                   border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
                   hintText: hintText,
                   hintStyle: theme.textTheme.bodyLarge?.copyWith(
                     color: colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
@@ -271,7 +273,7 @@ class _SearchField extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 8),
             AnimatedSwitcher(
               duration: const Duration(milliseconds: 200),
               transitionBuilder: (child, animation) => ScaleTransition(
@@ -332,7 +334,7 @@ class _SearchActionButton extends StatelessWidget {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(18),
         ),
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(10),
       ),
     );
   }
@@ -354,29 +356,15 @@ class _StoriesSegmentedControl extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(26),
-        color: colorScheme.surfaceBright.withValues(alpha: 0.68),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.24),
-        ),
+        color: colorScheme.surfaceContainerHigh.withValues(alpha: 0.4),
       ),
       child: TabBar(
         controller: controller,
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
         dividerColor: Colors.transparent,
-        indicator: ShapeDecoration(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-            side: BorderSide(
-              color: colorScheme.primary,
-              width: 1.6,
-            ),
-          ),
-          gradient: LinearGradient(
-            colors: [
-              colorScheme.primary.withValues(alpha: 0.18),
-              colorScheme.primary.withValues(alpha: 0.1),
-            ],
-          ),
+        indicator: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          color: colorScheme.primary.withValues(alpha: 0.12),
         ),
         labelStyle: theme.textTheme.labelLarge?.copyWith(
           fontWeight: FontWeight.w700,
@@ -437,7 +425,7 @@ class StoriesTab extends StatelessWidget {
 
     final mediaQuery = MediaQuery.of(context);
     final isCompact = mediaQuery.size.width < 640;
-    final horizontalPadding = isCompact ? 12.0 : 18.0;
+    final horizontalPadding = isCompact ? 10.0 : 16.0;
 
     if (filteredStories.isEmpty) {
       return RefreshIndicator(
@@ -464,23 +452,23 @@ class StoriesTab extends StatelessWidget {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: EdgeInsets.fromLTRB(
           horizontalPadding,
-          12,
+          8,
           horizontalPadding,
-          20,
+          16,
         ),
         itemCount: filteredStories.length,
         separatorBuilder: (context, index) => Padding(
           padding: EdgeInsets.fromLTRB(
-            horizontalPadding + (isCompact ? 2 : 12),
-            isCompact ? 8 : 12,
-            horizontalPadding + (isCompact ? 2 : 12),
-            isCompact ? 2 : 8,
+            horizontalPadding + (isCompact ? 2 : 10),
+            isCompact ? 6 : 10,
+            horizontalPadding + (isCompact ? 2 : 10),
+            isCompact ? 2 : 6,
           ),
           child: _StoriesSeparator(
             color: Theme.of(context)
                 .colorScheme
                 .outlineVariant
-                .withValues(alpha: 0.32),
+                .withValues(alpha: 0.24),
           ),
         ),
         itemBuilder: (context, index) {
@@ -797,13 +785,13 @@ class StoryListCard extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isCompact = constraints.maxWidth < 640;
-        final horizontalPadding = isCompact ? 14.0 : 18.0;
-        final verticalPadding = isCompact ? 14.0 : 18.0;
+        final horizontalPadding = isCompact ? 12.0 : 16.0;
+        final verticalPadding = isCompact ? 12.0 : 16.0;
         final titleStyle = (isCompact
                 ? theme.textTheme.titleMedium
                 : theme.textTheme.titleLarge)
             ?.copyWith(fontWeight: FontWeight.w700);
-        final cardRadius = BorderRadius.circular(22);
+        final cardRadius = BorderRadius.circular(18);
 
         return Material(
           color: Colors.transparent,
@@ -827,7 +815,7 @@ class StoryListCard extends StatelessWidget {
                   if (coverUrl != null)
                     ClipRRect(
                       borderRadius: const BorderRadius.vertical(
-                        top: Radius.circular(22),
+                        top: Radius.circular(18),
                       ),
                       child: AspectRatio(
                         aspectRatio: 16 / 9,
@@ -852,7 +840,7 @@ class StoryListCard extends StatelessWidget {
                       horizontalPadding,
                       verticalPadding,
                       horizontalPadding,
-                      isCompact ? 16 : 18,
+                      isCompact ? 14 : 16,
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -868,7 +856,7 @@ class StoryListCard extends StatelessWidget {
                                 color: accentColor,
                               ),
                             ),
-                            const SizedBox(width: 12),
+                            const SizedBox(width: 10),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -890,7 +878,7 @@ class StoryListCard extends StatelessWidget {
                                 ],
                               ),
                             ),
-                            const SizedBox(width: 12),
+                            const SizedBox(width: 10),
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
@@ -917,14 +905,14 @@ class StoryListCard extends StatelessWidget {
                             ),
                           ],
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 10),
                         Divider(
                           height: 1,
                           color: colorScheme.outlineVariant
                               .withValues(alpha: 0.28),
                         ),
                         if (excerpt.isNotEmpty) ...[
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 10),
                           Text(
                             excerpt,
                             style: theme.textTheme.bodyMedium?.copyWith(
@@ -935,7 +923,7 @@ class StoryListCard extends StatelessWidget {
                           ),
                         ],
                         if (tags.isNotEmpty) ...[
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 10),
                           Wrap(
                             spacing: 8,
                             runSpacing: 8,
@@ -945,7 +933,7 @@ class StoryListCard extends StatelessWidget {
                           ),
                         ],
                         if (metadataChips.isNotEmpty) ...[
-                          const SizedBox(height: 14),
+                          const SizedBox(height: 12),
                           Wrap(
                             spacing: 8,
                             runSpacing: 6,
@@ -958,16 +946,7 @@ class StoryListCard extends StatelessWidget {
                 ],
               ),
             ),
-            if (isCompact)
-              Positioned(
-                top: -10,
-                left: 20,
-                child: _StoryBadge(
-                  index: index,
-                  accentColor: accentColor,
-                ),
-              ),
-          ],
+          ),
         );
       },
     );
@@ -981,50 +960,6 @@ class StoryListCard extends StatelessWidget {
 
   static String _fallbackExcerpt(String? content) =>
       _fallbackStoryExcerpt(content);
-}
-
-class _StoryBadge extends StatelessWidget {
-  const _StoryBadge({required this.index, required this.accentColor});
-
-  final int index;
-  final Color accentColor;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            accentColor.withValues(alpha: 0.9),
-            accentColor.withValues(alpha: 0.6),
-          ],
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: accentColor.withValues(alpha: 0.28),
-            blurRadius: 18,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        child: Text(
-          '#${index + 1}'.padLeft(2, '0'),
-          style: theme.textTheme.labelLarge?.copyWith(
-            color: colorScheme.onPrimary,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.4,
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 Future<void> _handleStoryAction(

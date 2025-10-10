@@ -158,7 +158,6 @@ class _StoriesListPageState extends State<StoriesListPage>
                       _searchController.clear();
                       setState(() => _searchQuery = '');
                     },
-                    onRefresh: () => _loadStories(silent: true),
                     isQueryEmpty: _searchQuery.isEmpty,
                   ),
                   const SizedBox(height: 10),
@@ -216,7 +215,6 @@ class _SearchField extends StatelessWidget {
     required this.hintText,
     required this.onChanged,
     required this.onClear,
-    required this.onRefresh,
     required this.isQueryEmpty,
   });
 
@@ -224,7 +222,6 @@ class _SearchField extends StatelessWidget {
   final String hintText;
   final ValueChanged<String> onChanged;
   final VoidCallback onClear;
-  final Future<void> Function() onRefresh;
   final bool isQueryEmpty;
 
   @override
@@ -232,75 +229,56 @@ class _SearchField extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(26),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(26),
-          color: colorScheme.surfaceContainerHigh,
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(18),
-                color: colorScheme.primary.withValues(alpha: 0.12),
-              ),
-              child: Icon(
-                Icons.search_rounded,
-                color: colorScheme.primary,
-              ),
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        color: colorScheme.surfaceContainerHigh,
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              color: colorScheme.primary.withValues(alpha: 0.12),
             ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: TextField(
-                controller: controller,
-                onChanged: onChanged,
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  fontWeight: FontWeight.w500,
-                ),
-                decoration: InputDecoration(
-                  isCollapsed: true,
-                  border: InputBorder.none,
-                  enabledBorder: InputBorder.none,
-                  focusedBorder: InputBorder.none,
-                  hintText: hintText,
-                  hintStyle: theme.textTheme.bodyLarge?.copyWith(
-                    color: colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
-                  ),
+            child: Icon(
+              Icons.search_rounded,
+              color: colorScheme.primary,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              onChanged: onChanged,
+              style: theme.textTheme.bodyLarge?.copyWith(
+                fontWeight: FontWeight.w500,
+              ),
+              decoration: InputDecoration(
+                isCollapsed: true,
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                hintText: hintText,
+                hintStyle: theme.textTheme.bodyLarge?.copyWith(
+                  color: colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
                 ),
               ),
             ),
+          ),
+          if (!isQueryEmpty) ...[
             const SizedBox(width: 8),
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 200),
-              transitionBuilder: (child, animation) => ScaleTransition(
-                scale:
-                    CurvedAnimation(parent: animation, curve: Curves.easeOut),
-                child: child,
-              ),
-              child: isQueryEmpty
-                  ? _SearchActionButton(
-                      key: const ValueKey('filter'),
-                      icon: Icons.tune_rounded,
-                      tooltip: 'Actualizar lista',
-                      onPressed: onRefresh,
-                      background: colorScheme.primary.withValues(alpha: 0.1),
-                      foreground: colorScheme.primary,
-                    )
-                  : _SearchActionButton(
-                      key: const ValueKey('clear'),
-                      icon: Icons.close_rounded,
-                      tooltip: 'Limpiar búsqueda',
-                      onPressed: onClear,
-                      background: colorScheme.onSurface.withValues(alpha: 0.08),
-                      foreground: colorScheme.onSurface,
-                    ),
+            _SearchActionButton(
+              icon: Icons.close_rounded,
+              tooltip: 'Limpiar búsqueda',
+              onPressed: onClear,
+              background: colorScheme.onSurface.withValues(alpha: 0.08),
+              foreground: colorScheme.onSurface,
             ),
           ],
-        ),
+        ],
       ),
     );
   }
@@ -845,101 +823,103 @@ class StoryListCard extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Container(
-                              width: 5,
-                              height: isCompact ? 42 : 54,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(999),
-                                color: accentColor,
+                        IntrinsicHeight(
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Container(
+                                width: 5,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(999),
+                                  color: accentColor,
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    story.title.isEmpty
-                                        ? 'Sin título'
-                                        : story.title,
-                                    style: titleStyle,
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    'Actualizada ${_formatDate(story.updatedAt)}',
-                                    style:
-                                        theme.textTheme.labelMedium?.copyWith(
-                                      color: colorScheme.onSurfaceVariant,
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            story.title.isEmpty
+                                                ? 'Sin título'
+                                                : story.title,
+                                            style: titleStyle,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            _StatusPill(
+                                              label: story.status.displayName,
+                                              color: statusColors.foreground,
+                                              background:
+                                                  statusColors.background,
+                                              icon: story.status ==
+                                                      StoryStatus.published
+                                                  ? Icons.check_circle
+                                                  : Icons.edit_note,
+                                            ),
+                                            const SizedBox(width: 8),
+                                            _StoryActionsButton(
+                                              onSelected: (action) =>
+                                                  _handleStoryAction(
+                                                context,
+                                                story: story,
+                                                onActionComplete:
+                                                    onActionComplete,
+                                                action: action,
+                                              ),
+                                              itemBuilder: (menuContext) =>
+                                                  _buildStoryMenuItems(
+                                                story,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
                                     ),
-                                  ),
-                                ],
+                                    if (excerpt.isNotEmpty) ...[
+                                      const SizedBox(height: 10),
+                                      Text(
+                                        excerpt,
+                                        style: theme.textTheme.bodyMedium
+                                            ?.copyWith(
+                                          height: 1.45,
+                                        ),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ],
+                                    if (tags.isNotEmpty) ...[
+                                      const SizedBox(height: 12),
+                                      Wrap(
+                                        spacing: 8,
+                                        runSpacing: 8,
+                                        children: tags
+                                            .map((tag) => _TagChip(label: tag))
+                                            .toList(),
+                                      ),
+                                    ],
+                                    if (metadataChips.isNotEmpty) ...[
+                                      const SizedBox(height: 12),
+                                      Wrap(
+                                        spacing: 8,
+                                        runSpacing: 6,
+                                        children: metadataChips,
+                                      ),
+                                    ],
+                                  ],
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: 10),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                _StatusPill(
-                                  label: story.status.displayName,
-                                  color: statusColors.foreground,
-                                  background: statusColors.background,
-                                  icon: story.status == StoryStatus.published
-                                      ? Icons.check_circle
-                                      : Icons.edit_note,
-                                ),
-                                const SizedBox(height: 10),
-                                _StoryActionsButton(
-                                  onSelected: (action) => _handleStoryAction(
-                                    context,
-                                    story: story,
-                                    onActionComplete: onActionComplete,
-                                    action: action,
-                                  ),
-                                  itemBuilder: (menuContext) =>
-                                      _buildStoryMenuItems(story),
-                                ),
-                              ],
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                        const SizedBox(height: 10),
-                        Divider(
-                          height: 1,
-                          color: colorScheme.outlineVariant
-                              .withValues(alpha: 0.28),
-                        ),
-                        if (excerpt.isNotEmpty) ...[
-                          const SizedBox(height: 10),
-                          Text(
-                            excerpt,
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              height: 1.45,
-                            ),
-                            maxLines: isCompact ? 4 : 3,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                        if (tags.isNotEmpty) ...[
-                          const SizedBox(height: 10),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: tags
-                                .map((tag) => _TagChip(label: tag))
-                                .toList(),
-                          ),
-                        ],
-                        if (metadataChips.isNotEmpty) ...[
-                          const SizedBox(height: 12),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 6,
-                            children: metadataChips,
-                          ),
-                        ],
                       ],
                     ),
                   ),

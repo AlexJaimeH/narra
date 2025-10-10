@@ -164,7 +164,7 @@ class _StoriesListPageState extends State<StoriesListPage>
             ),
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
         Expanded(
           child: _isLoading
               ? const Center(child: CircularProgressIndicator())
@@ -240,15 +240,15 @@ class _SearchField extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: colorScheme.primary.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(18),
+                color: colorScheme.primary.withValues(alpha: 0.12),
               ),
               child: Icon(
                 Icons.search_rounded,
                 color: colorScheme.primary,
               ),
             ),
-            const SizedBox(width: 14),
+            const SizedBox(width: 10),
             Expanded(
               child: TextField(
                 controller: controller,
@@ -263,7 +263,7 @@ class _SearchField extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 10),
             AnimatedSwitcher(
               duration: const Duration(milliseconds: 200),
               transitionBuilder: (child, animation) => ScaleTransition(
@@ -272,37 +272,59 @@ class _SearchField extends StatelessWidget {
                 child: child,
               ),
               child: isQueryEmpty
-                  ? IconButton(
+                  ? _SearchActionButton(
                       key: const ValueKey('filter'),
-                      onPressed: onRefresh,
+                      icon: Icons.tune_rounded,
                       tooltip: 'Actualizar lista',
-                      icon: const Icon(Icons.tune_rounded),
-                      style: IconButton.styleFrom(
-                        backgroundColor:
-                            colorScheme.primary.withValues(alpha: 0.08),
-                        foregroundColor: colorScheme.primary,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ),
+                      onPressed: onRefresh,
+                      background: colorScheme.primary.withValues(alpha: 0.1),
+                      foreground: colorScheme.primary,
                     )
-                  : IconButton(
+                  : _SearchActionButton(
                       key: const ValueKey('clear'),
-                      onPressed: onClear,
+                      icon: Icons.close_rounded,
                       tooltip: 'Limpiar búsqueda',
-                      icon: const Icon(Icons.close_rounded),
-                      style: IconButton.styleFrom(
-                        backgroundColor:
-                            colorScheme.onSurface.withValues(alpha: 0.06),
-                        foregroundColor: colorScheme.onSurface,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ),
+                      onPressed: onClear,
+                      background: colorScheme.onSurface.withValues(alpha: 0.08),
+                      foreground: colorScheme.onSurface,
                     ),
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _SearchActionButton extends StatelessWidget {
+  const _SearchActionButton({
+    super.key,
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+    required this.background,
+    required this.foreground,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onPressed;
+  final Color background;
+  final Color foreground;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: tooltip,
+      onPressed: onPressed,
+      icon: Icon(icon),
+      style: IconButton.styleFrom(
+        backgroundColor: background,
+        foregroundColor: foreground,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+        ),
+        padding: const EdgeInsets.all(12),
       ),
     );
   }
@@ -336,22 +358,22 @@ class _StoriesSegmentedControl extends StatelessWidget {
         ),
         labelStyle: theme.textTheme.labelLarge?.copyWith(
           fontWeight: FontWeight.w700,
-          letterSpacing: 0.2,
+          letterSpacing: 0.25,
         ),
         unselectedLabelStyle: theme.textTheme.labelLarge?.copyWith(
-          fontWeight: FontWeight.w500,
+          fontWeight: FontWeight.w600,
         ),
-        labelColor: colorScheme.onPrimary,
+        labelColor: colorScheme.primary,
         unselectedLabelColor: colorScheme.onSurfaceVariant,
         overlayColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.pressed) ||
               states.contains(WidgetState.hovered)) {
-            return colorScheme.primary.withValues(alpha: 0.06);
+            return colorScheme.primary.withValues(alpha: 0.08);
           }
           return Colors.transparent;
         }),
         indicatorSize: TabBarIndicatorSize.tab,
-        splashFactory: NoSplash.splashFactory,
+        splashFactory: InkSparkle.splashFactory,
         tabs: const [
           Tab(text: 'Todas'),
           Tab(text: 'Borradores'),
@@ -392,7 +414,8 @@ class StoriesTab extends StatelessWidget {
     }).toList();
 
     final mediaQuery = MediaQuery.of(context);
-    final horizontalPadding = mediaQuery.size.width < 640 ? 12.0 : 24.0;
+    final isCompact = mediaQuery.size.width < 640;
+    final horizontalPadding = isCompact ? 12.0 : 18.0;
 
     if (filteredStories.isEmpty) {
       return RefreshIndicator(
@@ -400,7 +423,7 @@ class StoriesTab extends StatelessWidget {
         displacement: 80,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 60),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 48),
           children: [
             _EmptyStoriesState(
               isSearching: searchQuery.trim().isNotEmpty,
@@ -559,6 +582,20 @@ class StoriesTab extends StatelessWidget {
     }
 
     return distance[m][n];
+  }
+}
+
+class _StoriesSeparator extends StatelessWidget {
+  const _StoriesSeparator({required this.color});
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 1,
+      color: color,
+    );
   }
 }
 
@@ -737,6 +774,7 @@ class StoryListCard extends StatelessWidget {
                 ? theme.textTheme.titleMedium
                 : theme.textTheme.titleLarge)
             ?.copyWith(fontWeight: FontWeight.w700);
+        final cardRadius = BorderRadius.circular(22);
 
         return Material(
           color: Colors.transparent,
@@ -883,7 +921,16 @@ class StoryListCard extends StatelessWidget {
                 ],
               ),
             ),
-          ),
+            if (isCompact)
+              Positioned(
+                top: -10,
+                left: 20,
+                child: _StoryBadge(
+                  index: index,
+                  accentColor: accentColor,
+                ),
+              ),
+          ],
         );
       },
     );

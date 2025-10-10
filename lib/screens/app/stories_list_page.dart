@@ -373,7 +373,7 @@ class _SearchField extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 16),
             AnimatedSwitcher(
               duration: const Duration(milliseconds: 200),
               transitionBuilder: (child, animation) => ScaleTransition(
@@ -1101,7 +1101,16 @@ class StoryListCard extends StatelessWidget {
                 ],
               ),
             ),
-          ),
+            if (isCompact)
+              Positioned(
+                top: -10,
+                left: 20,
+                child: _StoryBadge(
+                  index: index,
+                  accentColor: accentColor,
+                ),
+              ),
+          ],
         );
       },
     );
@@ -1115,6 +1124,50 @@ class StoryListCard extends StatelessWidget {
 
   static String _fallbackExcerpt(String? content) =>
       _fallbackStoryExcerpt(content);
+}
+
+class _StoryBadge extends StatelessWidget {
+  const _StoryBadge({required this.index, required this.accentColor});
+
+  final int index;
+  final Color accentColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            accentColor.withValues(alpha: 0.9),
+            accentColor.withValues(alpha: 0.6),
+          ],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: accentColor.withValues(alpha: 0.28),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Text(
+          '#${index + 1}'.padLeft(2, '0'),
+          style: theme.textTheme.labelLarge?.copyWith(
+            color: colorScheme.onPrimary,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.4,
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 Future<void> _handleStoryAction(

@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:narra/repositories/story_repository.dart';
@@ -83,116 +84,128 @@ class _StoriesListPageState extends State<StoriesListPage>
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color:
-                  colorScheme.surfaceContainerHighest.withValues(alpha: 0.72),
-              borderRadius: BorderRadius.circular(24),
+              color: colorScheme.surface,
+              borderRadius: BorderRadius.circular(32),
               border: Border.all(
-                color: colorScheme.outlineVariant.withValues(alpha: 0.25),
+                color: colorScheme.outlineVariant.withValues(alpha: 0.18),
               ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 28,
+                  offset: const Offset(0, 18),
+                ),
+              ],
             ),
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+            child: Stack(
+              children: [
+                Positioned(
+                  right: -40,
+                  top: -80,
+                  child: _AccentOrb(
+                    color: colorScheme.primary.withValues(alpha: 0.24),
+                    size: 180,
+                  ),
+                ),
+                Positioned(
+                  left: -40,
+                  bottom: -60,
+                  child: _AccentOrb(
+                    color: colorScheme.secondary.withValues(alpha: 0.18),
+                    size: 150,
+                  ),
+                ),
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 26, vertical: 26),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Mis historias',
-                              style: theme.textTheme.headlineSmall?.copyWith(
-                                fontWeight: FontWeight.w700,
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  colorScheme.primary.withValues(alpha: 0.14),
+                                  colorScheme.primary.withValues(alpha: 0.06),
+                                ],
                               ),
+                              borderRadius: BorderRadius.circular(20),
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Administra, busca y publica tus recuerdos con facilidad.',
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: colorScheme.onSurfaceVariant,
+                            child: Icon(
+                              Icons.menu_book_rounded,
+                              color: colorScheme.primary,
+                              size: 30,
+                            ),
+                          ),
+                          const SizedBox(width: 18),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Mis historias',
+                                  style:
+                                      theme.textTheme.headlineSmall?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: -0.3,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  'Administra, busca y publica tus recuerdos con un espacio pensado para ti.',
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () => _loadStories(silent: true),
+                            tooltip: 'Actualizar historias',
+                            icon: const Icon(Icons.refresh_rounded),
+                            style: IconButton.styleFrom(
+                              backgroundColor: colorScheme.surfaceBright,
+                              foregroundColor: colorScheme.primary,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(18),
                               ),
+                              shadowColor:
+                                  colorScheme.primary.withValues(alpha: 0.18),
+                              elevation: 4,
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
-                      IconButton.filledTonal(
-                        onPressed: () => _loadStories(silent: true),
-                        tooltip: 'Actualizar historias',
-                        icon: const Icon(Icons.refresh),
+                      const SizedBox(height: 22),
+                      _SearchField(
+                        controller: _searchController,
+                        hintText:
+                            'Buscar por título, contenido, etiquetas o personas...',
+                        onChanged: (value) {
+                          setState(() => _searchQuery = value);
+                        },
+                        onClear: () {
+                          _searchController.clear();
+                          setState(() => _searchQuery = '');
+                        },
+                        onRefresh: () => _loadStories(silent: true),
+                        isQueryEmpty: _searchQuery.isEmpty,
+                      ),
+                      const SizedBox(height: 24),
+                      _StoriesSegmentedControl(
+                        controller: _tabController,
+                        theme: theme,
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: _searchController,
-                    decoration: InputDecoration(
-                      hintText:
-                          'Buscar por título, contenido, etiquetas o personas...',
-                      prefixIcon: const Icon(Icons.search),
-                      suffixIcon: _searchQuery.isEmpty
-                          ? null
-                          : IconButton(
-                              onPressed: () {
-                                _searchController.clear();
-                                setState(() {
-                                  _searchQuery = '';
-                                });
-                              },
-                              icon: const Icon(Icons.close),
-                              tooltip: 'Limpiar búsqueda',
-                            ),
-                      filled: true,
-                      fillColor: colorScheme.surface,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: BorderSide.none,
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 14,
-                      ),
-                    ),
-                    onChanged: (value) {
-                      setState(() {
-                        _searchQuery = value;
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: colorScheme.surface,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color:
-                            colorScheme.outlineVariant.withValues(alpha: 0.3),
-                      ),
-                    ),
-                    child: TabBar(
-                      controller: _tabController,
-                      labelStyle: theme.textTheme.labelLarge?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                      indicator: BoxDecoration(
-                        color: colorScheme.primary,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      labelColor: colorScheme.onPrimary,
-                      unselectedLabelColor: colorScheme.onSurfaceVariant,
-                      overlayColor: MaterialStatePropertyAll(
-                        colorScheme.primary.withValues(alpha: 0.08),
-                      ),
-                      tabs: const [
-                        Tab(text: 'Todas'),
-                        Tab(text: 'Borradores'),
-                        Tab(text: 'Publicadas'),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),
@@ -235,6 +248,221 @@ class _StoriesListPageState extends State<StoriesListPage>
   }
 }
 
+class _AccentOrb extends StatelessWidget {
+  const _AccentOrb({required this.color, required this.size});
+
+  final Color color;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Container(
+        height: size,
+        width: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: RadialGradient(
+            colors: [
+              color,
+              color.withValues(alpha: 0.0),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SearchField extends StatelessWidget {
+  const _SearchField({
+    required this.controller,
+    required this.hintText,
+    required this.onChanged,
+    required this.onClear,
+    required this.onRefresh,
+    required this.isQueryEmpty,
+  });
+
+  final TextEditingController controller;
+  final String hintText;
+  final ValueChanged<String> onChanged;
+  final VoidCallback onClear;
+  final Future<void> Function() onRefresh;
+  final bool isQueryEmpty;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(26),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            colorScheme.surfaceBright,
+            colorScheme.surface.withValues(alpha: 0.92),
+          ],
+        ),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.2),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 18,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: colorScheme.primary.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Icon(
+                Icons.search_rounded,
+                color: colorScheme.primary,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: TextField(
+                controller: controller,
+                onChanged: onChanged,
+                style: theme.textTheme.bodyLarge,
+                decoration: InputDecoration.collapsed(
+                  hintText: hintText,
+                  hintStyle: theme.textTheme.bodyLarge?.copyWith(
+                    color: colorScheme.onSurfaceVariant.withValues(alpha: 0.8),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 200),
+              transitionBuilder: (child, animation) => ScaleTransition(
+                scale:
+                    CurvedAnimation(parent: animation, curve: Curves.easeOut),
+                child: child,
+              ),
+              child: isQueryEmpty
+                  ? IconButton(
+                      key: const ValueKey('filter'),
+                      onPressed: onRefresh,
+                      tooltip: 'Actualizar lista',
+                      icon: const Icon(Icons.tune_rounded),
+                      style: IconButton.styleFrom(
+                        backgroundColor:
+                            colorScheme.primary.withValues(alpha: 0.08),
+                        foregroundColor: colorScheme.primary,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                    )
+                  : IconButton(
+                      key: const ValueKey('clear'),
+                      onPressed: onClear,
+                      tooltip: 'Limpiar búsqueda',
+                      icon: const Icon(Icons.close_rounded),
+                      style: IconButton.styleFrom(
+                        backgroundColor:
+                            colorScheme.onSurface.withValues(alpha: 0.06),
+                        foregroundColor: colorScheme.onSurface,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StoriesSegmentedControl extends StatelessWidget {
+  const _StoriesSegmentedControl({
+    required this.controller,
+    required this.theme,
+  });
+
+  final TabController controller;
+  final ThemeData theme;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = theme.colorScheme;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(26),
+        color: colorScheme.surfaceContainerLowest,
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.16),
+        ),
+      ),
+      child: TabBar(
+        controller: controller,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        dividerColor: Colors.transparent,
+        indicator: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              colorScheme.primary,
+              colorScheme.primaryContainer,
+            ],
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: colorScheme.primary.withValues(alpha: 0.32),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        labelStyle: theme.textTheme.labelLarge?.copyWith(
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.2,
+        ),
+        unselectedLabelStyle: theme.textTheme.labelLarge?.copyWith(
+          fontWeight: FontWeight.w500,
+        ),
+        labelColor: colorScheme.onPrimary,
+        unselectedLabelColor: colorScheme.onSurfaceVariant,
+        overlayColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.pressed) ||
+              states.contains(WidgetState.hovered)) {
+            return colorScheme.primary.withValues(alpha: 0.06);
+          }
+          return Colors.transparent;
+        }),
+        indicatorSize: TabBarIndicatorSize.tab,
+        splashFactory: NoSplash.splashFactory,
+        tabs: const [
+          Tab(text: 'Todas'),
+          Tab(text: 'Borradores'),
+          Tab(text: 'Publicadas'),
+        ],
+      ),
+    );
+  }
+}
+
 class StoriesTab extends StatelessWidget {
   const StoriesTab({
     super.key,
@@ -256,11 +484,16 @@ class StoriesTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final filteredStories = stories.where((story) {
-      final matchesFilter =
-          filterStatus == null || story.status == filterStatus;
+      final matchesFilter = switch (filterStatus) {
+        null => true,
+        _ => story.status == filterStatus,
+      };
       final matchesSearch = _matchesSearch(story, searchQuery);
       return matchesFilter && matchesSearch;
     }).toList();
+
+    final mediaQuery = MediaQuery.of(context);
+    final horizontalPadding = mediaQuery.size.width < 640 ? 12.0 : 24.0;
 
     if (filteredStories.isEmpty) {
       return RefreshIndicator(
@@ -285,18 +518,35 @@ class StoriesTab extends StatelessWidget {
       displacement: 80,
       child: ListView.separated(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
+        padding: EdgeInsets.fromLTRB(
+          horizontalPadding,
+          20,
+          horizontalPadding,
+          32,
+        ),
         itemCount: filteredStories.length,
-        separatorBuilder: (context, index) => const SizedBox(height: 16),
+        separatorBuilder: (context, index) => const SizedBox(height: 20),
         itemBuilder: (context, index) {
           final story = filteredStories[index];
           return StoryListCard(
             story: story,
             onActionComplete: onStoriesChanged,
+            accentColor: _cardAccentColor(context, index),
+            isAltBackground: index.isOdd,
           );
         },
       ),
     );
+  }
+
+  Color _cardAccentColor(BuildContext context, int index) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final palette = [
+      colorScheme.primary,
+      colorScheme.tertiary,
+      colorScheme.secondary,
+    ];
+    return palette[index % palette.length];
   }
 
   static bool _matchesSearch(Story story, String query) {
@@ -305,18 +555,20 @@ class StoriesTab extends StatelessWidget {
       return true;
     }
 
+    final tokens =
+        normalizedQuery.split(' ').where((token) => token.isNotEmpty);
+
     final searchableFields = <String>[
       story.title,
       story.excerpt ?? '',
-      story.content ?? '',
-      story.voiceTranscript ?? '',
+      _stripMarkup(story.content),
+      _stripMarkup(story.voiceTranscript),
       if (story.tags != null) story.tags!.join(' '),
+      if (story.storyTags.isNotEmpty)
+        story.storyTags.map((tag) => tag.name).join(' '),
       if (story.people.isNotEmpty)
         story.people.map((person) => person.name).join(' '),
-    ];
-
-    final tokens =
-        normalizedQuery.split(' ').where((token) => token.isNotEmpty);
+    ].map(_normalize).where((field) => field.isNotEmpty).toList();
 
     for (final token in tokens) {
       final tokenMatches = searchableFields.any(
@@ -330,14 +582,13 @@ class StoriesTab extends StatelessWidget {
     return true;
   }
 
-  static bool _fuzzyContains(String text, String query) {
-    final normalizedText = _normalize(text);
+  static bool _fuzzyContains(String normalizedText, String query) {
     if (normalizedText.contains(query)) {
       return true;
     }
 
     final words = normalizedText
-        .split(RegExp(r'[^a-z0-9áéíóúüñ]+'))
+        .split(RegExp(r'[^a-z0-9]+'))
         .where((word) => word.isNotEmpty);
 
     for (final word in words) {
@@ -350,7 +601,29 @@ class StoriesTab extends StatelessWidget {
   }
 
   static String _normalize(String value) {
-    return value.toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();
+    final lower = value.toLowerCase();
+    final withoutMarkup = lower.replaceAll(RegExp(r'<[^>]+>'), ' ');
+    final withoutDiacritics = _removeDiacritics(withoutMarkup);
+    return withoutDiacritics.replaceAll(RegExp(r'\s+'), ' ').trim();
+  }
+
+  static String _stripMarkup(String? value) {
+    if (value == null || value.isEmpty) {
+      return '';
+    }
+    return value.replaceAll(RegExp(r'<[^>]+>'), ' ');
+  }
+
+  static String _removeDiacritics(String input) {
+    if (input.isEmpty) {
+      return input;
+    }
+    final buffer = StringBuffer();
+    for (final codePoint in input.runes) {
+      final char = String.fromCharCode(codePoint);
+      buffer.write(_diacriticMap[char] ?? char);
+    }
+    return buffer.toString();
   }
 
   static int _levenshtein(String source, String target) {
@@ -384,6 +657,34 @@ class StoriesTab extends StatelessWidget {
     return distance[m][n];
   }
 }
+
+const Map<String, String> _diacriticMap = {
+  'á': 'a',
+  'à': 'a',
+  'ä': 'a',
+  'â': 'a',
+  'ã': 'a',
+  'å': 'a',
+  'é': 'e',
+  'è': 'e',
+  'ë': 'e',
+  'ê': 'e',
+  'í': 'i',
+  'ì': 'i',
+  'ï': 'i',
+  'î': 'i',
+  'ó': 'o',
+  'ò': 'o',
+  'ö': 'o',
+  'ô': 'o',
+  'õ': 'o',
+  'ú': 'u',
+  'ù': 'u',
+  'ü': 'u',
+  'û': 'u',
+  'ñ': 'n',
+  'ç': 'c',
+};
 
 class _EmptyStoriesState extends StatelessWidget {
   const _EmptyStoriesState({
@@ -456,18 +757,20 @@ class _EmptyStoriesState extends StatelessWidget {
             const SizedBox(height: 24),
             FilledButton.icon(
               onPressed: onCreateStory,
-              icon: const Icon(Icons.add),
+              icon: const Icon(Icons.add, size: 20),
               label: const Text('Crear nueva historia'),
               style: FilledButton.styleFrom(
+                backgroundColor: colorScheme.primary,
+                foregroundColor: colorScheme.onPrimary,
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 16,
+                  horizontal: 28,
+                  vertical: 14,
                 ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(18),
-                ),
+                shape: const StadiumBorder(),
+                elevation: 3,
                 textStyle: theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.1,
                 ),
               ),
             ),
@@ -483,10 +786,14 @@ class StoryListCard extends StatelessWidget {
     super.key,
     required this.story,
     required this.onActionComplete,
+    required this.accentColor,
+    required this.isAltBackground,
   });
 
   final Story story;
   final VoidCallback onActionComplete;
+  final Color accentColor;
+  final bool isAltBackground;
 
   @override
   Widget build(BuildContext context) {
@@ -502,163 +809,237 @@ class StoryListCard extends StatelessWidget {
         ? story.excerpt!.trim()
         : _fallbackExcerpt(story.content);
     final statusColors = _statusColors(story.status, colorScheme);
-
-    return InkWell(
-      borderRadius: BorderRadius.circular(24),
-      onTap: () async {
-        await Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (context) => StoryEditorPage(storyId: story.id),
-          ),
-        );
-        onActionComplete();
-      },
-      child: Ink(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(24),
-          color: colorScheme.surface,
-          border: Border.all(
-            color: colorScheme.outlineVariant.withValues(alpha: 0.25),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
-              blurRadius: 18,
-              offset: const Offset(0, 10),
-            ),
-          ],
+    final metadataChips = <Widget>[
+      _MetadataBadge(
+        icon: Icons.calendar_today,
+        label: _formatDate(story.createdAt),
+      ),
+      if (story.wordCount > 0)
+        _MetadataBadge(
+          icon: Icons.text_snippet_outlined,
+          label: '${story.wordCount} palabras',
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (coverUrl != null)
-              ClipRRect(
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(24)),
-                child: AspectRatio(
-                  aspectRatio: 16 / 9,
-                  child: Image.network(
-                    coverUrl,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) => Container(
-                      color: colorScheme.surfaceVariant,
-                      alignment: Alignment.center,
-                      child: Icon(
-                        Icons.image_not_supported_outlined,
-                        size: 42,
-                        color: colorScheme.onSurfaceVariant,
+      if (story.readingTime > 0)
+        _MetadataBadge(
+          icon: Icons.timer_outlined,
+          label: '${story.readingTime} min de lectura',
+        ),
+    ];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompact = constraints.maxWidth < 640;
+        final horizontalPadding = isCompact ? 18.0 : 24.0;
+        final verticalPadding = isCompact ? 18.0 : 24.0;
+        final titleStyle = (isCompact
+                ? theme.textTheme.titleMedium
+                : theme.textTheme.titleLarge)
+            ?.copyWith(fontWeight: FontWeight.w700);
+
+        final baseSurface = isAltBackground
+            ? colorScheme.surfaceContainerHighest
+            : colorScheme.surface;
+        final accentGlow = accentColor.withValues(alpha: 0.22);
+
+        return InkWell(
+          borderRadius: BorderRadius.circular(28),
+          onTap: () async {
+            await Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => StoryEditorPage(storyId: story.id),
+              ),
+            );
+            onActionComplete();
+          },
+          child: Ink(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(28),
+              color: baseSurface,
+              border: Border.all(
+                color: accentColor.withValues(alpha: 0.28),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: accentGlow,
+                  blurRadius: 28,
+                  offset: const Offset(0, 18),
+                ),
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.05),
+                  blurRadius: 18,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(28),
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            accentColor.withValues(alpha: 0.14),
+                            Colors.transparent,
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+                  Positioned(
+                    top: -60,
+                    left: -40,
+                    child: _AccentOrb(
+                      color: accentColor.withValues(alpha: 0.18),
+                      size: 160,
+                    ),
+                  ),
+                  if (isAltBackground)
+                    Positioned(
+                      right: -50,
+                      bottom: -70,
+                      child: _AccentOrb(
+                        color: accentColor.withValues(alpha: 0.12),
+                        size: 200,
+                      ),
+                    ),
+                  Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: Text(
-                          story.title.isEmpty ? 'Sin título' : story.title,
-                          style: theme.textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      _StatusPill(
-                        label: story.status.displayName,
-                        color: statusColors.foreground,
-                        background: statusColors.background,
-                        icon: story.status == StoryStatus.published
-                            ? Icons.check_circle
-                            : Icons.edit_note,
-                      ),
-                    ],
-                  ),
-                  if (excerpt.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    Text(
-                      excerpt,
-                      style: theme.textTheme.bodyMedium,
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                  if (tags.isNotEmpty) ...[
-                    const SizedBox(height: 16),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 6,
-                      children: tags
-                          .map(
-                            (tag) => Chip(
-                              label: Text(tag),
-                              backgroundColor:
-                                  colorScheme.secondaryContainer.withValues(
-                                alpha: 0.8,
-                              ),
-                              labelStyle: theme.textTheme.labelSmall?.copyWith(
-                                color: colorScheme.onSecondaryContainer,
-                                fontWeight: FontWeight.w600,
-                              ),
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 8),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
+                      if (coverUrl != null)
+                        ClipRRect(
+                          borderRadius: const BorderRadius.vertical(
+                              top: Radius.circular(28)),
+                          child: AspectRatio(
+                            aspectRatio: 16 / 9,
+                            child: Image.network(
+                              coverUrl,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) =>
+                                  Container(
+                                color: colorScheme.surfaceContainerHighest,
+                                alignment: Alignment.center,
+                                child: Icon(
+                                  Icons.image_not_supported_outlined,
+                                  size: 42,
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
                               ),
                             ),
-                          )
-                          .toList(),
-                    ),
-                  ],
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      _MetadataBadge(
-                        icon: Icons.calendar_today,
-                        label: _formatDate(story.createdAt),
-                      ),
-                      if (story.wordCount > 0) ...[
-                        const SizedBox(width: 12),
-                        _MetadataBadge(
-                          icon: Icons.text_snippet_outlined,
-                          label: '${story.wordCount} palabras',
-                        ),
-                      ],
-                      if (story.readingTime > 0) ...[
-                        const SizedBox(width: 12),
-                        _MetadataBadge(
-                          icon: Icons.timer_outlined,
-                          label: '${story.readingTime} min de lectura',
-                        ),
-                      ],
-                      const Spacer(),
-                      PopupMenuButton<String>(
-                        tooltip: 'Mostrar opciones',
-                        offset: const Offset(0, 12),
-                        elevation: 6,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        color: colorScheme.surface,
-                        onSelected: (value) =>
-                            _handleStoryAction(context, value),
-                        itemBuilder: (context) => _buildMenuItems(context),
-                        child: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: colorScheme.surfaceContainerHighest
-                                .withValues(alpha: 0.5),
-                            borderRadius: BorderRadius.circular(14),
                           ),
-                          child: Icon(
-                            Icons.more_horiz_rounded,
-                            color: colorScheme.onSurfaceVariant,
-                          ),
+                        ),
+                      Padding(
+                        padding: EdgeInsets.fromLTRB(
+                          horizontalPadding,
+                          verticalPadding,
+                          horizontalPadding,
+                          24,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  width: 6,
+                                  height: isCompact ? 44 : 56,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(999),
+                                    gradient: LinearGradient(
+                                      begin: Alignment.topCenter,
+                                      end: Alignment.bottomCenter,
+                                      colors: [
+                                        accentColor,
+                                        accentColor.withValues(alpha: 0.2),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        story.title.isEmpty
+                                            ? 'Sin título'
+                                            : story.title,
+                                        style: titleStyle,
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        'Actualizada ${_formatDate(story.updatedAt)}',
+                                        style: theme.textTheme.labelMedium
+                                            ?.copyWith(
+                                          color: colorScheme.onSurfaceVariant,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    _StatusPill(
+                                      label: story.status.displayName,
+                                      color: statusColors.foreground,
+                                      background: statusColors.background,
+                                      icon:
+                                          story.status == StoryStatus.published
+                                              ? Icons.check_circle
+                                              : Icons.edit_note,
+                                    ),
+                                    const SizedBox(height: 12),
+                                    _StoryActionsButton(
+                                      onSelected: (action) =>
+                                          _handleStoryAction(
+                                        context,
+                                        story: story,
+                                        onActionComplete: onActionComplete,
+                                        action: action,
+                                      ),
+                                      itemBuilder: (menuContext) =>
+                                          _buildStoryMenuItems(story),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 18),
+                            Divider(
+                              height: 1,
+                              color: accentColor.withValues(alpha: 0.16),
+                            ),
+                            if (excerpt.isNotEmpty) ...[
+                              const SizedBox(height: 18),
+                              Text(
+                                excerpt,
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  height: 1.5,
+                                ),
+                                maxLines: isCompact ? 4 : 3,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                            if (tags.isNotEmpty) ...[
+                              const SizedBox(height: 18),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: tags
+                                    .map((tag) => _TagChip(label: tag))
+                                    .toList(),
+                              ),
+                            ],
+                            if (metadataChips.isNotEmpty)
+                              ..._metadataSection(metadataChips),
+                          ],
                         ),
                       ),
                     ],
@@ -666,182 +1047,212 @@ class StoryListCard extends StatelessWidget {
                 ],
               ),
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
-  Future<void> _handleStoryAction(
-    BuildContext context,
-    String action,
-  ) async {
-    switch (action) {
-      case 'edit':
-        await Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (context) => StoryEditorPage(storyId: story.id),
-          ),
-        );
-        onActionComplete();
-        break;
-      case 'publish':
-        try {
-          await StoryServiceNew.publishStory(story.id);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Historia publicada exitosamente')),
-          );
-          onActionComplete();
-        } catch (e) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error al publicar historia: $e')),
-          );
-        }
-        break;
-      case 'unpublish':
-        try {
-          await StoryServiceNew.unpublishStory(story.id);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Historia despublicada')),
-          );
-          onActionComplete();
-        } catch (e) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error al despublicar historia: $e')),
-          );
-        }
-        break;
-      case 'delete':
-        final confirmed = await showDialog<bool>(
-          context: context,
-          builder: (dialogContext) => AlertDialog(
-            title: const Text('Eliminar historia'),
-            content: Text(
-              '¿Estás seguro de que deseas eliminar "${story.title}"?',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext, false),
-                child: const Text('Cancelar'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext, true),
-                style: TextButton.styleFrom(foregroundColor: Colors.red),
-                child: const Text('Eliminar'),
-              ),
-            ],
-          ),
-        );
-        if (confirmed == true) {
-          try {
-            await StoryServiceNew.deleteStory(story.id);
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Historia eliminada')),
-            );
-            onActionComplete();
-          } catch (e) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Error al eliminar historia: $e')),
-            );
-          }
-        }
-        break;
-    }
-  }
-
-  List<PopupMenuEntry<String>> _buildMenuItems(BuildContext context) {
+  Iterable<Widget> _metadataSection(List<Widget> metadataChips) {
     return [
-      const PopupMenuItem(
-        value: 'edit',
-        child: _PopupMenuRow(
-          icon: Icons.edit_outlined,
-          label: 'Editar',
-        ),
-      ),
-      if (story.status == StoryStatus.draft)
-        const PopupMenuItem(
-          value: 'publish',
-          child: _PopupMenuRow(
-            icon: Icons.publish_outlined,
-            label: 'Publicar',
-          ),
-        ),
-      if (story.status == StoryStatus.published)
-        const PopupMenuItem(
-          value: 'unpublish',
-          child: _PopupMenuRow(
-            icon: Icons.visibility_off_outlined,
-            label: 'Despublicar',
-          ),
-        ),
-      const PopupMenuItem(
-        value: 'delete',
-        child: _PopupMenuRow(
-          icon: Icons.delete_outline,
-          label: 'Eliminar',
-          isDestructive: true,
-        ),
+      const SizedBox(height: 20),
+      Wrap(
+        spacing: 12,
+        runSpacing: 10,
+        children: metadataChips,
       ),
     ];
   }
 
   _StatusColors _statusColors(StoryStatus status, ColorScheme colorScheme) {
-    switch (status) {
-      case StoryStatus.published:
-        return _StatusColors(
-          background: colorScheme.primary.withValues(alpha: 0.15),
-          foreground: colorScheme.primary,
-        );
-      case StoryStatus.draft:
-        return _StatusColors(
-          background: colorScheme.tertiaryContainer.withValues(alpha: 0.5),
-          foreground: colorScheme.tertiary,
-        );
-      case StoryStatus.archived:
-        return _StatusColors(
-          background: colorScheme.surfaceContainerHighest,
-          foreground: colorScheme.onSurfaceVariant,
-        );
-    }
+    return _storyStatusColors(status, colorScheme);
   }
 
-  static String _formatDate(DateTime date) {
-    final now = DateTime.now();
-    final difference = now.difference(date).inDays;
+  static String _formatDate(DateTime date) => _formatStoryDate(date);
 
-    if (difference == 0) return 'Hoy';
-    if (difference == 1) return 'Ayer';
-    if (difference < 7) return 'Hace $difference días';
+  static String _fallbackExcerpt(String? content) =>
+      _fallbackStoryExcerpt(content);
+}
 
-    const months = [
-      'ene',
-      'feb',
-      'mar',
-      'abr',
-      'may',
-      'jun',
-      'jul',
-      'ago',
-      'sep',
-      'oct',
-      'nov',
-      'dic',
-    ];
+Future<void> _handleStoryAction(
+  BuildContext context, {
+  required Story story,
+  required VoidCallback onActionComplete,
+  required String action,
+}) async {
+  final navigator = Navigator.of(context);
+  final messenger = ScaffoldMessenger.of(context);
 
-    return '${date.day} ${months[date.month - 1]}';
+  switch (action) {
+    case 'edit':
+      await navigator.push(
+        MaterialPageRoute(
+          builder: (context) => StoryEditorPage(storyId: story.id),
+        ),
+      );
+      onActionComplete();
+      break;
+    case 'publish':
+      try {
+        await StoryServiceNew.publishStory(story.id);
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('Historia publicada exitosamente'),
+          ),
+        );
+        onActionComplete();
+      } catch (e) {
+        messenger.showSnackBar(
+          SnackBar(content: Text('Error al publicar historia: $e')),
+        );
+      }
+      break;
+    case 'unpublish':
+      try {
+        await StoryServiceNew.unpublishStory(story.id);
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Historia despublicada')),
+        );
+        onActionComplete();
+      } catch (e) {
+        messenger.showSnackBar(
+          SnackBar(content: Text('Error al despublicar historia: $e')),
+        );
+      }
+      break;
+    case 'delete':
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Eliminar historia'),
+          content: Text(
+            '¿Estás seguro de que deseas eliminar "${story.title}"?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancelar'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: const Text('Eliminar'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed == true) {
+        try {
+          await StoryServiceNew.deleteStory(story.id);
+          messenger.showSnackBar(
+            const SnackBar(content: Text('Historia eliminada')),
+          );
+          onActionComplete();
+        } catch (e) {
+          messenger.showSnackBar(
+            SnackBar(content: Text('Error al eliminar historia: $e')),
+          );
+        }
+      }
+      break;
   }
+}
 
-  static String _fallbackExcerpt(String? content) {
-    if (content == null || content.isEmpty) {
-      return '';
-    }
-    final normalized = content.replaceAll(RegExp(r'\s+'), ' ').trim();
-    if (normalized.length <= 160) return normalized;
-    final truncated = normalized.substring(0, 160);
-    final lastSpace = truncated.lastIndexOf(' ');
-    return (lastSpace > 60 ? truncated.substring(0, lastSpace) : truncated) +
-        '...';
+List<PopupMenuEntry<String>> _buildStoryMenuItems(Story story) {
+  return [
+    const PopupMenuItem(
+      value: 'edit',
+      child: _PopupMenuRow(
+        icon: Icons.edit_outlined,
+        label: 'Editar',
+      ),
+    ),
+    if (story.status == StoryStatus.draft)
+      const PopupMenuItem(
+        value: 'publish',
+        child: _PopupMenuRow(
+          icon: Icons.publish_outlined,
+          label: 'Publicar',
+        ),
+      ),
+    if (story.status == StoryStatus.published)
+      const PopupMenuItem(
+        value: 'unpublish',
+        child: _PopupMenuRow(
+          icon: Icons.visibility_off_outlined,
+          label: 'Despublicar',
+        ),
+      ),
+    const PopupMenuItem(
+      value: 'delete',
+      child: _PopupMenuRow(
+        icon: Icons.delete_outline,
+        label: 'Eliminar',
+        isDestructive: true,
+      ),
+    ),
+  ];
+}
+
+_StatusColors _storyStatusColors(
+  StoryStatus status,
+  ColorScheme colorScheme,
+) {
+  switch (status) {
+    case StoryStatus.published:
+      return _StatusColors(
+        background: colorScheme.primaryContainer,
+        foreground: colorScheme.onPrimaryContainer,
+      );
+    case StoryStatus.draft:
+      return _StatusColors(
+        background: colorScheme.secondaryContainer,
+        foreground: colorScheme.onSecondaryContainer,
+      );
+    case StoryStatus.archived:
+      return _StatusColors(
+        background: colorScheme.surfaceContainerHighest,
+        foreground: colorScheme.onSurfaceVariant,
+      );
   }
+}
+
+String _formatStoryDate(DateTime date) {
+  final now = DateTime.now();
+  final difference = now.difference(date).inDays;
+
+  if (difference == 0) return 'Hoy';
+  if (difference == 1) return 'Ayer';
+  if (difference < 7) return 'Hace $difference días';
+
+  const months = [
+    'ene',
+    'feb',
+    'mar',
+    'abr',
+    'may',
+    'jun',
+    'jul',
+    'ago',
+    'sep',
+    'oct',
+    'nov',
+    'dic',
+  ];
+
+  return '${date.day} ${months[date.month - 1]}';
+}
+
+String _fallbackStoryExcerpt(String? content) {
+  if (content == null || content.isEmpty) {
+    return '';
+  }
+  final normalized = content.replaceAll(RegExp(r'\s+'), ' ').trim();
+  if (normalized.length <= 160) return normalized;
+  final truncated = normalized.substring(0, 160);
+  final lastSpace = truncated.lastIndexOf(' ');
+  return (lastSpace > 60 ? truncated.substring(0, lastSpace) : truncated) +
+      '...';
 }
 
 class _StatusPill extends StatelessWidget {
@@ -866,6 +1277,9 @@ class _StatusPill extends StatelessWidget {
       decoration: BoxDecoration(
         color: background,
         borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: color.withValues(alpha: 0.16),
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -905,8 +1319,11 @@ class _MetadataBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.55),
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.2),
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -920,6 +1337,129 @@ class _MetadataBadge extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _StoryActionsButton extends StatefulWidget {
+  const _StoryActionsButton({
+    required this.onSelected,
+    required this.itemBuilder,
+  });
+
+  final Future<void> Function(String action) onSelected;
+  final List<PopupMenuEntry<String>> Function(BuildContext context) itemBuilder;
+
+  @override
+  State<_StoryActionsButton> createState() => _StoryActionsButtonState();
+}
+
+class _StoryActionsButtonState extends State<_StoryActionsButton> {
+  Offset? _tapPosition;
+
+  void _storePosition(TapDownDetails details) {
+    _tapPosition = details.globalPosition;
+  }
+
+  Future<void> _showMenu() async {
+    final overlay = Overlay.of(context);
+    if (overlay == null) return;
+    final overlayBox = overlay.context.findRenderObject() as RenderBox?;
+    final buttonBox = context.findRenderObject() as RenderBox?;
+    if (overlayBox == null) return;
+
+    final tapPosition = _tapPosition ??
+        (buttonBox != null
+            ? buttonBox.localToGlobal(buttonBox.size.center(Offset.zero))
+            : overlayBox.size.center(Offset.zero));
+
+    final position = RelativeRect.fromRect(
+      ui.Rect.fromCenter(center: tapPosition, width: 1, height: 1),
+      Offset.zero & overlayBox.size,
+    );
+
+    final selected = await showMenu<String>(
+      context: context,
+      position: position,
+      items: widget.itemBuilder(context),
+      elevation: 12,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      color: Theme.of(context).colorScheme.surface,
+    );
+
+    _tapPosition = null;
+
+    if (selected != null) {
+      await widget.onSelected(selected);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Semantics(
+      button: true,
+      label: 'Opciones de historia',
+      child: Tooltip(
+        message: 'Opciones de historia',
+        waitDuration: const Duration(milliseconds: 250),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(14),
+            onTapDown: _storePosition,
+            onTap: _showMenu,
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color:
+                    colorScheme.surfaceContainerHighest.withValues(alpha: 0.55),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: colorScheme.outlineVariant.withValues(alpha: 0.18),
+                ),
+              ),
+              child: Icon(
+                Icons.more_horiz_rounded,
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TagChip extends StatelessWidget {
+  const _TagChip({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: colorScheme.secondaryContainer.withValues(alpha: 0.75),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.18),
+        ),
+      ),
+      child: Text(
+        label,
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: colorScheme.onSecondaryContainer,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }

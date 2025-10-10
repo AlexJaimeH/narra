@@ -1044,8 +1044,8 @@ class StoryListCard extends StatelessWidget {
                       ),
                     ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         );

@@ -82,127 +82,156 @@ class _StoriesListPageState extends State<StoriesListPage>
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: colorScheme.surface,
-              borderRadius: BorderRadius.circular(32),
-              border: Border.all(
-                color: colorScheme.outlineVariant.withValues(alpha: 0.18),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.04),
-                  blurRadius: 28,
-                  offset: const Offset(0, 18),
-                ),
-              ],
-            ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(32),
             child: Stack(
+              clipBehavior: Clip.hardEdge,
               children: [
                 Positioned(
-                  right: -40,
-                  top: -80,
+                  right: -60,
+                  top: -90,
                   child: _AccentOrb(
-                    color: colorScheme.primary.withValues(alpha: 0.24),
-                    size: 180,
+                    color: colorScheme.primary.withValues(alpha: 0.26),
+                    size: 210,
                   ),
                 ),
                 Positioned(
                   left: -40,
-                  bottom: -60,
+                  bottom: -70,
                   child: _AccentOrb(
-                    color: colorScheme.secondary.withValues(alpha: 0.18),
-                    size: 150,
+                    color: colorScheme.secondary.withValues(alpha: 0.2),
+                    size: 170,
                   ),
                 ),
-                Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 26, vertical: 26),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
+                Positioned(
+                  right: -120,
+                  bottom: -40,
+                  child: _AccentOrb(
+                    color: colorScheme.tertiary.withValues(alpha: 0.14),
+                    size: 220,
+                  ),
+                ),
+                BackdropFilter(
+                  filter: ui.ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          colorScheme.surfaceBright.withValues(alpha: 0.95),
+                          colorScheme.surface.withValues(alpha: 0.9),
+                        ],
+                      ),
+                      border: Border.all(
+                        color:
+                            colorScheme.outlineVariant.withValues(alpha: 0.22),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.05),
+                          blurRadius: 34,
+                          offset: const Offset(0, 28),
+                        ),
+                      ],
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 28,
+                        vertical: 28,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Container(
-                            padding: const EdgeInsets.all(14),
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                                colors: [
-                                  colorScheme.primary.withValues(alpha: 0.14),
-                                  colorScheme.primary.withValues(alpha: 0.06),
-                                ],
-                              ),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Icon(
-                              Icons.menu_book_rounded,
-                              color: colorScheme.primary,
-                              size: 30,
-                            ),
-                          ),
-                          const SizedBox(width: 18),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Mis historias',
-                                  style:
-                                      theme.textTheme.headlineSmall?.copyWith(
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: -0.3,
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [
+                                      colorScheme.primary
+                                          .withValues(alpha: 0.18),
+                                      colorScheme.primary
+                                          .withValues(alpha: 0.08),
+                                    ],
                                   ),
+                                  borderRadius: BorderRadius.circular(22),
                                 ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  'Administra, busca y publica tus recuerdos con un espacio pensado para ti.',
-                                  style: theme.textTheme.bodyMedium?.copyWith(
-                                    color: colorScheme.onSurfaceVariant,
-                                  ),
+                                child: Icon(
+                                  Icons.menu_book_rounded,
+                                  color: colorScheme.primary,
+                                  size: 32,
                                 ),
-                              ],
-                            ),
-                          ),
-                          IconButton(
-                            onPressed: () => _loadStories(silent: true),
-                            tooltip: 'Actualizar historias',
-                            icon: const Icon(Icons.refresh_rounded),
-                            style: IconButton.styleFrom(
-                              backgroundColor: colorScheme.surfaceBright,
-                              foregroundColor: colorScheme.primary,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(18),
                               ),
-                              shadowColor:
-                                  colorScheme.primary.withValues(alpha: 0.18),
-                              elevation: 4,
-                            ),
+                              const SizedBox(width: 20),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Mis historias',
+                                      style: theme.textTheme.headlineSmall
+                                          ?.copyWith(
+                                        fontWeight: FontWeight.w700,
+                                        letterSpacing: -0.3,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      'Administra, busca y publica tus recuerdos con un espacio pensado para ti.',
+                                      style:
+                                          theme.textTheme.bodyMedium?.copyWith(
+                                        color:
+                                            colorScheme.onSurfaceVariant,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              IconButton(
+                                onPressed: () => _loadStories(silent: true),
+                                tooltip: 'Actualizar historias',
+                                icon: const Icon(Icons.refresh_rounded),
+                                style: IconButton.styleFrom(
+                                  backgroundColor:
+                                      colorScheme.primary.withValues(alpha: 0.1),
+                                  foregroundColor: colorScheme.primary,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(18),
+                                  ),
+                                  padding: const EdgeInsets.all(14),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 24),
+                          _SearchField(
+                            controller: _searchController,
+                            hintText:
+                                'Buscar por título, contenido, etiquetas o personas...',
+                            onChanged: (value) {
+                              setState(() => _searchQuery = value);
+                            },
+                            onClear: () {
+                              _searchController.clear();
+                              setState(() => _searchQuery = '');
+                            },
+                            onRefresh: () => _loadStories(silent: true),
+                            isQueryEmpty: _searchQuery.isEmpty,
+                          ),
+                          const SizedBox(height: 26),
+                          _StoriesSegmentedControl(
+                            controller: _tabController,
+                            theme: theme,
                           ),
                         ],
                       ),
-                      const SizedBox(height: 22),
-                      _SearchField(
-                        controller: _searchController,
-                        hintText:
-                            'Buscar por título, contenido, etiquetas o personas...',
-                        onChanged: (value) {
-                          setState(() => _searchQuery = value);
-                        },
-                        onClear: () {
-                          _searchController.clear();
-                          setState(() => _searchQuery = '');
-                        },
-                        onRefresh: () => _loadStories(silent: true),
-                        isQueryEmpty: _searchQuery.isEmpty,
-                      ),
-                      const SizedBox(height: 24),
-                      _StoriesSegmentedControl(
-                        controller: _tabController,
-                        theme: theme,
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               ],
@@ -296,58 +325,61 @@ class _SearchField extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(26),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            colorScheme.surfaceBright,
-            colorScheme.surface.withValues(alpha: 0.92),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(28),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(28),
+          color: colorScheme.surface.withValues(alpha: 0.88),
+          border: Border.all(
+            color: colorScheme.outlineVariant.withValues(alpha: 0.22),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 22,
+              offset: const Offset(0, 18),
+            ),
           ],
         ),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.2),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 18,
-            offset: const Offset(0, 12),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
         child: Row(
           children: [
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: colorScheme.primary.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(18),
+                borderRadius: BorderRadius.circular(20),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    colorScheme.primary.withValues(alpha: 0.2),
+                    colorScheme.primary.withValues(alpha: 0.08),
+                  ],
+                ),
               ),
               child: Icon(
                 Icons.search_rounded,
                 color: colorScheme.primary,
               ),
             ),
-            const SizedBox(width: 14),
+            const SizedBox(width: 16),
             Expanded(
               child: TextField(
                 controller: controller,
                 onChanged: onChanged,
-                style: theme.textTheme.bodyLarge,
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  fontWeight: FontWeight.w500,
+                ),
                 decoration: InputDecoration.collapsed(
                   hintText: hintText,
                   hintStyle: theme.textTheme.bodyLarge?.copyWith(
-                    color: colorScheme.onSurfaceVariant.withValues(alpha: 0.8),
+                    color: colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
                   ),
                 ),
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 16),
             AnimatedSwitcher(
               duration: const Duration(milliseconds: 200),
               transitionBuilder: (child, animation) => ScaleTransition(
@@ -356,37 +388,61 @@ class _SearchField extends StatelessWidget {
                 child: child,
               ),
               child: isQueryEmpty
-                  ? IconButton(
+                  ? _SearchActionButton(
                       key: const ValueKey('filter'),
-                      onPressed: onRefresh,
+                      icon: Icons.tune_rounded,
                       tooltip: 'Actualizar lista',
-                      icon: const Icon(Icons.tune_rounded),
-                      style: IconButton.styleFrom(
-                        backgroundColor:
-                            colorScheme.primary.withValues(alpha: 0.08),
-                        foregroundColor: colorScheme.primary,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ),
+                      onPressed: onRefresh,
+                      background:
+                          colorScheme.primary.withValues(alpha: 0.1),
+                      foreground: colorScheme.primary,
                     )
-                  : IconButton(
+                  : _SearchActionButton(
                       key: const ValueKey('clear'),
-                      onPressed: onClear,
+                      icon: Icons.close_rounded,
                       tooltip: 'Limpiar búsqueda',
-                      icon: const Icon(Icons.close_rounded),
-                      style: IconButton.styleFrom(
-                        backgroundColor:
-                            colorScheme.onSurface.withValues(alpha: 0.06),
-                        foregroundColor: colorScheme.onSurface,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ),
+                      onPressed: onClear,
+                      background:
+                          colorScheme.onSurface.withValues(alpha: 0.08),
+                      foreground: colorScheme.onSurface,
                     ),
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _SearchActionButton extends StatelessWidget {
+  const _SearchActionButton({
+    super.key,
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+    required this.background,
+    required this.foreground,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onPressed;
+  final Color background;
+  final Color foreground;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: tooltip,
+      onPressed: onPressed,
+      icon: Icon(icon),
+      style: IconButton.styleFrom(
+        backgroundColor: background,
+        foregroundColor: foreground,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+        ),
+        padding: const EdgeInsets.all(12),
       ),
     );
   }
@@ -408,51 +464,48 @@ class _StoriesSegmentedControl extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(26),
-        color: colorScheme.surfaceContainerLowest,
+        color: colorScheme.surfaceBright.withValues(alpha: 0.68),
         border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.16),
+          color: colorScheme.outlineVariant.withValues(alpha: 0.24),
         ),
       ),
       child: TabBar(
         controller: controller,
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
         dividerColor: Colors.transparent,
-        indicator: BoxDecoration(
-          borderRadius: BorderRadius.circular(18),
+        indicator: ShapeDecoration(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+            side: BorderSide(
+              color: colorScheme.primary,
+              width: 1.6,
+            ),
+          ),
           gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
             colors: [
-              colorScheme.primary,
-              colorScheme.primaryContainer,
+              colorScheme.primary.withValues(alpha: 0.18),
+              colorScheme.primary.withValues(alpha: 0.1),
             ],
           ),
-          boxShadow: [
-            BoxShadow(
-              color: colorScheme.primary.withValues(alpha: 0.32),
-              blurRadius: 18,
-              offset: const Offset(0, 8),
-            ),
-          ],
         ),
         labelStyle: theme.textTheme.labelLarge?.copyWith(
           fontWeight: FontWeight.w700,
-          letterSpacing: 0.2,
+          letterSpacing: 0.25,
         ),
         unselectedLabelStyle: theme.textTheme.labelLarge?.copyWith(
-          fontWeight: FontWeight.w500,
+          fontWeight: FontWeight.w600,
         ),
-        labelColor: colorScheme.onPrimary,
+        labelColor: colorScheme.primary,
         unselectedLabelColor: colorScheme.onSurfaceVariant,
         overlayColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.pressed) ||
               states.contains(WidgetState.hovered)) {
-            return colorScheme.primary.withValues(alpha: 0.06);
+            return colorScheme.primary.withValues(alpha: 0.08);
           }
           return Colors.transparent;
         }),
         indicatorSize: TabBarIndicatorSize.tab,
-        splashFactory: NoSplash.splashFactory,
+        splashFactory: InkSparkle.splashFactory,
         tabs: const [
           Tab(text: 'Todas'),
           Tab(text: 'Borradores'),
@@ -493,7 +546,8 @@ class StoriesTab extends StatelessWidget {
     }).toList();
 
     final mediaQuery = MediaQuery.of(context);
-    final horizontalPadding = mediaQuery.size.width < 640 ? 12.0 : 24.0;
+    final isCompact = mediaQuery.size.width < 640;
+    final horizontalPadding = isCompact ? 12.0 : 24.0;
 
     if (filteredStories.isEmpty) {
       return RefreshIndicator(
@@ -525,7 +579,17 @@ class StoriesTab extends StatelessWidget {
           32,
         ),
         itemCount: filteredStories.length,
-        separatorBuilder: (context, index) => const SizedBox(height: 20),
+        separatorBuilder: (context, index) => Padding(
+          padding: EdgeInsets.fromLTRB(
+            horizontalPadding + (isCompact ? 6 : 28),
+            isCompact ? 12 : 18,
+            horizontalPadding + (isCompact ? 6 : 28),
+            isCompact ? 6 : 12,
+          ),
+          child: _StoriesSeparator(
+            accent: _cardAccentColor(context, index + 1),
+          ),
+        ),
         itemBuilder: (context, index) {
           final story = filteredStories[index];
           return StoryListCard(
@@ -533,6 +597,7 @@ class StoriesTab extends StatelessWidget {
             onActionComplete: onStoriesChanged,
             accentColor: _cardAccentColor(context, index),
             isAltBackground: index.isOdd,
+            index: index,
           );
         },
       ),
@@ -655,6 +720,65 @@ class StoriesTab extends StatelessWidget {
     }
 
     return distance[m][n];
+  }
+}
+
+class _StoriesSeparator extends StatelessWidget {
+  const _StoriesSeparator({required this.accent});
+
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Row(
+      children: [
+        Expanded(
+          child: Container(
+            height: 1.5,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Colors.transparent,
+                  accent.withValues(alpha: 0.4),
+                ],
+              ),
+            ),
+          ),
+        ),
+        Container(
+          width: 36,
+          height: 18,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(999),
+            color: accent.withValues(alpha: 0.18),
+            border: Border.all(
+              color: accent.withValues(alpha: 0.28),
+              width: 1.2,
+            ),
+          ),
+          alignment: Alignment.center,
+          child: Icon(
+            Icons.auto_awesome,
+            size: 14,
+            color: colorScheme.onSurface,
+          ),
+        ),
+        Expanded(
+          child: Container(
+            height: 1.5,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  accent.withValues(alpha: 0.4),
+                  Colors.transparent,
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -788,12 +912,14 @@ class StoryListCard extends StatelessWidget {
     required this.onActionComplete,
     required this.accentColor,
     required this.isAltBackground,
+    required this.index,
   });
 
   final Story story;
   final VoidCallback onActionComplete;
   final Color accentColor;
   final bool isAltBackground;
+  final int index;
 
   @override
   Widget build(BuildContext context) {
@@ -839,221 +965,276 @@ class StoryListCard extends StatelessWidget {
         final baseSurface = isAltBackground
             ? colorScheme.surfaceContainerHighest
             : colorScheme.surface;
-        final accentGlow = accentColor.withValues(alpha: 0.22);
+        final accentGlow = accentColor.withValues(alpha: 0.16);
+        final backgroundGradient = LinearGradient(
+          begin: isAltBackground ? Alignment.bottomRight : Alignment.topLeft,
+          end: isAltBackground ? Alignment.topLeft : Alignment.bottomRight,
+          colors: [
+            accentColor.withValues(alpha: 0.24),
+            accentColor.withValues(alpha: 0.06),
+          ],
+        );
 
-        return InkWell(
-          borderRadius: BorderRadius.circular(28),
-          onTap: () async {
-            await Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (context) => StoryEditorPage(storyId: story.id),
-              ),
-            );
-            onActionComplete();
-          },
-          child: Ink(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(28),
-              color: baseSurface,
-              border: Border.all(
-                color: accentColor.withValues(alpha: 0.28),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: accentGlow,
-                  blurRadius: 28,
-                  offset: const Offset(0, 18),
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned.fill(
+              left: isCompact ? 6 : 12,
+              right: isCompact ? 6 : 12,
+              top: isCompact ? 12 : 18,
+              bottom: isCompact ? 12 : 18,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(36),
+                  gradient: backgroundGradient,
                 ),
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  blurRadius: 18,
-                  offset: const Offset(0, 10),
-                ),
-              ],
+              ),
             ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(28),
-              child: Stack(
-                children: [
-                  Positioned.fill(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            accentColor.withValues(alpha: 0.14),
-                            Colors.transparent,
-                          ],
-                        ),
+            if (!isCompact)
+              Positioned(
+                top: -18,
+                left: 24,
+                child: _StoryBadge(
+                  index: index,
+                  accentColor: accentColor,
+                ),
+              ),
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(28),
+                onTap: () async {
+                  await Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) =>
+                          StoryEditorPage(storyId: story.id),
+                    ),
+                  );
+                  onActionComplete();
+                },
+                child: Ink(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(28),
+                    color: baseSurface,
+                    border: Border.all(
+                      color: accentColor.withValues(alpha: 0.28),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: accentGlow,
+                        blurRadius: 38,
+                        offset: const Offset(0, 24),
                       ),
-                    ),
-                  ),
-                  Positioned(
-                    top: -60,
-                    left: -40,
-                    child: _AccentOrb(
-                      color: accentColor.withValues(alpha: 0.18),
-                      size: 160,
-                    ),
-                  ),
-                  if (isAltBackground)
-                    Positioned(
-                      right: -50,
-                      bottom: -70,
-                      child: _AccentOrb(
-                        color: accentColor.withValues(alpha: 0.12),
-                        size: 200,
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 18,
+                        offset: const Offset(0, 12),
                       ),
-                    ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (coverUrl != null)
-                        ClipRRect(
-                          borderRadius: const BorderRadius.vertical(
-                              top: Radius.circular(28)),
-                          child: AspectRatio(
-                            aspectRatio: 16 / 9,
-                            child: Image.network(
-                              coverUrl,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) =>
-                                  Container(
-                                color: colorScheme.surfaceContainerHighest,
-                                alignment: Alignment.center,
-                                child: Icon(
-                                  Icons.image_not_supported_outlined,
-                                  size: 42,
-                                  color: colorScheme.onSurfaceVariant,
-                                ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(28),
+                    child: Stack(
+                      children: [
+                        Positioned.fill(
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  accentColor.withValues(alpha: 0.16),
+                                  Colors.transparent,
+                                ],
                               ),
                             ),
                           ),
                         ),
-                      Padding(
-                        padding: EdgeInsets.fromLTRB(
-                          horizontalPadding,
-                          verticalPadding,
-                          horizontalPadding,
-                          24,
+                        Positioned(
+                          top: -60,
+                          left: -40,
+                          child: _AccentOrb(
+                            color: accentColor.withValues(alpha: 0.18),
+                            size: 160,
+                          ),
                         ),
-                        child: Column(
+                        if (isAltBackground)
+                          Positioned(
+                            right: -50,
+                            bottom: -70,
+                            child: _AccentOrb(
+                              color: accentColor.withValues(alpha: 0.12),
+                              size: 200,
+                            ),
+                          ),
+                        Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Container(
-                                  width: 6,
-                                  height: isCompact ? 44 : 56,
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(999),
-                                    gradient: LinearGradient(
-                                      begin: Alignment.topCenter,
-                                      end: Alignment.bottomCenter,
-                                      colors: [
-                                        accentColor,
-                                        accentColor.withValues(alpha: 0.2),
-                                      ],
+                            if (coverUrl != null)
+                              ClipRRect(
+                                borderRadius: const BorderRadius.vertical(
+                                    top: Radius.circular(28)),
+                                child: AspectRatio(
+                                  aspectRatio: 16 / 9,
+                                  child: Image.network(
+                                    coverUrl,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) =>
+                                        Container(
+                                      color:
+                                          colorScheme.surfaceContainerHighest,
+                                      alignment: Alignment.center,
+                                      child: Icon(
+                                        Icons.image_not_supported_outlined,
+                                        size: 42,
+                                        color: colorScheme.onSurfaceVariant,
+                                      ),
                                     ),
                                   ),
                                 ),
-                                const SizedBox(width: 14),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
+                              ),
+                            Padding(
+                              padding: EdgeInsets.fromLTRB(
+                                horizontalPadding,
+                                verticalPadding,
+                                horizontalPadding,
+                                24,
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Text(
-                                        story.title.isEmpty
-                                            ? 'Sin título'
-                                            : story.title,
-                                        style: titleStyle,
-                                      ),
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        'Actualizada ${_formatDate(story.updatedAt)}',
-                                        style: theme.textTheme.labelMedium
-                                            ?.copyWith(
-                                          color: colorScheme.onSurfaceVariant,
+                                      Container(
+                                        width: 6,
+                                        height: isCompact ? 44 : 56,
+                                        decoration: BoxDecoration(
+                                          borderRadius:
+                                              BorderRadius.circular(999),
+                                          gradient: LinearGradient(
+                                            begin: Alignment.topCenter,
+                                            end: Alignment.bottomCenter,
+                                            colors: [
+                                              accentColor,
+                                              accentColor
+                                                  .withValues(alpha: 0.2),
+                                            ],
+                                          ),
                                         ),
+                                      ),
+                                      const SizedBox(width: 14),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              story.title.isEmpty
+                                                  ? 'Sin título'
+                                                  : story.title,
+                                              style: titleStyle,
+                                            ),
+                                            const SizedBox(height: 6),
+                                            Text(
+                                              'Actualizada ${_formatDate(story.updatedAt)}',
+                                              style: theme.textTheme.labelMedium
+                                                  ?.copyWith(
+                                                color: colorScheme
+                                                    .onSurfaceVariant,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.end,
+                                        children: [
+                                          _StatusPill(
+                                            label: story.status.displayName,
+                                            color: statusColors.foreground,
+                                            background:
+                                                statusColors.background,
+                                            icon: story.status ==
+                                                    StoryStatus.published
+                                                ? Icons.check_circle
+                                                : Icons.edit_note,
+                                          ),
+                                          const SizedBox(height: 12),
+                                          _StoryActionsButton(
+                                            onSelected: (action) =>
+                                                _handleStoryAction(
+                                              context,
+                                              story: story,
+                                              onActionComplete:
+                                                  onActionComplete,
+                                              action: action,
+                                            ),
+                                            itemBuilder: (menuContext) =>
+                                                _buildStoryMenuItems(story),
+                                          ),
+                                        ],
                                       ),
                                     ],
                                   ),
-                                ),
-                                const SizedBox(width: 12),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    _StatusPill(
-                                      label: story.status.displayName,
-                                      color: statusColors.foreground,
-                                      background: statusColors.background,
-                                      icon:
-                                          story.status == StoryStatus.published
-                                              ? Icons.check_circle
-                                              : Icons.edit_note,
-                                    ),
-                                    const SizedBox(height: 12),
-                                    _StoryActionsButton(
-                                      onSelected: (action) =>
-                                          _handleStoryAction(
-                                        context,
-                                        story: story,
-                                        onActionComplete: onActionComplete,
-                                        action: action,
+                                  const SizedBox(height: 18),
+                                  Divider(
+                                    height: 1,
+                                    color: accentColor.withValues(alpha: 0.16),
+                                  ),
+                                  if (excerpt.isNotEmpty) ...[
+                                    const SizedBox(height: 18),
+                                    Text(
+                                      excerpt,
+                                      style:
+                                          theme.textTheme.bodyMedium?.copyWith(
+                                        height: 1.5,
                                       ),
-                                      itemBuilder: (menuContext) =>
-                                          _buildStoryMenuItems(story),
+                                      maxLines: isCompact ? 4 : 3,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ],
-                                ),
-                              ],
+                                  if (tags.isNotEmpty) ...[
+                                    const SizedBox(height: 18),
+                                    Wrap(
+                                      spacing: 8,
+                                      runSpacing: 8,
+                                      children: tags
+                                          .map((tag) => _TagChip(label: tag))
+                                          .toList(),
+                                    ),
+                                  ],
+                                  if (metadataChips.isNotEmpty) ...[
+                                    const SizedBox(height: 20),
+                                    Wrap(
+                                      spacing: 12,
+                                      runSpacing: 10,
+                                      children: metadataChips,
+                                    ),
+                                  ],
+                                ],
+                              ),
                             ),
-                            const SizedBox(height: 18),
-                            Divider(
-                              height: 1,
-                              color: accentColor.withValues(alpha: 0.16),
-                            ),
-                            if (excerpt.isNotEmpty) ...[
-                              const SizedBox(height: 18),
-                              Text(
-                                excerpt,
-                                style: theme.textTheme.bodyMedium?.copyWith(
-                                  height: 1.5,
-                                ),
-                                maxLines: isCompact ? 4 : 3,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                            if (tags.isNotEmpty) ...[
-                              const SizedBox(height: 18),
-                              Wrap(
-                                spacing: 8,
-                                runSpacing: 8,
-                                children: tags
-                                    .map((tag) => _TagChip(label: tag))
-                                    .toList(),
-                              ),
-                            ],
-                            if (metadataChips.isNotEmpty) ...[
-                              const SizedBox(height: 20),
-                              Wrap(
-                                spacing: 12,
-                                runSpacing: 10,
-                                children: metadataChips,
-                              ),
-                            ],
                           ],
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
-              ],
+              ),
             ),
-          ),
+            if (isCompact)
+              Positioned(
+                top: -10,
+                left: 20,
+                child: _StoryBadge(
+                  index: index,
+                  accentColor: accentColor,
+                ),
+              ),
+          ],
         );
       },
     );
@@ -1067,6 +1248,50 @@ class StoryListCard extends StatelessWidget {
 
   static String _fallbackExcerpt(String? content) =>
       _fallbackStoryExcerpt(content);
+}
+
+class _StoryBadge extends StatelessWidget {
+  const _StoryBadge({required this.index, required this.accentColor});
+
+  final int index;
+  final Color accentColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            accentColor.withValues(alpha: 0.9),
+            accentColor.withValues(alpha: 0.6),
+          ],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: accentColor.withValues(alpha: 0.28),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Text(
+          '#${index + 1}'.padLeft(2, '0'),
+          style: theme.textTheme.labelLarge?.copyWith(
+            color: colorScheme.onPrimary,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.4,
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 Future<void> _handleStoryAction(

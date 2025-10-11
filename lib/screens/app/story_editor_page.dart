@@ -279,7 +279,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+                    padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
                       child: _EditorHeader(
                         isSaving: _isSaving,
                         onSave: _saveDraft,
@@ -287,7 +287,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                         isNewStory: widget.storyId == null,
                       ),
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 2),
                     Expanded(
                       child: TabBarView(
                         controller: _tabController,
@@ -329,11 +329,11 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         final isCompact = constraints.maxWidth < 720;
         final cardPadding = EdgeInsets.symmetric(
           horizontal: isCompact ? 16 : 22,
-          vertical: isCompact ? 16 : 22,
+          vertical: isCompact ? 14 : 20,
         );
         final controlPadding = EdgeInsets.symmetric(
           horizontal: isCompact ? 16 : 20,
-          vertical: isCompact ? 14 : 18,
+          vertical: isCompact ? 12 : 16,
         );
         final mediaQuery = MediaQuery.of(context);
         final bodyStyle = theme.textTheme.bodyLarge?.copyWith(
@@ -345,7 +345,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         final availableHeight = mediaQuery.size.height -
             mediaQuery.padding.vertical -
             mediaQuery.viewInsets.bottom;
-        final reservedHeight = isCompact ? 240.0 : 280.0;
+        final reservedHeight = isCompact ? 210.0 : 260.0;
         final targetHeight = math.max(
           minContentHeight,
           availableHeight.isFinite
@@ -354,33 +354,31 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         );
 
         Widget buildContentField() {
-          return LayoutBuilder(
-            builder: (context, fieldConstraints) {
-              final fallbackHeight = math.max(minContentHeight, targetHeight);
-              final resolvedHeight = fieldConstraints.maxHeight.isFinite
-                  ? math.max(minContentHeight, fieldConstraints.maxHeight)
-                  : fallbackHeight;
-              return SizedBox(
-                height: resolvedHeight,
-                child: TextField(
-                  controller: _contentController,
-                  decoration: InputDecoration(
-                    hintText: 'Cuenta tu historia...',
-                    border: InputBorder.none,
-                    hintStyle: bodyStyle?.copyWith(
-                      color:
-                          colorScheme.onSurfaceVariant.withValues(alpha: 0.55),
-                    ),
+          return ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight: minContentHeight,
+              maxHeight: targetHeight,
+            ),
+            child: SizedBox(
+              height: targetHeight,
+              child: TextField(
+                controller: _contentController,
+                decoration: InputDecoration(
+                  hintText: 'Cuenta tu historia...',
+                  border: InputBorder.none,
+                  hintStyle: bodyStyle?.copyWith(
+                    color:
+                        colorScheme.onSurfaceVariant.withValues(alpha: 0.55),
                   ),
-                  style: bodyStyle,
-                  keyboardType: TextInputType.multiline,
-                  maxLines: null,
-                  minLines: null,
-                  expands: true,
-                  textAlignVertical: TextAlignVertical.top,
                 ),
-              );
-            },
+                style: bodyStyle,
+                keyboardType: TextInputType.multiline,
+                maxLines: null,
+                minLines: null,
+                expands: true,
+                textAlignVertical: TextAlignVertical.top,
+              ),
+            ),
           );
         }
 
@@ -390,7 +388,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
             controller: _scrollController,
             padding: EdgeInsets.fromLTRB(
               12,
-              isCompact ? 6 : 10,
+              isCompact ? 4 : 8,
               12,
               isCompact ? 18 : 22,
             ),
@@ -444,6 +442,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                             ],
                           ),
                         ),
+                      ),
                       if (_showSuggestions) ...[
                         const SizedBox(height: 16),
                         Text(
@@ -497,7 +496,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                     ],
                   ),
                 ),
-                SizedBox(height: isCompact ? 12 : 16),
+                SizedBox(height: isCompact ? 10 : 14),
                 DecoratedBox(
                   decoration: BoxDecoration(
                     color: colorScheme.surface,
@@ -4110,7 +4109,7 @@ class _EditorHeader extends StatelessWidget {
         borderRadius: BorderRadius.circular(28),
       ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -4174,7 +4173,7 @@ class _EditorHeader extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             _EditorSegmentedControl(
               controller: controller,
               theme: theme,

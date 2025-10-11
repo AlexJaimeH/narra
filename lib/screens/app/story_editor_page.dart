@@ -274,99 +274,45 @@ class _StoryEditorPageState extends State<StoryEditorPage>
               body: Center(child: CircularProgressIndicator()),
             )
           : Scaffold(
-              appBar: AppBar(
-                title: Text(widget.storyId == null
-                    ? 'Nueva historia'
-                    : 'Editar historia'),
-                actions: [
-                  if (_isSaving)
-                    const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  else
-                    TextButton(
-                      onPressed: _saveDraft,
-                      child: const Text('Guardar'),
-                    ),
-                ],
-                bottom: TabBar(
-                  controller: _tabController,
-                  isScrollable: true,
-                  tabAlignment: TabAlignment.start,
-                  tabs: const [
-                    Tab(icon: Icon(Icons.edit), text: 'Escribir'),
-                    Tab(icon: Icon(Icons.photo_library), text: 'Fotos'),
-                    Tab(icon: Icon(Icons.calendar_today), text: 'Fechas'),
-                    Tab(icon: Icon(Icons.label), text: 'Etiquetas'),
-                  ],
-                ),
-              ),
-              body: TabBarView(
-                controller: _tabController,
-                children: [
-                  _buildWritingTab(),
-                  _buildPhotosTab(),
-                  _buildDatesTab(),
-                  _buildTagsTab(),
-                ],
-              ),
-              bottomNavigationBar: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).scaffoldBackgroundColor,
-                  border: Border(
-                    top: BorderSide(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .outline
-                          .withValues(alpha: 0.3),
-                    ),
-                  ),
-                ),
-                child: Row(
+              body: SafeArea(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Dictation bottom-sheet launcher (no inline recording state)
-                    IconButton(
-                      onPressed: _openDictationPanel,
-                      icon: const Icon(Icons.mic),
-                      color: Theme.of(context).colorScheme.primary,
-                      style: IconButton.styleFrom(
-                        backgroundColor:
-                            Theme.of(context).colorScheme.primaryContainer,
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+                      child: _EditorHeader(
+                        isSaving: _isSaving,
+                        onSave: _saveDraft,
+                        controller: _tabController,
+                        isNewStory: widget.storyId == null,
                       ),
                     ),
-
-                    const SizedBox(width: 16),
-
-                    // Action Buttons
+                    const SizedBox(height: 6),
                     Expanded(
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      child: TabBarView(
+                        controller: _tabController,
                         children: [
-                          TextButton.icon(
-                            onPressed: _isSaving ? null : _saveDraft,
-                            icon: _isSaving
-                                ? const SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CircularProgressIndicator(
-                                        strokeWidth: 2))
-                                : const Icon(Icons.save),
-                            label: const Text('Borrador'),
-                          ),
-                          ElevatedButton.icon(
-                            onPressed:
-                                _canPublish() ? _showPublishDialog : null,
-                            icon:
-                                const Icon(Icons.publish, color: Colors.white),
-                            label: const Text('Publicar'),
-                          ),
+                          _buildWritingTab(),
+                          _buildPhotosTab(),
+                          _buildDatesTab(),
+                          _buildTagsTab(),
                         ],
                       ),
                     ),
                   ],
+                ),
+              ),
+              bottomNavigationBar: SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                  child: _EditorBottomBar(
+                    isSaving: _isSaving,
+                    onSaveDraft: _saveDraft,
+                    onPublish: _showPublishDialog,
+                    onOpenDictation: _openDictationPanel,
+                    canPublish: _canPublish(),
+                  ),
                 ),
               ),
             ),
@@ -374,441 +320,645 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   }
 
   Widget _buildWritingTab() {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     final wordCount = _getWordCount();
 
-    return Column(
-      children: [
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                // Title Field
-                TextField(
-                  controller: _titleController,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompact = constraints.maxWidth < 720;
+        final cardPadding = EdgeInsets.symmetric(
+          horizontal: isCompact ? 16 : 22,
+          vertical: isCompact ? 16 : 22,
+        );
+        final controlPadding = EdgeInsets.symmetric(
+          horizontal: isCompact ? 16 : 20,
+          vertical: isCompact ? 14 : 18,
+        );
+        final mediaQuery = MediaQuery.of(context);
+        final bodyStyle = theme.textTheme.bodyLarge?.copyWith(
+          height: 1.45,
+        );
+        final fontSize = bodyStyle?.fontSize ?? 16;
+        final lineHeight = (bodyStyle?.height ?? 1.45) * fontSize;
+        final minContentHeight = lineHeight * 10;
+        final availableHeight = mediaQuery.size.height -
+            mediaQuery.padding.vertical -
+            mediaQuery.viewInsets.bottom;
+        final reservedHeight = isCompact ? 240.0 : 280.0;
+        final targetHeight = math.max(
+          minContentHeight,
+          availableHeight.isFinite
+              ? availableHeight - reservedHeight
+              : minContentHeight,
+        );
+
+        Widget buildContentField() {
+          return LayoutBuilder(
+            builder: (context, fieldConstraints) {
+              final fallbackHeight = math.max(minContentHeight, targetHeight);
+              final resolvedHeight = fieldConstraints.maxHeight.isFinite
+                  ? math.max(minContentHeight, fieldConstraints.maxHeight)
+                  : fallbackHeight;
+              return SizedBox(
+                height: resolvedHeight,
+                child: TextField(
+                  controller: _contentController,
                   decoration: InputDecoration(
-                    hintText: 'Título de tu historia...',
-                    hintStyle: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          color: Theme.of(context).colorScheme.outline,
-                        ),
+                    hintText: 'Cuenta tu historia...',
                     border: InputBorder.none,
+                    hintStyle: bodyStyle?.copyWith(
+                      color:
+                          colorScheme.onSurfaceVariant.withValues(alpha: 0.55),
+                    ),
                   ),
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                  style: bodyStyle,
+                  keyboardType: TextInputType.multiline,
+                  maxLines: null,
+                  minLines: null,
+                  expands: true,
+                  textAlignVertical: TextAlignVertical.top,
                 ),
+              );
+            },
+          );
+        }
 
-                const Divider(),
-
-                // Content Field
-                Expanded(
-                  child: TextField(
-                    controller: _contentController,
-                    decoration: InputDecoration(
-                      hintText: 'Cuenta tu historia...',
-                      hintStyle:
-                          Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                color: Theme.of(context).colorScheme.outline,
+        return Scrollbar(
+          controller: _scrollController,
+          child: SingleChildScrollView(
+            controller: _scrollController,
+            padding: EdgeInsets.fromLTRB(
+              12,
+              isCompact ? 6 : 10,
+              12,
+              isCompact ? 18 : 22,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: colorScheme.surface,
+                    borderRadius: BorderRadius.circular(28),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Container(
+                        width: 5,
+                        decoration: BoxDecoration(
+                          color: colorScheme.primary.withValues(alpha: 0.7),
+                          borderRadius: const BorderRadius.horizontal(
+                            left: Radius.circular(28),
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: Padding(
+                          padding: cardPadding,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              TextField(
+                                controller: _titleController,
+                                decoration: InputDecoration(
+                                  hintText: 'Título de tu historia...',
+                                  border: InputBorder.none,
+                                  isCollapsed: true,
+                                  hintStyle:
+                                      theme.textTheme.titleMedium?.copyWith(
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                                style: theme.textTheme.headlineSmall?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: -0.2,
+                                ),
+                                minLines: 1,
+                                maxLines: 3,
+                                textInputAction: TextInputAction.next,
                               ),
-                      border: InputBorder.none,
-                    ),
-                    style: Theme.of(context).textTheme.bodyLarge,
-                    maxLines: null,
-                    expands: true,
-                    textAlignVertical: TextAlignVertical.top,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-
-        // AI Tools Section
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceVariant,
-            border: Border(
-              top: BorderSide(
-                color: Theme.of(context)
-                    .colorScheme
-                    .outline
-                    .withValues(alpha: 0.3),
-              ),
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Tools row with horizontal scroll
-              Row(
-                children: [
-                  Expanded(
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: [
-                          // Ghost Writer Button
-                          OutlinedButton.icon(
-                            onPressed: _canUseGhostWriter()
-                                ? _showGhostWriterDialog
-                                : null,
-                            icon: const Icon(Icons.auto_fix_high),
-                            label: const Text('Ghost Writer'),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: _canUseGhostWriter()
-                                  ? Theme.of(context).colorScheme.primary
-                                  : Theme.of(context).colorScheme.outline,
-                            ),
+                              const SizedBox(height: 6),
+                              buildContentField(),
+                            ],
                           ),
-                          const SizedBox(width: 8),
-                          // AI Suggestions Button
-                          OutlinedButton.icon(
-                            onPressed: () {
-                              setState(
-                                  () => _showSuggestions = !_showSuggestions);
-                              if (_showSuggestions && _aiSuggestions.isEmpty) {
-                                _generateAISuggestions();
-                              }
-                            },
-                            icon: Icon(_showSuggestions
-                                ? Icons.lightbulb
-                                : Icons.lightbulb_outline),
-                            label: const Text('Sugerencias'),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: _showSuggestions
-                                  ? Theme.of(context).colorScheme.primary
-                                  : Theme.of(context).colorScheme.onSurface,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  // Three dots menu
-                  PopupMenuButton<String>(
-                    onSelected: _handleAppBarAction,
-                    itemBuilder: (context) => [
-                      const PopupMenuItem(
-                        value: 'view_originals',
-                        child: Row(
-                          children: [
-                            Icon(Icons.history),
-                            SizedBox(width: 8),
-                            Text('Ver originales'),
-                          ],
                         ),
                       ),
                     ],
                   ),
-                ],
-              ),
-
-              // Ghost Writer requirement note
-              if (!_canUseGhostWriter())
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Text(
-                    'Ghost Writer disponible con título y 400+ palabras',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.outline,
-                          fontStyle: FontStyle.italic,
-                        ),
-                  ),
                 ),
-
-              // AI Suggestions
-              if (_showSuggestions) ...[
-                const SizedBox(height: 16),
-                Text(
-                  'Sugerencias para mejorar tu historia:',
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                ),
-                const SizedBox(height: 8),
-                if (_aiSuggestions.isEmpty) ...[
-                  const Center(
-                    child: CircularProgressIndicator(),
+                SizedBox(height: isCompact ? 12 : 16),
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: colorScheme.surface,
+                    borderRadius: BorderRadius.circular(28),
                   ),
-                  const SizedBox(height: 8),
-                  const Text('Generando sugerencias...',
-                      textAlign: TextAlign.center),
-                ] else ...[
-                  Text(
-                    'Palabras: $wordCount',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.outline,
-                        ),
-                  ),
-                  const SizedBox(height: 8),
-                  ..._aiSuggestions.map((suggestion) => Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Row(
+                  child: Padding(
+                    padding: controlPadding,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Icon(
-                              Icons.help_outline,
-                              size: 16,
-                              color: Theme.of(context).colorScheme.primary,
+                            Expanded(
+                              child: SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                padding: const EdgeInsets.only(bottom: 4),
+                                child: Row(
+                                  children: [
+                                    OutlinedButton.icon(
+                                      onPressed: _canUseGhostWriter()
+                                          ? _showGhostWriterDialog
+                                          : null,
+                                      icon: const Icon(Icons.auto_fix_high),
+                                      label: const Text('Ghost Writer'),
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: _canUseGhostWriter()
+                                            ? colorScheme.primary
+                                            : colorScheme.onSurfaceVariant,
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 18,
+                                          vertical: 12,
+                                        ),
+                                        shape: const StadiumBorder(),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    OutlinedButton.icon(
+                                      onPressed: () {
+                                        setState(() => _showSuggestions =
+                                            !_showSuggestions);
+                                        if (_showSuggestions &&
+                                            _aiSuggestions.isEmpty) {
+                                          _generateAISuggestions();
+                                        }
+                                      },
+                                      icon: Icon(_showSuggestions
+                                          ? Icons.lightbulb
+                                          : Icons.lightbulb_outline),
+                                      label: const Text('Sugerencias'),
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: _showSuggestions
+                                            ? colorScheme.primary
+                                            : colorScheme.onSurface,
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 18,
+                                          vertical: 12,
+                                        ),
+                                        shape: const StadiumBorder(),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
                             const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                suggestion,
-                                style: Theme.of(context).textTheme.bodyMedium,
+                            PopupMenuButton<String>(
+                              onSelected: _handleAppBarAction,
+                              itemBuilder: (context) => const [
+                                PopupMenuItem(
+                                  value: 'view_originals',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.history),
+                                      SizedBox(width: 8),
+                                      Text('Ver originales'),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                              icon: Icon(
+                                Icons.more_vert,
+                                color: colorScheme.onSurfaceVariant,
                               ),
                             ),
                           ],
                         ),
-                      )),
-                ],
+                        if (!_canUseGhostWriter())
+                          Padding(
+                            padding: const EdgeInsets.only(top: 12),
+                            child: Text(
+                              'Ghost Writer disponible con título y 400+ palabras',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                                fontStyle: FontStyle.italic,
+                              ),
+                            ),
+                          ),
+                        if (_showSuggestions) ...[
+                          const SizedBox(height: 16),
+                          Text(
+                            'Sugerencias para mejorar tu historia:',
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          if (_aiSuggestions.isEmpty) ...[
+                            const Center(
+                              child: CircularProgressIndicator(),
+                            ),
+                            const SizedBox(height: 8),
+                            const Text(
+                              'Generando sugerencias...',
+                              textAlign: TextAlign.center,
+                            ),
+                          ] else ...[
+                            Text(
+                              'Palabras: $wordCount',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            ..._aiSuggestions.map(
+                              (suggestion) => Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Icon(
+                                      Icons.help_outline,
+                                      size: 16,
+                                      color: colorScheme.primary,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        suggestion,
+                                        style: theme.textTheme.bodyMedium,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
               ],
-            ],
+            ),
           ),
-        ),
-      ],
+        );
+      },
     );
   }
 
   Widget _buildPhotosTab() {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Fotos (${_photos.length}/8)',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompact = constraints.maxWidth < 720;
+        final outerPadding = EdgeInsets.fromLTRB(
+          12,
+          isCompact ? 12 : 16,
+          12,
+          isCompact ? 12 : 16,
+        );
+        final innerPadding = EdgeInsets.symmetric(
+          horizontal: isCompact ? 18 : 24,
+          vertical: isCompact ? 18 : 24,
+        );
+
+        return Padding(
+          padding: outerPadding,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: colorScheme.surface,
+              borderRadius: BorderRadius.circular(28),
+            ),
+            child: Padding(
+              padding: innerPadding,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Fotos (${_photos.length}/8)',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      if (_photos.length < 8)
+                        FilledButton.tonalIcon(
+                          onPressed: _addPhoto,
+                          icon: const Icon(Icons.add_a_photo),
+                          label: const Text('Añadir foto'),
+                          style: FilledButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 18,
+                              vertical: 12,
+                            ),
+                            shape: const StadiumBorder(),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Usa "Colocar foto" para insertar placeholders [img_1] en tu texto. Puedes mover los placeholders libremente.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      fontStyle: FontStyle.italic,
                     ),
-              ),
-              if (_photos.length < 8)
-                ElevatedButton.icon(
-                  onPressed: _addPhoto,
-                  icon: const Icon(Icons.add_a_photo, color: Colors.white),
-                  label: const Text('Añadir foto'),
-                ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Usa "Colocar foto" para insertar placeholders [img_1] en tu texto. Puedes mover los placeholders libremente.',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.outline,
-                  fontStyle: FontStyle.italic,
-                ),
-          ),
-          const SizedBox(height: 16),
-          if (_photos.isEmpty)
-            Expanded(
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.photo_library_outlined,
-                      size: 64,
-                      color: Theme.of(context).colorScheme.outline,
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'No hay fotos aún',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Añade hasta 8 fotos para ilustrar tu historia',
-                      style: Theme.of(context).textTheme.bodyMedium,
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 24),
-                    OutlinedButton.icon(
-                      onPressed: _addPhoto,
-                      icon: const Icon(Icons.add_a_photo),
-                      label: const Text('Añadir primera foto'),
-                    ),
-                  ],
-                ),
-              ),
-            )
-          else
-            Expanded(
-              child: ListView.builder(
-                itemCount: _photos.length,
-                itemBuilder: (context, index) {
-                  final photo = _photos[index];
-                  return PhotoCard(
-                    key: ValueKey(photo['id']),
-                    photo: photo,
-                    index: index,
-                    onEdit: () => _editPhoto(index),
-                    onDelete: () => _deletePhoto(index),
-                    onInsertIntoText: () => _insertPhotoIntoText(index),
-                  );
-                },
+                  ),
+                  const SizedBox(height: 20),
+                  Expanded(
+                    child: _photos.isEmpty
+                        ? _EmptyStateCard(
+                            icon: Icons.photo_library_outlined,
+                            title: 'No hay fotos aún',
+                            message:
+                                'Añade hasta 8 fotos para ilustrar tu historia',
+                            actionLabel: 'Añadir primera foto',
+                            onAction: _addPhoto,
+                          )
+                        : ListView.separated(
+                            itemCount: _photos.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 14),
+                            itemBuilder: (context, index) {
+                              final photo = _photos[index];
+                              return PhotoCard(
+                                key: ValueKey(photo['id']),
+                                photo: photo,
+                                index: index,
+                                onEdit: () => _editPhoto(index),
+                                onDelete: () => _deletePhoto(index),
+                                onInsertIntoText: () =>
+                                    _insertPhotoIntoText(index),
+                              );
+                            },
+                          ),
+                  ),
+                ],
               ),
             ),
-        ],
-      ),
+          ),
+        );
+      },
     );
   }
 
   Widget _buildDatesTab() {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Fechas de la historia',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-          ),
-          const SizedBox(height: 16),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Precisión de fechas',
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompact = constraints.maxWidth < 720;
+        final outerPadding = EdgeInsets.fromLTRB(
+          12,
+          isCompact ? 12 : 16,
+          12,
+          isCompact ? 12 : 16,
+        );
+        final innerPadding = EdgeInsets.symmetric(
+          horizontal: isCompact ? 18 : 24,
+          vertical: isCompact ? 18 : 24,
+        );
+        final cardRadius = BorderRadius.circular(24);
+
+        return ListView(
+          padding: outerPadding,
+          children: [
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: colorScheme.surface,
+                borderRadius: BorderRadius.circular(28),
+              ),
+              child: Padding(
+                padding: innerPadding,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Fechas de la historia',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Define cuándo sucedió tu recuerdo para darle contexto.',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        borderRadius: cardRadius,
+                        color: colorScheme.surfaceContainerHigh
+                            .withValues(alpha: 0.55),
+                      ),
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: isCompact ? 16 : 20,
+                          vertical: isCompact ? 16 : 20,
                         ),
-                  ),
-                  const SizedBox(height: 12),
-                  SegmentedButton<String>(
-                    segments: const [
-                      ButtonSegment(value: 'day', label: Text('Día')),
-                      ButtonSegment(value: 'month', label: Text('Mes')),
-                      ButtonSegment(value: 'year', label: Text('Año')),
-                    ],
-                    selected: {_datesPrecision},
-                    onSelectionChanged: (selection) {
-                      setState(() {
-                        _datesPrecision = selection.first;
-                      });
-                    },
-                  ),
-                ],
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Precisión de fechas',
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            SegmentedButton<String>(
+                              segments: const [
+                                ButtonSegment(value: 'day', label: Text('Día')),
+                                ButtonSegment(
+                                    value: 'month', label: Text('Mes')),
+                                ButtonSegment(
+                                    value: 'year', label: Text('Año')),
+                              ],
+                              selected: {_datesPrecision},
+                              onSelectionChanged: (selection) {
+                                setState(() {
+                                  _datesPrecision = selection.first;
+                                });
+                              },
+                              style: ButtonStyle(
+                                shape: WidgetStateProperty.all(
+                                  const StadiumBorder(),
+                                ),
+                                padding: WidgetStateProperty.all(
+                                  const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 10,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        borderRadius: cardRadius,
+                        color: colorScheme.surfaceContainerHigh
+                            .withValues(alpha: 0.55),
+                      ),
+                      child: Column(
+                        children: [
+                          _DateTile(
+                            icon: Icons.event,
+                            title: 'Fecha de inicio',
+                            subtitle: _startDate != null
+                                ? _formatDate(_startDate!, _datesPrecision)
+                                : 'No especificada',
+                            onTap: () => _selectDate(context, true),
+                          ),
+                          Divider(
+                            height: 1,
+                            color: colorScheme.onSurfaceVariant
+                                .withValues(alpha: 0.15),
+                          ),
+                          _DateTile(
+                            icon: Icons.event_busy,
+                            title: 'Fecha de fin (opcional)',
+                            subtitle: _endDate != null
+                                ? _formatDate(_endDate!, _datesPrecision)
+                                : 'No especificada',
+                            onTap: () => _selectDate(context, false),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 16),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.event),
-                    title: const Text('Fecha de inicio'),
-                    subtitle: Text(
-                      _startDate != null
-                          ? _formatDate(_startDate!, _datesPrecision)
-                          : 'No especificada',
-                    ),
-                    trailing: const Icon(Icons.edit),
-                    onTap: () => _selectDate(context, true),
-                  ),
-                  const Divider(),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.event_busy),
-                    title: const Text('Fecha de fin (opcional)'),
-                    subtitle: Text(
-                      _endDate != null
-                          ? _formatDate(_endDate!, _datesPrecision)
-                          : 'No especificada',
-                    ),
-                    trailing: const Icon(Icons.edit),
-                    onTap: () => _selectDate(context, false),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
+          ],
+        );
+      },
     );
   }
 
   Widget _buildTagsTab() {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Etiquetas temáticas',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Ayuda a organizar y encontrar tus historias',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.outline,
-                ),
-          ),
-          const SizedBox(height: 16),
-          if (_selectedTags.isNotEmpty) ...[
-            Text(
-              'Seleccionadas (${_selectedTags.length})',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: Theme.of(context).colorScheme.primary,
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompact = constraints.maxWidth < 720;
+        final outerPadding = EdgeInsets.fromLTRB(
+          12,
+          isCompact ? 12 : 16,
+          12,
+          isCompact ? 12 : 16,
+        );
+        final innerPadding = EdgeInsets.symmetric(
+          horizontal: isCompact ? 18 : 24,
+          vertical: isCompact ? 18 : 24,
+        );
+
+        return Padding(
+          padding: outerPadding,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: colorScheme.surface,
+              borderRadius: BorderRadius.circular(28),
+            ),
+            child: Padding(
+              padding: innerPadding,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Etiquetas temáticas',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: _selectedTags
-                  .map((tag) => Chip(
-                        label: Text(tag),
-                        onDeleted: () => _toggleTag(tag),
-                        deleteIcon: const Icon(Icons.close, size: 18),
-                        backgroundColor:
-                            Theme.of(context).colorScheme.primaryContainer,
-                      ))
-                  .toList(),
-            ),
-            const SizedBox(height: 24),
-          ],
-          Text(
-            'Disponibles',
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-          ),
-          const SizedBox(height: 8),
-          Expanded(
-            child: SingleChildScrollView(
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: _availableTags
-                    .where((tag) => !_selectedTags.contains(tag))
-                    .map((tag) => ActionChip(
-                          label: Text(tag),
-                          onPressed: () => _toggleTag(tag),
-                        ))
-                    .toList(),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Organiza y clasifica tus historias con etiquetas claras.',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  if (_selectedTags.isNotEmpty) ...[
+                    Text(
+                      'Seleccionadas (${_selectedTags.length})',
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: colorScheme.primary,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _selectedTags
+                          .map(
+                            (tag) => Chip(
+                              label: Text(tag),
+                              onDeleted: () => _toggleTag(tag),
+                              deleteIcon: const Icon(Icons.close, size: 18),
+                              backgroundColor: colorScheme.primaryContainer
+                                  .withValues(alpha: 0.8),
+                              labelStyle: theme.textTheme.labelLarge?.copyWith(
+                                color: colorScheme.primary,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+                  Text(
+                    'Disponibles',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: _availableTags
+                            .where((tag) => !_selectedTags.contains(tag))
+                            .map(
+                              (tag) => ActionChip(
+                                label: Text(tag),
+                                onPressed: () => _toggleTag(tag),
+                                labelStyle:
+                                    theme.textTheme.labelLarge?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                shape: const StadiumBorder(),
+                              ),
+                            )
+                            .toList(),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -3881,6 +4031,440 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   }
 }
 
+class _EditorHeader extends StatelessWidget {
+  const _EditorHeader({
+    required this.isSaving,
+    required this.onSave,
+    required this.controller,
+    required this.isNewStory,
+  });
+
+  final bool isSaving;
+  final VoidCallback onSave;
+  final TabController controller;
+  final bool isNewStory;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final title = isNewStory ? 'Nueva historia' : 'Editar historia';
+    final description = isNewStory
+        ? 'Escribe y publica un nuevo recuerdo con todas las herramientas.'
+        : 'Actualiza y pule tu historia manteniendo un flujo de trabajo claro.';
+    final icon =
+        isNewStory ? Icons.auto_stories_rounded : Icons.edit_note_rounded;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(28),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: colorScheme.primary.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: Icon(
+                    icon,
+                    size: 28,
+                    color: colorScheme.primary,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        description,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                FilledButton.icon(
+                  onPressed: isSaving ? null : onSave,
+                  icon: isSaving
+                      ? SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: const CircularProgressIndicator(
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Icon(Icons.save_outlined),
+                  label: Text(isSaving ? 'Guardando...' : 'Guardar'),
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 14,
+                    ),
+                    shape: const StadiumBorder(),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _EditorSegmentedControl(
+              controller: controller,
+              theme: theme,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EditorSegmentedControl extends StatelessWidget {
+  const _EditorSegmentedControl({
+    required this.controller,
+    required this.theme,
+  });
+
+  final TabController controller;
+  final ThemeData theme;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = theme.colorScheme;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(26),
+        color: colorScheme.surfaceContainerHigh.withValues(alpha: 0.4),
+      ),
+      child: TabBar(
+        controller: controller,
+        isScrollable: true,
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+        dividerColor: Colors.transparent,
+        indicator: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          color: colorScheme.primary.withValues(alpha: 0.12),
+        ),
+        labelStyle: theme.textTheme.labelLarge?.copyWith(
+          fontWeight: FontWeight.w700,
+        ),
+        unselectedLabelStyle: theme.textTheme.labelLarge?.copyWith(
+          fontWeight: FontWeight.w600,
+        ),
+        labelColor: colorScheme.primary,
+        unselectedLabelColor: colorScheme.onSurfaceVariant,
+        overlayColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.pressed) ||
+              states.contains(WidgetState.hovered)) {
+            return colorScheme.primary.withValues(alpha: 0.08);
+          }
+          return Colors.transparent;
+        }),
+        indicatorSize: TabBarIndicatorSize.tab,
+        splashFactory: InkSparkle.splashFactory,
+        tabs: const [
+          Tab(text: 'Escribir'),
+          Tab(text: 'Fotos'),
+          Tab(text: 'Fechas'),
+          Tab(text: 'Etiquetas'),
+        ],
+      ),
+    );
+  }
+}
+
+class _EditorBottomBar extends StatelessWidget {
+  const _EditorBottomBar({
+    required this.isSaving,
+    required this.onSaveDraft,
+    required this.onPublish,
+    required this.onOpenDictation,
+    required this.canPublish,
+  });
+
+  final bool isSaving;
+  final VoidCallback onSaveDraft;
+  final VoidCallback onPublish;
+  final VoidCallback onOpenDictation;
+  final bool canPublish;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color: colorScheme.shadow.withValues(alpha: 0.05),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isCompact = constraints.maxWidth < 640;
+
+            Widget micButton() => IconButton(
+                  onPressed: onOpenDictation,
+                  icon: const Icon(Icons.mic_rounded),
+                  style: IconButton.styleFrom(
+                    backgroundColor:
+                        colorScheme.primary.withValues(alpha: 0.12),
+                    foregroundColor: colorScheme.primary,
+                    padding: const EdgeInsets.all(14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                  ),
+                );
+
+            Widget draftButton() => FilledButton.tonalIcon(
+                  onPressed: isSaving ? null : onSaveDraft,
+                  icon: isSaving
+                      ? SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: const CircularProgressIndicator(
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Icon(Icons.save_outlined),
+                  label: Text(isSaving ? 'Guardando...' : 'Borrador'),
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 14,
+                    ),
+                    shape: const StadiumBorder(),
+                  ),
+                );
+
+            Widget publishButton() => FilledButton.icon(
+                  onPressed: canPublish ? onPublish : null,
+                  icon: const Icon(Icons.publish_rounded),
+                  label: const Text('Publicar'),
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 22,
+                      vertical: 14,
+                    ),
+                    shape: const StadiumBorder(),
+                  ),
+                );
+
+            if (isCompact) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      micButton(),
+                      const SizedBox(width: 12),
+                      Expanded(child: draftButton()),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: publishButton(),
+                  ),
+                ],
+              );
+            }
+
+            return Row(
+              children: [
+                micButton(),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      draftButton(),
+                      const SizedBox(width: 12),
+                      publishButton(),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyStateCard extends StatelessWidget {
+  const _EmptyStateCard({
+    required this.icon,
+    required this.title,
+    required this.message,
+    required this.actionLabel,
+    required this.onAction,
+  });
+
+  final IconData icon;
+  final String title;
+  final String message;
+  final String actionLabel;
+  final VoidCallback onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: colorScheme.primary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(28),
+            ),
+            child: Icon(
+              icon,
+              size: 56,
+              color: colorScheme.primary,
+            ),
+          ),
+          const SizedBox(height: 18),
+          Text(
+            title,
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 360),
+            child: Text(
+              message,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          FilledButton.tonalIcon(
+            onPressed: onAction,
+            icon: const Icon(Icons.add_rounded),
+            label: Text(actionLabel),
+            style: FilledButton.styleFrom(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 20,
+                vertical: 12,
+              ),
+              shape: const StadiumBorder(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DateTile extends StatelessWidget {
+  const _DateTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Material(
+      type: MaterialType.transparency,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(24),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: colorScheme.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Icon(
+                  icon,
+                  color: colorScheme.primary,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.edit_outlined,
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class PhotoCard extends StatelessWidget {
   final Map<String, dynamic> photo;
   final int index;
@@ -3899,133 +4483,140 @@ class PhotoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(26),
+        color: colorScheme.surfaceContainerHigh.withValues(alpha: 0.55),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Image preview
-          Container(
-            height: 200,
-            width: double.infinity,
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceVariant,
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(12)),
-            ),
-            child: ClipRRect(
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(12)),
+          ClipRRect(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
+            child: SizedBox(
+              height: 200,
+              width: double.infinity,
               child: _buildImageWidget(context),
             ),
           ),
-
-          // Photo details
-          ListTile(
-            leading: CircleAvatar(
-              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-              child: Text(
-                '${index + 1}',
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.primary,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            title: Text(photo['fileName'] ?? 'Foto ${index + 1}'),
-            subtitle: Column(
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 18, 18, 12),
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  photo['caption']?.isNotEmpty == true
-                      ? photo['caption']
-                      : 'Sin descripción',
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: colorScheme.primary.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: Text(
+                    '#${index + 1}',
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      color: colorScheme.primary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ),
-                Row(
-                  children: [
-                    if (!photo['uploaded']) ...[
-                      Icon(
-                        Icons.cloud_upload,
-                        size: 16,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                      const SizedBox(width: 4),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       Text(
-                        'Pendiente de subir',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Theme.of(context).colorScheme.primary,
-                          fontStyle: FontStyle.italic,
+                        photo['fileName'] ?? 'Foto ${index + 1}',
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
-                    ] else ...[
-                      Icon(
-                        Icons.cloud_done,
-                        size: 16,
-                        color: Colors.green,
-                      ),
-                      const SizedBox(width: 4),
+                      const SizedBox(height: 6),
                       Text(
-                        'Subida al servidor',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.green,
-                          fontStyle: FontStyle.italic,
-                        ),
+                        photo['caption']?.isNotEmpty == true
+                            ? photo['caption']
+                            : 'Sin descripción',
+                        style: theme.textTheme.bodyMedium,
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Icon(
+                            photo['uploaded']
+                                ? Icons.cloud_done
+                                : Icons.cloud_upload,
+                            size: 16,
+                            color: photo['uploaded']
+                                ? Colors.green
+                                : colorScheme.primary,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            photo['uploaded']
+                                ? 'Subida al servidor'
+                                : 'Pendiente de subir',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: photo['uploaded']
+                                  ? Colors.green
+                                  : colorScheme.primary,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
+                  ),
+                ),
+                PopupMenuButton<String>(
+                  onSelected: (value) {
+                    if (value == 'edit') {
+                      onEdit();
+                    } else if (value == 'delete') {
+                      onDelete();
+                    } else if (value == 'insert') {
+                      onInsertIntoText();
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(
+                      value: 'insert',
+                      child: Row(
+                        children: [
+                          Icon(Icons.add_to_photos),
+                          SizedBox(width: 8),
+                          Text('Colocar foto'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'edit',
+                      child: Row(
+                        children: [
+                          Icon(Icons.edit),
+                          SizedBox(width: 8),
+                          Text('Editar'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'delete',
+                      child: Row(
+                        children: [
+                          Icon(Icons.delete, color: Colors.red),
+                          SizedBox(width: 8),
+                          Text('Eliminar', style: TextStyle(color: Colors.red)),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ],
             ),
-            trailing: PopupMenuButton<String>(
-              onSelected: (value) {
-                if (value == 'edit') {
-                  onEdit();
-                } else if (value == 'delete') {
-                  onDelete();
-                } else if (value == 'insert') {
-                  onInsertIntoText();
-                }
-              },
-              itemBuilder: (context) => [
-                const PopupMenuItem(
-                  value: 'insert',
-                  child: Row(
-                    children: [
-                      Icon(Icons.add_to_photos),
-                      SizedBox(width: 8),
-                      Text('Colocar foto'),
-                    ],
-                  ),
-                ),
-                const PopupMenuItem(
-                  value: 'edit',
-                  child: Row(
-                    children: [
-                      Icon(Icons.edit),
-                      SizedBox(width: 8),
-                      Text('Editar'),
-                    ],
-                  ),
-                ),
-                const PopupMenuItem(
-                  value: 'delete',
-                  child: Row(
-                    children: [
-                      Icon(Icons.delete, color: Colors.red),
-                      SizedBox(width: 8),
-                      Text('Eliminar', style: TextStyle(color: Colors.red)),
-                    ],
-                  ),
-                ),
-              ],
-            ),
           ),
-
-          // Colocar foto button
           Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
             child: SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
@@ -4034,6 +4625,7 @@ class PhotoCard extends StatelessWidget {
                 label: const Text('Colocar foto'),
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: const StadiumBorder(),
                 ),
               ),
             ),

@@ -444,7 +444,56 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                             ],
                           ),
                         ),
-                      ),
+                      if (_showSuggestions) ...[
+                        const SizedBox(height: 16),
+                        Text(
+                          'Sugerencias para mejorar tu historia:',
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        if (_aiSuggestions.isEmpty) ...[
+                          const Center(
+                            child: CircularProgressIndicator(),
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'Generando sugerencias...',
+                            textAlign: TextAlign.center,
+                          ),
+                        ] else ...[
+                          Text(
+                            'Palabras: $wordCount',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          ..._aiSuggestions.map(
+                            (suggestion) => Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Icon(
+                                    Icons.help_outline,
+                                    size: 16,
+                                    color: colorScheme.primary,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      suggestion,
+                                      style: theme.textTheme.bodyMedium,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ],
                   ),
                 ),

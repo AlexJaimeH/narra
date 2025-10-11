@@ -229,56 +229,61 @@ class _SearchField extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        color: colorScheme.surfaceContainerHigh,
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(18),
-              color: colorScheme.primary.withValues(alpha: 0.12),
-            ),
-            child: Icon(
-              Icons.search_rounded,
-              color: colorScheme.primary,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: TextField(
-              controller: controller,
-              onChanged: onChanged,
-              style: theme.textTheme.bodyLarge?.copyWith(
-                fontWeight: FontWeight.w500,
-              ),
-              decoration: InputDecoration(
-                isCollapsed: true,
-                border: InputBorder.none,
-                enabledBorder: InputBorder.none,
-                focusedBorder: InputBorder.none,
-                hintText: hintText,
-                hintStyle: theme.textTheme.bodyLarge?.copyWith(
-                  color: colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(22),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: colorScheme.surfaceContainerHigh,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(18),
+                  color: colorScheme.primary.withValues(alpha: 0.12),
+                ),
+                child: Icon(
+                  Icons.search_rounded,
+                  color: colorScheme.primary,
                 ),
               ),
-            ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: TextField(
+                  controller: controller,
+                  onChanged: onChanged,
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    fontWeight: FontWeight.w500,
+                  ),
+                  decoration: InputDecoration(
+                    isCollapsed: true,
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    hintText: hintText,
+                    hintStyle: theme.textTheme.bodyLarge?.copyWith(
+                      color:
+                          colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+                    ),
+                  ),
+                ),
+              ),
+              if (!isQueryEmpty) ...[
+                const SizedBox(width: 8),
+                _SearchActionButton(
+                  icon: Icons.close_rounded,
+                  tooltip: 'Limpiar búsqueda',
+                  onPressed: onClear,
+                  background: colorScheme.onSurface.withValues(alpha: 0.08),
+                  foreground: colorScheme.onSurface,
+                ),
+              ],
+            ],
           ),
-          if (!isQueryEmpty) ...[
-            const SizedBox(width: 8),
-            _SearchActionButton(
-              icon: Icons.close_rounded,
-              tooltip: 'Limpiar búsqueda',
-              onPressed: onClear,
-              background: colorScheme.onSurface.withValues(alpha: 0.08),
-              foreground: colorScheme.onSurface,
-            ),
-          ],
-        ],
+        ),
       ),
     );
   }
@@ -841,7 +846,7 @@ class StoryListCard extends StatelessWidget {
                                   children: [
                                     Row(
                                       crossAxisAlignment:
-                                          CrossAxisAlignment.start,
+                                          CrossAxisAlignment.center,
                                       children: [
                                         Expanded(
                                           child: Text(
@@ -885,7 +890,7 @@ class StoryListCard extends StatelessWidget {
                                       ],
                                     ),
                                     if (excerpt.isNotEmpty) ...[
-                                      const SizedBox(height: 10),
+                                      const SizedBox(height: 6),
                                       Text(
                                         excerpt,
                                         style: theme.textTheme.bodyMedium
@@ -1116,11 +1121,7 @@ String _fallbackStoryExcerpt(String? content) {
     return '';
   }
   final normalized = content.replaceAll(RegExp(r'\s+'), ' ').trim();
-  if (normalized.length <= 160) return normalized;
-  final truncated = normalized.substring(0, 160);
-  final lastSpace = truncated.lastIndexOf(' ');
-  return (lastSpace > 60 ? truncated.substring(0, lastSpace) : truncated) +
-      '...';
+  return normalized;
 }
 
 class _StatusPill extends StatelessWidget {
@@ -1278,15 +1279,15 @@ class _StoryActionsButtonState extends State<_StoryActionsButton> {
         child: Material(
           color: Colors.transparent,
           child: InkWell(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(12),
             onTapDown: _storePosition,
             onTap: _showMenu,
             child: Container(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
               decoration: BoxDecoration(
                 color:
                     colorScheme.surfaceContainerHighest.withValues(alpha: 0.55),
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(12),
                 border: Border.all(
                   color: colorScheme.outlineVariant.withValues(alpha: 0.18),
                 ),
@@ -1294,6 +1295,7 @@ class _StoryActionsButtonState extends State<_StoryActionsButton> {
               child: Icon(
                 Icons.more_horiz_rounded,
                 color: colorScheme.onSurfaceVariant,
+                size: 18,
               ),
             ),
           ),

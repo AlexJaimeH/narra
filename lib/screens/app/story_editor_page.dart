@@ -332,7 +332,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           horizontal: isCompact ? 16 : 20,
           vertical: isCompact ? 12 : 16,
         );
-        final mediaQuery = MediaQuery.of(context);
         final bodyStyle = theme.textTheme.bodyLarge?.copyWith(
           height: 1.45,
         );

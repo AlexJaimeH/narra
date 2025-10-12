@@ -34,7 +34,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   late TabController _tabController;
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _contentController = TextEditingController();
-  final ScrollController _scrollController = ScrollController();
   final ScrollController _transcriptScrollController = ScrollController();
 
   bool _isRecording = false;
@@ -136,7 +135,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     _tabController.dispose();
     _titleController.dispose();
     _contentController.dispose();
-    _scrollController.dispose();
     _transcriptScrollController.dispose();
     super.dispose();
   }
@@ -275,31 +273,30 @@ class _StoryEditorPageState extends State<StoryEditorPage>
             )
           : Scaffold(
               body: SafeArea(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
-                      child: _EditorHeader(
-                        isSaving: _isSaving,
-                        onSave: _saveDraft,
-                        controller: _tabController,
-                        isNewStory: widget.storyId == null,
+                child: NestedScrollView(
+                  headerSliverBuilder: (context, innerBoxIsScrolled) => [
+                    SliverPadding(
+                      padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+                      sliver: SliverToBoxAdapter(
+                        child: _EditorHeader(
+                          isSaving: _isSaving,
+                          onSave: _saveDraft,
+                          controller: _tabController,
+                          isNewStory: widget.storyId == null,
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 6),
-                    Expanded(
-                      child: TabBarView(
-                        controller: _tabController,
-                        children: [
-                          _buildWritingTab(),
-                          _buildPhotosTab(),
-                          _buildDatesTab(),
-                          _buildTagsTab(),
-                        ],
-                      ),
-                    ),
+                    const SliverToBoxAdapter(child: SizedBox(height: 2)),
                   ],
+                  body: TabBarView(
+                    controller: _tabController,
+                    children: [
+                      _buildWritingTab(),
+                      _buildPhotosTab(),
+                      _buildDatesTab(),
+                      _buildTagsTab(),
+                    ],
+                  ),
                 ),
               ),
               bottomNavigationBar: SafeArea(
@@ -329,68 +326,47 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         final isCompact = constraints.maxWidth < 720;
         final cardPadding = EdgeInsets.symmetric(
           horizontal: isCompact ? 16 : 22,
-          vertical: isCompact ? 16 : 22,
+          vertical: isCompact ? 14 : 20,
         );
         final controlPadding = EdgeInsets.symmetric(
           horizontal: isCompact ? 16 : 20,
-          vertical: isCompact ? 14 : 18,
+          vertical: isCompact ? 12 : 16,
         );
-        final mediaQuery = MediaQuery.of(context);
         final bodyStyle = theme.textTheme.bodyLarge?.copyWith(
           height: 1.45,
         );
         final fontSize = bodyStyle?.fontSize ?? 16;
         final lineHeight = (bodyStyle?.height ?? 1.45) * fontSize;
         final minContentHeight = lineHeight * 10;
-        final availableHeight = mediaQuery.size.height -
-            mediaQuery.padding.vertical -
-            mediaQuery.viewInsets.bottom;
-        final reservedHeight = isCompact ? 240.0 : 280.0;
-        final targetHeight = math.max(
-          minContentHeight,
-          availableHeight.isFinite
-              ? availableHeight - reservedHeight
-              : minContentHeight,
-        );
 
         Widget buildContentField() {
-          return LayoutBuilder(
-            builder: (context, fieldConstraints) {
-              final fallbackHeight = math.max(minContentHeight, targetHeight);
-              final resolvedHeight = fieldConstraints.maxHeight.isFinite
-                  ? math.max(minContentHeight, fieldConstraints.maxHeight)
-                  : fallbackHeight;
-              return SizedBox(
-                height: resolvedHeight,
-                child: TextField(
-                  controller: _contentController,
-                  decoration: InputDecoration(
-                    hintText: 'Cuenta tu historia...',
-                    border: InputBorder.none,
-                    hintStyle: bodyStyle?.copyWith(
-                      color:
-                          colorScheme.onSurfaceVariant.withValues(alpha: 0.55),
-                    ),
-                  ),
-                  style: bodyStyle,
-                  keyboardType: TextInputType.multiline,
-                  maxLines: null,
-                  minLines: null,
-                  expands: true,
-                  textAlignVertical: TextAlignVertical.top,
+          return ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight: minContentHeight,
+            ),
+            child: TextField(
+              controller: _contentController,
+              decoration: InputDecoration(
+                hintText: 'Cuenta tu historia...',
+                border: InputBorder.none,
+                hintStyle: bodyStyle?.copyWith(
+                  color: colorScheme.onSurfaceVariant.withValues(alpha: 0.55),
                 ),
-              );
-            },
+              ),
+              style: bodyStyle,
+              keyboardType: TextInputType.multiline,
+              maxLines: null,
+              minLines: 10,
+              textAlignVertical: TextAlignVertical.top,
+            ),
           );
         }
 
         return Scrollbar(
-          controller: _scrollController,
           child: SingleChildScrollView(
-            controller: _scrollController,
             padding: EdgeInsets.fromLTRB(
               12,
-              isCompact ? 6 : 10,
+              isCompact ? 4 : 8,
               12,
               isCompact ? 18 : 22,
             ),
@@ -444,6 +420,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                             ],
                           ),
                         ),
+                      ),
                       if (_showSuggestions) ...[
                         const SizedBox(height: 16),
                         Text(
@@ -497,7 +474,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                     ],
                   ),
                 ),
-                SizedBox(height: isCompact ? 12 : 16),
+                SizedBox(height: isCompact ? 10 : 14),
                 DecoratedBox(
                   decoration: BoxDecoration(
                     color: colorScheme.surface,
@@ -4110,7 +4087,7 @@ class _EditorHeader extends StatelessWidget {
         borderRadius: BorderRadius.circular(28),
       ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -4174,7 +4151,7 @@ class _EditorHeader extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             _EditorSegmentedControl(
               controller: controller,
               theme: theme,

@@ -34,7 +34,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   late TabController _tabController;
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _contentController = TextEditingController();
-  final ScrollController _scrollController = ScrollController();
   final ScrollController _transcriptScrollController = ScrollController();
 
   bool _isRecording = false;
@@ -136,7 +135,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     _tabController.dispose();
     _titleController.dispose();
     _contentController.dispose();
-    _scrollController.dispose();
     _transcriptScrollController.dispose();
     super.dispose();
   }
@@ -275,31 +273,30 @@ class _StoryEditorPageState extends State<StoryEditorPage>
             )
           : Scaffold(
               body: SafeArea(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
-                      child: _EditorHeader(
-                        isSaving: _isSaving,
-                        onSave: _saveDraft,
-                        controller: _tabController,
-                        isNewStory: widget.storyId == null,
+                child: NestedScrollView(
+                  headerSliverBuilder: (context, innerBoxIsScrolled) => [
+                    SliverPadding(
+                      padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+                      sliver: SliverToBoxAdapter(
+                        child: _EditorHeader(
+                          isSaving: _isSaving,
+                          onSave: _saveDraft,
+                          controller: _tabController,
+                          isNewStory: widget.storyId == null,
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 2),
-                    Expanded(
-                      child: TabBarView(
-                        controller: _tabController,
-                        children: [
-                          _buildWritingTab(),
-                          _buildPhotosTab(),
-                          _buildDatesTab(),
-                          _buildTagsTab(),
-                        ],
-                      ),
-                    ),
+                    const SliverToBoxAdapter(child: SizedBox(height: 2)),
                   ],
+                  body: TabBarView(
+                    controller: _tabController,
+                    children: [
+                      _buildWritingTab(),
+                      _buildPhotosTab(),
+                      _buildDatesTab(),
+                      _buildTagsTab(),
+                    ],
+                  ),
                 ),
               ),
               bottomNavigationBar: SafeArea(
@@ -366,9 +363,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         }
 
         return Scrollbar(
-          controller: _scrollController,
           child: SingleChildScrollView(
-            controller: _scrollController,
             padding: EdgeInsets.fromLTRB(
               12,
               isCompact ? 4 : 8,

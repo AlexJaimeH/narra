@@ -335,49 +335,32 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           horizontal: isCompact ? 16 : 20,
           vertical: isCompact ? 12 : 16,
         );
-        final mediaQuery = MediaQuery.of(context);
         final bodyStyle = theme.textTheme.bodyLarge?.copyWith(
           height: 1.45,
         );
         final fontSize = bodyStyle?.fontSize ?? 16;
         final lineHeight = (bodyStyle?.height ?? 1.45) * fontSize;
         final minContentHeight = lineHeight * 10;
-        final availableHeight = mediaQuery.size.height -
-            mediaQuery.padding.vertical -
-            mediaQuery.viewInsets.bottom;
-        final reservedHeight = isCompact ? 210.0 : 260.0;
-        final targetHeight = math.max(
-          minContentHeight,
-          availableHeight.isFinite
-              ? availableHeight - reservedHeight
-              : minContentHeight,
-        );
 
         Widget buildContentField() {
           return ConstrainedBox(
             constraints: BoxConstraints(
               minHeight: minContentHeight,
-              maxHeight: targetHeight,
             ),
-            child: SizedBox(
-              height: targetHeight,
-              child: TextField(
-                controller: _contentController,
-                decoration: InputDecoration(
-                  hintText: 'Cuenta tu historia...',
-                  border: InputBorder.none,
-                  hintStyle: bodyStyle?.copyWith(
-                    color:
-                        colorScheme.onSurfaceVariant.withValues(alpha: 0.55),
-                  ),
+            child: TextField(
+              controller: _contentController,
+              decoration: InputDecoration(
+                hintText: 'Cuenta tu historia...',
+                border: InputBorder.none,
+                hintStyle: bodyStyle?.copyWith(
+                  color: colorScheme.onSurfaceVariant.withValues(alpha: 0.55),
                 ),
-                style: bodyStyle,
-                keyboardType: TextInputType.multiline,
-                maxLines: null,
-                minLines: null,
-                expands: true,
-                textAlignVertical: TextAlignVertical.top,
               ),
+              style: bodyStyle,
+              keyboardType: TextInputType.multiline,
+              maxLines: null,
+              minLines: 10,
+              textAlignVertical: TextAlignVertical.top,
             ),
           );
         }

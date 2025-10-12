@@ -356,12 +356,14 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           if (!mounted) return;
           final cardContext = _editorCardKey.currentContext;
           if (cardContext == null) return;
-          if (!constraints.maxHeight.isFinite) return;
           final renderObject = cardContext.findRenderObject();
           if (renderObject is! RenderBox) return;
+          final controller = scrollController;
+          if (!controller.hasClients) return;
           final cardHeight = renderObject.size.height;
           final totalHeight = cardHeight + verticalInsets;
-          final bool needsScroll = totalHeight > constraints.maxHeight + 0.5;
+          final viewportHeight = controller.position.viewportDimension;
+          final bool needsScroll = totalHeight > viewportHeight + 0.5;
           if (needsScroll != _writingNeedsScroll) {
             setState(() => _writingNeedsScroll = needsScroll);
           }
@@ -391,47 +393,30 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           );
         }
 
-        return Scrollbar(
-          controller: scrollController,
-          child: CustomScrollView(
-            controller: scrollController,
-            physics: _writingNeedsScroll
-                ? const ClampingScrollPhysics()
-                : const NeverScrollableScrollPhysics(),
-            slivers: [
-              SliverPadding(
-                padding: EdgeInsets.fromLTRB(
-                  12,
-                  topInset,
-                  12,
-                  bottomInset,
+        final editorCard = DecoratedBox(
+          key: _editorCardKey,
+          decoration: BoxDecoration(
+            color: colorScheme.surface,
+            borderRadius: BorderRadius.circular(28),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                width: 5,
+                decoration: BoxDecoration(
+                  color: colorScheme.primary.withValues(alpha: 0.7),
+                  borderRadius: const BorderRadius.horizontal(
+                    left: Radius.circular(28),
+                  ),
                 ),
-                sliver: SliverList(
-                  delegate: SliverChildListDelegate([
-                    DecoratedBox(
-                      key: _editorCardKey,
-                      decoration: BoxDecoration(
-                        color: colorScheme.surface,
-                        borderRadius: BorderRadius.circular(28),
-                      ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Container(
-                            width: 5,
-                            decoration: BoxDecoration(
-                              color: colorScheme.primary.withValues(alpha: 0.7),
-                              borderRadius: const BorderRadius.horizontal(
-                                left: Radius.circular(28),
-                              ),
-                            ),
-                          ),
-                          Expanded(
-                            child: Padding(
-                              padding: cardPadding,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
+              ),
+              Expanded(
+                child: Padding(
+                  padding: cardPadding,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                                   TextField(
                                     controller: _titleController,
                                     decoration: InputDecoration(
@@ -620,15 +605,44 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                                       ),
                                     ],
                                   ],
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ]),
+                    ],
+                  ),
                 ),
+              ),
+            ],
+          ),
+        );
+
+        final sliver = _writingNeedsScroll
+            ? SliverList(
+                delegate: SliverChildListDelegate([
+                  editorCard,
+                ]),
+              )
+            : SliverFillRemaining(
+                hasScrollBody: false,
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: editorCard,
+                ),
+              );
+
+        return Scrollbar(
+          controller: scrollController,
+          child: CustomScrollView(
+            controller: scrollController,
+            physics: _writingNeedsScroll
+                ? const ClampingScrollPhysics()
+                : const NeverScrollableScrollPhysics(),
+            slivers: [
+              SliverPadding(
+                padding: EdgeInsets.fromLTRB(
+                  12,
+                  topInset,
+                  12,
+                  bottomInset,
+                ),
+                sliver: sliver,
               ),
             ],
           ),

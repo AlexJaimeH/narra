@@ -588,18 +588,18 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
         return Scrollbar(
           controller: _writingScrollController,
-          child: CustomScrollView(
+          child: SingleChildScrollView(
             controller: _writingScrollController,
-            slivers: [
-              SliverPadding(
-                padding: padding,
-                sliver: SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: Align(
-                    alignment: Alignment.topCenter,
-                    child: editorCard,
-                  ),
-                ),
+            padding: padding,
+            physics: const ClampingScrollPhysics(),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minHeight:
+                    constraints.hasBoundedHeight ? constraints.maxHeight : 0,
+              ),
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: editorCard,
               ),
             ],
           ),

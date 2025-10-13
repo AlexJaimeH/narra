@@ -344,12 +344,24 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         final fontSize = bodyStyle?.fontSize ?? 16;
         final lineHeight = (bodyStyle?.height ?? 1.45) * fontSize;
         final minContentHeight = lineHeight * 10;
-        final availableHeight = mediaQueryData.size.height -
-            mediaQueryData.padding.vertical -
-            mediaQueryData.viewInsets.bottom;
-        final reservedHeight = isCompact ? 260.0 : 320.0;
-        final maxContentHeight = availableHeight.isFinite
-            ? math.max(minContentHeight, availableHeight - reservedHeight)
+        final padding = EdgeInsets.fromLTRB(
+          12,
+          topInset,
+          12,
+          bottomInset,
+        );
+
+        final viewportHeight = constraints.hasBoundedHeight
+            ? constraints.maxHeight
+            : (mediaQueryData.size.height -
+                mediaQueryData.padding.vertical -
+                mediaQueryData.viewInsets.bottom);
+        final reservedHeight = isCompact ? 240.0 : 300.0;
+        final availableForContent = viewportHeight.isFinite
+            ? viewportHeight - padding.vertical - reservedHeight
+            : null;
+        final maxContentHeight = availableForContent != null
+            ? math.max(minContentHeight, availableForContent)
             : minContentHeight;
         Widget buildContentField() {
           return ConstrainedBox(
@@ -574,32 +586,22 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           ),
         );
 
-        final padding = EdgeInsets.fromLTRB(
-          12,
-          topInset,
-          12,
-          bottomInset,
-        );
-
-        final viewportHeight = constraints.hasBoundedHeight
-            ? constraints.maxHeight
-            : (mediaQueryData.size.height -
-                mediaQueryData.padding.vertical -
-                mediaQueryData.viewInsets.bottom);
-        final minHeight = viewportHeight.isFinite ? viewportHeight : 0.0;
-
         return Scrollbar(
           controller: _writingScrollController,
-          child: SingleChildScrollView(
+          child: CustomScrollView(
             controller: _writingScrollController,
-            padding: padding,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(minHeight: minHeight),
-              child: Align(
-                alignment: Alignment.topCenter,
-                child: editorCard,
+            slivers: [
+              SliverPadding(
+                padding: padding,
+                sliver: SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Align(
+                    alignment: Alignment.topCenter,
+                    child: editorCard,
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
         );
       },

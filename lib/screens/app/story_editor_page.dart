@@ -36,11 +36,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   final TextEditingController _contentController = TextEditingController();
   final ScrollController _transcriptScrollController = ScrollController();
   final ScrollController _writingScrollController = ScrollController();
-  bool _writingCanScroll = false;
-  bool _writingScrollCheckPending = false;
-  double? _writingViewportHeight;
-  double _writingVerticalPadding = 0;
-  final GlobalKey _writingContentKey = GlobalKey();
 
   bool _isRecording = false;
   VoiceRecorder? _recorder;
@@ -106,7 +101,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     _tabController.addListener(() {
       if (!_tabController.indexIsChanging && mounted) {
         setState(() {});
-        _scheduleWritingScrollCheck();
       }
     });
 
@@ -122,10 +116,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     _titleController.addListener(_handleTitleChange);
 
     // Generate initial AI suggestions when suggestions are shown
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _evaluateWritingScroll();
-    });
   }
 
   void _handleContentChange() {
@@ -134,64 +124,12 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     }
     // Note: We could add placeholder detection here if needed
     // but for now we keep it simple - users can manually manage placeholders
-    _scheduleWritingScrollCheck();
   }
 
   void _handleTitleChange() {
     if (!_hasChanges) {
       setState(() => _hasChanges = true);
     }
-  }
-
-  void _evaluateWritingScroll() {
-    if (_tabController.index != 0) {
-      if (_writingCanScroll) {
-        setState(() => _writingCanScroll = false);
-      }
-      return;
-    }
-
-    final viewportHeight = _writingViewportHeight;
-    if (viewportHeight == null || !viewportHeight.isFinite) {
-      if (_writingCanScroll) {
-        setState(() => _writingCanScroll = false);
-      }
-      return;
-    }
-
-    final contentContext = _writingContentKey.currentContext;
-    final renderObject = contentContext?.findRenderObject();
-    if (renderObject is! RenderBox) {
-      if (_writingCanScroll) {
-        setState(() => _writingCanScroll = false);
-      }
-      return;
-    }
-
-    final contentHeight = renderObject.size.height;
-    final totalHeight = contentHeight + _writingVerticalPadding;
-    final needsScroll = totalHeight > viewportHeight + 0.5;
-
-    if (!needsScroll && _writingScrollController.hasClients) {
-      final position = _writingScrollController.position;
-      if (position.pixels != position.minScrollExtent) {
-        position.jumpTo(position.minScrollExtent);
-      }
-    }
-
-    if (needsScroll != _writingCanScroll) {
-      setState(() => _writingCanScroll = needsScroll);
-    }
-  }
-
-  void _scheduleWritingScrollCheck() {
-    if (_writingScrollCheckPending) return;
-    _writingScrollCheckPending = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _writingScrollCheckPending = false;
-      if (!mounted) return;
-      _evaluateWritingScroll();
-    });
   }
 
   @override
@@ -285,7 +223,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           _hasChanges = false;
           _isLoading = false;
         });
-        _scheduleWritingScrollCheck();
         // Initialize AI suggestions
       }
     } catch (e) {
@@ -311,7 +248,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         setState(() {
           _aiSuggestions = suggestions;
         });
-        _scheduleWritingScrollCheck();
       }
     } catch (e) {
       // Fail silently for AI suggestions
@@ -331,7 +267,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
   @override
   Widget build(BuildContext context) {
-    _scheduleWritingScrollCheck();
     return PopScope(
       canPop: !_hasChanges,
       onPopInvoked: (didPop) {
@@ -409,12 +344,24 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         final fontSize = bodyStyle?.fontSize ?? 16;
         final lineHeight = (bodyStyle?.height ?? 1.45) * fontSize;
         final minContentHeight = lineHeight * 10;
-        final availableHeight = mediaQueryData.size.height -
-            mediaQueryData.padding.vertical -
-            mediaQueryData.viewInsets.bottom;
-        final reservedHeight = isCompact ? 260.0 : 320.0;
-        final maxContentHeight = availableHeight.isFinite
-            ? math.max(minContentHeight, availableHeight - reservedHeight)
+        final padding = EdgeInsets.fromLTRB(
+          12,
+          topInset,
+          12,
+          bottomInset,
+        );
+
+        final viewportHeight = constraints.hasBoundedHeight
+            ? constraints.maxHeight
+            : (mediaQueryData.size.height -
+                mediaQueryData.padding.vertical -
+                mediaQueryData.viewInsets.bottom);
+        final reservedHeight = isCompact ? 240.0 : 300.0;
+        final availableForContent = viewportHeight.isFinite
+            ? viewportHeight - padding.vertical - reservedHeight
+            : null;
+        final maxContentHeight = availableForContent != null
+            ? math.max(minContentHeight, availableForContent)
             : minContentHeight;
         Widget buildContentField() {
           return ConstrainedBox(
@@ -519,7 +466,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                                           _aiSuggestions.isEmpty) {
                                         _generateAISuggestions();
                                       }
-                                      _scheduleWritingScrollCheck();
                                     },
                                     icon: Icon(
                                       _showSuggestions
@@ -640,44 +586,20 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           ),
         );
 
-        final padding = EdgeInsets.fromLTRB(
-          12,
-          topInset,
-          12,
-          bottomInset,
-        );
-
-        final mediaHeight = mediaQueryData.size.height -
-            mediaQueryData.padding.vertical -
-            mediaQueryData.viewInsets.bottom;
-        final viewportHeight = constraints.hasBoundedHeight
-            ? constraints.maxHeight
-            : mediaHeight;
-        _writingViewportHeight = viewportHeight;
-        _writingVerticalPadding = padding.vertical;
-        _scheduleWritingScrollCheck();
-
-        final minHeight = viewportHeight.isFinite ? viewportHeight : 0.0;
-
         return Scrollbar(
           controller: _writingScrollController,
-          thumbVisibility: _writingCanScroll,
           child: SingleChildScrollView(
             controller: _writingScrollController,
-            physics: _writingCanScroll
-                ? const ClampingScrollPhysics()
-                : const NeverScrollableScrollPhysics(),
+            padding: padding,
+            physics: const ClampingScrollPhysics(),
             child: ConstrainedBox(
-              constraints: BoxConstraints(minHeight: minHeight),
-              child: Padding(
-                padding: padding,
-                child: Align(
-                  alignment: Alignment.topCenter,
-                  child: KeyedSubtree(
-                    key: _writingContentKey,
-                    child: editorCard,
-                  ),
-                ),
+              constraints: BoxConstraints(
+                minHeight:
+                    constraints.hasBoundedHeight ? constraints.maxHeight : 0,
+              ),
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: editorCard,
               ),
             ),
           ),

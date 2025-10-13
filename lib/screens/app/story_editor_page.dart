@@ -625,7 +625,11 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                 alignment: Alignment.topCenter,
                 child: editorCard,
               ),
-            ),
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: editorCard,
+              ),
+            ],
           ),
         );
       },

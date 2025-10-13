@@ -100,6 +100,11 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
+    _tabController.addListener(() {
+      if (!_tabController.indexIsChanging && mounted) {
+        setState(() {});
+      }
+    });
 
     _loadAvailableTags();
 
@@ -264,6 +269,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
   @override
   Widget build(BuildContext context) {
+    final bool isWritingTabActive = _tabController.index == 0;
     return PopScope(
       canPop: !_hasChanges,
       onPopInvoked: (didPop) {
@@ -278,6 +284,9 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           : Scaffold(
               body: SafeArea(
                 child: NestedScrollView(
+                  physics: isWritingTabActive && !_writingNeedsScroll
+                      ? const NeverScrollableScrollPhysics()
+                      : const ClampingScrollPhysics(),
                   headerSliverBuilder: (context, innerBoxIsScrolled) => [
                     SliverPadding(
                       padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
@@ -351,6 +360,9 @@ class _StoryEditorPageState extends State<StoryEditorPage>
             : minContentHeight;
         final scrollController = PrimaryScrollController.of(context) ??
             _writingFallbackScrollController;
+        final viewportHeight = constraints.maxHeight.isFinite
+            ? constraints.maxHeight
+            : mediaQueryData.size.height - mediaQueryData.padding.vertical;
 
         SchedulerBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
@@ -358,11 +370,9 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           if (cardContext == null) return;
           final renderObject = cardContext.findRenderObject();
           if (renderObject is! RenderBox) return;
-          final controller = scrollController;
-          if (!controller.hasClients) return;
           final cardHeight = renderObject.size.height;
           final totalHeight = cardHeight + verticalInsets;
-          final viewportHeight = controller.position.viewportDimension;
+          if (!viewportHeight.isFinite) return;
           final bool needsScroll = totalHeight > viewportHeight + 0.5;
           if (needsScroll != _writingNeedsScroll) {
             setState(() => _writingNeedsScroll = needsScroll);

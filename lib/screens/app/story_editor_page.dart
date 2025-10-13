@@ -34,14 +34,10 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   late TabController _tabController;
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _contentController = TextEditingController();
-  final ScrollController _pageScrollController = ScrollController();
   final ScrollController _transcriptScrollController = ScrollController();
-  final GlobalKey _editorCardKey = GlobalKey();
-  final GlobalKey _headerKey = GlobalKey();
-  bool _writingNeedsScroll = false;
-  bool _scrollEvaluationPending = false;
-  double? _lastWritingBodyHeight;
-  double _lastAvailableHeight = 0;
+  final ScrollController _writingScrollController = ScrollController();
+  bool _writingCanScroll = false;
+  bool _writingScrollCheckPending = false;
 
   bool _isRecording = false;
   VoiceRecorder? _recorder;
@@ -107,7 +103,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     _tabController.addListener(() {
       if (!_tabController.indexIsChanging && mounted) {
         setState(() {});
-        _scheduleScrollEvaluation();
+        _scheduleWritingScrollCheck();
       }
     });
 
@@ -123,7 +119,10 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     _titleController.addListener(_handleTitleChange);
 
     // Generate initial AI suggestions when suggestions are shown
-    _scheduleScrollEvaluation();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _evaluateWritingScroll();
+    });
   }
 
   void _handleContentChange() {
@@ -132,7 +131,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     }
     // Note: We could add placeholder detection here if needed
     // but for now we keep it simple - users can manually manage placeholders
-    _scheduleScrollEvaluation();
+    _scheduleWritingScrollCheck();
   }
 
   void _handleTitleChange() {
@@ -141,42 +140,33 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     }
   }
 
-  void _scheduleScrollEvaluation() {
-    if (_scrollEvaluationPending) return;
-    _scrollEvaluationPending = true;
+  void _evaluateWritingScroll() {
+    if (_tabController.index != 0 || !_writingScrollController.hasClients) {
+      if (_writingCanScroll) {
+        setState(() => _writingCanScroll = false);
+      }
+      return;
+    }
+
+    final position = _writingScrollController.position;
+    final canScroll = position.maxScrollExtent > 0.5;
+
+    if (!canScroll && position.pixels != position.minScrollExtent) {
+      position.jumpTo(position.minScrollExtent);
+    }
+
+    if (canScroll != _writingCanScroll) {
+      setState(() => _writingCanScroll = canScroll);
+    }
+  }
+
+  void _scheduleWritingScrollCheck() {
+    if (_writingScrollCheckPending) return;
+    _writingScrollCheckPending = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _scrollEvaluationPending = false;
-      if (!mounted) {
-        return;
-      }
-
-      if (_tabController.index != 0 || _tabController.indexIsChanging) {
-        if (_writingNeedsScroll) {
-          setState(() => _writingNeedsScroll = false);
-        }
-        return;
-      }
-
-      final headerBox =
-          _headerKey.currentContext?.findRenderObject() as RenderBox?;
-      final bodyHeight = _lastWritingBodyHeight;
-      if (headerBox == null || bodyHeight == null || _lastAvailableHeight <= 0) {
-        return;
-      }
-
-      final totalHeight = headerBox.size.height + 2 + bodyHeight;
-      final bool needsScroll = totalHeight > _lastAvailableHeight + 0.5;
-
-      if (!needsScroll && _pageScrollController.hasClients) {
-        final position = _pageScrollController.position;
-        if (position.pixels != position.minScrollExtent) {
-          position.jumpTo(position.minScrollExtent);
-        }
-      }
-
-      if (needsScroll != _writingNeedsScroll) {
-        setState(() => _writingNeedsScroll = needsScroll);
-      }
+      _writingScrollCheckPending = false;
+      if (!mounted) return;
+      _evaluateWritingScroll();
     });
   }
 
@@ -187,11 +177,10 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     _recordingTicker = null;
     _disposePlaybackAudio();
     _tabController.dispose();
-    _pageScrollController.dispose();
     _titleController.dispose();
     _contentController.dispose();
     _transcriptScrollController.dispose();
-    _writingFallbackScrollController.dispose();
+    _writingScrollController.dispose();
     super.dispose();
   }
 
@@ -272,6 +261,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           _hasChanges = false;
           _isLoading = false;
         });
+        _scheduleWritingScrollCheck();
         // Initialize AI suggestions
       }
     } catch (e) {
@@ -297,6 +287,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         setState(() {
           _aiSuggestions = suggestions;
         });
+        _scheduleWritingScrollCheck();
       }
     } catch (e) {
       // Fail silently for AI suggestions
@@ -316,8 +307,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
   @override
   Widget build(BuildContext context) {
-    _scheduleScrollEvaluation();
-    final bool isWritingTabActive = _tabController.index == 0;
+    _scheduleWritingScrollCheck();
     return PopScope(
       canPop: !_hasChanges,
       onPopInvoked: (didPop) {
@@ -331,64 +321,30 @@ class _StoryEditorPageState extends State<StoryEditorPage>
             )
           : Scaffold(
               body: SafeArea(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final availableHeight = constraints.maxHeight;
-                    if ((_lastAvailableHeight - availableHeight).abs() > 0.5) {
-                      _lastAvailableHeight = availableHeight;
-                      _scheduleScrollEvaluation();
-                    } else {
-                      _lastAvailableHeight = availableHeight;
-                    }
-
-                    final header = KeyedSubtree(
-                      key: _headerKey,
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
                       child: _EditorHeader(
                         isSaving: _isSaving,
                         onSave: _saveDraft,
                         controller: _tabController,
                         isNewStory: widget.storyId == null,
                       ),
-                    );
-
-                    if (isWritingTabActive && !_writingNeedsScroll) {
-                      return Column(
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
-                            child: header,
-                          ),
-                          const SizedBox(height: 2),
-                          Expanded(
-                            child: _buildWritingTab(enableScroll: false),
-                          ),
-                        ],
-                      );
-                    }
-
-                    return NestedScrollView(
-                      controller: _pageScrollController,
-                      physics: isWritingTabActive && !_writingNeedsScroll
-                          ? const NeverScrollableScrollPhysics()
-                          : const ClampingScrollPhysics(),
-                      headerSliverBuilder: (context, innerBoxIsScrolled) => [
-                        SliverPadding(
-                          padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
-                          sliver: SliverToBoxAdapter(child: header),
-                        ),
-                        const SliverToBoxAdapter(child: SizedBox(height: 2)),
-                      ],
-                      body: TabBarView(
+                    ),
+                    const SizedBox(height: 2),
+                    Expanded(
+                      child: TabBarView(
                         controller: _tabController,
                         children: [
-                          _buildWritingTab(enableScroll: true),
+                          _buildWritingTab(),
                           _buildPhotosTab(),
                           _buildDatesTab(),
                           _buildTagsTab(),
                         ],
                       ),
-                    );
-                  },
+                    ),
+                  ],
                 ),
               ),
               bottomNavigationBar: SafeArea(
@@ -408,7 +364,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     );
   }
 
-  Widget _buildWritingTab({required bool enableScroll}) {
+  Widget _buildWritingTab() {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final wordCount = _getWordCount();
@@ -422,7 +378,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         );
         final topInset = isCompact ? 4.0 : 8.0;
         final bottomInset = isCompact ? 18.0 : 22.0;
-        final verticalInsets = topInset + bottomInset;
         final mediaQueryData = MediaQuery.of(context);
         final bodyStyle = theme.textTheme.bodyLarge?.copyWith(
           height: 1.45,
@@ -437,8 +392,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         final maxContentHeight = availableHeight.isFinite
             ? math.max(minContentHeight, availableHeight - reservedHeight)
             : minContentHeight;
-        final scrollController =
-            PrimaryScrollController.of(context) ?? _pageScrollController;
         Widget buildContentField() {
           return ConstrainedBox(
             constraints: BoxConstraints(
@@ -464,7 +417,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         }
 
         final editorCard = DecoratedBox(
-          key: _editorCardKey,
           decoration: BoxDecoration(
             color: colorScheme.surface,
             borderRadius: BorderRadius.circular(28),
@@ -487,194 +439,175 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                                  TextField(
-                                    controller: _titleController,
-                                    decoration: InputDecoration(
-                                      hintText: 'Título de tu historia...',
-                                      border: InputBorder.none,
-                                      isCollapsed: true,
-                                      hintStyle:
-                                          theme.textTheme.titleMedium?.copyWith(
-                                        color: colorScheme.onSurfaceVariant,
+                      TextField(
+                        controller: _titleController,
+                        decoration: InputDecoration(
+                          hintText: 'Título de tu historia...',
+                          border: InputBorder.none,
+                          isCollapsed: true,
+                          hintStyle: theme.textTheme.titleMedium?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.2,
+                        ),
+                        minLines: 1,
+                        maxLines: 3,
+                        textInputAction: TextInputAction.next,
+                      ),
+                      const SizedBox(height: 6),
+                      buildContentField(),
+                      const SizedBox(height: 18),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              padding: const EdgeInsets.only(bottom: 4),
+                              child: Row(
+                                children: [
+                                  OutlinedButton.icon(
+                                    onPressed: _canUseGhostWriter()
+                                        ? _showGhostWriterDialog
+                                        : null,
+                                    icon: const Icon(Icons.auto_fix_high),
+                                    label: const Text('Ghost Writer'),
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: _canUseGhostWriter()
+                                          ? colorScheme.primary
+                                          : colorScheme.onSurfaceVariant,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 18,
+                                        vertical: 12,
                                       ),
+                                      shape: const StadiumBorder(),
                                     ),
-                                    style:
-                                        theme.textTheme.headlineSmall?.copyWith(
-                                      fontWeight: FontWeight.w700,
-                                      letterSpacing: -0.2,
-                                    ),
-                                    minLines: 1,
-                                    maxLines: 3,
-                                    textInputAction: TextInputAction.next,
                                   ),
-                                  const SizedBox(height: 6),
-                                  buildContentField(),
-                                  const SizedBox(height: 18),
-                                  Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Expanded(
-                                        child: SingleChildScrollView(
-                                          scrollDirection: Axis.horizontal,
-                                          padding:
-                                              const EdgeInsets.only(bottom: 4),
-                                          child: Row(
-                                            children: [
-                                              OutlinedButton.icon(
-                                                onPressed: _canUseGhostWriter()
-                                                    ? _showGhostWriterDialog
-                                                    : null,
-                                                icon: const Icon(
-                                                    Icons.auto_fix_high),
-                                                label:
-                                                    const Text('Ghost Writer'),
-                                                style: OutlinedButton.styleFrom(
-                                                  foregroundColor:
-                                                      _canUseGhostWriter()
-                                                          ? colorScheme.primary
-                                                          : colorScheme
-                                                              .onSurfaceVariant,
-                                                  padding: const EdgeInsets
-                                                      .symmetric(
-                                                    horizontal: 18,
-                                                    vertical: 12,
-                                                  ),
-                                                  shape: const StadiumBorder(),
-                                                ),
-                                              ),
-                                              const SizedBox(width: 10),
-                                              OutlinedButton.icon(
-                                                onPressed: () {
-                                                  setState(() =>
-                                                      _showSuggestions =
-                                                          !_showSuggestions);
-                                                  if (_showSuggestions &&
-                                                      _aiSuggestions.isEmpty) {
-                                                    _generateAISuggestions();
-                                                  }
-                                                },
-                                                icon: Icon(
-                                                  _showSuggestions
-                                                      ? Icons.lightbulb
-                                                      : Icons.lightbulb_outline,
-                                                ),
-                                                label:
-                                                    const Text('Sugerencias'),
-                                                style: OutlinedButton.styleFrom(
-                                                  foregroundColor:
-                                                      _showSuggestions
-                                                          ? colorScheme.primary
-                                                          : colorScheme
-                                                              .onSurface,
-                                                  padding: const EdgeInsets
-                                                      .symmetric(
-                                                    horizontal: 18,
-                                                    vertical: 12,
-                                                  ),
-                                                  shape: const StadiumBorder(),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
+                                  const SizedBox(width: 10),
+                                  OutlinedButton.icon(
+                                    onPressed: () {
+                                      setState(() =>
+                                          _showSuggestions = !_showSuggestions);
+                                      if (_showSuggestions &&
+                                          _aiSuggestions.isEmpty) {
+                                        _generateAISuggestions();
+                                      }
+                                      _scheduleWritingScrollCheck();
+                                    },
+                                    icon: Icon(
+                                      _showSuggestions
+                                          ? Icons.lightbulb
+                                          : Icons.lightbulb_outline,
+                                    ),
+                                    label: const Text('Sugerencias'),
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: _showSuggestions
+                                          ? colorScheme.primary
+                                          : colorScheme.onSurface,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 18,
+                                        vertical: 12,
                                       ),
-                                      const SizedBox(width: 8),
-                                      PopupMenuButton<String>(
-                                        onSelected: _handleAppBarAction,
-                                        itemBuilder: (context) => const [
-                                          PopupMenuItem(
-                                            value: 'view_originals',
-                                            child: Row(
-                                              children: [
-                                                Icon(Icons.history),
-                                                SizedBox(width: 8),
-                                                Text('Ver originales'),
-                                              ],
-                                            ),
-                                          ),
-                                        ],
-                                        icon: Icon(
-                                          Icons.more_vert,
-                                          color: colorScheme.onSurfaceVariant,
-                                        ),
-                                      ),
-                                    ],
+                                      shape: const StadiumBorder(),
+                                    ),
                                   ),
-                                  if (!_canUseGhostWriter())
-                                    Padding(
-                                      padding: const EdgeInsets.only(top: 12),
-                                      child: Text(
-                                        'Ghost Writer disponible con título y 400+ palabras',
-                                        style:
-                                            theme.textTheme.bodySmall?.copyWith(
-                                          color: colorScheme.onSurfaceVariant,
-                                          fontStyle: FontStyle.italic,
-                                        ),
-                                      ),
-                                    ),
-                                  if (_showSuggestions) ...[
-                                    const SizedBox(height: 16),
-                                    Text(
-                                      'Sugerencias para mejorar tu historia:',
-                                      style:
-                                          theme.textTheme.titleSmall?.copyWith(
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    if (_aiSuggestions.isEmpty) ...[
-                                      const Align(
-                                        alignment: Alignment.centerLeft,
-                                        child: SizedBox(
-                                          width: 22,
-                                          height: 22,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 3,
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      const Text(
-                                        'Generando sugerencias...',
-                                        textAlign: TextAlign.left,
-                                      ),
-                                    ] else ...[
-                                      Text(
-                                        'Palabras: $wordCount',
-                                        style:
-                                            theme.textTheme.bodySmall?.copyWith(
-                                          color: colorScheme.onSurfaceVariant,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      ..._aiSuggestions.map(
-                                        (suggestion) => Padding(
-                                          padding:
-                                              const EdgeInsets.only(bottom: 8),
-                                          child: Row(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              Icon(
-                                                Icons.help_outline,
-                                                size: 16,
-                                                color: colorScheme.primary,
-                                              ),
-                                              const SizedBox(width: 8),
-                                              Expanded(
-                                                child: Text(
-                                                  suggestion,
-                                                  style: theme
-                                                      .textTheme.bodyMedium,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ],
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          PopupMenuButton<String>(
+                            onSelected: _handleAppBarAction,
+                            itemBuilder: (context) => const [
+                              PopupMenuItem(
+                                value: 'view_originals',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.history),
+                                    SizedBox(width: 8),
+                                    Text('Ver originales'),
                                   ],
+                                ),
+                              ),
+                            ],
+                            icon: Icon(
+                              Icons.more_vert,
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (!_canUseGhostWriter())
+                        Padding(
+                          padding: const EdgeInsets.only(top: 12),
+                          child: Text(
+                            'Ghost Writer disponible con título y 400+ palabras',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        ),
+                      if (_showSuggestions) ...[
+                        const SizedBox(height: 16),
+                        Text(
+                          'Sugerencias para mejorar tu historia:',
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        if (_aiSuggestions.isEmpty) ...[
+                          const Align(
+                            alignment: Alignment.centerLeft,
+                            child: SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 3,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'Generando sugerencias...',
+                            textAlign: TextAlign.left,
+                          ),
+                        ] else ...[
+                          Text(
+                            'Palabras: $wordCount',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          ..._aiSuggestions.map(
+                            (suggestion) => Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Icon(
+                                    Icons.help_outline,
+                                    size: 16,
+                                    color: colorScheme.primary,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      suggestion,
+                                      style: theme.textTheme.bodyMedium,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ],
                   ),
                 ),
@@ -690,57 +623,28 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           bottomInset,
         );
 
-        SchedulerBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
-          final cardContext = _editorCardKey.currentContext;
-          if (cardContext == null) return;
-          final renderObject = cardContext.findRenderObject();
-          if (renderObject is! RenderBox) return;
-          final bodyHeight = renderObject.size.height + verticalInsets;
-          if (_lastWritingBodyHeight == null ||
-              (bodyHeight - _lastWritingBodyHeight!).abs() > 0.5) {
-            _lastWritingBodyHeight = bodyHeight;
-            _scheduleScrollEvaluation();
-          }
-        });
+        final minHeight =
+            constraints.hasBoundedHeight ? constraints.maxHeight : 0.0;
+        _scheduleWritingScrollCheck();
 
-        if (!enableScroll) {
-          return Padding(
-            padding: padding,
-            child: Align(
-              alignment: Alignment.topCenter,
-              child: editorCard,
-            ),
-          );
-        }
-
-        final sliver = _writingNeedsScroll
-            ? SliverList(
-                delegate: SliverChildListDelegate([
-                  editorCard,
-                ]),
-              )
-            : SliverFillRemaining(
-                hasScrollBody: false,
+        return Scrollbar(
+          controller: _writingScrollController,
+          thumbVisibility: _writingCanScroll,
+          child: SingleChildScrollView(
+            controller: _writingScrollController,
+            physics: _writingCanScroll
+                ? const ClampingScrollPhysics()
+                : const NeverScrollableScrollPhysics(),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: minHeight),
+              child: Padding(
+                padding: padding,
                 child: Align(
                   alignment: Alignment.topCenter,
                   child: editorCard,
                 ),
-              );
-
-        return Scrollbar(
-          controller: scrollController,
-          child: CustomScrollView(
-            controller: scrollController,
-            physics: _writingNeedsScroll
-                ? const ClampingScrollPhysics()
-                : const NeverScrollableScrollPhysics(),
-            slivers: [
-              SliverPadding(
-                padding: padding,
-                sliver: sliver,
               ),
-            ],
+            ),
           ),
         );
       },

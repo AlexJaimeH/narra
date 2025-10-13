@@ -38,6 +38,9 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   final ScrollController _writingScrollController = ScrollController();
   bool _writingCanScroll = false;
   bool _writingScrollCheckPending = false;
+  double? _writingViewportHeight;
+  double _writingVerticalPadding = 0;
+  final GlobalKey _writingContentKey = GlobalKey();
 
   bool _isRecording = false;
   VoiceRecorder? _recorder;
@@ -141,22 +144,43 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   }
 
   void _evaluateWritingScroll() {
-    if (_tabController.index != 0 || !_writingScrollController.hasClients) {
+    if (_tabController.index != 0) {
       if (_writingCanScroll) {
         setState(() => _writingCanScroll = false);
       }
       return;
     }
 
-    final position = _writingScrollController.position;
-    final canScroll = position.maxScrollExtent > 0.5;
-
-    if (!canScroll && position.pixels != position.minScrollExtent) {
-      position.jumpTo(position.minScrollExtent);
+    final viewportHeight = _writingViewportHeight;
+    if (viewportHeight == null || !viewportHeight.isFinite) {
+      if (_writingCanScroll) {
+        setState(() => _writingCanScroll = false);
+      }
+      return;
     }
 
-    if (canScroll != _writingCanScroll) {
-      setState(() => _writingCanScroll = canScroll);
+    final contentContext = _writingContentKey.currentContext;
+    final renderObject = contentContext?.findRenderObject();
+    if (renderObject is! RenderBox) {
+      if (_writingCanScroll) {
+        setState(() => _writingCanScroll = false);
+      }
+      return;
+    }
+
+    final contentHeight = renderObject.size.height;
+    final totalHeight = contentHeight + _writingVerticalPadding;
+    final needsScroll = totalHeight > viewportHeight + 0.5;
+
+    if (!needsScroll && _writingScrollController.hasClients) {
+      final position = _writingScrollController.position;
+      if (position.pixels != position.minScrollExtent) {
+        position.jumpTo(position.minScrollExtent);
+      }
+    }
+
+    if (needsScroll != _writingCanScroll) {
+      setState(() => _writingCanScroll = needsScroll);
     }
   }
 
@@ -623,9 +647,17 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           bottomInset,
         );
 
-        final minHeight =
-            constraints.hasBoundedHeight ? constraints.maxHeight : 0.0;
+        final mediaHeight = mediaQueryData.size.height -
+            mediaQueryData.padding.vertical -
+            mediaQueryData.viewInsets.bottom;
+        final viewportHeight = constraints.hasBoundedHeight
+            ? constraints.maxHeight
+            : mediaHeight;
+        _writingViewportHeight = viewportHeight;
+        _writingVerticalPadding = padding.vertical;
         _scheduleWritingScrollCheck();
+
+        final minHeight = viewportHeight.isFinite ? viewportHeight : 0.0;
 
         return Scrollbar(
           controller: _writingScrollController,
@@ -641,7 +673,10 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                 padding: padding,
                 child: Align(
                   alignment: Alignment.topCenter,
-                  child: editorCard,
+                  child: KeyedSubtree(
+                    key: _writingContentKey,
+                    child: editorCard,
+                  ),
                 ),
               ),
             ),

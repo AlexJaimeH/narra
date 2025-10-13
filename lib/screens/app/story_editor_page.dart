@@ -191,6 +191,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     _titleController.dispose();
     _contentController.dispose();
     _transcriptScrollController.dispose();
+    _writingFallbackScrollController.dispose();
     super.dispose();
   }
 

@@ -586,20 +586,29 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           ),
         );
 
+        final minViewportHeight = constraints.hasBoundedHeight
+            ? math.max(0.0, constraints.maxHeight - padding.vertical)
+            : 0.0;
+
         return Scrollbar(
           controller: _writingScrollController,
-          child: SingleChildScrollView(
+          child: CustomScrollView(
             controller: _writingScrollController,
-            padding: padding,
             physics: const ClampingScrollPhysics(),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                minHeight:
-                    constraints.hasBoundedHeight ? constraints.maxHeight : 0,
-              ),
-              child: Align(
-                alignment: Alignment.topCenter,
-                child: editorCard,
+            slivers: [
+              SliverPadding(
+                padding: padding,
+                sliver: SliverToBoxAdapter(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: minViewportHeight,
+                    ),
+                    child: Align(
+                      alignment: Alignment.topCenter,
+                      child: editorCard,
+                    ),
+                  ),
+                ),
               ),
             ],
           ),

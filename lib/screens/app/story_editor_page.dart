@@ -36,11 +36,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   final TextEditingController _contentController = TextEditingController();
   final ScrollController _transcriptScrollController = ScrollController();
   final ScrollController _writingScrollController = ScrollController();
-  bool _writingCanScroll = false;
-  bool _writingScrollCheckPending = false;
-  double? _writingViewportHeight;
-  double _writingVerticalPadding = 0;
-  final GlobalKey _writingContentKey = GlobalKey();
 
   bool _isRecording = false;
   VoiceRecorder? _recorder;
@@ -106,7 +101,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     _tabController.addListener(() {
       if (!_tabController.indexIsChanging && mounted) {
         setState(() {});
-        _scheduleWritingScrollCheck();
       }
     });
 
@@ -122,10 +116,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     _titleController.addListener(_handleTitleChange);
 
     // Generate initial AI suggestions when suggestions are shown
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _evaluateWritingScroll();
-    });
   }
 
   void _handleContentChange() {
@@ -134,64 +124,12 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     }
     // Note: We could add placeholder detection here if needed
     // but for now we keep it simple - users can manually manage placeholders
-    _scheduleWritingScrollCheck();
   }
 
   void _handleTitleChange() {
     if (!_hasChanges) {
       setState(() => _hasChanges = true);
     }
-  }
-
-  void _evaluateWritingScroll() {
-    if (_tabController.index != 0) {
-      if (_writingCanScroll) {
-        setState(() => _writingCanScroll = false);
-      }
-      return;
-    }
-
-    final viewportHeight = _writingViewportHeight;
-    if (viewportHeight == null || !viewportHeight.isFinite) {
-      if (_writingCanScroll) {
-        setState(() => _writingCanScroll = false);
-      }
-      return;
-    }
-
-    final contentContext = _writingContentKey.currentContext;
-    final renderObject = contentContext?.findRenderObject();
-    if (renderObject is! RenderBox) {
-      if (_writingCanScroll) {
-        setState(() => _writingCanScroll = false);
-      }
-      return;
-    }
-
-    final contentHeight = renderObject.size.height;
-    final totalHeight = contentHeight + _writingVerticalPadding;
-    final needsScroll = totalHeight > viewportHeight + 0.5;
-
-    if (!needsScroll && _writingScrollController.hasClients) {
-      final position = _writingScrollController.position;
-      if (position.pixels != position.minScrollExtent) {
-        position.jumpTo(position.minScrollExtent);
-      }
-    }
-
-    if (needsScroll != _writingCanScroll) {
-      setState(() => _writingCanScroll = needsScroll);
-    }
-  }
-
-  void _scheduleWritingScrollCheck() {
-    if (_writingScrollCheckPending) return;
-    _writingScrollCheckPending = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _writingScrollCheckPending = false;
-      if (!mounted) return;
-      _evaluateWritingScroll();
-    });
   }
 
   @override
@@ -285,7 +223,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           _hasChanges = false;
           _isLoading = false;
         });
-        _scheduleWritingScrollCheck();
         // Initialize AI suggestions
       }
     } catch (e) {
@@ -311,7 +248,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         setState(() {
           _aiSuggestions = suggestions;
         });
-        _scheduleWritingScrollCheck();
       }
     } catch (e) {
       // Fail silently for AI suggestions
@@ -331,7 +267,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
   @override
   Widget build(BuildContext context) {
-    _scheduleWritingScrollCheck();
     return PopScope(
       canPop: !_hasChanges,
       onPopInvoked: (didPop) {
@@ -409,12 +344,27 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         final fontSize = bodyStyle?.fontSize ?? 16;
         final lineHeight = (bodyStyle?.height ?? 1.45) * fontSize;
         final minContentHeight = lineHeight * 10;
-        final availableHeight = mediaQueryData.size.height -
-            mediaQueryData.padding.vertical -
-            mediaQueryData.viewInsets.bottom;
-        final reservedHeight = isCompact ? 260.0 : 320.0;
-        final maxContentHeight = availableHeight.isFinite
-            ? math.max(minContentHeight, availableHeight - reservedHeight)
+        final padding = EdgeInsets.fromLTRB(
+          12,
+          topInset,
+          12,
+          bottomInset,
+        );
+
+        final viewportHeight = constraints.hasBoundedHeight
+            ? constraints.maxHeight
+            : (mediaQueryData.size.height -
+                mediaQueryData.padding.vertical -
+                mediaQueryData.viewInsets.bottom);
+        final contentViewportHeight = viewportHeight.isFinite
+            ? math.max(0.0, viewportHeight - padding.vertical)
+            : 0.0;
+        final reservedHeight = isCompact ? 240.0 : 300.0;
+        final availableForContent = contentViewportHeight > 0
+            ? contentViewportHeight - reservedHeight
+            : null;
+        final maxContentHeight = availableForContent != null
+            ? math.max(minContentHeight, availableForContent)
             : minContentHeight;
         Widget buildContentField() {
           return ConstrainedBox(
@@ -460,224 +410,220 @@ class _StoryEditorPageState extends State<StoryEditorPage>
               Expanded(
                 child: Padding(
                   padding: cardPadding,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      TextField(
-                        controller: _titleController,
-                        decoration: InputDecoration(
-                          hintText: 'Título de tu historia...',
-                          border: InputBorder.none,
-                          isCollapsed: true,
-                          hintStyle: theme.textTheme.titleMedium?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
+                    child: Builder(
+                      builder: (context) {
+                        final editorChildren = <Widget>[
+                          TextField(
+                            controller: _titleController,
+                            decoration: InputDecoration(
+                              hintText: 'Título de tu historia...',
+                              border: InputBorder.none,
+                              isCollapsed: true,
+                              hintStyle: theme.textTheme.titleMedium?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                            style: theme.textTheme.headlineSmall?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: -0.2,
+                            ),
+                            minLines: 1,
+                            maxLines: 3,
+                            textInputAction: TextInputAction.next,
                           ),
-                        ),
-                        style: theme.textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: -0.2,
-                        ),
-                        minLines: 1,
-                        maxLines: 3,
-                        textInputAction: TextInputAction.next,
-                      ),
-                      const SizedBox(height: 6),
-                      buildContentField(),
-                      const SizedBox(height: 18),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              padding: const EdgeInsets.only(bottom: 4),
-                              child: Row(
-                                children: [
-                                  OutlinedButton.icon(
-                                    onPressed: _canUseGhostWriter()
-                                        ? _showGhostWriterDialog
-                                        : null,
-                                    icon: const Icon(Icons.auto_fix_high),
-                                    label: const Text('Ghost Writer'),
-                                    style: OutlinedButton.styleFrom(
-                                      foregroundColor: _canUseGhostWriter()
-                                          ? colorScheme.primary
-                                          : colorScheme.onSurfaceVariant,
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 18,
-                                        vertical: 12,
+                          const SizedBox(height: 6),
+                          buildContentField(),
+                          const SizedBox(height: 18),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: SingleChildScrollView(
+                                  scrollDirection: Axis.horizontal,
+                                  padding: const EdgeInsets.only(bottom: 4),
+                                  child: Row(
+                                    children: [
+                                      OutlinedButton.icon(
+                                        onPressed: _canUseGhostWriter()
+                                            ? _showGhostWriterDialog
+                                            : null,
+                                        icon: const Icon(Icons.auto_fix_high),
+                                        label: const Text('Ghost Writer'),
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor: _canUseGhostWriter()
+                                              ? colorScheme.primary
+                                              : colorScheme.onSurfaceVariant,
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 18,
+                                            vertical: 12,
+                                          ),
+                                          shape: const StadiumBorder(),
+                                        ),
                                       ),
-                                      shape: const StadiumBorder(),
-                                    ),
+                                      const SizedBox(width: 10),
+                                      OutlinedButton.icon(
+                                        onPressed: () {
+                                          setState(() => _showSuggestions =
+                                              !_showSuggestions);
+                                          if (_showSuggestions &&
+                                              _aiSuggestions.isEmpty) {
+                                            _generateAISuggestions();
+                                          }
+                                        },
+                                        icon: Icon(
+                                          _showSuggestions
+                                              ? Icons.lightbulb
+                                              : Icons.lightbulb_outline,
+                                        ),
+                                        label: const Text('Sugerencias'),
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor: _showSuggestions
+                                              ? colorScheme.primary
+                                              : colorScheme.onSurface,
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 18,
+                                            vertical: 12,
+                                          ),
+                                          shape: const StadiumBorder(),
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                  const SizedBox(width: 10),
-                                  OutlinedButton.icon(
-                                    onPressed: () {
-                                      setState(() =>
-                                          _showSuggestions = !_showSuggestions);
-                                      if (_showSuggestions &&
-                                          _aiSuggestions.isEmpty) {
-                                        _generateAISuggestions();
-                                      }
-                                      _scheduleWritingScrollCheck();
-                                    },
-                                    icon: Icon(
-                                      _showSuggestions
-                                          ? Icons.lightbulb
-                                          : Icons.lightbulb_outline,
-                                    ),
-                                    label: const Text('Sugerencias'),
-                                    style: OutlinedButton.styleFrom(
-                                      foregroundColor: _showSuggestions
-                                          ? colorScheme.primary
-                                          : colorScheme.onSurface,
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 18,
-                                        vertical: 12,
-                                      ),
-                                      shape: const StadiumBorder(),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              PopupMenuButton<String>(
+                                onSelected: _handleAppBarAction,
+                                itemBuilder: (context) => const [
+                                  PopupMenuItem(
+                                    value: 'view_originals',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.history),
+                                        SizedBox(width: 8),
+                                        Text('Ver originales'),
+                                      ],
                                     ),
                                   ),
                                 ],
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          PopupMenuButton<String>(
-                            onSelected: _handleAppBarAction,
-                            itemBuilder: (context) => const [
-                              PopupMenuItem(
-                                value: 'view_originals',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.history),
-                                    SizedBox(width: 8),
-                                    Text('Ver originales'),
-                                  ],
+                                icon: Icon(
+                                  Icons.more_vert,
+                                  color: colorScheme.onSurfaceVariant,
                                 ),
                               ),
                             ],
-                            icon: Icon(
-                              Icons.more_vert,
-                              color: colorScheme.onSurfaceVariant,
-                            ),
                           ),
-                        ],
-                      ),
-                      if (!_canUseGhostWriter())
-                        Padding(
-                          padding: const EdgeInsets.only(top: 12),
-                          child: Text(
-                            'Ghost Writer disponible con título y 400+ palabras',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                              fontStyle: FontStyle.italic,
-                            ),
-                          ),
-                        ),
-                      if (_showSuggestions) ...[
-                        const SizedBox(height: 16),
-                        Text(
-                          'Sugerencias para mejorar tu historia:',
-                          style: theme.textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        if (_aiSuggestions.isEmpty) ...[
-                          const Align(
-                            alignment: Alignment.centerLeft,
-                            child: SizedBox(
-                              width: 22,
-                              height: 22,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 3,
+                        ];
+
+                        if (!_canUseGhostWriter()) {
+                          editorChildren.add(
+                            Padding(
+                              padding: const EdgeInsets.only(top: 12),
+                              child: Text(
+                                'Ghost Writer disponible con título y 400+ palabras',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                  fontStyle: FontStyle.italic,
+                                ),
                               ),
                             ),
-                          ),
-                          const SizedBox(height: 8),
-                          const Text(
-                            'Generando sugerencias...',
-                            textAlign: TextAlign.left,
-                          ),
-                        ] else ...[
-                          Text(
-                            'Palabras: $wordCount',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          ..._aiSuggestions.map(
-                            (suggestion) => Padding(
-                              padding: const EdgeInsets.only(bottom: 8),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Icon(
-                                    Icons.help_outline,
-                                    size: 16,
-                                    color: colorScheme.primary,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      suggestion,
-                                      style: theme.textTheme.bodyMedium,
-                                    ),
-                                  ),
-                                ],
+                          );
+                        }
+
+                        if (_showSuggestions) {
+                          editorChildren.addAll([
+                            const SizedBox(height: 16),
+                            Text(
+                              'Sugerencias para mejorar tu historia:',
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
-                          ),
-                        ],
-                      ],
-                    ],
-                  ),
+                            const SizedBox(height: 8),
+                          ]);
+
+                          if (_aiSuggestions.isEmpty) {
+                            editorChildren.addAll([
+                              const Align(
+                                alignment: Alignment.centerLeft,
+                                child: SizedBox(
+                                  width: 22,
+                                  height: 22,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 3,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              const Text(
+                                'Generando sugerencias...',
+                                textAlign: TextAlign.left,
+                              ),
+                            ]);
+                          }
+
+                          if (_aiSuggestions.isNotEmpty) {
+                            editorChildren.add(
+                              Text(
+                                'Palabras: $wordCount',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            );
+                            editorChildren.add(const SizedBox(height: 8));
+                            editorChildren.addAll(
+                              _aiSuggestions.map(
+                                (suggestion) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 8),
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Icon(
+                                        Icons.help_outline,
+                                        size: 16,
+                                        color: colorScheme.primary,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          suggestion,
+                                          style: theme.textTheme.bodyMedium,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            );
+                          }
+                        }
+
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: editorChildren,
+                        );
+                      },
+                    ),
                 ),
               ),
             ],
           ),
         );
 
-        final padding = EdgeInsets.fromLTRB(
-          12,
-          topInset,
-          12,
-          bottomInset,
-        );
-
-        final mediaHeight = mediaQueryData.size.height -
-            mediaQueryData.padding.vertical -
-            mediaQueryData.viewInsets.bottom;
-        final viewportHeight = constraints.hasBoundedHeight
-            ? constraints.maxHeight
-            : mediaHeight;
-        _writingViewportHeight = viewportHeight;
-        _writingVerticalPadding = padding.vertical;
-        _scheduleWritingScrollCheck();
-
-        final minHeight = viewportHeight.isFinite ? viewportHeight : 0.0;
-
         return Scrollbar(
           controller: _writingScrollController,
-          thumbVisibility: _writingCanScroll,
           child: SingleChildScrollView(
             controller: _writingScrollController,
-            physics: _writingCanScroll
-                ? const ClampingScrollPhysics()
-                : const NeverScrollableScrollPhysics(),
+            physics: const ClampingScrollPhysics(),
+            padding: padding,
             child: ConstrainedBox(
-              constraints: BoxConstraints(minHeight: minHeight),
-              child: Padding(
-                padding: padding,
-                child: Align(
-                  alignment: Alignment.topCenter,
-                  child: KeyedSubtree(
-                    key: _writingContentKey,
-                    child: editorCard,
-                  ),
-                ),
+              constraints: BoxConstraints(
+                minHeight: contentViewportHeight,
+              ),
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: editorCard,
               ),
             ),
           ),

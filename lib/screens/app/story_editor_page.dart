@@ -356,9 +356,12 @@ class _StoryEditorPageState extends State<StoryEditorPage>
             : (mediaQueryData.size.height -
                 mediaQueryData.padding.vertical -
                 mediaQueryData.viewInsets.bottom);
+        final contentViewportHeight = viewportHeight.isFinite
+            ? math.max(0.0, viewportHeight - padding.vertical)
+            : 0.0;
         final reservedHeight = isCompact ? 240.0 : 300.0;
-        final availableForContent = viewportHeight.isFinite
-            ? viewportHeight - padding.vertical - reservedHeight
+        final availableForContent = contentViewportHeight > 0
+            ? contentViewportHeight - reservedHeight
             : null;
         final maxContentHeight = availableForContent != null
             ? math.max(minContentHeight, availableForContent)
@@ -546,7 +549,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                             'Generando sugerencias...',
                             textAlign: TextAlign.left,
                           ),
-                        ] else ...[
+                        ],
+                        if (_aiSuggestions.isNotEmpty) ...[
                           Text(
                             'Palabras: $wordCount',
                             style: theme.textTheme.bodySmall?.copyWith(
@@ -586,29 +590,19 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           ),
         );
 
-        final minViewportHeight = constraints.hasBoundedHeight
-            ? math.max(0.0, constraints.maxHeight - padding.vertical)
-            : 0.0;
-
         return Scrollbar(
           controller: _writingScrollController,
-          child: CustomScrollView(
+          child: SingleChildScrollView(
             controller: _writingScrollController,
             physics: const ClampingScrollPhysics(),
-            slivers: [
-              SliverPadding(
-                padding: padding,
-                sliver: SliverToBoxAdapter(
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      minHeight: minViewportHeight,
-                    ),
-                    child: Align(
-                      alignment: Alignment.topCenter,
-                      child: editorCard,
-                    ),
-                  ),
-                ),
+            padding: padding,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minHeight: contentViewportHeight,
+              ),
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: editorCard,
               ),
             ],
           ),

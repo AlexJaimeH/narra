@@ -34,10 +34,14 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   late TabController _tabController;
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _contentController = TextEditingController();
+  final ScrollController _pageScrollController = ScrollController();
   final ScrollController _transcriptScrollController = ScrollController();
-  final ScrollController _writingFallbackScrollController = ScrollController();
   final GlobalKey _editorCardKey = GlobalKey();
+  final GlobalKey _headerKey = GlobalKey();
   bool _writingNeedsScroll = false;
+  bool _scrollEvaluationPending = false;
+  double? _lastWritingBodyHeight;
+  double _lastAvailableHeight = 0;
 
   bool _isRecording = false;
   VoiceRecorder? _recorder;
@@ -103,6 +107,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     _tabController.addListener(() {
       if (!_tabController.indexIsChanging && mounted) {
         setState(() {});
+        _scheduleScrollEvaluation();
       }
     });
 
@@ -118,6 +123,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     _titleController.addListener(_handleTitleChange);
 
     // Generate initial AI suggestions when suggestions are shown
+    _scheduleScrollEvaluation();
   }
 
   void _handleContentChange() {
@@ -126,12 +132,52 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     }
     // Note: We could add placeholder detection here if needed
     // but for now we keep it simple - users can manually manage placeholders
+    _scheduleScrollEvaluation();
   }
 
   void _handleTitleChange() {
     if (!_hasChanges) {
       setState(() => _hasChanges = true);
     }
+  }
+
+  void _scheduleScrollEvaluation() {
+    if (_scrollEvaluationPending) return;
+    _scrollEvaluationPending = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollEvaluationPending = false;
+      if (!mounted) {
+        return;
+      }
+
+      if (_tabController.index != 0 || _tabController.indexIsChanging) {
+        if (_writingNeedsScroll) {
+          setState(() => _writingNeedsScroll = false);
+        }
+        return;
+      }
+
+      final headerBox =
+          _headerKey.currentContext?.findRenderObject() as RenderBox?;
+      final bodyHeight = _lastWritingBodyHeight;
+      if (headerBox == null || bodyHeight == null || _lastAvailableHeight <= 0) {
+        return;
+      }
+
+      final totalHeight = headerBox.size.height + 2 + bodyHeight;
+      final bool needsScroll = totalHeight > _lastAvailableHeight + 0.5;
+
+      if (!needsScroll && _pageScrollController.hasClients) {
+        final position = _pageScrollController.position;
+        if (position.pixels != position.minScrollExtent) {
+          position.jumpTo(position.minScrollExtent);
+        }
+      }
+
+      if (needsScroll != _writingNeedsScroll) {
+        setState(() => _writingNeedsScroll = needsScroll);
+      }
+    });
   }
 
   @override
@@ -141,6 +187,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     _recordingTicker = null;
     _disposePlaybackAudio();
     _tabController.dispose();
+    _pageScrollController.dispose();
     _titleController.dispose();
     _contentController.dispose();
     _transcriptScrollController.dispose();
@@ -269,6 +316,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
   @override
   Widget build(BuildContext context) {
+    _scheduleScrollEvaluation();
     final bool isWritingTabActive = _tabController.index == 0;
     return PopScope(
       canPop: !_hasChanges,
@@ -283,33 +331,64 @@ class _StoryEditorPageState extends State<StoryEditorPage>
             )
           : Scaffold(
               body: SafeArea(
-                child: NestedScrollView(
-                  physics: isWritingTabActive && !_writingNeedsScroll
-                      ? const NeverScrollableScrollPhysics()
-                      : const ClampingScrollPhysics(),
-                  headerSliverBuilder: (context, innerBoxIsScrolled) => [
-                    SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
-                      sliver: SliverToBoxAdapter(
-                        child: _EditorHeader(
-                          isSaving: _isSaving,
-                          onSave: _saveDraft,
-                          controller: _tabController,
-                          isNewStory: widget.storyId == null,
-                        ),
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final availableHeight = constraints.maxHeight;
+                    if ((_lastAvailableHeight - availableHeight).abs() > 0.5) {
+                      _lastAvailableHeight = availableHeight;
+                      _scheduleScrollEvaluation();
+                    } else {
+                      _lastAvailableHeight = availableHeight;
+                    }
+
+                    final header = KeyedSubtree(
+                      key: _headerKey,
+                      child: _EditorHeader(
+                        isSaving: _isSaving,
+                        onSave: _saveDraft,
+                        controller: _tabController,
+                        isNewStory: widget.storyId == null,
                       ),
-                    ),
-                    const SliverToBoxAdapter(child: SizedBox(height: 2)),
-                  ],
-                  body: TabBarView(
-                    controller: _tabController,
-                    children: [
-                      _buildWritingTab(),
-                      _buildPhotosTab(),
-                      _buildDatesTab(),
-                      _buildTagsTab(),
-                    ],
-                  ),
+                    );
+
+                    if (isWritingTabActive && !_writingNeedsScroll) {
+                      return Column(
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+                            child: header,
+                          ),
+                          const SizedBox(height: 2),
+                          Expanded(
+                            child: _buildWritingTab(enableScroll: false),
+                          ),
+                        ],
+                      );
+                    }
+
+                    return NestedScrollView(
+                      controller: _pageScrollController,
+                      physics: isWritingTabActive && !_writingNeedsScroll
+                          ? const NeverScrollableScrollPhysics()
+                          : const ClampingScrollPhysics(),
+                      headerSliverBuilder: (context, innerBoxIsScrolled) => [
+                        SliverPadding(
+                          padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+                          sliver: SliverToBoxAdapter(child: header),
+                        ),
+                        const SliverToBoxAdapter(child: SizedBox(height: 2)),
+                      ],
+                      body: TabBarView(
+                        controller: _tabController,
+                        children: [
+                          _buildWritingTab(enableScroll: true),
+                          _buildPhotosTab(),
+                          _buildDatesTab(),
+                          _buildTagsTab(),
+                        ],
+                      ),
+                    );
+                  },
                 ),
               ),
               bottomNavigationBar: SafeArea(
@@ -329,7 +408,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     );
   }
 
-  Widget _buildWritingTab() {
+  Widget _buildWritingTab({required bool enableScroll}) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final wordCount = _getWordCount();
@@ -358,27 +437,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         final maxContentHeight = availableHeight.isFinite
             ? math.max(minContentHeight, availableHeight - reservedHeight)
             : minContentHeight;
-        final scrollController = PrimaryScrollController.of(context) ??
-            _writingFallbackScrollController;
-        final viewportHeight = constraints.maxHeight.isFinite
-            ? constraints.maxHeight
-            : mediaQueryData.size.height - mediaQueryData.padding.vertical;
-
-        SchedulerBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
-          final cardContext = _editorCardKey.currentContext;
-          if (cardContext == null) return;
-          final renderObject = cardContext.findRenderObject();
-          if (renderObject is! RenderBox) return;
-          final cardHeight = renderObject.size.height;
-          final totalHeight = cardHeight + verticalInsets;
-          if (!viewportHeight.isFinite) return;
-          final bool needsScroll = totalHeight > viewportHeight + 0.5;
-          if (needsScroll != _writingNeedsScroll) {
-            setState(() => _writingNeedsScroll = needsScroll);
-          }
-        });
-
+        final scrollController =
+            PrimaryScrollController.of(context) ?? _pageScrollController;
         Widget buildContentField() {
           return ConstrainedBox(
             constraints: BoxConstraints(
@@ -623,6 +683,37 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           ),
         );
 
+        final padding = EdgeInsets.fromLTRB(
+          12,
+          topInset,
+          12,
+          bottomInset,
+        );
+
+        SchedulerBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          final cardContext = _editorCardKey.currentContext;
+          if (cardContext == null) return;
+          final renderObject = cardContext.findRenderObject();
+          if (renderObject is! RenderBox) return;
+          final bodyHeight = renderObject.size.height + verticalInsets;
+          if (_lastWritingBodyHeight == null ||
+              (bodyHeight - _lastWritingBodyHeight!).abs() > 0.5) {
+            _lastWritingBodyHeight = bodyHeight;
+            _scheduleScrollEvaluation();
+          }
+        });
+
+        if (!enableScroll) {
+          return Padding(
+            padding: padding,
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: editorCard,
+            ),
+          );
+        }
+
         final sliver = _writingNeedsScroll
             ? SliverList(
                 delegate: SliverChildListDelegate([
@@ -646,12 +737,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                 : const NeverScrollableScrollPhysics(),
             slivers: [
               SliverPadding(
-                padding: EdgeInsets.fromLTRB(
-                  12,
-                  topInset,
-                  12,
-                  bottomInset,
-                ),
+                padding: padding,
                 sliver: sliver,
               ),
             ],

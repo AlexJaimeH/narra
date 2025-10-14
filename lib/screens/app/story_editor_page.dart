@@ -18,6 +18,7 @@ import 'package:narra/repositories/story_repository.dart';
 import 'package:narra/openai/openai_service.dart';
 import 'package:narra/services/voice_recorder.dart';
 import 'package:narra/services/audio_upload_service.dart';
+import 'package:narra/services/user_service.dart';
 import 'package:narra/supabase/narra_client.dart';
 
 class StoryEditorPage extends StatefulWidget {
@@ -28,6 +29,8 @@ class StoryEditorPage extends StatefulWidget {
   @override
   State<StoryEditorPage> createState() => _StoryEditorPageState();
 }
+
+enum _GhostWriterResultAction { apply, retry, cancel }
 
 class _StoryEditorPageState extends State<StoryEditorPage>
     with SingleTickerProviderStateMixin {
@@ -81,18 +84,17 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
   List<String> _availableTags = [];
   List<String> _aiSuggestions = [];
-  bool _showAdvancedGhostWriter = false;
   bool _showSuggestions = false;
 
-  // Ghost Writer configuration
-  String _ghostWriterTone = 'nostálgico';
-  String _ghostWriterFidelity = 'high';
-  String _ghostWriterLanguage = 'español';
-  String _ghostWriterAudience = 'familia';
-  String _ghostWriterPerspective = 'primera persona';
-  String _ghostWriterPrivacy = 'privado';
-  bool _ghostWriterExpandContent = false;
-  bool _ghostWriterPreserveStructure = true;
+  // Ghost Writer configuration (synced with user settings)
+  String _ghostWriterTone = 'warm';
+  String _ghostWriterEditingStyle = 'balanced';
+  String _ghostWriterLanguage = 'es';
+  String _ghostWriterPerspective = 'first';
+  bool _ghostWriterAvoidProfanity = false;
+  String _ghostWriterExtraInstructions = '';
+  bool _isGhostWriterProcessing = false;
+  Timer? _ghostWriterInstructionsDebounce;
 
   @override
   void initState() {
@@ -105,6 +107,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     });
 
     _loadAvailableTags();
+    _loadGhostWriterPreferences();
 
     // Load existing story if editing
     if (widget.storyId != null) {
@@ -143,6 +146,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     _contentController.dispose();
     _editorScrollController.dispose();
     _transcriptScrollController.dispose();
+    _ghostWriterInstructionsDebounce?.cancel();
     super.dispose();
   }
 
@@ -176,6 +180,35 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           ];
         });
       }
+    }
+  }
+
+  Future<void> _loadGhostWriterPreferences() async {
+    try {
+      final profile = await UserService.getCurrentUserProfile();
+      final settings = await UserService.getUserSettings();
+      if (!mounted) return;
+      setState(() {
+        _ghostWriterTone = (profile?['writing_tone'] as String?) ?? 'warm';
+        _ghostWriterPerspective =
+            (settings?['ai_person'] as String?) ?? 'first';
+        _ghostWriterEditingStyle =
+            (settings?['ai_fidelity'] as String?) ?? 'balanced';
+        _ghostWriterAvoidProfanity =
+            (settings?['ai_no_bad_words'] as bool?) ?? false;
+        _ghostWriterExtraInstructions =
+            (settings?['ai_extra_instructions'] as String?)?.trim() ?? '';
+        _ghostWriterLanguage = (settings?['language'] as String?) ?? 'es';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'No se pudieron cargar los ajustes de Ghost Writer: $e',
+          ),
+        ),
+      );
     }
   }
 
@@ -262,7 +295,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   }
 
   bool _canUseGhostWriter() {
-    return _titleController.text.trim().isNotEmpty && _getWordCount() >= 400;
+    return _getWordCount() >= 300;
   }
 
   @override
@@ -427,15 +460,40 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                   child: Row(
                     children: [
                       OutlinedButton.icon(
-                        onPressed: _canUseGhostWriter()
-                            ? _showGhostWriterDialog
-                            : null,
-                        icon: const Icon(Icons.auto_fix_high),
-                        label: const Text('Ghost Writer'),
+                        onPressed: _isGhostWriterProcessing
+                            ? null
+                            : _handleGhostWriterPressed,
+                        icon: _isGhostWriterProcessing
+                            ? SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.5,
+                                  valueColor: AlwaysStoppedAnimation(
+                                    colorScheme.primary,
+                                  ),
+                                ),
+                              )
+                            : Icon(
+                                Icons.auto_fix_high,
+                                color: _canUseGhostWriter()
+                                    ? colorScheme.primary
+                                    : colorScheme.onSurfaceVariant,
+                              ),
+                        label: Text(
+                          _isGhostWriterProcessing
+                              ? 'Trabajando...'
+                              : 'Ghost Writer',
+                        ),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: _canUseGhostWriter()
                               ? colorScheme.primary
                               : colorScheme.onSurfaceVariant,
+                          side: BorderSide(
+                            color: _canUseGhostWriter()
+                                ? colorScheme.primary.withValues(alpha: 0.5)
+                                : colorScheme.outlineVariant,
+                          ),
                           padding: const EdgeInsets.symmetric(
                             horizontal: 18,
                             vertical: 12,
@@ -495,21 +553,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
             ],
           ),
         ];
-
-        if (!_canUseGhostWriter()) {
-          editorChildren.add(
-            Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: Text(
-                'Ghost Writer disponible con título y 400+ palabras',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                  fontStyle: FontStyle.italic,
-                ),
-              ),
-            ),
-          );
-        }
 
         if (_showSuggestions) {
           editorChildren.addAll([
@@ -3729,278 +3772,719 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     }
   }
 
-  Future<void> _showGhostWriterDialog() async {
+  void _handleGhostWriterPressed() {
+    if (_isGhostWriterProcessing) return;
     if (!_canUseGhostWriter()) {
+      final missingWords = math.max(0, 300 - _getWordCount());
+      final message = missingWords > 0
+          ? 'Ghost Writer se activa al superar las 300 palabras. Te faltan '
+              '$missingWords ${missingWords == 1 ? 'palabra' : 'palabras'}.'
+          : 'Ghost Writer se activa al superar las 300 palabras.';
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Ghost Writer requiere título y al menos 500 palabras'),
-        ),
+        SnackBar(content: Text(message)),
       );
       return;
     }
-
-    final result = await showDialog<Map<String, dynamic>>(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: const Text('Ghost Writer IA'),
-          content: SizedBox(
-            width: double.maxFinite,
-            height: _showAdvancedGhostWriter ? 400 : 200,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Basic configuration
-                  const Text(
-                    'Configuración básica',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 12),
-
-                  DropdownButtonFormField<String>(
-                    value: _ghostWriterTone,
-                    decoration: const InputDecoration(
-                      labelText: 'Tono',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: const [
-                      DropdownMenuItem(
-                          value: 'nostálgico', child: Text('Nostálgico')),
-                      DropdownMenuItem(value: 'alegre', child: Text('Alegre')),
-                      DropdownMenuItem(
-                          value: 'emotivo', child: Text('Emotivo')),
-                      DropdownMenuItem(
-                          value: 'reflexivo', child: Text('Reflexivo')),
-                      DropdownMenuItem(
-                          value: 'divertido', child: Text('Divertido')),
-                    ],
-                    onChanged: (value) =>
-                        setState(() => _ghostWriterTone = value!),
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // Advanced options toggle
-                  Row(
-                    children: [
-                      Checkbox(
-                        value: _showAdvancedGhostWriter,
-                        onChanged: (value) => setState(
-                            () => _showAdvancedGhostWriter = value ?? false),
-                      ),
-                      const Text('Mostrar opciones avanzadas'),
-                    ],
-                  ),
-
-                  // Advanced configuration
-                  if (_showAdvancedGhostWriter) ...[
-                    const SizedBox(height: 16),
-                    const Text(
-                      'Opciones avanzadas',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<String>(
-                      value: _ghostWriterFidelity,
-                      decoration: const InputDecoration(
-                        labelText: 'Fidelidad al texto original',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: const [
-                        DropdownMenuItem(
-                            value: 'high',
-                            child: Text('Alta - cambios mínimos')),
-                        DropdownMenuItem(
-                            value: 'medium',
-                            child: Text('Media - mejoras moderadas')),
-                        DropdownMenuItem(
-                            value: 'creative',
-                            child: Text('Creativa - interpretación libre')),
-                      ],
-                      onChanged: (value) =>
-                          setState(() => _ghostWriterFidelity = value!),
-                    ),
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<String>(
-                      value: _ghostWriterAudience,
-                      decoration: const InputDecoration(
-                        labelText: 'Audiencia objetivo',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: const [
-                        DropdownMenuItem(
-                            value: 'familia', child: Text('Familia')),
-                        DropdownMenuItem(
-                            value: 'amigos', child: Text('Amigos')),
-                        DropdownMenuItem(
-                            value: 'público', child: Text('Público general')),
-                      ],
-                      onChanged: (value) =>
-                          setState(() => _ghostWriterAudience = value!),
-                    ),
-                    const SizedBox(height: 12),
-                    SwitchListTile(
-                      title: const Text('Expandir contenido'),
-                      subtitle: const Text('Añadir más detalles y contexto'),
-                      value: _ghostWriterExpandContent,
-                      onChanged: (value) =>
-                          setState(() => _ghostWriterExpandContent = value),
-                    ),
-                    SwitchListTile(
-                      title: const Text('Preservar estructura'),
-                      subtitle: const Text('Mantener organización de párrafos'),
-                      value: _ghostWriterPreserveStructure,
-                      onChanged: (value) =>
-                          setState(() => _ghostWriterPreserveStructure = value),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancelar'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context, {
-                'tone': _ghostWriterTone,
-                'fidelity': _ghostWriterFidelity,
-                'language': _ghostWriterLanguage,
-                'audience': _ghostWriterAudience,
-                'perspective': _ghostWriterPerspective,
-                'privacy': _ghostWriterPrivacy,
-                'expandContent': _ghostWriterExpandContent,
-                'preserveStructure': _ghostWriterPreserveStructure,
-              }),
-              child: const Text('Mejorar texto'),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    if (result != null) {
-      _applyGhostWriter(result);
-    }
+    _runGhostWriter();
   }
 
-  Future<void> _applyGhostWriter(Map<String, dynamic> params) async {
+  Future<void> _runGhostWriter() async {
+    if (_isGhostWriterProcessing) return;
+
+    setState(() => _isGhostWriterProcessing = true);
+
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => const AlertDialog(
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text('Ghost Writer mejorando tu historia...'),
-            SizedBox(height: 8),
-            Text(
-              'Esto puede tomar unos momentos',
-              style: TextStyle(fontSize: 12),
+      builder: (dialogContext) {
+        final theme = Theme.of(dialogContext);
+        final colorScheme = theme.colorScheme;
+        return Dialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          backgroundColor: colorScheme.surface,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  height: 48,
+                  width: 48,
+                  child: CircularProgressIndicator(
+                    valueColor: AlwaysStoppedAnimation(colorScheme.primary),
+                    strokeWidth: 4,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  'Ghost Writer está trabajando...',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Estamos puliendo tu historia para que luzca lista para un libro.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
 
     try {
       final result = await OpenAIService.improveStoryText(
         originalText: _contentController.text,
         title: _titleController.text,
-        tone: params['tone'],
-        fidelity: params['fidelity'],
-        language: params['language'],
-        audience: params['audience'],
-        perspective: params['perspective'],
-        privacy: params['privacy'],
-        expandContent: params['expandContent'],
-        preserveStructure: params['preserveStructure'],
+        tone: _ghostWriterTone,
+        fidelity: _ghostWriterEditingStyle,
+        language: _ghostWriterLanguage,
+        perspective: _ghostWriterPerspective,
+        avoidProfanity: _ghostWriterAvoidProfanity,
+        extraInstructions: _ghostWriterExtraInstructions.trim(),
       );
 
-      Navigator.pop(context); // Close loading dialog
+      if (mounted) {
+        await Navigator.of(context).maybePop();
+        setState(() => _isGhostWriterProcessing = false);
+      }
 
-      // Show results dialog
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Ghost Writer - Resultados'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Cambios realizados:',
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                ),
-                const SizedBox(height: 8),
-                Text(result['changes_summary']),
-                const SizedBox(height: 16),
-                Text(
-                  'Palabras: ${result['word_count']}',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.outline,
-                      ),
-                ),
-                if (result['suggestions'].isNotEmpty) ...[
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Sugerencias adicionales:',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
-                  ...result['suggestions'].map((suggestion) => Padding(
-                        padding: const EdgeInsets.only(bottom: 4),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('• '),
-                            Expanded(child: Text(suggestion)),
-                          ],
-                        ),
-                      )),
-                ],
-              ],
-            ),
+      if (!mounted) {
+        return;
+      }
+
+      final action = await _showGhostWriterResultDialog(result);
+
+      if (!mounted || action == null) {
+        return;
+      }
+
+      if (action == _GhostWriterResultAction.apply) {
+        final polished =
+            (result['polished_text'] as String?) ?? _contentController.text;
+        setState(() {
+          _contentController.text = polished;
+          _hasChanges = true;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✓ Texto mejorado por Ghost Writer'),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Mantener original'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-                // Apply the improved text
-                setState(() {
-                  _contentController.text = result['polished_text'];
-                  _hasChanges = true;
-                });
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('✓ Texto mejorado por Ghost Writer'),
+        );
+      } else if (action == _GhostWriterResultAction.retry) {
+        await _runGhostWriter();
+      }
+    } catch (e) {
+      if (mounted) {
+        await Navigator.of(context).maybePop();
+        setState(() => _isGhostWriterProcessing = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error en Ghost Writer: $e')),
+        );
+      }
+    }
+  }
+
+  Future<_GhostWriterResultAction?> _showGhostWriterResultDialog(
+    Map<String, dynamic> result,
+  ) async {
+    final polished =
+        (result['polished_text'] as String?) ?? _contentController.text;
+    final summary = (result['changes_summary'] as String?) ?? '';
+    final toneAnalysis = (result['tone_analysis'] as String?) ?? '';
+    final suggestionsRaw = result['suggestions'];
+    final suggestions = suggestionsRaw is List
+        ? suggestionsRaw.whereType<String>().toList()
+        : <String>[];
+    final wordCount = result['word_count'];
+    final polishedWordCount = wordCount is num
+        ? wordCount.toInt()
+        : polished.split(RegExp(r'\s+')).length;
+
+    final instructionsController =
+        TextEditingController(text: _ghostWriterExtraInstructions);
+
+    try {
+      return await showDialog<_GhostWriterResultAction>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) {
+          return StatefulBuilder(
+            builder: (context, setDialogState) {
+              final theme = Theme.of(context);
+              final colorScheme = theme.colorScheme;
+              final media = MediaQuery.of(context);
+              final isCompact = media.size.width < 640;
+              final horizontalPadding = isCompact ? 16.0 : 24.0;
+              final verticalPadding = isCompact ? 20.0 : 28.0;
+              final maxWidth = math.min(media.size.width - 32, 760.0);
+              final textAreaHeight =
+                  math.min(isCompact ? 240.0 : 360.0, media.size.height * 0.45);
+
+              Widget buildChip(IconData icon, String label) {
+                return Chip(
+                  avatar: Icon(icon, size: 16, color: colorScheme.primary),
+                  label: Text(label),
+                  labelStyle: theme.textTheme.bodySmall?.copyWith(
+                    color: colorScheme.primary,
+                    fontWeight: FontWeight.w600,
                   ),
+                  side: BorderSide(
+                    color: colorScheme.primary.withValues(alpha: 0.25),
+                  ),
+                  backgroundColor: colorScheme.primary.withValues(alpha: 0.08),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 );
-              },
-              child: const Text('Aplicar mejoras'),
-            ),
-          ],
-        ),
+              }
+
+              final chips = <Widget>[
+                buildChip(
+                    Icons.article_outlined, '$polishedWordCount palabras'),
+                buildChip(Icons.palette_outlined,
+                    _ghostWriterToneLabel(_ghostWriterTone)),
+                buildChip(Icons.tune,
+                    _ghostWriterEditingStyleLabel(_ghostWriterEditingStyle)),
+                buildChip(Icons.record_voice_over,
+                    _ghostWriterPerspectiveLabel(_ghostWriterPerspective)),
+                buildChip(Icons.translate,
+                    _ghostWriterLanguageLabel(_ghostWriterLanguage)),
+              ];
+
+              if (_ghostWriterAvoidProfanity) {
+                chips.add(buildChip(Icons.shield_outlined, 'Lenguaje amable'));
+              }
+
+              return Dialog(
+                insetPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(28),
+                ),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: maxWidth),
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: horizontalPadding,
+                      vertical: verticalPadding,
+                    ),
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                height: 44,
+                                width: 44,
+                                decoration: BoxDecoration(
+                                  color: colorScheme.primary
+                                      .withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: Icon(
+                                  Icons.auto_fix_high,
+                                  color: colorScheme.primary,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Ghost Writer afinó tu historia',
+                                      style:
+                                          theme.textTheme.titleMedium?.copyWith(
+                                        fontWeight: FontWeight.w700,
+                                        letterSpacing: -0.1,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Revisa los cambios sugeridos antes de aplicarlos a tu borrador.',
+                                      style:
+                                          theme.textTheme.bodyMedium?.copyWith(
+                                        color: colorScheme.onSurfaceVariant,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: chips,
+                          ),
+                          if (summary.isNotEmpty ||
+                              toneAnalysis.isNotEmpty) ...[
+                            const SizedBox(height: 18),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: colorScheme.surfaceVariant
+                                    .withValues(alpha: 0.55),
+                                borderRadius: BorderRadius.circular(18),
+                                border: Border.all(
+                                  color: colorScheme.outlineVariant,
+                                ),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  if (summary.isNotEmpty) ...[
+                                    Text(
+                                      'Qué mejoró',
+                                      style:
+                                          theme.textTheme.titleSmall?.copyWith(
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(summary),
+                                  ],
+                                  if (summary.isNotEmpty &&
+                                      toneAnalysis.isNotEmpty)
+                                    const SizedBox(height: 12),
+                                  if (toneAnalysis.isNotEmpty) ...[
+                                    Text(
+                                      'Tono aplicado',
+                                      style:
+                                          theme.textTheme.titleSmall?.copyWith(
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(toneAnalysis),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 18),
+                          Text(
+                            'Texto mejorado',
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Container(
+                            decoration: BoxDecoration(
+                              color: colorScheme.surfaceVariant
+                                  .withValues(alpha: 0.35),
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(
+                                color: colorScheme.outlineVariant,
+                              ),
+                            ),
+                            child: SizedBox(
+                              height: textAreaHeight,
+                              child: Scrollbar(
+                                thumbVisibility: true,
+                                child: SingleChildScrollView(
+                                  padding: const EdgeInsets.all(16),
+                                  child: SelectableText(
+                                    polished,
+                                    style: theme.textTheme.bodyLarge?.copyWith(
+                                      height: 1.5,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          if (suggestions.isNotEmpty) ...[
+                            const SizedBox(height: 18),
+                            Text(
+                              'Sugerencias para seguir puliendo',
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            ...suggestions.map(
+                              (suggestion) => Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Icon(
+                                      Icons.check_circle_outline,
+                                      size: 18,
+                                      color: colorScheme.primary,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(child: Text(suggestion)),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 18),
+                          Theme(
+                            data: theme.copyWith(
+                                dividerColor: Colors.transparent),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(18),
+                              child: ExpansionTile(
+                                initiallyExpanded: false,
+                                tilePadding:
+                                    const EdgeInsets.symmetric(horizontal: 16),
+                                backgroundColor: colorScheme.surfaceVariant
+                                    .withValues(alpha: 0.4),
+                                collapsedBackgroundColor: colorScheme
+                                    .surfaceVariant
+                                    .withValues(alpha: 0.3),
+                                title: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.settings_suggest,
+                                      color: colorScheme.primary,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    const Text('Ajustes de Ghost Writer'),
+                                  ],
+                                ),
+                                subtitle: Text(
+                                  _ghostWriterSummaryLabel(),
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.fromLTRB(
+                                        16, 0, 16, 16),
+                                    child: Column(
+                                      children: [
+                                        DropdownButtonFormField<String>(
+                                          value: _ghostWriterTone,
+                                          decoration: const InputDecoration(
+                                            labelText: 'Tono de escritura',
+                                            border: OutlineInputBorder(),
+                                          ),
+                                          items: const [
+                                            DropdownMenuItem(
+                                              value: 'formal',
+                                              child: Text('Formal'),
+                                            ),
+                                            DropdownMenuItem(
+                                              value: 'neutral',
+                                              child: Text('Neutro'),
+                                            ),
+                                            DropdownMenuItem(
+                                              value: 'warm',
+                                              child: Text('Cálido'),
+                                            ),
+                                          ],
+                                          onChanged: (value) async {
+                                            if (value == null) return;
+                                            setDialogState(
+                                              () => _ghostWriterTone = value,
+                                            );
+                                            if (mounted) {
+                                              setState(() {
+                                                _ghostWriterTone = value;
+                                              });
+                                            } else {
+                                              _ghostWriterTone = value;
+                                            }
+                                            await _persistGhostWriterPreferences(
+                                              tone: value,
+                                            );
+                                          },
+                                        ),
+                                        const SizedBox(height: 12),
+                                        DropdownButtonFormField<String>(
+                                          value: _ghostWriterEditingStyle,
+                                          decoration: const InputDecoration(
+                                            labelText: 'Estilo de edición',
+                                            border: OutlineInputBorder(),
+                                          ),
+                                          items: const [
+                                            DropdownMenuItem(
+                                              value: 'faithful',
+                                              child:
+                                                  Text('Muy fiel al original'),
+                                            ),
+                                            DropdownMenuItem(
+                                              value: 'balanced',
+                                              child: Text('Equilibrado'),
+                                            ),
+                                            DropdownMenuItem(
+                                              value: 'polished',
+                                              child: Text('Pulido y elegante'),
+                                            ),
+                                          ],
+                                          onChanged: (value) async {
+                                            if (value == null) return;
+                                            setDialogState(
+                                              () => _ghostWriterEditingStyle =
+                                                  value,
+                                            );
+                                            if (mounted) {
+                                              setState(() {
+                                                _ghostWriterEditingStyle =
+                                                    value;
+                                              });
+                                            } else {
+                                              _ghostWriterEditingStyle = value;
+                                            }
+                                            await _persistGhostWriterPreferences(
+                                              editingStyle: value,
+                                            );
+                                          },
+                                        ),
+                                        const SizedBox(height: 12),
+                                        DropdownButtonFormField<String>(
+                                          value: _ghostWriterPerspective,
+                                          decoration: const InputDecoration(
+                                            labelText: 'Perspectiva narrativa',
+                                            border: OutlineInputBorder(),
+                                          ),
+                                          items: const [
+                                            DropdownMenuItem(
+                                              value: 'first',
+                                              child: Text('Primera persona'),
+                                            ),
+                                            DropdownMenuItem(
+                                              value: 'third',
+                                              child: Text('Tercera persona'),
+                                            ),
+                                          ],
+                                          onChanged: (value) async {
+                                            if (value == null) return;
+                                            setDialogState(
+                                              () => _ghostWriterPerspective =
+                                                  value,
+                                            );
+                                            if (mounted) {
+                                              setState(() {
+                                                _ghostWriterPerspective = value;
+                                              });
+                                            } else {
+                                              _ghostWriterPerspective = value;
+                                            }
+                                            await _persistGhostWriterPreferences(
+                                              perspective: value,
+                                            );
+                                          },
+                                        ),
+                                        const SizedBox(height: 12),
+                                        SwitchListTile(
+                                          contentPadding: EdgeInsets.zero,
+                                          title: const Text(
+                                              'Evitar palabras fuertes'),
+                                          subtitle: const Text(
+                                              'Mantiene el lenguaje amable y adecuado para todas las edades.'),
+                                          value: _ghostWriterAvoidProfanity,
+                                          onChanged: (value) async {
+                                            setDialogState(
+                                              () => _ghostWriterAvoidProfanity =
+                                                  value,
+                                            );
+                                            if (mounted) {
+                                              setState(() {
+                                                _ghostWriterAvoidProfanity =
+                                                    value;
+                                              });
+                                            } else {
+                                              _ghostWriterAvoidProfanity =
+                                                  value;
+                                            }
+                                            await _persistGhostWriterPreferences(
+                                              avoidProfanity: value,
+                                            );
+                                          },
+                                        ),
+                                        const SizedBox(height: 12),
+                                        TextField(
+                                          controller: instructionsController,
+                                          maxLines: 3,
+                                          decoration: const InputDecoration(
+                                            labelText:
+                                                'Instrucciones adicionales',
+                                            hintText:
+                                                'Ej. Prefiere párrafos cortos, destaca nombres de familiares...',
+                                            border: OutlineInputBorder(),
+                                          ),
+                                          onChanged: (value) {
+                                            setDialogState(
+                                              () =>
+                                                  _ghostWriterExtraInstructions =
+                                                      value,
+                                            );
+                                            if (mounted) {
+                                              setState(() {
+                                                _ghostWriterExtraInstructions =
+                                                    value;
+                                              });
+                                            } else {
+                                              _ghostWriterExtraInstructions =
+                                                  value;
+                                            }
+                                            _scheduleGhostWriterInstructionsUpdate(
+                                              value,
+                                            );
+                                          },
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          const Divider(),
+                          const SizedBox(height: 16),
+                          Wrap(
+                            spacing: 12,
+                            runSpacing: 8,
+                            alignment: WrapAlignment.end,
+                            children: [
+                              TextButton(
+                                onPressed: () => Navigator.of(context).pop(
+                                  _GhostWriterResultAction.cancel,
+                                ),
+                                child: const Text('Cancelar'),
+                              ),
+                              OutlinedButton.icon(
+                                onPressed: () => Navigator.of(context).pop(
+                                  _GhostWriterResultAction.retry,
+                                ),
+                                icon: const Icon(Icons.refresh),
+                                label: const Text('Volver a intentar'),
+                              ),
+                              FilledButton.icon(
+                                onPressed: () => Navigator.of(context).pop(
+                                  _GhostWriterResultAction.apply,
+                                ),
+                                icon: const Icon(Icons.check_circle),
+                                label: const Text('Aceptar cambios'),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      );
+    } finally {
+      instructionsController.dispose();
+    }
+  }
+
+  Future<void> _persistGhostWriterPreferences({
+    String? tone,
+    String? perspective,
+    String? editingStyle,
+    bool? avoidProfanity,
+    String? extraInstructions,
+  }) async {
+    try {
+      await UserService.updateAiPreferences(
+        writingTone: tone,
+        narrativePerson: perspective,
+        editingStyle: editingStyle,
+        noBadWords: avoidProfanity,
+        extraInstructions: extraInstructions,
       );
     } catch (e) {
-      Navigator.pop(context); // Close loading dialog
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error en Ghost Writer: $e')),
+        SnackBar(
+          content:
+              Text('No se pudieron guardar los ajustes de Ghost Writer: $e'),
+        ),
       );
     }
+  }
+
+  void _scheduleGhostWriterInstructionsUpdate(String value) {
+    _ghostWriterInstructionsDebounce?.cancel();
+    _ghostWriterInstructionsDebounce = Timer(
+      const Duration(milliseconds: 700),
+      () => _persistGhostWriterPreferences(
+        extraInstructions: value.trim(),
+      ),
+    );
+  }
+
+  String _ghostWriterToneLabel(String tone) {
+    switch (tone) {
+      case 'formal':
+        return 'Formal';
+      case 'neutral':
+        return 'Neutro';
+      case 'warm':
+      default:
+        return 'Cálido';
+    }
+  }
+
+  String _ghostWriterEditingStyleLabel(String style) {
+    switch (style) {
+      case 'faithful':
+        return 'Muy fiel';
+      case 'polished':
+        return 'Pulido';
+      case 'balanced':
+      default:
+        return 'Equilibrado';
+    }
+  }
+
+  String _ghostWriterPerspectiveLabel(String perspective) {
+    switch (perspective) {
+      case 'third':
+        return 'Tercera persona';
+      case 'first':
+      default:
+        return 'Primera persona';
+    }
+  }
+
+  String _ghostWriterLanguageLabel(String code) {
+    switch (code) {
+      case 'en':
+        return 'Inglés';
+      case 'pt':
+        return 'Portugués';
+      default:
+        return 'Español';
+    }
+  }
+
+  String _ghostWriterSummaryLabel() {
+    final parts = [
+      _ghostWriterToneLabel(_ghostWriterTone),
+      _ghostWriterEditingStyleLabel(_ghostWriterEditingStyle),
+      _ghostWriterPerspectiveLabel(_ghostWriterPerspective),
+      _ghostWriterLanguageLabel(_ghostWriterLanguage),
+    ];
+    if (_ghostWriterAvoidProfanity) {
+      parts.add('Lenguaje amable');
+    }
+    return parts.join(' · ');
   }
 
   void _showOriginalsDialog() {

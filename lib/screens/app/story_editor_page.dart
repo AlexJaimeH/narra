@@ -4167,7 +4167,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                                 children: [
                                   Padding(
                                     padding: const EdgeInsets.fromLTRB(
-                                        16, 0, 16, 16),
+                                        16, 8, 16, 16),
                                     child: Column(
                                       children: [
                                         DropdownButtonFormField<String>(

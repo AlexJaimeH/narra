@@ -5,6 +5,20 @@ class OpenAIService {
   // Route proxied by Cloudflare Pages Functions. No client-side key usage.
   static const String _proxyEndpoint = '/api/openai';
 
+  static Map<String, dynamic> _jsonSchemaFormat({
+    required String name,
+    required Map<String, dynamic> schema,
+  }) {
+    return {
+      'type': 'json_schema',
+      'json_schema': {
+        'name': name,
+        'schema': schema,
+        'strict': true,
+      },
+    };
+  }
+
   static Future<Map<String, dynamic>> _proxyChat({
     required List<Map<String, dynamic>> messages,
     String model = 'gpt-5-mini',
@@ -21,11 +35,27 @@ class OpenAIService {
         'temperature': temperature,
       }),
     );
-    if (response.statusCode >= 200 && response.statusCode < 300) {
-      return jsonDecode(utf8.decode(response.bodyBytes))
-          as Map<String, dynamic>;
+
+    final bodyText = utf8.decode(response.bodyBytes);
+    Map<String, dynamic>? decodedBody;
+    try {
+      final parsed = jsonDecode(bodyText);
+      if (parsed is Map<String, dynamic>) {
+        decodedBody = parsed;
+      }
+    } catch (_) {
+      // Ignore JSON parsing errors, handled below.
     }
-    throw Exception('OpenAI proxy error: ${response.statusCode}');
+
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      if (decodedBody != null) {
+        return decodedBody!;
+      }
+      throw Exception('OpenAI proxy error: respuesta inesperada del proxy');
+    }
+
+    final errorDetail = decodedBody?['error'] ?? bodyText;
+    throw Exception('OpenAI proxy error: ${response.statusCode} - $errorDetail');
   }
 
   // Generar preguntas/pistas para ayudar a escribir historias
@@ -91,7 +121,22 @@ Responde SOLO con un objeto JSON con esta estructura:
             'content': prompt,
           },
         ],
-        responseFormat: {'type': 'json_object'},
+        responseFormat: _jsonSchemaFormat(
+          name: 'narra_story_prompts',
+          schema: {
+            'type': 'object',
+            'additionalProperties': false,
+            'required': ['prompts'],
+            'properties': {
+              'prompts': {
+                'type': 'array',
+                'items': {'type': 'string'},
+                'minItems': count,
+                'maxItems': count,
+              },
+            },
+          },
+        ),
         temperature: 0.7,
       );
       final content = jsonDecode(data['choices'][0]['message']['content']);
@@ -214,7 +259,31 @@ Responde únicamente con el objeto JSON y nada más.
             'content': prompt,
           },
         ],
-        responseFormat: {'type': 'json_object'},
+        responseFormat: _jsonSchemaFormat(
+          name: 'narra_ghost_writer_polish',
+          schema: {
+            'type': 'object',
+            'additionalProperties': false,
+            'required': [
+              'polished_text',
+              'changes_summary',
+              'suggestions',
+              'tone_analysis',
+              'word_count',
+            ],
+            'properties': {
+              'polished_text': {'type': 'string'},
+              'changes_summary': {'type': 'string'},
+              'suggestions': {
+                'type': 'array',
+                'items': {'type': 'string'},
+                'maxItems': 3,
+              },
+              'tone_analysis': {'type': 'string'},
+              'word_count': {'type': 'integer', 'minimum': 0},
+            },
+          },
+        ),
         temperature: 0.55,
       );
       final content = jsonDecode(data['choices'][0]['message']['content']);
@@ -350,7 +419,31 @@ OUTPUT FORMAT: $outputFormat
             'content': prompt,
           },
         ],
-        responseFormat: outputFormat == 'json' ? {'type': 'json_object'} : null,
+        responseFormat: outputFormat == 'json'
+            ? _jsonSchemaFormat(
+                name: 'narra_ghost_writer_advanced',
+                schema: {
+                  'type': 'object',
+                  'additionalProperties': false,
+                  'required': [
+                    'polished_text',
+                    'changes_summary',
+                    'notes_for_author',
+                  ],
+                  'properties': {
+                    'polished_text': {'type': 'string'},
+                    'changes_summary': {
+                      'type': 'array',
+                      'items': {'type': 'string'},
+                    },
+                    'notes_for_author': {
+                      'type': 'array',
+                      'items': {'type': 'string'},
+                    },
+                  },
+                },
+              )
+            : null,
         temperature: 0.7,
       );
 

@@ -34,6 +34,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   late TabController _tabController;
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _contentController = TextEditingController();
+  final ScrollController _editorScrollController = ScrollController();
   final ScrollController _transcriptScrollController = ScrollController();
 
   bool _isRecording = false;
@@ -140,6 +141,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     _tabController.dispose();
     _titleController.dispose();
     _contentController.dispose();
+    _editorScrollController.dispose();
     _transcriptScrollController.dispose();
     super.dispose();
   }
@@ -283,14 +285,16 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                     final tabContent = _buildActiveTabContent();
 
                     return Scrollbar(
+                      controller: _editorScrollController,
                       child: CustomScrollView(
+                        controller: _editorScrollController,
+                        physics: const ClampingScrollPhysics(),
                         slivers: [
                           const SliverToBoxAdapter(
                             child: SizedBox(height: 4),
                           ),
                           SliverPadding(
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: 12),
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
                             sliver: SliverToBoxAdapter(
                               child: _EditorHeader(
                                 isSaving: _isSaving,
@@ -305,8 +309,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                           ),
                           SliverToBoxAdapter(
                             child: Padding(
-                              padding:
-                                  const EdgeInsets.only(bottom: 24),
+                              padding: const EdgeInsets.only(bottom: 24),
                               child: tabContent,
                             ),
                           ),

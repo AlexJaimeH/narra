@@ -5,6 +5,20 @@ class OpenAIService {
   // Route proxied by Cloudflare Pages Functions. No client-side key usage.
   static const String _proxyEndpoint = '/api/openai';
 
+  static Map<String, dynamic> _jsonSchemaFormat({
+    required String name,
+    required Map<String, dynamic> schema,
+  }) {
+    return {
+      'type': 'json_schema',
+      'json_schema': {
+        'name': name,
+        'schema': schema,
+        'strict': true,
+      },
+    };
+  }
+
   static Future<Map<String, dynamic>> _proxyChat({
     required List<Map<String, dynamic>> messages,
     String model = 'gpt-5-mini',
@@ -21,11 +35,27 @@ class OpenAIService {
         'temperature': temperature,
       }),
     );
-    if (response.statusCode >= 200 && response.statusCode < 300) {
-      return jsonDecode(utf8.decode(response.bodyBytes))
-          as Map<String, dynamic>;
+
+    final bodyText = utf8.decode(response.bodyBytes);
+    Map<String, dynamic>? decodedBody;
+    try {
+      final parsed = jsonDecode(bodyText);
+      if (parsed is Map<String, dynamic>) {
+        decodedBody = parsed;
+      }
+    } catch (_) {
+      // Ignore JSON parsing errors, handled below.
     }
-    throw Exception('OpenAI proxy error: ${response.statusCode}');
+
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      if (decodedBody != null) {
+        return decodedBody!;
+      }
+      throw Exception('OpenAI proxy error: respuesta inesperada del proxy');
+    }
+
+    final errorDetail = decodedBody?['error'] ?? bodyText;
+    throw Exception('OpenAI proxy error: ${response.statusCode} - $errorDetail');
   }
 
   // Generar preguntas/pistas para ayudar a escribir historias
@@ -91,7 +121,22 @@ Responde SOLO con un objeto JSON con esta estructura:
             'content': prompt,
           },
         ],
-        responseFormat: {'type': 'json_object'},
+        responseFormat: _jsonSchemaFormat(
+          name: 'narra_story_prompts',
+          schema: {
+            'type': 'object',
+            'additionalProperties': false,
+            'required': ['prompts'],
+            'properties': {
+              'prompts': {
+                'type': 'array',
+                'items': {'type': 'string'},
+                'minItems': count,
+                'maxItems': count,
+              },
+            },
+          },
+        ),
         temperature: 0.7,
       );
       final content = jsonDecode(data['choices'][0]['message']['content']);
@@ -111,73 +156,95 @@ Responde SOLO con un objeto JSON con esta estructura:
   static Future<Map<String, dynamic>> improveStoryText({
     required String originalText,
     String title = '',
-    String tone = 'nostálgico',
-    String fidelity = 'high',
-    String language = 'español',
-    String audience = 'familia',
-    String perspective = 'primera persona',
-    String privacy = 'privado',
-    bool expandContent = false,
-    bool preserveStructure = true,
+    String tone = 'warm',
+    String fidelity = 'balanced',
+    String language = 'es',
+    String perspective = 'first',
+    bool avoidProfanity = false,
+    String extraInstructions = '',
   }) async {
-    final toneMap = {
-      'nostálgico':
-          'nostalgic and warm, evoking sweet memories and gentle melancholy',
-      'alegre':
-          'joyful and uplifting, highlighting positive moments and celebrations',
-      'emotivo':
-          'deeply emotional and touching, bringing out heartfelt feelings',
-      'reflexivo': 'thoughtful and contemplative, encouraging introspection',
-      'divertido':
-          'light-hearted and amusing, finding gentle humor in life\'s moments'
+    final toneDescriptions = {
+      'formal':
+          'un tono formal, elegante y cuidado, propio de una obra literaria',
+      'neutral': 'un tono claro y directo, objetivo pero cercano',
+      'warm':
+          'un tono cálido, humano y emotivo, ideal para memorias familiares',
     };
 
-    final fidelityMap = {
-      'high':
-          'Maintain extremely high fidelity to original facts and events. Make minimal changes.',
-      'medium':
-          'Preserve core facts while allowing moderate enhancement and expansion.',
-      'creative':
-          'Allow creative interpretation while keeping the essence of the story.'
+    final fidelityDescriptions = {
+      'faithful':
+          'Realiza solo correcciones imprescindibles y conserva al máximo la redacción original.',
+      'balanced':
+          'Mejora claridad, ritmo y emoción respetando por completo los hechos y la voz del autor.',
+      'polished':
+          'Pulir estilo, ritmo y riqueza expresiva para lograr un acabado editorial sin alterar los hechos.',
     };
+
+    final perspectiveDescriptions = {
+      'first': 'primera persona (yo/nosotros)',
+      'third': 'tercera persona (él/ella/ellos)',
+    };
+
+    final languageNames = {
+      'es': 'español',
+      'en': 'inglés',
+      'pt': 'portugués',
+    };
+
+    final languageLabel = languageNames[language] ?? 'español';
+    final editingGuidance =
+        fidelityDescriptions[fidelity] ?? fidelityDescriptions['balanced']!;
+    final voiceGuidance = perspectiveDescriptions[perspective] ??
+        perspectiveDescriptions['first']!;
+    final toneGuidance = toneDescriptions[tone] ?? toneDescriptions['warm']!;
+    final sanitizedInstructions = extraInstructions.trim();
+    final additionalInstructions = <String>[
+      if (avoidProfanity)
+        '- Evita palabrotas o expresiones agresivas; usa un lenguaje amable y respetuoso.',
+      if (sanitizedInstructions.isNotEmpty)
+        '- Preferencias del autor: $sanitizedInstructions',
+    ];
 
     final prompt = '''
-You are "Narra Ghost Writer," a careful editorial assistant. 
-Goal: polish the user's story for clarity, flow, and emotional impact while respecting their voice and memories.
+Actúa como "Narra Ghost Writer", editor senior de memorias autobiográficas reales.
+Tu misión es pulir el texto para que pueda publicarse en un libro manteniendo la verdad y la voz auténtica del autor.
 
-## STORY TO IMPROVE:
-Title: "$title"
-Content: "$originalText"
+## Parámetros clave
+- Título de referencia: "$title"
+- Tono deseado: $toneGuidance
+- Estilo de edición: $editingGuidance
+- Voz narrativa: $voiceGuidance
+- Idioma de entrega: $languageLabel
+${additionalInstructions.isNotEmpty ? additionalInstructions.join('\n') + '\n' : ''}- Respeta absolutamente los hechos, nombres, fechas y lugares aportados.
 
-## IMPROVEMENT PARAMETERS:
-- Tone: ${toneMap[tone] ?? toneMap['nostálgico']}
-- Fidelity Level: ${fidelityMap[fidelity] ?? fidelityMap['high']}
-- Target Language: $language
-- Intended Audience: $audience  
-- Narrative Perspective: $perspective
-- Privacy Setting: $privacy
-- Expand Content: ${expandContent ? 'Yes' : 'No'}
-- Preserve Structure: ${preserveStructure ? 'Yes' : 'No'}
+## Texto original
+"""$originalText"""
 
-## INSTRUCTIONS:
-1. PRESERVE AUTHENTICITY: Never invent facts, people, or events not in the original
-2. ENHANCE READABILITY: Improve sentence flow, transitions, and paragraph structure
-3. ADD SENSORY DETAILS: Where appropriate, enhance with details that feel natural to the story
-4. MAINTAIN VOICE: Keep the personal, authentic voice of the storyteller
-5. RESPECT MEMORIES: These are precious personal memories - treat them with care and respect
-6. IMPROVE EMOTIONAL IMPACT: Help the story connect better with readers while staying truthful
+## Tareas
+1. Corrige ortografía, gramática, puntuación y acentos.
+2. Mejora la fluidez, las transiciones y la estructura de párrafos para lectura editorial.
+3. Refuerza la emoción y los detalles sensoriales solo cuando surjan naturalmente del texto original.
+4. Evita repeticiones innecesarias y frases redundantes.
+5. Mantén el ritmo y la extensión general; no inventes ni alteres hechos.
 
-## OUTPUT REQUIREMENTS:
-Return ONLY a JSON object with this exact structure:
+## Formato de salida
+Devuelve EXCLUSIVAMENTE un JSON válido con la forma:
 {
-  "polished_text": "[improved version of the story]",
-  "changes_summary": "[brief summary of what was improved]",
-  "suggestions": ["suggestion1", "suggestion2", "suggestion3"],
-  "tone_analysis": "[how the tone was applied]",
-  "word_count": [number of words in polished text]
+  "polished_text": "...",
+  "changes_summary": "...",
+  "suggestions": ["...", "..."],
+  "tone_analysis": "...",
+  "word_count": 123
 }
 
-Write in $language. Be respectful of this personal story.''';
+- "polished_text": versión final lista para reemplazar el borrador, escrita en $languageLabel.
+- "changes_summary": resumen breve (máx. 3 frases) de las mejoras aplicadas.
+- "suggestions": hasta 3 sugerencias concretas para continuar mejorando.
+- "tone_analysis": explica cómo aplicaste el tono solicitado.
+- "word_count": número de palabras del texto mejorado.
+
+Responde únicamente con el objeto JSON y nada más.
+''';
 
     try {
       final data = await _proxyChat(
@@ -185,32 +252,77 @@ Write in $language. Be respectful of this personal story.''';
           {
             'role': 'system',
             'content':
-                'Eres un ghost writer experto en memorias personales. Siempre responde con un objeto JSON válido.',
+                'Eres un editor literario experto en memorias personales. Siempre responde con un objeto JSON válido.',
           },
           {
             'role': 'user',
             'content': prompt,
           },
         ],
-        responseFormat: {'type': 'json_object'},
-        temperature: 0.7,
+        responseFormat: _jsonSchemaFormat(
+          name: 'narra_ghost_writer_polish',
+          schema: {
+            'type': 'object',
+            'additionalProperties': false,
+            'required': [
+              'polished_text',
+              'changes_summary',
+              'suggestions',
+              'tone_analysis',
+              'word_count',
+            ],
+            'properties': {
+              'polished_text': {'type': 'string'},
+              'changes_summary': {'type': 'string'},
+              'suggestions': {
+                'type': 'array',
+                'items': {'type': 'string'},
+                'maxItems': 3,
+              },
+              'tone_analysis': {'type': 'string'},
+              'word_count': {'type': 'integer', 'minimum': 0},
+            },
+          },
+        ),
+        temperature: 0.55,
       );
       final content = jsonDecode(data['choices'][0]['message']['content']);
+      final polishedText =
+          (content['polished_text'] as String?)?.trim() ?? originalText;
+      final summary = (content['changes_summary'] as String?)?.trim() ??
+          'Sin cambios reportados';
+      final toneAnalysis = (content['tone_analysis'] as String?)?.trim() ??
+          'No se proporcionó análisis de tono';
+      final suggestionsList = content['suggestions'] is List
+          ? List<String>.from(content['suggestions'])
+          : <String>[];
+      final wordCountValue = content['word_count'];
+      final wordCount = wordCountValue is num
+          ? wordCountValue.toInt()
+          : polishedText
+              .split(RegExp(r'\s+'))
+              .where((word) => word.isNotEmpty)
+              .length;
+
       return {
-        'polished_text': content['polished_text'] ?? originalText,
-        'changes_summary': content['changes_summary'] ?? 'No changes made',
-        'suggestions': List<String>.from(content['suggestions'] ?? []),
-        'tone_analysis': content['tone_analysis'] ?? 'No tone analysis',
-        'word_count': content['word_count'] ?? originalText.split(' ').length,
+        'polished_text': polishedText,
+        'changes_summary': summary,
+        'suggestions': suggestionsList,
+        'tone_analysis': toneAnalysis,
+        'word_count': wordCount,
       };
     } catch (e) {
       print('Error improving story text: $e');
+      final fallbackWordCount = originalText
+          .split(RegExp(r'\s+'))
+          .where((word) => word.isNotEmpty)
+          .length;
       return {
         'polished_text': originalText,
-        'changes_summary': 'Error occurred during processing',
+        'changes_summary': 'No se pudo completar la mejora automáticamente.',
         'suggestions': <String>[],
-        'tone_analysis': 'Unable to analyze tone',
-        'word_count': originalText.split(' ').length,
+        'tone_analysis': 'No fue posible analizar el tono solicitado.',
+        'word_count': fallbackWordCount,
       };
     }
   }
@@ -307,7 +419,31 @@ OUTPUT FORMAT: $outputFormat
             'content': prompt,
           },
         ],
-        responseFormat: outputFormat == 'json' ? {'type': 'json_object'} : null,
+        responseFormat: outputFormat == 'json'
+            ? _jsonSchemaFormat(
+                name: 'narra_ghost_writer_advanced',
+                schema: {
+                  'type': 'object',
+                  'additionalProperties': false,
+                  'required': [
+                    'polished_text',
+                    'changes_summary',
+                    'notes_for_author',
+                  ],
+                  'properties': {
+                    'polished_text': {'type': 'string'},
+                    'changes_summary': {
+                      'type': 'array',
+                      'items': {'type': 'string'},
+                    },
+                    'notes_for_author': {
+                      'type': 'array',
+                      'items': {'type': 'string'},
+                    },
+                  },
+                },
+              )
+            : null,
         temperature: 0.7,
       );
 

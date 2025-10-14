@@ -35,7 +35,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _contentController = TextEditingController();
   final ScrollController _transcriptScrollController = ScrollController();
-  final ScrollController _writingScrollController = ScrollController();
 
   bool _isRecording = false;
   VoiceRecorder? _recorder;
@@ -142,7 +141,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     _titleController.dispose();
     _contentController.dispose();
     _transcriptScrollController.dispose();
-    _writingScrollController.dispose();
     super.dispose();
   }
 
@@ -280,30 +278,40 @@ class _StoryEditorPageState extends State<StoryEditorPage>
             )
           : Scaffold(
               body: SafeArea(
-                child: Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
-                      child: _EditorHeader(
-                        isSaving: _isSaving,
-                        onSave: _saveDraft,
-                        controller: _tabController,
-                        isNewStory: widget.storyId == null,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final tabContent = _buildActiveTabContent();
+
+                    return Scrollbar(
+                      child: SingleChildScrollView(
+                        padding: EdgeInsets.zero,
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            minHeight: constraints.maxHeight,
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              const SizedBox(height: 4),
+                              Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 12),
+                                child: _EditorHeader(
+                                  isSaving: _isSaving,
+                                  onSave: _saveDraft,
+                                  controller: _tabController,
+                                  isNewStory: widget.storyId == null,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              tabContent,
+                              const SizedBox(height: 24),
+                            ],
+                          ),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 2),
-                    Expanded(
-                      child: TabBarView(
-                        controller: _tabController,
-                        children: [
-                          _buildWritingTab(),
-                          _buildPhotosTab(),
-                          _buildDatesTab(),
-                          _buildTagsTab(),
-                        ],
-                      ),
-                    ),
-                  ],
+                    );
+                  },
                 ),
               ),
               bottomNavigationBar: SafeArea(
@@ -323,6 +331,19 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     );
   }
 
+  Widget _buildActiveTabContent() {
+    switch (_tabController.index) {
+      case 1:
+        return _buildPhotosTab();
+      case 2:
+        return _buildDatesTab();
+      case 3:
+        return _buildTagsTab();
+      default:
+        return _buildWritingTab();
+    }
+  }
+
   Widget _buildWritingTab() {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
@@ -335,43 +356,17 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           horizontal: isCompact ? 16 : 22,
           vertical: isCompact ? 14 : 20,
         );
-        final topInset = isCompact ? 4.0 : 8.0;
-        final bottomInset = isCompact ? 18.0 : 22.0;
-        final mediaQueryData = MediaQuery.of(context);
         final bodyStyle = theme.textTheme.bodyLarge?.copyWith(
           height: 1.45,
         );
         final fontSize = bodyStyle?.fontSize ?? 16;
         final lineHeight = (bodyStyle?.height ?? 1.45) * fontSize;
         final minContentHeight = lineHeight * 10;
-        final padding = EdgeInsets.fromLTRB(
-          12,
-          topInset,
-          12,
-          bottomInset,
-        );
-
-        final viewportHeight = constraints.hasBoundedHeight
-            ? constraints.maxHeight
-            : (mediaQueryData.size.height -
-                mediaQueryData.padding.vertical -
-                mediaQueryData.viewInsets.bottom);
-        final contentViewportHeight = viewportHeight.isFinite
-            ? math.max(0.0, viewportHeight - padding.vertical)
-            : 0.0;
-        final reservedHeight = isCompact ? 240.0 : 300.0;
-        final availableForContent = contentViewportHeight > 0
-            ? contentViewportHeight - reservedHeight
-            : null;
-        final maxContentHeight = availableForContent != null
-            ? math.max(minContentHeight, availableForContent)
-            : minContentHeight;
 
         Widget buildContentField() {
           return ConstrainedBox(
             constraints: BoxConstraints(
               minHeight: minContentHeight,
-              maxHeight: maxContentHeight,
             ),
             child: TextField(
               controller: _contentController,
@@ -576,50 +571,40 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           }
         }
 
-        final editorCard = DecoratedBox(
-          decoration: BoxDecoration(
-            color: colorScheme.surface,
-            borderRadius: BorderRadius.circular(28),
+        return Padding(
+          padding: EdgeInsets.fromLTRB(
+            12,
+            isCompact ? 0 : 4,
+            12,
+            0,
           ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Container(
-                width: 5,
-                decoration: BoxDecoration(
-                  color: colorScheme.primary.withValues(alpha: 0.7),
-                  borderRadius: const BorderRadius.horizontal(
-                    left: Radius.circular(28),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: colorScheme.surface,
+              borderRadius: BorderRadius.circular(28),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(
+                  width: 5,
+                  decoration: BoxDecoration(
+                    color: colorScheme.primary.withValues(alpha: 0.7),
+                    borderRadius: const BorderRadius.horizontal(
+                      left: Radius.circular(28),
+                    ),
                   ),
                 ),
-              ),
-              Expanded(
-                child: Padding(
-                  padding: cardPadding,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: editorChildren,
+                Expanded(
+                  child: Padding(
+                    padding: cardPadding,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: editorChildren,
+                    ),
                   ),
                 ),
-              ),
-            ],
-          ),
-        );
-
-        return Scrollbar(
-          controller: _writingScrollController,
-          child: SingleChildScrollView(
-            controller: _writingScrollController,
-            physics: const ClampingScrollPhysics(),
-            padding: padding,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                minHeight: contentViewportHeight,
-              ),
-              child: Align(
-                alignment: Alignment.topCenter,
-                child: editorCard,
-              ),
+              ],
             ),
           ),
         );
@@ -691,34 +676,33 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                     ),
                   ),
                   const SizedBox(height: 20),
-                  Expanded(
-                    child: _photos.isEmpty
-                        ? _EmptyStateCard(
-                            icon: Icons.photo_library_outlined,
-                            title: 'No hay fotos aún',
-                            message:
-                                'Añade hasta 8 fotos para ilustrar tu historia',
-                            actionLabel: 'Añadir primera foto',
-                            onAction: _addPhoto,
-                          )
-                        : ListView.separated(
-                            itemCount: _photos.length,
-                            separatorBuilder: (_, __) =>
-                                const SizedBox(height: 14),
-                            itemBuilder: (context, index) {
-                              final photo = _photos[index];
-                              return PhotoCard(
-                                key: ValueKey(photo['id']),
-                                photo: photo,
-                                index: index,
-                                onEdit: () => _editPhoto(index),
-                                onDelete: () => _deletePhoto(index),
-                                onInsertIntoText: () =>
-                                    _insertPhotoIntoText(index),
-                              );
-                            },
+                  if (_photos.isEmpty)
+                    _EmptyStateCard(
+                      icon: Icons.photo_library_outlined,
+                      title: 'No hay fotos aún',
+                      message: 'Añade hasta 8 fotos para ilustrar tu historia',
+                      actionLabel: 'Añadir primera foto',
+                      onAction: _addPhoto,
+                    )
+                  else
+                    Column(
+                      children: [
+                        for (var index = 0;
+                            index < _photos.length;
+                            index++) ...[
+                          PhotoCard(
+                            key: ValueKey(_photos[index]['id']),
+                            photo: _photos[index],
+                            index: index,
+                            onEdit: () => _editPhoto(index),
+                            onDelete: () => _deletePhoto(index),
+                            onInsertIntoText: () => _insertPhotoIntoText(index),
                           ),
-                  ),
+                          if (index != _photos.length - 1)
+                            const SizedBox(height: 14),
+                        ],
+                      ],
+                    ),
                 ],
               ),
             ),
@@ -747,122 +731,118 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         );
         final cardRadius = BorderRadius.circular(24);
 
-        return ListView(
+        return Padding(
           padding: outerPadding,
-          children: [
-            DecoratedBox(
-              decoration: BoxDecoration(
-                color: colorScheme.surface,
-                borderRadius: BorderRadius.circular(28),
-              ),
-              child: Padding(
-                padding: innerPadding,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Fechas de la historia',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: colorScheme.surface,
+              borderRadius: BorderRadius.circular(28),
+            ),
+            child: Padding(
+              padding: innerPadding,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Fechas de la historia',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Define cuándo sucedió tu recuerdo para darle contexto.',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Define cuándo sucedió tu recuerdo para darle contexto.',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
                     ),
-                    const SizedBox(height: 20),
-                    DecoratedBox(
-                      decoration: BoxDecoration(
-                        borderRadius: cardRadius,
-                        color: colorScheme.surfaceContainerHigh
-                            .withValues(alpha: 0.55),
-                      ),
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: isCompact ? 16 : 20,
-                          vertical: isCompact ? 16 : 20,
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Precisión de fechas',
-                              style: theme.textTheme.titleSmall?.copyWith(
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            SegmentedButton<String>(
-                              segments: const [
-                                ButtonSegment(value: 'day', label: Text('Día')),
-                                ButtonSegment(
-                                    value: 'month', label: Text('Mes')),
-                                ButtonSegment(
-                                    value: 'year', label: Text('Año')),
-                              ],
-                              selected: {_datesPrecision},
-                              onSelectionChanged: (selection) {
-                                setState(() {
-                                  _datesPrecision = selection.first;
-                                });
-                              },
-                              style: ButtonStyle(
-                                shape: WidgetStateProperty.all(
-                                  const StadiumBorder(),
-                                ),
-                                padding: WidgetStateProperty.all(
-                                  const EdgeInsets.symmetric(
-                                    horizontal: 14,
-                                    vertical: 10,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                  ),
+                  const SizedBox(height: 20),
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: cardRadius,
+                      color: colorScheme.surfaceContainerHigh
+                          .withValues(alpha: 0.55),
                     ),
-                    const SizedBox(height: 18),
-                    DecoratedBox(
-                      decoration: BoxDecoration(
-                        borderRadius: cardRadius,
-                        color: colorScheme.surfaceContainerHigh
-                            .withValues(alpha: 0.55),
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: isCompact ? 16 : 20,
+                        vertical: isCompact ? 16 : 20,
                       ),
                       child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _DateTile(
-                            icon: Icons.event,
-                            title: 'Fecha de inicio',
-                            subtitle: _startDate != null
-                                ? _formatDate(_startDate!, _datesPrecision)
-                                : 'No especificada',
-                            onTap: () => _selectDate(context, true),
+                          Text(
+                            'Precisión de fechas',
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
-                          Divider(
-                            height: 1,
-                            color: colorScheme.onSurfaceVariant
-                                .withValues(alpha: 0.15),
-                          ),
-                          _DateTile(
-                            icon: Icons.event_busy,
-                            title: 'Fecha de fin (opcional)',
-                            subtitle: _endDate != null
-                                ? _formatDate(_endDate!, _datesPrecision)
-                                : 'No especificada',
-                            onTap: () => _selectDate(context, false),
+                          const SizedBox(height: 12),
+                          SegmentedButton<String>(
+                            segments: const [
+                              ButtonSegment(value: 'day', label: Text('Día')),
+                              ButtonSegment(value: 'month', label: Text('Mes')),
+                              ButtonSegment(value: 'year', label: Text('Año')),
+                            ],
+                            selected: {_datesPrecision},
+                            onSelectionChanged: (selection) {
+                              setState(() {
+                                _datesPrecision = selection.first;
+                              });
+                            },
+                            style: ButtonStyle(
+                              shape: WidgetStateProperty.all(
+                                const StadiumBorder(),
+                              ),
+                              padding: WidgetStateProperty.all(
+                                const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 10,
+                                ),
+                              ),
+                            ),
                           ),
                         ],
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 18),
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: cardRadius,
+                      color: colorScheme.surfaceContainerHigh
+                          .withValues(alpha: 0.55),
+                    ),
+                    child: Column(
+                      children: [
+                        _DateTile(
+                          icon: Icons.event,
+                          title: 'Fecha de inicio',
+                          subtitle: _startDate != null
+                              ? _formatDate(_startDate!, _datesPrecision)
+                              : 'No especificada',
+                          onTap: () => _selectDate(context, true),
+                        ),
+                        Divider(
+                          height: 1,
+                          color: colorScheme.onSurfaceVariant
+                              .withValues(alpha: 0.15),
+                        ),
+                        _DateTile(
+                          icon: Icons.event_busy,
+                          title: 'Fecha de fin (opcional)',
+                          subtitle: _endDate != null
+                              ? _formatDate(_endDate!, _datesPrecision)
+                              : 'No especificada',
+                          onTap: () => _selectDate(context, false),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
+          ),
         );
       },
     );
@@ -949,27 +929,22 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                     ),
                   ),
                   const SizedBox(height: 10),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      child: Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: _availableTags
-                            .where((tag) => !_selectedTags.contains(tag))
-                            .map(
-                              (tag) => ActionChip(
-                                label: Text(tag),
-                                onPressed: () => _toggleTag(tag),
-                                labelStyle:
-                                    theme.textTheme.labelLarge?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                ),
-                                shape: const StadiumBorder(),
-                              ),
-                            )
-                            .toList(),
-                      ),
-                    ),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _availableTags
+                        .where((tag) => !_selectedTags.contains(tag))
+                        .map(
+                          (tag) => ActionChip(
+                            label: Text(tag),
+                            onPressed: () => _toggleTag(tag),
+                            labelStyle: theme.textTheme.labelLarge?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                            shape: const StadiumBorder(),
+                          ),
+                        )
+                        .toList(),
                   ),
                 ],
               ),

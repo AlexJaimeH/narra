@@ -283,32 +283,38 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                     final tabContent = _buildActiveTabContent();
 
                     return Scrollbar(
-                      child: SingleChildScrollView(
-                        padding: EdgeInsets.zero,
-                        child: ConstrainedBox(
-                          constraints: BoxConstraints(
-                            minHeight: constraints.maxHeight,
+                      child: CustomScrollView(
+                        slivers: [
+                          const SliverToBoxAdapter(
+                            child: SizedBox(height: 4),
                           ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              const SizedBox(height: 4),
-                              Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 12),
-                                child: _EditorHeader(
-                                  isSaving: _isSaving,
-                                  onSave: _saveDraft,
-                                  controller: _tabController,
-                                  isNewStory: widget.storyId == null,
-                                ),
+                          SliverPadding(
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 12),
+                            sliver: SliverToBoxAdapter(
+                              child: _EditorHeader(
+                                isSaving: _isSaving,
+                                onSave: _saveDraft,
+                                controller: _tabController,
+                                isNewStory: widget.storyId == null,
                               ),
-                              const SizedBox(height: 12),
-                              tabContent,
-                              const SizedBox(height: 24),
-                            ],
+                            ),
                           ),
-                        ),
+                          const SliverToBoxAdapter(
+                            child: SizedBox(height: 12),
+                          ),
+                          SliverToBoxAdapter(
+                            child: Padding(
+                              padding:
+                                  const EdgeInsets.only(bottom: 24),
+                              child: tabContent,
+                            ),
+                          ),
+                          const SliverFillRemaining(
+                            hasScrollBody: false,
+                            child: SizedBox.shrink(),
+                          ),
+                        ],
                       ),
                     );
                   },

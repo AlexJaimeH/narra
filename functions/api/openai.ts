@@ -24,7 +24,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     }
 
     const payload: Record<string, unknown> = {
-      model: typeof req.model === 'string' ? req.model : 'o4',
+      model: typeof req.model === 'string' ? req.model : 'gpt-5.1',
       messages: req.messages,
     };
 

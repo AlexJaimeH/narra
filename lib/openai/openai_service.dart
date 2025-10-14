@@ -19,9 +19,13 @@ class OpenAIService {
     };
   }
 
+  // October 2025: GPT-5.1 is OpenAI's flagship general-purpose editor model,
+  // offering the highest quality for long-form narrative polishing tasks.
+  static const String _bestNarrativeModel = 'gpt-5.1';
+
   static Future<Map<String, dynamic>> _proxyChat({
     required List<Map<String, dynamic>> messages,
-    String model = 'o4',
+    String model = _bestNarrativeModel,
     Map<String, dynamic>? responseFormat,
     double? temperature = 0.7,
   }) async {

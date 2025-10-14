@@ -21,9 +21,9 @@ class OpenAIService {
 
   static Future<Map<String, dynamic>> _proxyChat({
     required List<Map<String, dynamic>> messages,
-    String model = 'gpt-5-mini',
+    String model = 'o4',
     Map<String, dynamic>? responseFormat,
-    double temperature = 0.7,
+    double? temperature = 0.7,
   }) async {
     final response = await http.post(
       Uri.parse(_proxyEndpoint),
@@ -32,7 +32,7 @@ class OpenAIService {
         'model': model,
         'messages': messages,
         if (responseFormat != null) 'response_format': responseFormat,
-        'temperature': temperature,
+        if (temperature != null) 'temperature': temperature,
       }),
     );
 

@@ -1,5 +1,23 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+
+class OpenAIProxyException implements Exception {
+  OpenAIProxyException({
+    required this.statusCode,
+    required this.message,
+    this.code,
+    this.body,
+  });
+
+  final int statusCode;
+  final String message;
+  final String? code;
+  final Map<String, dynamic>? body;
+
+  @override
+  String toString() => 'OpenAI proxy error: $statusCode - $message';
+}
 
 class OpenAIService {
   // Route proxied by Cloudflare Pages Functions. No client-side key usage.
@@ -19,9 +37,11 @@ class OpenAIService {
     };
   }
 
-  // October 2025: GPT-5.1 is OpenAI's flagship general-purpose editor model,
-  // offering the highest quality for long-form narrative polishing tasks.
-  static const String _bestNarrativeModel = 'gpt-5.1';
+  // October 2025: According to https://platform.openai.com/docs/models#gpt-4-1,
+  // GPT-4.1 delivers the highest quality editing and long-form reasoning
+  // experience generally available for narrative refinement tasks.
+  static const String _bestNarrativeModel = 'gpt-4.1';
+  static const String _fallbackNarrativeModel = 'gpt-4.1-mini';
 
   static Future<Map<String, dynamic>> _proxyChat({
     required List<Map<String, dynamic>> messages,
@@ -29,37 +49,85 @@ class OpenAIService {
     Map<String, dynamic>? responseFormat,
     double? temperature = 0.7,
   }) async {
-    final response = await http.post(
-      Uri.parse(_proxyEndpoint),
-      headers: const {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'model': model,
-        'messages': messages,
-        if (responseFormat != null) 'response_format': responseFormat,
-        if (temperature != null) 'temperature': temperature,
-      }),
-    );
+    Future<Map<String, dynamic>> send(String modelId) async {
+      final response = await http.post(
+        Uri.parse(_proxyEndpoint),
+        headers: const {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'model': modelId,
+          'messages': messages,
+          if (responseFormat != null) 'response_format': responseFormat,
+          if (temperature != null) 'temperature': temperature,
+        }),
+      );
 
-    final bodyText = utf8.decode(response.bodyBytes);
-    Map<String, dynamic>? decodedBody;
-    try {
-      final parsed = jsonDecode(bodyText);
-      if (parsed is Map<String, dynamic>) {
-        decodedBody = parsed;
+      final bodyText = utf8.decode(response.bodyBytes);
+      Map<String, dynamic>? decodedBody;
+      try {
+        final parsed = jsonDecode(bodyText);
+        if (parsed is Map<String, dynamic>) {
+          decodedBody = parsed;
+        }
+      } catch (_) {
+        // Ignore JSON parsing errors, handled below.
       }
-    } catch (_) {
-      // Ignore JSON parsing errors, handled below.
-    }
 
-    if (response.statusCode >= 200 && response.statusCode < 300) {
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        if (decodedBody != null) {
+          return decodedBody;
+        }
+        throw OpenAIProxyException(
+          statusCode: response.statusCode,
+          message: 'respuesta inesperada del proxy',
+          body: decodedBody,
+        );
+      }
+
+      String errorMessage = bodyText;
+      String? errorCode;
+
       if (decodedBody != null) {
-        return decodedBody!;
+        final errorField = decodedBody['error'];
+        if (errorField is Map<String, dynamic>) {
+          errorMessage = errorField['message']?.toString() ?? errorMessage;
+          errorCode = errorField['code']?.toString();
+        } else if (errorField is String) {
+          errorMessage = errorField;
+        }
       }
-      throw Exception('OpenAI proxy error: respuesta inesperada del proxy');
+
+      throw OpenAIProxyException(
+        statusCode: response.statusCode,
+        message: errorMessage,
+        code: errorCode,
+        body: decodedBody,
+      );
     }
 
-    final errorDetail = decodedBody?['error'] ?? bodyText;
-    throw Exception('OpenAI proxy error: ${response.statusCode} - $errorDetail');
+    Future<Map<String, dynamic>> attempt(String modelId,
+        {bool allowFallback = true}) async {
+      try {
+        return await send(modelId);
+      } on OpenAIProxyException catch (error) {
+        final bool shouldTryFallback = allowFallback &&
+            modelId == _bestNarrativeModel &&
+            error.statusCode == 404 &&
+            (error.code == 'model_not_found' ||
+                error.message.contains('does not exist'));
+
+        if (shouldTryFallback) {
+          debugPrint(
+            'Falling back to $_fallbackNarrativeModel due to inaccessible $modelId: ${error.message}',
+          );
+          return attempt(_fallbackNarrativeModel, allowFallback: false);
+        }
+        rethrow;
+      }
+    }
+
+    final chosenModel = model;
+    final shouldAllowFallback = chosenModel == _bestNarrativeModel;
+    return attempt(chosenModel, allowFallback: shouldAllowFallback);
   }
 
   // Generar preguntas/pistas para ayudar a escribir historias

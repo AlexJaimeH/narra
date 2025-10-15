@@ -32,6 +32,102 @@ class StoryEditorPage extends StatefulWidget {
 
 enum _GhostWriterResultAction { apply, retry, cancel }
 
+class StoryCoachSection {
+  const StoryCoachSection({
+    required this.title,
+    required this.purpose,
+    required this.items,
+    this.description,
+  });
+
+  final String title;
+  final String purpose;
+  final List<String> items;
+  final String? description;
+
+  factory StoryCoachSection.fromJson(Map<String, dynamic> json) {
+    final rawItems = json['items'];
+    final items = rawItems is List
+        ? rawItems
+            .whereType<String>()
+            .map((item) => item.trim())
+            .where((item) => item.isNotEmpty)
+            .toList()
+        : <String>[];
+
+    return StoryCoachSection(
+      title: (json['title'] as String?)?.trim().isNotEmpty == true
+          ? json['title'] as String
+          : 'Ideas clave',
+      purpose: (json['purpose'] as String?)?.trim().isNotEmpty == true
+          ? json['purpose'] as String
+          : 'ideas',
+      description: (json['description'] as String?)?.trim(),
+      items: items,
+    );
+  }
+}
+
+class StoryCoachPlan {
+  const StoryCoachPlan({
+    required this.status,
+    required this.summary,
+    required this.sections,
+    required this.nextSteps,
+    required this.encouragement,
+    this.missingPieces = const [],
+    this.warmups = const [],
+  });
+
+  final String status;
+  final String summary;
+  final List<StoryCoachSection> sections;
+  final List<String> nextSteps;
+  final List<String> missingPieces;
+  final List<String> warmups;
+  final String encouragement;
+
+  bool get isComplete => status == 'complete';
+  bool get isStarting => status == 'starting_out';
+
+  factory StoryCoachPlan.fromJson(Map<String, dynamic> json) {
+    List<String> parseStringList(String key) {
+      final value = json[key];
+      if (value is List) {
+        return value
+            .whereType<String>()
+            .map((item) => item.trim())
+            .where((item) => item.isNotEmpty)
+            .toList();
+      }
+      return <String>[];
+    }
+
+    final sectionsRaw = json['sections'];
+    final sections = sectionsRaw is List
+        ? sectionsRaw
+            .whereType<Map<String, dynamic>>()
+            .map((section) => StoryCoachSection.fromJson(section))
+            .where((section) => section.items.isNotEmpty)
+            .toList()
+        : <StoryCoachSection>[];
+
+    return StoryCoachPlan(
+      status: (json['status'] as String?)?.trim().isNotEmpty == true
+          ? json['status'] as String
+          : 'in_progress',
+      summary: (json['summary'] as String?)?.trim() ??
+          'Aquí tienes ideas para seguir avanzando.',
+      sections: sections,
+      nextSteps: parseStringList('next_steps'),
+      encouragement: (json['encouragement'] as String?)?.trim() ??
+          'Continúa escribiendo a tu ritmo, lo estás haciendo muy bien.',
+      missingPieces: parseStringList('missing_pieces'),
+      warmups: parseStringList('warmups'),
+    );
+  }
+}
+
 class _StoryEditorPageState extends State<StoryEditorPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
@@ -83,8 +179,12 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   Story? _currentStory;
 
   List<String> _availableTags = [];
-  List<String> _aiSuggestions = [];
+  StoryCoachPlan? _storyCoachPlan;
   bool _showSuggestions = false;
+  bool _isSuggestionsLoading = false;
+  String? _suggestionsError;
+  DateTime? _suggestionsGeneratedAt;
+  String _lastSuggestionsSource = '';
 
   // Ghost Writer configuration (synced with user settings)
   String _ghostWriterTone = 'warm';
@@ -268,24 +368,540 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     }
   }
 
-  Future<void> _generateAISuggestions() async {
-    if (_titleController.text.isEmpty && _contentController.text.isEmpty)
+  Future<void> _generateAISuggestions({bool force = false}) async {
+    if (!mounted) return;
+
+    final sourceKey =
+        '${_titleController.text.trim()}|${_contentController.text.trim()}';
+
+    if (!force &&
+        _storyCoachPlan != null &&
+        _lastSuggestionsSource == sourceKey) {
       return;
+    }
+
+    if (_isSuggestionsLoading) return;
+
+    setState(() {
+      _isSuggestionsLoading = true;
+      _suggestionsError = null;
+    });
 
     try {
-      final suggestions = await OpenAIService.generateStoryPrompts(
-        currentTitle: _titleController.text,
-        currentContent: _contentController.text,
+      final planJson = await OpenAIService.generateStoryCoachPlan(
+        title: _titleController.text,
+        content: _contentController.text,
       );
-      if (mounted) {
-        setState(() {
-          _aiSuggestions = suggestions;
-        });
-      }
-    } catch (e) {
-      // Fail silently for AI suggestions
-      print('Error generating AI suggestions: $e');
+      if (!mounted) return;
+      setState(() {
+        _storyCoachPlan = StoryCoachPlan.fromJson(planJson);
+        _lastSuggestionsSource = sourceKey;
+        _suggestionsGeneratedAt = DateTime.now();
+        _isSuggestionsLoading = false;
+      });
+    } on OpenAIProxyException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _suggestionsError = error.message;
+        _isSuggestionsLoading = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _suggestionsError = error.toString();
+        _isSuggestionsLoading = false;
+      });
     }
+  }
+
+  String _suggestionsStatusLabel(String status) {
+    switch (status) {
+      case 'complete':
+        return 'Historia completa';
+      case 'starting_out':
+        return 'Listo para comenzar';
+      case 'needs_more':
+        return 'Faltan detalles clave';
+      case 'in_progress':
+        return 'En progreso';
+      default:
+        return 'Recomendaciones personalizadas';
+    }
+  }
+
+  Color _suggestionsStatusColor(String status, ColorScheme colorScheme) {
+    switch (status) {
+      case 'complete':
+        return colorScheme.secondary;
+      case 'starting_out':
+        return colorScheme.tertiary;
+      case 'needs_more':
+        return colorScheme.error;
+      default:
+        return colorScheme.primary;
+    }
+  }
+
+  IconData _suggestionsSectionIcon(String purpose) {
+    switch (purpose) {
+      case 'questions':
+        return Icons.quiz_outlined;
+      case 'memories':
+        return Icons.photo_album_outlined;
+      case 'edits':
+        return Icons.edit_note;
+      case 'reflection':
+        return Icons.self_improvement;
+      case 'ideas':
+      default:
+        return Icons.tips_and_updates_outlined;
+    }
+  }
+
+  Color _suggestionsSectionColor(String purpose, ColorScheme colorScheme) {
+    switch (purpose) {
+      case 'questions':
+        return colorScheme.primary.withValues(alpha: 0.12);
+      case 'memories':
+        return colorScheme.tertiary.withValues(alpha: 0.12);
+      case 'edits':
+        return colorScheme.secondary.withValues(alpha: 0.12);
+      case 'reflection':
+        return colorScheme.surfaceTint.withValues(alpha: 0.12);
+      default:
+        return colorScheme.surfaceVariant.withValues(alpha: 0.18);
+    }
+  }
+
+  String? _formattedSuggestionsTimestamp() {
+    final generated = _suggestionsGeneratedAt;
+    if (generated == null) return null;
+
+    final local = generated.toLocal();
+    final now = DateTime.now();
+    final isSameDay = local.year == now.year &&
+        local.month == now.month &&
+        local.day == now.day;
+    final timeLabel = TimeOfDay.fromDateTime(local).format(context);
+    if (isSameDay) {
+      return 'Actualizado hoy a las $timeLabel';
+    }
+
+    final day = local.day.toString().padLeft(2, '0');
+    final month = local.month.toString().padLeft(2, '0');
+    final year = local.year;
+    return 'Actualizado el $day/$month/$year a las $timeLabel';
+  }
+
+  Widget _buildSuggestionsLoading(ThemeData theme, ColorScheme colorScheme) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceVariant.withValues(alpha: 0.28),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: colorScheme.outlineVariant),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 28,
+              height: 28,
+              child: CircularProgressIndicator(
+                strokeWidth: 3,
+                valueColor: AlwaysStoppedAnimation(colorScheme.primary),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(
+                'Analizando tu historia y preparando sugerencias personalizadas...',
+                style: theme.textTheme.bodyMedium?.copyWith(height: 1.5),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSuggestionsError(
+    ThemeData theme,
+    ColorScheme colorScheme,
+    String message,
+  ) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.errorContainer.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: colorScheme.errorContainer),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.error_outline, color: colorScheme.error),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'No se pudieron generar sugerencias en este momento',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: colorScheme.error,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              message,
+              style: theme.textTheme.bodySmall,
+            ),
+            const SizedBox(height: 16),
+            FilledButton.tonalIcon(
+              onPressed: () => _generateAISuggestions(force: true),
+              icon: const Icon(Icons.refresh),
+              label: const Text('Intentar de nuevo'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStoryCoachPlanCard(
+    ThemeData theme,
+    ColorScheme colorScheme,
+    StoryCoachPlan plan,
+  ) {
+    final statusColor = _suggestionsStatusColor(plan.status, colorScheme)
+        .withValues(alpha: 0.85);
+    final statusLabel = _suggestionsStatusLabel(plan.status);
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceVariant.withValues(alpha: 0.24),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: colorScheme.outlineVariant),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (_isSuggestionsLoading)
+              ClipRRect(
+                borderRadius: BorderRadius.circular(100),
+                child: LinearProgressIndicator(
+                  minHeight: 3,
+                  color: statusColor,
+                  backgroundColor: colorScheme.surface.withValues(alpha: 0.4),
+                ),
+              ),
+            if (_isSuggestionsLoading) const SizedBox(height: 12),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.menu_book_rounded, color: statusColor),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        statusLabel,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        plan.summary,
+                        style:
+                            theme.textTheme.bodyMedium?.copyWith(height: 1.5),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            if (plan.missingPieces.isNotEmpty) ...[
+              const SizedBox(height: 18),
+              Container(
+                decoration: BoxDecoration(
+                  color: colorScheme.errorContainer.withValues(alpha: 0.45),
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.flag_outlined, color: colorScheme.error),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Información que puedes detallar más',
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: colorScheme.error,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    ...plan.missingPieces.map(
+                      (item) => Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(
+                              Icons.radio_button_unchecked,
+                              size: 14,
+                              color: colorScheme.error,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                item,
+                                style: theme.textTheme.bodyMedium,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            for (final section in plan.sections) ...[
+              const SizedBox(height: 18),
+              _buildStoryCoachSection(section, theme, colorScheme),
+            ],
+            if (plan.nextSteps.isNotEmpty) ...[
+              const SizedBox(height: 20),
+              Text(
+                'Siguientes pasos sugeridos',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 8),
+              ...plan.nextSteps.map(
+                (step) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.check_circle_outline,
+                        size: 18,
+                        color: statusColor,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          step,
+                          style: theme.textTheme.bodyMedium,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+            if (plan.warmups.isNotEmpty) ...[
+              const SizedBox(height: 20),
+              Text(
+                plan.isStarting
+                    ? 'Ideas para comenzar a escribir'
+                    : 'Preguntas extra para inspirarte',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 8),
+              ...plan.warmups.map(
+                (idea) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.lightbulb_outline,
+                        size: 18,
+                        color: colorScheme.primary,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          idea,
+                          style: theme.textTheme.bodyMedium,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+            const SizedBox(height: 20),
+            Container(
+              decoration: BoxDecoration(
+                color: statusColor.withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              padding: const EdgeInsets.all(14),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.favorite_outline,
+                    color: statusColor,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      plan.encouragement,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        height: 1.5,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStoryCoachSection(
+    StoryCoachSection section,
+    ThemeData theme,
+    ColorScheme colorScheme,
+  ) {
+    final backgroundColor =
+        _suggestionsSectionColor(section.purpose, colorScheme);
+    final icon = _suggestionsSectionIcon(section.purpose);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: colorScheme.surface,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(
+                  icon,
+                  color: colorScheme.primary,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      section.title,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (section.description?.isNotEmpty == true) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        section.description!,
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ...section.items.map(
+            (item) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.arrow_forward_ios,
+                    size: 14,
+                    color: colorScheme.primary,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      item,
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSuggestionsPlaceholder(
+    ThemeData theme,
+    ColorScheme colorScheme,
+  ) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceVariant.withValues(alpha: 0.22),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: colorScheme.outlineVariant),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.lightbulb_outline, color: colorScheme.primary),
+                const SizedBox(width: 8),
+                Text(
+                  'Obtén orientación personalizada',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Presiona "Actualizar sugerencias" para recibir ideas y preguntas que te acompañen a escribir tu historia.',
+              style: theme.textTheme.bodyMedium?.copyWith(height: 1.5),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   int _getWordCount() {
@@ -505,7 +1121,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                       OutlinedButton.icon(
                         onPressed: () {
                           setState(() => _showSuggestions = !_showSuggestions);
-                          if (_showSuggestions && _aiSuggestions.isEmpty) {
+                          if (_showSuggestions) {
                             _generateAISuggestions();
                           }
                         },
@@ -555,72 +1171,85 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         ];
 
         if (_showSuggestions) {
-          editorChildren.addAll([
-            const SizedBox(height: 16),
-            Text(
-              'Sugerencias para mejorar tu historia:',
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w700,
+          editorChildren.add(const SizedBox(height: 16));
+          editorChildren.add(
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: Text(
+                    'Acompañamiento inteligente para tu historia',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  tooltip: 'Actualizar sugerencias',
+                  onPressed: _isSuggestionsLoading
+                      ? null
+                      : () => _generateAISuggestions(force: true),
+                  icon: const Icon(Icons.refresh),
+                ),
+              ],
+            ),
+          );
+
+          final timestampLabel = _formattedSuggestionsTimestamp();
+
+          editorChildren.add(
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Row(
+                children: [
+                  Text(
+                    'Palabras actuales: $wordCount',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  if (timestampLabel != null) ...[
+                    const SizedBox(width: 12),
+                    Icon(
+                      Icons.schedule,
+                      size: 14,
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      timestampLabel,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant
+                            .withValues(alpha: 0.85),
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
-            const SizedBox(height: 8),
-          ]);
+          );
 
-          if (_aiSuggestions.isEmpty) {
-            editorChildren.addAll([
-              const Align(
-                alignment: Alignment.centerLeft,
-                child: SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 3,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Generando sugerencias...',
-                textAlign: TextAlign.left,
-              ),
-            ]);
+          editorChildren.add(const SizedBox(height: 12));
+
+          Widget suggestionsContent;
+          if (_isSuggestionsLoading && _storyCoachPlan == null) {
+            suggestionsContent = _buildSuggestionsLoading(theme, colorScheme);
+          } else if (_suggestionsError != null) {
+            suggestionsContent =
+                _buildSuggestionsError(theme, colorScheme, _suggestionsError!);
+          } else if (_storyCoachPlan != null) {
+            suggestionsContent = _buildStoryCoachPlanCard(
+              theme,
+              colorScheme,
+              _storyCoachPlan!,
+            );
+          } else {
+            suggestionsContent =
+                _buildSuggestionsPlaceholder(theme, colorScheme);
           }
 
-          if (_aiSuggestions.isNotEmpty) {
-            editorChildren.add(
-              Text(
-                'Palabras: $wordCount',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                ),
-              ),
-            );
-            editorChildren.add(const SizedBox(height: 8));
-            editorChildren.addAll(
-              _aiSuggestions.map(
-                (suggestion) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(
-                        Icons.help_outline,
-                        size: 16,
-                        color: colorScheme.primary,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          suggestion,
-                          style: theme.textTheme.bodyMedium,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          }
+          editorChildren.add(suggestionsContent);
         }
 
         return Padding(

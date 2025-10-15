@@ -224,6 +224,167 @@ Responde SOLO con un objeto JSON con esta estructura:
     }
   }
 
+  static Future<Map<String, dynamic>> generateStoryCoachPlan({
+    required String title,
+    required String content,
+  }) async {
+    final trimmedTitle = title.trim();
+    final trimmedContent = content.trim();
+    final wordCount = trimmedContent.isEmpty
+        ? 0
+        : trimmedContent
+            .split(RegExp(r'\s+'))
+            .where((word) => word.isNotEmpty)
+            .length;
+    final hasContent = trimmedContent.isNotEmpty;
+
+    final contextSummary = hasContent
+        ? 'Borrador actual:\n"""$trimmedContent"""'
+        : 'Borrador actual: (sin texto aún)';
+
+    final prompt = '''
+Actúas como "Narra Story Coach", un editor y coach narrativo que acompaña a personas hispanohablantes sin experiencia editorial a escribir memorias familiares claras, completas y emocionantes.
+
+## Información del autor
+- Título provisional: ${trimmedTitle.isEmpty ? 'Sin título' : '"$trimmedTitle"'}
+- Palabras actuales: $wordCount
+- $contextSummary
+
+## Tareas
+1. Evalúa el avance general del texto.
+2. Detecta si faltan etapas, personajes o detalles importantes.
+3. Sugiere ideas concretas y preguntas cálidas que ayuden a ampliar o pulir el relato.
+4. Propone siguientes pasos claros para que la persona continúe escribiendo.
+5. Cierra con un mensaje de ánimo personalizado que refuerce la confianza.
+
+## Estados disponibles
+- "starting_out": la persona aún no escribe o apenas comienza.
+- "needs_more": hay borrador, pero faltan partes clave o claridad.
+- "in_progress": el relato avanza bien aunque puede profundizar.
+- "complete": el relato está completo y claro, basta con celebrarlo.
+
+## Formato de salida
+Responde SOLO con un objeto JSON válido que cumpla exactamente el siguiente esquema:
+{
+  "status": "starting_out" | "needs_more" | "in_progress" | "complete",
+  "summary": "Resumen breve del diagnóstico",
+  "sections": [
+    {
+      "title": "Título breve del bloque",
+      "purpose": "ideas" | "questions" | "edits" | "reflection" | "memories",
+      "description": "Contexto opcional",
+      "items": ["Sugerencia concreta 1", "Sugerencia concreta 2"]
+    }
+  ],
+  "next_steps": ["Paso inmediato 1", "Paso inmediato 2"],
+  "missing_pieces": ["Detalle a profundizar"],
+  "warmups": ["Idea o pregunta para inspirar"],
+  "encouragement": "Mensaje motivador en segunda persona"
+}
+
+- Mantén todas las respuestas en español neutro.
+- Si no hay texto, entrega warmups e ideas para comenzar.
+- Si el relato está completo, celebra el logro pero ofrece un repaso final amable.
+- Ajusta el tono para que sea cercano, cálido y profesional.
+''';
+
+    final data = await _proxyChat(
+      messages: [
+        {
+          'role': 'system',
+          'content':
+              'Eres Narra Story Coach, un editor empático que orienta autobiografías familiares en español. Siempre responde con JSON válido según el formato solicitado.',
+        },
+        {
+          'role': 'user',
+          'content': prompt,
+        },
+      ],
+      responseFormat: _jsonSchemaFormat(
+        name: 'narra_story_coach_plan',
+        schema: {
+          'type': 'object',
+          'additionalProperties': false,
+          'required': [
+            'status',
+            'summary',
+            'sections',
+            'next_steps',
+            'encouragement',
+          ],
+          'properties': {
+            'status': {
+              'type': 'string',
+              'enum': [
+                'starting_out',
+                'needs_more',
+                'in_progress',
+                'complete',
+              ],
+            },
+            'summary': {'type': 'string', 'minLength': 1},
+            'sections': {
+              'type': 'array',
+              'minItems': 1,
+              'maxItems': 4,
+              'items': {
+                'type': 'object',
+                'additionalProperties': false,
+                'required': ['title', 'purpose', 'items'],
+                'properties': {
+                  'title': {'type': 'string', 'minLength': 1},
+                  'purpose': {
+                    'type': 'string',
+                    'enum': [
+                      'ideas',
+                      'questions',
+                      'edits',
+                      'reflection',
+                      'memories',
+                    ],
+                  },
+                  'description': {'type': 'string'},
+                  'items': {
+                    'type': 'array',
+                    'minItems': 1,
+                    'maxItems': 5,
+                    'items': {'type': 'string', 'minLength': 1},
+                  },
+                },
+              },
+            },
+            'next_steps': {
+              'type': 'array',
+              'minItems': 1,
+              'maxItems': 5,
+              'items': {'type': 'string', 'minLength': 1},
+            },
+            'missing_pieces': {
+              'type': 'array',
+              'items': {'type': 'string', 'minLength': 1},
+              'maxItems': 6,
+            },
+            'warmups': {
+              'type': 'array',
+              'items': {'type': 'string', 'minLength': 1},
+              'maxItems': 5,
+            },
+            'encouragement': {'type': 'string', 'minLength': 1},
+          },
+        },
+      ),
+      temperature: hasContent ? 0.7 : 0.8,
+    );
+
+    final contentRaw = data['choices'][0]['message']['content'];
+    final decoded = jsonDecode(contentRaw);
+    if (decoded is Map<String, dynamic>) {
+      return decoded;
+    }
+
+    throw Exception('Respuesta inválida del asistente de Story Coach');
+  }
+
   // Ghost Writer básico (compatibilidad: título opcional)
   static Future<Map<String, dynamic>> improveStoryText({
     required String originalText,

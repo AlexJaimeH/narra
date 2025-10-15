@@ -18,6 +18,7 @@ import 'package:narra/repositories/story_repository.dart';
 import 'package:narra/openai/openai_service.dart';
 import 'package:narra/services/voice_recorder.dart';
 import 'package:narra/services/audio_upload_service.dart';
+import 'package:narra/services/user_service.dart';
 import 'package:narra/supabase/narra_client.dart';
 
 class StoryEditorPage extends StatefulWidget {
@@ -27,6 +28,104 @@ class StoryEditorPage extends StatefulWidget {
 
   @override
   State<StoryEditorPage> createState() => _StoryEditorPageState();
+}
+
+enum _GhostWriterResultAction { apply, retry, cancel }
+
+class StoryCoachSection {
+  const StoryCoachSection({
+    required this.title,
+    required this.purpose,
+    required this.items,
+    this.description,
+  });
+
+  final String title;
+  final String purpose;
+  final List<String> items;
+  final String? description;
+
+  factory StoryCoachSection.fromJson(Map<String, dynamic> json) {
+    final rawItems = json['items'];
+    final items = rawItems is List
+        ? rawItems
+            .whereType<String>()
+            .map((item) => item.trim())
+            .where((item) => item.isNotEmpty)
+            .toList()
+        : <String>[];
+
+    return StoryCoachSection(
+      title: (json['title'] as String?)?.trim().isNotEmpty == true
+          ? json['title'] as String
+          : 'Ideas clave',
+      purpose: (json['purpose'] as String?)?.trim().isNotEmpty == true
+          ? json['purpose'] as String
+          : 'ideas',
+      description: (json['description'] as String?)?.trim(),
+      items: items,
+    );
+  }
+}
+
+class StoryCoachPlan {
+  const StoryCoachPlan({
+    required this.status,
+    required this.summary,
+    required this.sections,
+    required this.nextSteps,
+    required this.encouragement,
+    this.missingPieces = const [],
+    this.warmups = const [],
+  });
+
+  final String status;
+  final String summary;
+  final List<StoryCoachSection> sections;
+  final List<String> nextSteps;
+  final List<String> missingPieces;
+  final List<String> warmups;
+  final String encouragement;
+
+  bool get isComplete => status == 'complete';
+  bool get isStarting => status == 'starting_out';
+
+  factory StoryCoachPlan.fromJson(Map<String, dynamic> json) {
+    List<String> parseStringList(String key) {
+      final value = json[key];
+      if (value is List) {
+        return value
+            .whereType<String>()
+            .map((item) => item.trim())
+            .where((item) => item.isNotEmpty)
+            .toList();
+      }
+      return <String>[];
+    }
+
+    final sectionsRaw = json['sections'];
+    final sections = sectionsRaw is List
+        ? sectionsRaw
+            .whereType<Map<String, dynamic>>()
+            .map((section) => StoryCoachSection.fromJson(section))
+            .where((section) => section.items.isNotEmpty)
+            .toList()
+        : <StoryCoachSection>[];
+
+    return StoryCoachPlan(
+      status: (json['status'] as String?)?.trim().isNotEmpty == true
+          ? json['status'] as String
+          : 'in_progress',
+      summary: (json['summary'] as String?)?.trim() ??
+          'Aquí tienes ideas para seguir avanzando.',
+      sections: sections,
+      nextSteps: parseStringList('next_steps'),
+      encouragement: (json['encouragement'] as String?)?.trim() ??
+          'Continúa escribiendo a tu ritmo, lo estás haciendo muy bien.',
+      missingPieces: parseStringList('missing_pieces'),
+      warmups: parseStringList('warmups'),
+    );
+  }
 }
 
 class _StoryEditorPageState extends State<StoryEditorPage>
@@ -80,19 +179,22 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   Story? _currentStory;
 
   List<String> _availableTags = [];
-  List<String> _aiSuggestions = [];
-  bool _showAdvancedGhostWriter = false;
+  StoryCoachPlan? _storyCoachPlan;
   bool _showSuggestions = false;
+  bool _isSuggestionsLoading = false;
+  String? _suggestionsError;
+  DateTime? _suggestionsGeneratedAt;
+  String _lastSuggestionsSource = '';
 
-  // Ghost Writer configuration
-  String _ghostWriterTone = 'nostálgico';
-  String _ghostWriterFidelity = 'high';
-  String _ghostWriterLanguage = 'español';
-  String _ghostWriterAudience = 'familia';
-  String _ghostWriterPerspective = 'primera persona';
-  String _ghostWriterPrivacy = 'privado';
-  bool _ghostWriterExpandContent = false;
-  bool _ghostWriterPreserveStructure = true;
+  // Ghost Writer configuration (synced with user settings)
+  String _ghostWriterTone = 'warm';
+  String _ghostWriterEditingStyle = 'balanced';
+  String _ghostWriterLanguage = 'es';
+  String _ghostWriterPerspective = 'first';
+  bool _ghostWriterAvoidProfanity = false;
+  String _ghostWriterExtraInstructions = '';
+  bool _isGhostWriterProcessing = false;
+  Timer? _ghostWriterInstructionsDebounce;
 
   @override
   void initState() {
@@ -105,6 +207,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     });
 
     _loadAvailableTags();
+    _loadGhostWriterPreferences();
 
     // Load existing story if editing
     if (widget.storyId != null) {
@@ -143,6 +246,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     _contentController.dispose();
     _editorScrollController.dispose();
     _transcriptScrollController.dispose();
+    _ghostWriterInstructionsDebounce?.cancel();
     super.dispose();
   }
 
@@ -176,6 +280,35 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           ];
         });
       }
+    }
+  }
+
+  Future<void> _loadGhostWriterPreferences() async {
+    try {
+      final profile = await UserService.getCurrentUserProfile();
+      final settings = await UserService.getUserSettings();
+      if (!mounted) return;
+      setState(() {
+        _ghostWriterTone = (profile?['writing_tone'] as String?) ?? 'warm';
+        _ghostWriterPerspective =
+            (settings?['ai_person'] as String?) ?? 'first';
+        _ghostWriterEditingStyle =
+            (settings?['ai_fidelity'] as String?) ?? 'balanced';
+        _ghostWriterAvoidProfanity =
+            (settings?['ai_no_bad_words'] as bool?) ?? false;
+        _ghostWriterExtraInstructions =
+            (settings?['ai_extra_instructions'] as String?)?.trim() ?? '';
+        _ghostWriterLanguage = (settings?['language'] as String?) ?? 'es';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'No se pudieron cargar los ajustes de Ghost Writer: $e',
+          ),
+        ),
+      );
     }
   }
 
@@ -235,24 +368,540 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     }
   }
 
-  Future<void> _generateAISuggestions() async {
-    if (_titleController.text.isEmpty && _contentController.text.isEmpty)
+  Future<void> _generateAISuggestions({bool force = false}) async {
+    if (!mounted) return;
+
+    final sourceKey =
+        '${_titleController.text.trim()}|${_contentController.text.trim()}';
+
+    if (!force &&
+        _storyCoachPlan != null &&
+        _lastSuggestionsSource == sourceKey) {
       return;
+    }
+
+    if (_isSuggestionsLoading) return;
+
+    setState(() {
+      _isSuggestionsLoading = true;
+      _suggestionsError = null;
+    });
 
     try {
-      final suggestions = await OpenAIService.generateStoryPrompts(
-        currentTitle: _titleController.text,
-        currentContent: _contentController.text,
+      final planJson = await OpenAIService.generateStoryCoachPlan(
+        title: _titleController.text,
+        content: _contentController.text,
       );
-      if (mounted) {
-        setState(() {
-          _aiSuggestions = suggestions;
-        });
-      }
-    } catch (e) {
-      // Fail silently for AI suggestions
-      print('Error generating AI suggestions: $e');
+      if (!mounted) return;
+      setState(() {
+        _storyCoachPlan = StoryCoachPlan.fromJson(planJson);
+        _lastSuggestionsSource = sourceKey;
+        _suggestionsGeneratedAt = DateTime.now();
+        _isSuggestionsLoading = false;
+      });
+    } on OpenAIProxyException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _suggestionsError = error.message;
+        _isSuggestionsLoading = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _suggestionsError = error.toString();
+        _isSuggestionsLoading = false;
+      });
     }
+  }
+
+  String _suggestionsStatusLabel(String status) {
+    switch (status) {
+      case 'complete':
+        return 'Historia completa';
+      case 'starting_out':
+        return 'Listo para comenzar';
+      case 'needs_more':
+        return 'Faltan detalles clave';
+      case 'in_progress':
+        return 'En progreso';
+      default:
+        return 'Recomendaciones personalizadas';
+    }
+  }
+
+  Color _suggestionsStatusColor(String status, ColorScheme colorScheme) {
+    switch (status) {
+      case 'complete':
+        return colorScheme.secondary;
+      case 'starting_out':
+        return colorScheme.tertiary;
+      case 'needs_more':
+        return colorScheme.error;
+      default:
+        return colorScheme.primary;
+    }
+  }
+
+  IconData _suggestionsSectionIcon(String purpose) {
+    switch (purpose) {
+      case 'questions':
+        return Icons.quiz_outlined;
+      case 'memories':
+        return Icons.photo_album_outlined;
+      case 'edits':
+        return Icons.edit_note;
+      case 'reflection':
+        return Icons.self_improvement;
+      case 'ideas':
+      default:
+        return Icons.tips_and_updates_outlined;
+    }
+  }
+
+  Color _suggestionsSectionColor(String purpose, ColorScheme colorScheme) {
+    switch (purpose) {
+      case 'questions':
+        return colorScheme.primary.withValues(alpha: 0.12);
+      case 'memories':
+        return colorScheme.tertiary.withValues(alpha: 0.12);
+      case 'edits':
+        return colorScheme.secondary.withValues(alpha: 0.12);
+      case 'reflection':
+        return colorScheme.surfaceTint.withValues(alpha: 0.12);
+      default:
+        return colorScheme.surfaceVariant.withValues(alpha: 0.18);
+    }
+  }
+
+  String? _formattedSuggestionsTimestamp() {
+    final generated = _suggestionsGeneratedAt;
+    if (generated == null) return null;
+
+    final local = generated.toLocal();
+    final now = DateTime.now();
+    final isSameDay = local.year == now.year &&
+        local.month == now.month &&
+        local.day == now.day;
+    final timeLabel = TimeOfDay.fromDateTime(local).format(context);
+    if (isSameDay) {
+      return 'Actualizado hoy a las $timeLabel';
+    }
+
+    final day = local.day.toString().padLeft(2, '0');
+    final month = local.month.toString().padLeft(2, '0');
+    final year = local.year;
+    return 'Actualizado el $day/$month/$year a las $timeLabel';
+  }
+
+  Widget _buildSuggestionsLoading(ThemeData theme, ColorScheme colorScheme) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceVariant.withValues(alpha: 0.28),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: colorScheme.outlineVariant),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 28,
+              height: 28,
+              child: CircularProgressIndicator(
+                strokeWidth: 3,
+                valueColor: AlwaysStoppedAnimation(colorScheme.primary),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(
+                'Analizando tu historia y preparando sugerencias personalizadas...',
+                style: theme.textTheme.bodyMedium?.copyWith(height: 1.5),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSuggestionsError(
+    ThemeData theme,
+    ColorScheme colorScheme,
+    String message,
+  ) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.errorContainer.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: colorScheme.errorContainer),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.error_outline, color: colorScheme.error),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'No se pudieron generar sugerencias en este momento',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: colorScheme.error,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              message,
+              style: theme.textTheme.bodySmall,
+            ),
+            const SizedBox(height: 16),
+            FilledButton.tonalIcon(
+              onPressed: () => _generateAISuggestions(force: true),
+              icon: const Icon(Icons.refresh),
+              label: const Text('Intentar de nuevo'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStoryCoachPlanCard(
+    ThemeData theme,
+    ColorScheme colorScheme,
+    StoryCoachPlan plan,
+  ) {
+    final statusColor = _suggestionsStatusColor(plan.status, colorScheme)
+        .withValues(alpha: 0.85);
+    final statusLabel = _suggestionsStatusLabel(plan.status);
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceVariant.withValues(alpha: 0.24),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: colorScheme.outlineVariant),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (_isSuggestionsLoading)
+              ClipRRect(
+                borderRadius: BorderRadius.circular(100),
+                child: LinearProgressIndicator(
+                  minHeight: 3,
+                  color: statusColor,
+                  backgroundColor: colorScheme.surface.withValues(alpha: 0.4),
+                ),
+              ),
+            if (_isSuggestionsLoading) const SizedBox(height: 12),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.menu_book_rounded, color: statusColor),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        statusLabel,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        plan.summary,
+                        style:
+                            theme.textTheme.bodyMedium?.copyWith(height: 1.5),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            if (plan.missingPieces.isNotEmpty) ...[
+              const SizedBox(height: 18),
+              Container(
+                decoration: BoxDecoration(
+                  color: colorScheme.errorContainer.withValues(alpha: 0.45),
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.flag_outlined, color: colorScheme.error),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Información que puedes detallar más',
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: colorScheme.error,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    ...plan.missingPieces.map(
+                      (item) => Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(
+                              Icons.radio_button_unchecked,
+                              size: 14,
+                              color: colorScheme.error,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                item,
+                                style: theme.textTheme.bodyMedium,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            for (final section in plan.sections) ...[
+              const SizedBox(height: 18),
+              _buildStoryCoachSection(section, theme, colorScheme),
+            ],
+            if (plan.nextSteps.isNotEmpty) ...[
+              const SizedBox(height: 20),
+              Text(
+                'Siguientes pasos sugeridos',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 8),
+              ...plan.nextSteps.map(
+                (step) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.check_circle_outline,
+                        size: 18,
+                        color: statusColor,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          step,
+                          style: theme.textTheme.bodyMedium,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+            if (plan.warmups.isNotEmpty) ...[
+              const SizedBox(height: 20),
+              Text(
+                plan.isStarting
+                    ? 'Ideas para comenzar a escribir'
+                    : 'Preguntas extra para inspirarte',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 8),
+              ...plan.warmups.map(
+                (idea) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.lightbulb_outline,
+                        size: 18,
+                        color: colorScheme.primary,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          idea,
+                          style: theme.textTheme.bodyMedium,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+            const SizedBox(height: 20),
+            Container(
+              decoration: BoxDecoration(
+                color: statusColor.withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              padding: const EdgeInsets.all(14),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.favorite_outline,
+                    color: statusColor,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      plan.encouragement,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        height: 1.5,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStoryCoachSection(
+    StoryCoachSection section,
+    ThemeData theme,
+    ColorScheme colorScheme,
+  ) {
+    final backgroundColor =
+        _suggestionsSectionColor(section.purpose, colorScheme);
+    final icon = _suggestionsSectionIcon(section.purpose);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: colorScheme.surface,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(
+                  icon,
+                  color: colorScheme.primary,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      section.title,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (section.description?.isNotEmpty == true) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        section.description!,
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ...section.items.map(
+            (item) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.arrow_forward_ios,
+                    size: 14,
+                    color: colorScheme.primary,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      item,
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSuggestionsPlaceholder(
+    ThemeData theme,
+    ColorScheme colorScheme,
+  ) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceVariant.withValues(alpha: 0.22),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: colorScheme.outlineVariant),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.lightbulb_outline, color: colorScheme.primary),
+                const SizedBox(width: 8),
+                Text(
+                  'Obtén orientación personalizada',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Presiona "Actualizar sugerencias" para recibir ideas y preguntas que te acompañen a escribir tu historia.',
+              style: theme.textTheme.bodyMedium?.copyWith(height: 1.5),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   int _getWordCount() {
@@ -262,7 +911,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   }
 
   bool _canUseGhostWriter() {
-    return _titleController.text.trim().isNotEmpty && _getWordCount() >= 400;
+    return _getWordCount() >= 300;
   }
 
   @override
@@ -427,15 +1076,40 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                   child: Row(
                     children: [
                       OutlinedButton.icon(
-                        onPressed: _canUseGhostWriter()
-                            ? _showGhostWriterDialog
-                            : null,
-                        icon: const Icon(Icons.auto_fix_high),
-                        label: const Text('Ghost Writer'),
+                        onPressed: _isGhostWriterProcessing
+                            ? null
+                            : _handleGhostWriterPressed,
+                        icon: _isGhostWriterProcessing
+                            ? SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.5,
+                                  valueColor: AlwaysStoppedAnimation(
+                                    colorScheme.primary,
+                                  ),
+                                ),
+                              )
+                            : Icon(
+                                Icons.auto_fix_high,
+                                color: _canUseGhostWriter()
+                                    ? colorScheme.primary
+                                    : colorScheme.onSurfaceVariant,
+                              ),
+                        label: Text(
+                          _isGhostWriterProcessing
+                              ? 'Trabajando...'
+                              : 'Ghost Writer',
+                        ),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: _canUseGhostWriter()
                               ? colorScheme.primary
                               : colorScheme.onSurfaceVariant,
+                          side: BorderSide(
+                            color: _canUseGhostWriter()
+                                ? colorScheme.primary.withValues(alpha: 0.5)
+                                : colorScheme.outlineVariant,
+                          ),
                           padding: const EdgeInsets.symmetric(
                             horizontal: 18,
                             vertical: 12,
@@ -447,7 +1121,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                       OutlinedButton.icon(
                         onPressed: () {
                           setState(() => _showSuggestions = !_showSuggestions);
-                          if (_showSuggestions && _aiSuggestions.isEmpty) {
+                          if (_showSuggestions) {
                             _generateAISuggestions();
                           }
                         },
@@ -496,88 +1170,86 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           ),
         ];
 
-        if (!_canUseGhostWriter()) {
+        if (_showSuggestions) {
+          editorChildren.add(const SizedBox(height: 16));
+          editorChildren.add(
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: Text(
+                    'Acompañamiento inteligente para tu historia',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  tooltip: 'Actualizar sugerencias',
+                  onPressed: _isSuggestionsLoading
+                      ? null
+                      : () => _generateAISuggestions(force: true),
+                  icon: const Icon(Icons.refresh),
+                ),
+              ],
+            ),
+          );
+
+          final timestampLabel = _formattedSuggestionsTimestamp();
+
           editorChildren.add(
             Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: Text(
-                'Ghost Writer disponible con título y 400+ palabras',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                  fontStyle: FontStyle.italic,
-                ),
+              padding: const EdgeInsets.only(top: 4),
+              child: Row(
+                children: [
+                  Text(
+                    'Palabras actuales: $wordCount',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  if (timestampLabel != null) ...[
+                    const SizedBox(width: 12),
+                    Icon(
+                      Icons.schedule,
+                      size: 14,
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      timestampLabel,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant
+                            .withValues(alpha: 0.85),
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
           );
-        }
 
-        if (_showSuggestions) {
-          editorChildren.addAll([
-            const SizedBox(height: 16),
-            Text(
-              'Sugerencias para mejorar tu historia:',
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 8),
-          ]);
+          editorChildren.add(const SizedBox(height: 12));
 
-          if (_aiSuggestions.isEmpty) {
-            editorChildren.addAll([
-              const Align(
-                alignment: Alignment.centerLeft,
-                child: SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 3,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Generando sugerencias...',
-                textAlign: TextAlign.left,
-              ),
-            ]);
+          Widget suggestionsContent;
+          if (_isSuggestionsLoading && _storyCoachPlan == null) {
+            suggestionsContent = _buildSuggestionsLoading(theme, colorScheme);
+          } else if (_suggestionsError != null) {
+            suggestionsContent =
+                _buildSuggestionsError(theme, colorScheme, _suggestionsError!);
+          } else if (_storyCoachPlan != null) {
+            suggestionsContent = _buildStoryCoachPlanCard(
+              theme,
+              colorScheme,
+              _storyCoachPlan!,
+            );
+          } else {
+            suggestionsContent =
+                _buildSuggestionsPlaceholder(theme, colorScheme);
           }
 
-          if (_aiSuggestions.isNotEmpty) {
-            editorChildren.add(
-              Text(
-                'Palabras: $wordCount',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                ),
-              ),
-            );
-            editorChildren.add(const SizedBox(height: 8));
-            editorChildren.addAll(
-              _aiSuggestions.map(
-                (suggestion) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(
-                        Icons.help_outline,
-                        size: 16,
-                        color: colorScheme.primary,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          suggestion,
-                          style: theme.textTheme.bodyMedium,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          }
+          editorChildren.add(suggestionsContent);
         }
 
         return Padding(
@@ -3729,278 +4401,719 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     }
   }
 
-  Future<void> _showGhostWriterDialog() async {
+  void _handleGhostWriterPressed() {
+    if (_isGhostWriterProcessing) return;
     if (!_canUseGhostWriter()) {
+      final missingWords = math.max(0, 300 - _getWordCount());
+      final message = missingWords > 0
+          ? 'Ghost Writer se activa al superar las 300 palabras. Te faltan '
+              '$missingWords ${missingWords == 1 ? 'palabra' : 'palabras'}.'
+          : 'Ghost Writer se activa al superar las 300 palabras.';
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Ghost Writer requiere título y al menos 500 palabras'),
-        ),
+        SnackBar(content: Text(message)),
       );
       return;
     }
-
-    final result = await showDialog<Map<String, dynamic>>(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: const Text('Ghost Writer IA'),
-          content: SizedBox(
-            width: double.maxFinite,
-            height: _showAdvancedGhostWriter ? 400 : 200,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Basic configuration
-                  const Text(
-                    'Configuración básica',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 12),
-
-                  DropdownButtonFormField<String>(
-                    value: _ghostWriterTone,
-                    decoration: const InputDecoration(
-                      labelText: 'Tono',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: const [
-                      DropdownMenuItem(
-                          value: 'nostálgico', child: Text('Nostálgico')),
-                      DropdownMenuItem(value: 'alegre', child: Text('Alegre')),
-                      DropdownMenuItem(
-                          value: 'emotivo', child: Text('Emotivo')),
-                      DropdownMenuItem(
-                          value: 'reflexivo', child: Text('Reflexivo')),
-                      DropdownMenuItem(
-                          value: 'divertido', child: Text('Divertido')),
-                    ],
-                    onChanged: (value) =>
-                        setState(() => _ghostWriterTone = value!),
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // Advanced options toggle
-                  Row(
-                    children: [
-                      Checkbox(
-                        value: _showAdvancedGhostWriter,
-                        onChanged: (value) => setState(
-                            () => _showAdvancedGhostWriter = value ?? false),
-                      ),
-                      const Text('Mostrar opciones avanzadas'),
-                    ],
-                  ),
-
-                  // Advanced configuration
-                  if (_showAdvancedGhostWriter) ...[
-                    const SizedBox(height: 16),
-                    const Text(
-                      'Opciones avanzadas',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<String>(
-                      value: _ghostWriterFidelity,
-                      decoration: const InputDecoration(
-                        labelText: 'Fidelidad al texto original',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: const [
-                        DropdownMenuItem(
-                            value: 'high',
-                            child: Text('Alta - cambios mínimos')),
-                        DropdownMenuItem(
-                            value: 'medium',
-                            child: Text('Media - mejoras moderadas')),
-                        DropdownMenuItem(
-                            value: 'creative',
-                            child: Text('Creativa - interpretación libre')),
-                      ],
-                      onChanged: (value) =>
-                          setState(() => _ghostWriterFidelity = value!),
-                    ),
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<String>(
-                      value: _ghostWriterAudience,
-                      decoration: const InputDecoration(
-                        labelText: 'Audiencia objetivo',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: const [
-                        DropdownMenuItem(
-                            value: 'familia', child: Text('Familia')),
-                        DropdownMenuItem(
-                            value: 'amigos', child: Text('Amigos')),
-                        DropdownMenuItem(
-                            value: 'público', child: Text('Público general')),
-                      ],
-                      onChanged: (value) =>
-                          setState(() => _ghostWriterAudience = value!),
-                    ),
-                    const SizedBox(height: 12),
-                    SwitchListTile(
-                      title: const Text('Expandir contenido'),
-                      subtitle: const Text('Añadir más detalles y contexto'),
-                      value: _ghostWriterExpandContent,
-                      onChanged: (value) =>
-                          setState(() => _ghostWriterExpandContent = value),
-                    ),
-                    SwitchListTile(
-                      title: const Text('Preservar estructura'),
-                      subtitle: const Text('Mantener organización de párrafos'),
-                      value: _ghostWriterPreserveStructure,
-                      onChanged: (value) =>
-                          setState(() => _ghostWriterPreserveStructure = value),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancelar'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context, {
-                'tone': _ghostWriterTone,
-                'fidelity': _ghostWriterFidelity,
-                'language': _ghostWriterLanguage,
-                'audience': _ghostWriterAudience,
-                'perspective': _ghostWriterPerspective,
-                'privacy': _ghostWriterPrivacy,
-                'expandContent': _ghostWriterExpandContent,
-                'preserveStructure': _ghostWriterPreserveStructure,
-              }),
-              child: const Text('Mejorar texto'),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    if (result != null) {
-      _applyGhostWriter(result);
-    }
+    _runGhostWriter();
   }
 
-  Future<void> _applyGhostWriter(Map<String, dynamic> params) async {
+  Future<void> _runGhostWriter() async {
+    if (_isGhostWriterProcessing) return;
+
+    setState(() => _isGhostWriterProcessing = true);
+
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => const AlertDialog(
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text('Ghost Writer mejorando tu historia...'),
-            SizedBox(height: 8),
-            Text(
-              'Esto puede tomar unos momentos',
-              style: TextStyle(fontSize: 12),
+      builder: (dialogContext) {
+        final theme = Theme.of(dialogContext);
+        final colorScheme = theme.colorScheme;
+        return Dialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          backgroundColor: colorScheme.surface,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  height: 48,
+                  width: 48,
+                  child: CircularProgressIndicator(
+                    valueColor: AlwaysStoppedAnimation(colorScheme.primary),
+                    strokeWidth: 4,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  'Ghost Writer está trabajando...',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Estamos puliendo tu historia para que luzca lista para un libro.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
 
     try {
       final result = await OpenAIService.improveStoryText(
         originalText: _contentController.text,
         title: _titleController.text,
-        tone: params['tone'],
-        fidelity: params['fidelity'],
-        language: params['language'],
-        audience: params['audience'],
-        perspective: params['perspective'],
-        privacy: params['privacy'],
-        expandContent: params['expandContent'],
-        preserveStructure: params['preserveStructure'],
+        tone: _ghostWriterTone,
+        fidelity: _ghostWriterEditingStyle,
+        language: _ghostWriterLanguage,
+        perspective: _ghostWriterPerspective,
+        avoidProfanity: _ghostWriterAvoidProfanity,
+        extraInstructions: _ghostWriterExtraInstructions.trim(),
       );
 
-      Navigator.pop(context); // Close loading dialog
+      if (mounted) {
+        await Navigator.of(context).maybePop();
+        setState(() => _isGhostWriterProcessing = false);
+      }
 
-      // Show results dialog
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Ghost Writer - Resultados'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Cambios realizados:',
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                ),
-                const SizedBox(height: 8),
-                Text(result['changes_summary']),
-                const SizedBox(height: 16),
-                Text(
-                  'Palabras: ${result['word_count']}',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.outline,
-                      ),
-                ),
-                if (result['suggestions'].isNotEmpty) ...[
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Sugerencias adicionales:',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
-                  ...result['suggestions'].map((suggestion) => Padding(
-                        padding: const EdgeInsets.only(bottom: 4),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('• '),
-                            Expanded(child: Text(suggestion)),
-                          ],
-                        ),
-                      )),
-                ],
-              ],
-            ),
+      if (!mounted) {
+        return;
+      }
+
+      final action = await _showGhostWriterResultDialog(result);
+
+      if (!mounted || action == null) {
+        return;
+      }
+
+      if (action == _GhostWriterResultAction.apply) {
+        final polished =
+            (result['polished_text'] as String?) ?? _contentController.text;
+        setState(() {
+          _contentController.text = polished;
+          _hasChanges = true;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✓ Texto mejorado por Ghost Writer'),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Mantener original'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-                // Apply the improved text
-                setState(() {
-                  _contentController.text = result['polished_text'];
-                  _hasChanges = true;
-                });
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('✓ Texto mejorado por Ghost Writer'),
+        );
+      } else if (action == _GhostWriterResultAction.retry) {
+        await _runGhostWriter();
+      }
+    } catch (e) {
+      if (mounted) {
+        await Navigator.of(context).maybePop();
+        setState(() => _isGhostWriterProcessing = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error en Ghost Writer: $e')),
+        );
+      }
+    }
+  }
+
+  Future<_GhostWriterResultAction?> _showGhostWriterResultDialog(
+    Map<String, dynamic> result,
+  ) async {
+    final polished =
+        (result['polished_text'] as String?) ?? _contentController.text;
+    final summary = (result['changes_summary'] as String?) ?? '';
+    final toneAnalysis = (result['tone_analysis'] as String?) ?? '';
+    final suggestionsRaw = result['suggestions'];
+    final suggestions = suggestionsRaw is List
+        ? suggestionsRaw.whereType<String>().toList()
+        : <String>[];
+    final wordCount = result['word_count'];
+    final polishedWordCount = wordCount is num
+        ? wordCount.toInt()
+        : polished.split(RegExp(r'\s+')).length;
+
+    final instructionsController =
+        TextEditingController(text: _ghostWriterExtraInstructions);
+
+    try {
+      return await showDialog<_GhostWriterResultAction>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) {
+          return StatefulBuilder(
+            builder: (context, setDialogState) {
+              final theme = Theme.of(context);
+              final colorScheme = theme.colorScheme;
+              final media = MediaQuery.of(context);
+              final isCompact = media.size.width < 640;
+              final horizontalPadding = isCompact ? 16.0 : 24.0;
+              final verticalPadding = isCompact ? 20.0 : 28.0;
+              final maxWidth = math.min(media.size.width - 32, 760.0);
+              final textAreaHeight =
+                  math.min(isCompact ? 240.0 : 360.0, media.size.height * 0.45);
+
+              Widget buildChip(IconData icon, String label) {
+                return Chip(
+                  avatar: Icon(icon, size: 16, color: colorScheme.primary),
+                  label: Text(label),
+                  labelStyle: theme.textTheme.bodySmall?.copyWith(
+                    color: colorScheme.primary,
+                    fontWeight: FontWeight.w600,
                   ),
+                  side: BorderSide(
+                    color: colorScheme.primary.withValues(alpha: 0.25),
+                  ),
+                  backgroundColor: colorScheme.primary.withValues(alpha: 0.08),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 );
-              },
-              child: const Text('Aplicar mejoras'),
-            ),
-          ],
-        ),
+              }
+
+              final chips = <Widget>[
+                buildChip(
+                    Icons.article_outlined, '$polishedWordCount palabras'),
+                buildChip(Icons.palette_outlined,
+                    _ghostWriterToneLabel(_ghostWriterTone)),
+                buildChip(Icons.tune,
+                    _ghostWriterEditingStyleLabel(_ghostWriterEditingStyle)),
+                buildChip(Icons.record_voice_over,
+                    _ghostWriterPerspectiveLabel(_ghostWriterPerspective)),
+                buildChip(Icons.translate,
+                    _ghostWriterLanguageLabel(_ghostWriterLanguage)),
+              ];
+
+              if (_ghostWriterAvoidProfanity) {
+                chips.add(buildChip(Icons.shield_outlined, 'Lenguaje amable'));
+              }
+
+              return Dialog(
+                insetPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(28),
+                ),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: maxWidth),
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: horizontalPadding,
+                      vertical: verticalPadding,
+                    ),
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                height: 44,
+                                width: 44,
+                                decoration: BoxDecoration(
+                                  color: colorScheme.primary
+                                      .withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: Icon(
+                                  Icons.auto_fix_high,
+                                  color: colorScheme.primary,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Ghost Writer afinó tu historia',
+                                      style:
+                                          theme.textTheme.titleMedium?.copyWith(
+                                        fontWeight: FontWeight.w700,
+                                        letterSpacing: -0.1,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Revisa los cambios sugeridos antes de aplicarlos a tu borrador.',
+                                      style:
+                                          theme.textTheme.bodyMedium?.copyWith(
+                                        color: colorScheme.onSurfaceVariant,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: chips,
+                          ),
+                          if (summary.isNotEmpty ||
+                              toneAnalysis.isNotEmpty) ...[
+                            const SizedBox(height: 18),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: colorScheme.surfaceVariant
+                                    .withValues(alpha: 0.55),
+                                borderRadius: BorderRadius.circular(18),
+                                border: Border.all(
+                                  color: colorScheme.outlineVariant,
+                                ),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  if (summary.isNotEmpty) ...[
+                                    Text(
+                                      'Qué mejoró',
+                                      style:
+                                          theme.textTheme.titleSmall?.copyWith(
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(summary),
+                                  ],
+                                  if (summary.isNotEmpty &&
+                                      toneAnalysis.isNotEmpty)
+                                    const SizedBox(height: 12),
+                                  if (toneAnalysis.isNotEmpty) ...[
+                                    Text(
+                                      'Tono aplicado',
+                                      style:
+                                          theme.textTheme.titleSmall?.copyWith(
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(toneAnalysis),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 18),
+                          Text(
+                            'Texto mejorado',
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Container(
+                            decoration: BoxDecoration(
+                              color: colorScheme.surfaceVariant
+                                  .withValues(alpha: 0.35),
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(
+                                color: colorScheme.outlineVariant,
+                              ),
+                            ),
+                            child: SizedBox(
+                              height: textAreaHeight,
+                              child: Scrollbar(
+                                thumbVisibility: true,
+                                child: SingleChildScrollView(
+                                  padding: const EdgeInsets.all(16),
+                                  child: SelectableText(
+                                    polished,
+                                    style: theme.textTheme.bodyLarge?.copyWith(
+                                      height: 1.5,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          if (suggestions.isNotEmpty) ...[
+                            const SizedBox(height: 18),
+                            Text(
+                              'Sugerencias para seguir puliendo',
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            ...suggestions.map(
+                              (suggestion) => Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Icon(
+                                      Icons.check_circle_outline,
+                                      size: 18,
+                                      color: colorScheme.primary,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(child: Text(suggestion)),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 18),
+                          Theme(
+                            data: theme.copyWith(
+                                dividerColor: Colors.transparent),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(18),
+                              child: ExpansionTile(
+                                initiallyExpanded: false,
+                                tilePadding:
+                                    const EdgeInsets.symmetric(horizontal: 16),
+                                backgroundColor: colorScheme.surfaceVariant
+                                    .withValues(alpha: 0.4),
+                                collapsedBackgroundColor: colorScheme
+                                    .surfaceVariant
+                                    .withValues(alpha: 0.3),
+                                title: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.settings_suggest,
+                                      color: colorScheme.primary,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    const Text('Ajustes de Ghost Writer'),
+                                  ],
+                                ),
+                                subtitle: Text(
+                                  _ghostWriterSummaryLabel(),
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.fromLTRB(
+                                        16, 8, 16, 16),
+                                    child: Column(
+                                      children: [
+                                        DropdownButtonFormField<String>(
+                                          value: _ghostWriterTone,
+                                          decoration: const InputDecoration(
+                                            labelText: 'Tono de escritura',
+                                            border: OutlineInputBorder(),
+                                          ),
+                                          items: const [
+                                            DropdownMenuItem(
+                                              value: 'formal',
+                                              child: Text('Formal'),
+                                            ),
+                                            DropdownMenuItem(
+                                              value: 'neutral',
+                                              child: Text('Neutro'),
+                                            ),
+                                            DropdownMenuItem(
+                                              value: 'warm',
+                                              child: Text('Cálido'),
+                                            ),
+                                          ],
+                                          onChanged: (value) async {
+                                            if (value == null) return;
+                                            setDialogState(
+                                              () => _ghostWriterTone = value,
+                                            );
+                                            if (mounted) {
+                                              setState(() {
+                                                _ghostWriterTone = value;
+                                              });
+                                            } else {
+                                              _ghostWriterTone = value;
+                                            }
+                                            await _persistGhostWriterPreferences(
+                                              tone: value,
+                                            );
+                                          },
+                                        ),
+                                        const SizedBox(height: 12),
+                                        DropdownButtonFormField<String>(
+                                          value: _ghostWriterEditingStyle,
+                                          decoration: const InputDecoration(
+                                            labelText: 'Estilo de edición',
+                                            border: OutlineInputBorder(),
+                                          ),
+                                          items: const [
+                                            DropdownMenuItem(
+                                              value: 'faithful',
+                                              child:
+                                                  Text('Muy fiel al original'),
+                                            ),
+                                            DropdownMenuItem(
+                                              value: 'balanced',
+                                              child: Text('Equilibrado'),
+                                            ),
+                                            DropdownMenuItem(
+                                              value: 'polished',
+                                              child: Text('Pulido y elegante'),
+                                            ),
+                                          ],
+                                          onChanged: (value) async {
+                                            if (value == null) return;
+                                            setDialogState(
+                                              () => _ghostWriterEditingStyle =
+                                                  value,
+                                            );
+                                            if (mounted) {
+                                              setState(() {
+                                                _ghostWriterEditingStyle =
+                                                    value;
+                                              });
+                                            } else {
+                                              _ghostWriterEditingStyle = value;
+                                            }
+                                            await _persistGhostWriterPreferences(
+                                              editingStyle: value,
+                                            );
+                                          },
+                                        ),
+                                        const SizedBox(height: 12),
+                                        DropdownButtonFormField<String>(
+                                          value: _ghostWriterPerspective,
+                                          decoration: const InputDecoration(
+                                            labelText: 'Perspectiva narrativa',
+                                            border: OutlineInputBorder(),
+                                          ),
+                                          items: const [
+                                            DropdownMenuItem(
+                                              value: 'first',
+                                              child: Text('Primera persona'),
+                                            ),
+                                            DropdownMenuItem(
+                                              value: 'third',
+                                              child: Text('Tercera persona'),
+                                            ),
+                                          ],
+                                          onChanged: (value) async {
+                                            if (value == null) return;
+                                            setDialogState(
+                                              () => _ghostWriterPerspective =
+                                                  value,
+                                            );
+                                            if (mounted) {
+                                              setState(() {
+                                                _ghostWriterPerspective = value;
+                                              });
+                                            } else {
+                                              _ghostWriterPerspective = value;
+                                            }
+                                            await _persistGhostWriterPreferences(
+                                              perspective: value,
+                                            );
+                                          },
+                                        ),
+                                        const SizedBox(height: 12),
+                                        SwitchListTile(
+                                          contentPadding: EdgeInsets.zero,
+                                          title: const Text(
+                                              'Evitar palabras fuertes'),
+                                          subtitle: const Text(
+                                              'Mantiene el lenguaje amable y adecuado para todas las edades.'),
+                                          value: _ghostWriterAvoidProfanity,
+                                          onChanged: (value) async {
+                                            setDialogState(
+                                              () => _ghostWriterAvoidProfanity =
+                                                  value,
+                                            );
+                                            if (mounted) {
+                                              setState(() {
+                                                _ghostWriterAvoidProfanity =
+                                                    value;
+                                              });
+                                            } else {
+                                              _ghostWriterAvoidProfanity =
+                                                  value;
+                                            }
+                                            await _persistGhostWriterPreferences(
+                                              avoidProfanity: value,
+                                            );
+                                          },
+                                        ),
+                                        const SizedBox(height: 12),
+                                        TextField(
+                                          controller: instructionsController,
+                                          maxLines: 3,
+                                          decoration: const InputDecoration(
+                                            labelText:
+                                                'Instrucciones adicionales',
+                                            hintText:
+                                                'Ej. Prefiere párrafos cortos, destaca nombres de familiares...',
+                                            border: OutlineInputBorder(),
+                                          ),
+                                          onChanged: (value) {
+                                            setDialogState(
+                                              () =>
+                                                  _ghostWriterExtraInstructions =
+                                                      value,
+                                            );
+                                            if (mounted) {
+                                              setState(() {
+                                                _ghostWriterExtraInstructions =
+                                                    value;
+                                              });
+                                            } else {
+                                              _ghostWriterExtraInstructions =
+                                                  value;
+                                            }
+                                            _scheduleGhostWriterInstructionsUpdate(
+                                              value,
+                                            );
+                                          },
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          const Divider(),
+                          const SizedBox(height: 16),
+                          Wrap(
+                            spacing: 12,
+                            runSpacing: 8,
+                            alignment: WrapAlignment.end,
+                            children: [
+                              TextButton(
+                                onPressed: () => Navigator.of(context).pop(
+                                  _GhostWriterResultAction.cancel,
+                                ),
+                                child: const Text('Cancelar'),
+                              ),
+                              OutlinedButton.icon(
+                                onPressed: () => Navigator.of(context).pop(
+                                  _GhostWriterResultAction.retry,
+                                ),
+                                icon: const Icon(Icons.refresh),
+                                label: const Text('Volver a intentar'),
+                              ),
+                              FilledButton.icon(
+                                onPressed: () => Navigator.of(context).pop(
+                                  _GhostWriterResultAction.apply,
+                                ),
+                                icon: const Icon(Icons.check_circle),
+                                label: const Text('Aceptar cambios'),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      );
+    } finally {
+      instructionsController.dispose();
+    }
+  }
+
+  Future<void> _persistGhostWriterPreferences({
+    String? tone,
+    String? perspective,
+    String? editingStyle,
+    bool? avoidProfanity,
+    String? extraInstructions,
+  }) async {
+    try {
+      await UserService.updateAiPreferences(
+        writingTone: tone,
+        narrativePerson: perspective,
+        editingStyle: editingStyle,
+        noBadWords: avoidProfanity,
+        extraInstructions: extraInstructions,
       );
     } catch (e) {
-      Navigator.pop(context); // Close loading dialog
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error en Ghost Writer: $e')),
+        SnackBar(
+          content:
+              Text('No se pudieron guardar los ajustes de Ghost Writer: $e'),
+        ),
       );
     }
+  }
+
+  void _scheduleGhostWriterInstructionsUpdate(String value) {
+    _ghostWriterInstructionsDebounce?.cancel();
+    _ghostWriterInstructionsDebounce = Timer(
+      const Duration(milliseconds: 700),
+      () => _persistGhostWriterPreferences(
+        extraInstructions: value.trim(),
+      ),
+    );
+  }
+
+  String _ghostWriterToneLabel(String tone) {
+    switch (tone) {
+      case 'formal':
+        return 'Formal';
+      case 'neutral':
+        return 'Neutro';
+      case 'warm':
+      default:
+        return 'Cálido';
+    }
+  }
+
+  String _ghostWriterEditingStyleLabel(String style) {
+    switch (style) {
+      case 'faithful':
+        return 'Muy fiel';
+      case 'polished':
+        return 'Pulido';
+      case 'balanced':
+      default:
+        return 'Equilibrado';
+    }
+  }
+
+  String _ghostWriterPerspectiveLabel(String perspective) {
+    switch (perspective) {
+      case 'third':
+        return 'Tercera persona';
+      case 'first':
+      default:
+        return 'Primera persona';
+    }
+  }
+
+  String _ghostWriterLanguageLabel(String code) {
+    switch (code) {
+      case 'en':
+        return 'Inglés';
+      case 'pt':
+        return 'Portugués';
+      default:
+        return 'Español';
+    }
+  }
+
+  String _ghostWriterSummaryLabel() {
+    final parts = [
+      _ghostWriterToneLabel(_ghostWriterTone),
+      _ghostWriterEditingStyleLabel(_ghostWriterEditingStyle),
+      _ghostWriterPerspectiveLabel(_ghostWriterPerspective),
+      _ghostWriterLanguageLabel(_ghostWriterLanguage),
+    ];
+    if (_ghostWriterAvoidProfanity) {
+      parts.add('Lenguaje amable');
+    }
+    return parts.join(' · ');
   }
 
   void _showOriginalsDialog() {

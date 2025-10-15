@@ -187,6 +187,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   String? _suggestionsError;
   DateTime? _suggestionsGeneratedAt;
   String _lastSuggestionsSource = '';
+  static const String _suggestionsFriendlyErrorMessage =
+      'Estamos teniendo dificultades para generar nuevas sugerencias en este momento. Intenta nuevamente dentro de unos segundos.';
 
   // Ghost Writer configuration (synced with user settings)
   String _ghostWriterTone = 'warm';
@@ -402,15 +404,17 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         _isSuggestionsLoading = false;
       });
     } on OpenAIProxyException catch (error) {
+      debugPrint('Story coach suggestions error: ${error.message}');
       if (!mounted) return;
       setState(() {
-        _suggestionsError = error.message;
+        _suggestionsError = _suggestionsFriendlyErrorMessage;
         _isSuggestionsLoading = false;
       });
     } catch (error) {
+      debugPrint('Unexpected story coach suggestions error: $error');
       if (!mounted) return;
       setState(() {
-        _suggestionsError = error.toString();
+        _suggestionsError = _suggestionsFriendlyErrorMessage;
         _isSuggestionsLoading = false;
       });
     }
@@ -897,7 +901,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
             ),
             const SizedBox(height: 12),
             Text(
-              'Presiona "Actualizar sugerencias" para recibir ideas y preguntas que te acompañen a escribir tu historia.',
+              'Presiona "Generar nueva sugerencia" para recibir ideas y preguntas que te acompañen a escribir tu historia.',
               style: theme.textTheme.bodyMedium?.copyWith(height: 1.5),
             ),
           ],
@@ -1174,29 +1178,53 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
         if (_showSuggestions) {
           editorChildren.add(const SizedBox(height: 16));
-          editorChildren.add(
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Expanded(
-                  child: Text(
+          if (isCompact) {
+            editorChildren.add(
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
                     'Acompañamiento inteligente para tu historia',
                     style: theme.textTheme.titleSmall?.copyWith(
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                IconButton(
-                  tooltip: 'Actualizar sugerencias',
-                  onPressed: _isSuggestionsLoading
-                      ? null
-                      : () => _generateAISuggestions(force: true),
-                  icon: const Icon(Icons.refresh),
-                ),
-              ],
-            ),
-          );
+                  const SizedBox(height: 12),
+                  FilledButton.tonalIcon(
+                    onPressed: _isSuggestionsLoading
+                        ? null
+                        : () => _generateAISuggestions(force: true),
+                    icon: const Icon(Icons.auto_awesome),
+                    label: const Text('Generar nueva sugerencia'),
+                  ),
+                ],
+              ),
+            );
+          } else {
+            editorChildren.add(
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Acompañamiento inteligente para tu historia',
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  FilledButton.tonalIcon(
+                    onPressed: _isSuggestionsLoading
+                        ? null
+                        : () => _generateAISuggestions(force: true),
+                    icon: const Icon(Icons.auto_awesome),
+                    label: const Text('Generar nueva sugerencia'),
+                  ),
+                ],
+              ),
+            );
+          }
 
           final timestampLabel = _formattedSuggestionsTimestamp();
 

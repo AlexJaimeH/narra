@@ -55,6 +55,8 @@ class StoryCoachSection {
             .toList()
         : <String>[];
 
+    final rawDescription = (json['description'] as String?)?.trim();
+
     return StoryCoachSection(
       title: (json['title'] as String?)?.trim().isNotEmpty == true
           ? json['title'] as String
@@ -62,7 +64,7 @@ class StoryCoachSection {
       purpose: (json['purpose'] as String?)?.trim().isNotEmpty == true
           ? json['purpose'] as String
           : 'ideas',
-      description: (json['description'] as String?)?.trim(),
+      description: rawDescription?.isNotEmpty == true ? rawDescription : null,
       items: items,
     );
   }

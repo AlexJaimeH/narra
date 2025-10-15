@@ -272,7 +272,7 @@ Responde SOLO con un objeto JSON válido que cumpla exactamente el siguiente esq
     {
       "title": "Título breve del bloque",
       "purpose": "ideas" | "questions" | "edits" | "reflection" | "memories",
-      "description": "Contexto opcional",
+      "description": "Contexto opcional (usa cadena vacía si no aplica)",
       "items": ["Sugerencia concreta 1", "Sugerencia concreta 2"]
     }
   ],
@@ -286,6 +286,7 @@ Responde SOLO con un objeto JSON válido que cumpla exactamente el siguiente esq
 - Si no hay texto, entrega warmups e ideas para comenzar.
 - Si el relato está completo, celebra el logro pero ofrece un repaso final amable.
 - Ajusta el tono para que sea cercano, cálido y profesional.
+- Incluye siempre todos los campos del esquema, aunque alguna lista quede vacía o la descripción sea una cadena vacía.
 ''';
 
     final data = await _proxyChat(
@@ -310,6 +311,8 @@ Responde SOLO con un objeto JSON válido que cumpla exactamente el siguiente esq
             'summary',
             'sections',
             'next_steps',
+            'missing_pieces',
+            'warmups',
             'encouragement',
           ],
           'properties': {
@@ -330,7 +333,7 @@ Responde SOLO con un objeto JSON válido que cumpla exactamente el siguiente esq
               'items': {
                 'type': 'object',
                 'additionalProperties': false,
-                'required': ['title', 'purpose', 'items'],
+                'required': ['title', 'purpose', 'description', 'items'],
                 'properties': {
                   'title': {'type': 'string', 'minLength': 1},
                   'purpose': {
@@ -343,7 +346,7 @@ Responde SOLO con un objeto JSON válido que cumpla exactamente el siguiente esq
                       'memories',
                     ],
                   },
-                  'description': {'type': 'string'},
+                  'description': {'type': 'string', 'minLength': 0},
                   'items': {
                     'type': 'array',
                     'minItems': 1,

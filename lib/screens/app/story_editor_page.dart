@@ -19,6 +19,7 @@ import 'package:narra/openai/openai_service.dart';
 import 'package:narra/services/voice_recorder.dart';
 import 'package:narra/services/audio_upload_service.dart';
 import 'package:narra/services/user_service.dart';
+import 'package:narra/screens/app/top_navigation_bar.dart';
 import 'package:narra/supabase/narra_client.dart';
 
 class StoryEditorPage extends StatefulWidget {
@@ -138,6 +139,9 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   final ScrollController _editorScrollController = ScrollController();
   final ScrollController _transcriptScrollController = ScrollController();
 
+  bool _isTopMenuOpen = false;
+  bool _isTopBarElevated = false;
+
   bool _isRecording = false;
   VoiceRecorder? _recorder;
 
@@ -221,6 +225,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     // Listen to content changes - debounced to prevent flickering
     _contentController.addListener(_handleContentChange);
     _titleController.addListener(_handleTitleChange);
+    _editorScrollController.addListener(_handleEditorScroll);
 
     // Generate initial AI suggestions when suggestions are shown
   }
@@ -239,6 +244,59 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     }
   }
 
+  void _handleEditorScroll() {
+    if (!_editorScrollController.hasClients) {
+      return;
+    }
+
+    final offset = _editorScrollController.offset;
+    final shouldElevate = offset > 12;
+    final shouldCloseMenu = _isTopMenuOpen && offset > 12;
+
+    if (shouldElevate != _isTopBarElevated || shouldCloseMenu) {
+      setState(() {
+        _isTopBarElevated = shouldElevate;
+        if (shouldCloseMenu) {
+          _isTopMenuOpen = false;
+        }
+      });
+    }
+  }
+
+  void _toggleTopMenu() {
+    setState(() {
+      _isTopMenuOpen = !_isTopMenuOpen;
+    });
+  }
+
+  void _handleTopNavSelection(int index) {
+    setState(() {
+      _isTopMenuOpen = false;
+    });
+
+    if (index == 1) {
+      return;
+    }
+
+    Navigator.of(context).pushNamedAndRemoveUntil(
+      '/app',
+      (route) => route.settings.name == '/' || route.settings.name == '/landing',
+      arguments: index,
+    );
+  }
+
+  Future<void> _handleTopNavCreateStory() async {
+    setState(() {
+      _isTopMenuOpen = false;
+    });
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => const StoryEditorPage(),
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _recorder?.dispose();
@@ -248,6 +306,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     _tabController.dispose();
     _titleController.dispose();
     _contentController.dispose();
+    _editorScrollController.removeListener(_handleEditorScroll);
     _editorScrollController.dispose();
     _transcriptScrollController.dispose();
     _ghostWriterInstructionsDebounce?.cancel();
@@ -777,6 +836,592 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                       style: theme.textTheme.bodyMedium?.copyWith(
                         height: 1.5,
                       ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStoryCoachSection(
+    StoryCoachSection section,
+    ThemeData theme,
+    ColorScheme colorScheme,
+  ) {
+    final backgroundColor =
+        _suggestionsSectionColor(section.purpose, colorScheme);
+    final icon = _suggestionsSectionIcon(section.purpose);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: colorScheme.surface,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(
+                  icon,
+                  color: colorScheme.primary,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      section.title,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (section.description?.isNotEmpty == true) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        section.description!,
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ...section.items.map(
+            (item) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.arrow_forward_ios,
+                    size: 14,
+                    color: colorScheme.primary,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      item,
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSuggestionsPlaceholder(
+    ThemeData theme,
+    ColorScheme colorScheme,
+  ) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceVariant.withValues(alpha: 0.22),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: colorScheme.outlineVariant),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.lightbulb_outline, color: colorScheme.primary),
+                const SizedBox(width: 8),
+                Text(
+                  'Obtén orientación personalizada',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Presiona "Generar nueva sugerencia" para recibir ideas y preguntas que te acompañen a escribir tu historia.',
+              style: theme.textTheme.bodyMedium?.copyWith(height: 1.5),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  int _getWordCount() {
+    final text = _contentController.text.trim();
+    if (text.isEmpty) return 0;
+    return text.split(RegExp(r'\s+')).length;
+  }
+
+  bool _canUseGhostWriter() {
+    return _getWordCount() >= 300;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: !_hasChanges,
+      onPopInvoked: (didPop) {
+        if (!didPop && _hasChanges) {
+          _showDiscardChangesDialog();
+        }
+      },
+      child: _isLoading
+          ? const Scaffold(
+              body: Center(child: CircularProgressIndicator()),
+            )
+          : Scaffold(
+              body: SafeArea(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final tabContent = _buildActiveTabContent();
+                    const List<AppNavigationItem> navItems = [
+                      AppNavigationItem(label: 'Inicio', icon: Icons.dashboard),
+                      AppNavigationItem(
+                        label: 'Historias',
+                        icon: Icons.library_books,
+                      ),
+                      AppNavigationItem(label: 'Personas', icon: Icons.people),
+                      AppNavigationItem(
+                        label: 'Suscriptores',
+                        icon: Icons.email,
+                      ),
+                      AppNavigationItem(label: 'Ajustes', icon: Icons.settings),
+                    ];
+                    final isCompactNav = constraints.maxWidth < 840;
+
+                    return Column(
+                      children: [
+                        AppTopNavigationBar(
+                          items: navItems,
+                          currentIndex: 1,
+                          isCompact: isCompactNav,
+                          isMenuOpen: _isTopMenuOpen,
+                          isScrolled: _isTopBarElevated,
+                          onItemSelected: _handleTopNavSelection,
+                          onCreateStory: _handleTopNavCreateStory,
+                          onToggleMenu: _toggleTopMenu,
+                        ),
+                        const SizedBox(height: 8),
+                        Expanded(
+                          child: Scrollbar(
+                            controller: _editorScrollController,
+                            child: CustomScrollView(
+                              controller: _editorScrollController,
+                              physics: const ClampingScrollPhysics(),
+                              slivers: [
+                                SliverPadding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                  ),
+                                  sliver: SliverToBoxAdapter(
+                                    child: _EditorHeader(
+                                      controller: _tabController,
+                                      isNewStory: widget.storyId == null,
+                                    ),
+                                  ),
+                                ),
+                                const SliverToBoxAdapter(
+                                  child: SizedBox(height: 12),
+                                ),
+                                SliverToBoxAdapter(
+                                  child: Padding(
+                                    padding:
+                                        const EdgeInsets.only(bottom: 24),
+                                    child: tabContent,
+                                  ),
+                                ),
+                                const SliverFillRemaining(
+                                  hasScrollBody: false,
+                                  child: SizedBox.shrink(),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+              bottomNavigationBar: SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                  child: _EditorBottomBar(
+                    isSaving: _isSaving,
+                    onSaveDraft: _saveDraft,
+                    onPublish: _showPublishDialog,
+                    onOpenDictation: _openDictationPanel,
+                    canPublish: _canPublish(),
+                  ),
+                ),
+              ),
+            ),
+    );
+  }
+
+  Widget _buildActiveTabContent() {
+    switch (_tabController.index) {
+      case 1:
+        return _buildPhotosTab();
+      case 2:
+        return _buildDatesTab();
+      case 3:
+        return _buildTagsTab();
+      default:
+        return _buildWritingTab();
+    }
+  }
+
+  Widget _buildWritingTab() {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final wordCount = _getWordCount();
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompact = constraints.maxWidth < 720;
+        final cardPadding = EdgeInsets.symmetric(
+          horizontal: isCompact ? 16 : 22,
+          vertical: isCompact ? 14 : 20,
+        );
+        final bodyStyle = theme.textTheme.bodyLarge?.copyWith(
+          height: 1.45,
+        );
+        final fontSize = bodyStyle?.fontSize ?? 16;
+        final lineHeight = (bodyStyle?.height ?? 1.45) * fontSize;
+        final minContentHeight = lineHeight * 10;
+
+        Widget buildContentField() {
+          return ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight: minContentHeight,
+            ),
+            child: TextField(
+              controller: _contentController,
+              decoration: InputDecoration(
+                hintText: 'Cuenta tu historia...',
+                border: InputBorder.none,
+                hintStyle: bodyStyle?.copyWith(
+                  color: colorScheme.onSurfaceVariant.withValues(alpha: 0.55),
+                ),
+              ),
+              style: bodyStyle,
+              keyboardType: TextInputType.multiline,
+              maxLines: null,
+              minLines: 10,
+              textAlignVertical: TextAlignVertical.top,
+            ),
+          );
+        }
+
+        final editorChildren = <Widget>[
+          TextField(
+            controller: _titleController,
+            decoration: InputDecoration(
+              hintText: 'Título de tu historia...',
+              border: InputBorder.none,
+              isCollapsed: true,
+              hintStyle: theme.textTheme.titleMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+            style: theme.textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.2,
+            ),
+            minLines: 1,
+            maxLines: 3,
+            textInputAction: TextInputAction.next,
+          ),
+          const SizedBox(height: 6),
+          buildContentField(),
+          const SizedBox(height: 18),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Row(
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed: _isGhostWriterProcessing
+                            ? null
+                            : _handleGhostWriterPressed,
+                        icon: _isGhostWriterProcessing
+                            ? SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.5,
+                                  valueColor: AlwaysStoppedAnimation(
+                                    colorScheme.primary,
+                                  ),
+                                ),
+                              )
+                            : Icon(
+                                Icons.auto_fix_high,
+                                color: _canUseGhostWriter()
+                                    ? colorScheme.primary
+                                    : colorScheme.onSurfaceVariant,
+                              ),
+                        label: Text(
+                          _isGhostWriterProcessing
+                              ? 'Trabajando...'
+                              : 'Ghost Writer',
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: _canUseGhostWriter()
+                              ? colorScheme.primary
+                              : colorScheme.onSurfaceVariant,
+                          side: BorderSide(
+                            color: _canUseGhostWriter()
+                                ? colorScheme.primary.withValues(alpha: 0.5)
+                                : colorScheme.outlineVariant,
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 18,
+                            vertical: 12,
+                          ),
+                          shape: const StadiumBorder(),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      OutlinedButton.icon(
+                        onPressed: () {
+                          setState(() => _showSuggestions = !_showSuggestions);
+                          if (_showSuggestions) {
+                            _generateAISuggestions();
+                          }
+                        },
+                        icon: Icon(
+                          _showSuggestions
+                              ? Icons.lightbulb
+                              : Icons.lightbulb_outline,
+                        ),
+                        label: const Text('Sugerencias'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: _showSuggestions
+                              ? colorScheme.primary
+                              : colorScheme.onSurface,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 18,
+                            vertical: 12,
+                          ),
+                          shape: const StadiumBorder(),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            if (plan.missingPieces.isNotEmpty) ...[
+              const SizedBox(height: 18),
+              Container(
+                decoration: BoxDecoration(
+                  color: colorScheme.errorContainer.withValues(alpha: 0.45),
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.flag_outlined, color: colorScheme.error),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Información que puedes detallar más',
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: colorScheme.error,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    ...plan.missingPieces.map(
+                      (item) => Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(
+                              Icons.radio_button_unchecked,
+                              size: 14,
+                              color: colorScheme.error,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                item,
+                                style: theme.textTheme.bodyMedium,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ];
+
+        if (_showSuggestions) {
+          editorChildren.add(const SizedBox(height: 16));
+          if (isCompact) {
+            editorChildren.add(
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Acompañamiento inteligente para tu historia',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  FilledButton.tonalIcon(
+                    onPressed: _isSuggestionsLoading
+                        ? null
+                        : () => _generateAISuggestions(force: true),
+                    icon: const Icon(Icons.auto_awesome),
+                    label: const Text('Generar nueva sugerencia'),
+                  ),
+                ],
+              ),
+            );
+          } else {
+            editorChildren.add(
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Acompañamiento inteligente para tu historia',
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  FilledButton.tonalIcon(
+                    onPressed: _isSuggestionsLoading
+                        ? null
+                        : () => _generateAISuggestions(force: true),
+                    icon: const Icon(Icons.auto_awesome),
+                    label: const Text('Generar nueva sugerencia'),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          final timestampLabel = _formattedSuggestionsTimestamp();
+
+          editorChildren.add(
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Row(
+                children: [
+                  Text(
+                    'Palabras actuales: $wordCount',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  if (timestampLabel != null) ...[
+                    const SizedBox(width: 12),
+                    Icon(
+                      Icons.schedule,
+                      size: 14,
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      timestampLabel,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant
+                            .withValues(alpha: 0.85),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          );
+
+          editorChildren.add(const SizedBox(height: 12));
+
+          Widget suggestionsContent;
+          if (_isSuggestionsLoading && _storyCoachPlan == null) {
+            suggestionsContent = _buildSuggestionsLoading(theme, colorScheme);
+          } else if (_suggestionsError != null) {
+            suggestionsContent =
+                _buildSuggestionsError(theme, colorScheme, _suggestionsError!);
+          } else if (_storyCoachPlan != null) {
+            suggestionsContent = _buildStoryCoachPlanCard(
+              theme,
+              colorScheme,
+              _storyCoachPlan!,
+            );
+          } else {
+            suggestionsContent =
+                _buildSuggestionsPlaceholder(theme, colorScheme);
+          }
+
+          editorChildren.add(suggestionsContent);
+        }
+
+        return Padding(
+          padding: EdgeInsets.fromLTRB(
+            12,
+            isCompact ? 0 : 4,
+            12,
+            0,
+          ),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: colorScheme.surface,
+              borderRadius: BorderRadius.circular(28),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(
+                  width: 5,
+                  decoration: BoxDecoration(
+                    color: colorScheme.primary.withValues(alpha: 0.7),
+                    borderRadius: const BorderRadius.horizontal(
+                      left: Radius.circular(28),
                     ),
                   ),
                 ],
@@ -5178,14 +5823,10 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
 class _EditorHeader extends StatelessWidget {
   const _EditorHeader({
-    required this.isSaving,
-    required this.onSave,
     required this.controller,
     required this.isNewStory,
   });
 
-  final bool isSaving;
-  final VoidCallback onSave;
   final TabController controller;
   final bool isNewStory;
 
@@ -5247,30 +5888,9 @@ class _EditorHeader extends StatelessWidget {
                     ],
                   ),
                 ),
-                const SizedBox(width: 8),
-                FilledButton.icon(
-                  onPressed: isSaving ? null : onSave,
-                  icon: isSaving
-                      ? SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: const CircularProgressIndicator(
-                            strokeWidth: 2,
-                          ),
-                        )
-                      : const Icon(Icons.save_outlined),
-                  label: Text(isSaving ? 'Guardando...' : 'Guardar'),
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 14,
-                    ),
-                    shape: const StadiumBorder(),
-                  ),
-                ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
             _EditorSegmentedControl(
               controller: controller,
               theme: theme,

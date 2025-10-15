@@ -45,9 +45,24 @@ class NarraApp extends StatelessWidget {
       darkTheme: themeController.dark,
       themeMode: ThemeMode.system,
       home: const LandingPage(),
-      routes: {
-        '/app': (context) => const AppNavigation(),
-        '/landing': (context) => const LandingPage(),
+      onGenerateRoute: (settings) {
+        switch (settings.name) {
+          case '/app':
+            final initialIndex = settings.arguments is int
+                ? settings.arguments as int
+                : 0;
+            return MaterialPageRoute(
+              builder: (_) => AppNavigation(initialIndex: initialIndex),
+              settings: settings,
+            );
+          case '/landing':
+            return MaterialPageRoute(
+              builder: (_) => const LandingPage(),
+              settings: settings,
+            );
+          default:
+            return null;
+        }
       },
           ),
         );

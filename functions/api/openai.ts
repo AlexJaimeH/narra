@@ -24,11 +24,15 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     }
 
     const payload: Record<string, unknown> = {
-      model: typeof req.model === 'string' ? req.model : 'gpt-5-mini',
+      model: typeof req.model === 'string' ? req.model : 'gpt-4.1',
       messages: req.messages,
-      temperature:
-        typeof req.temperature === 'number' ? req.temperature : 0.7,
     };
+
+    const temperature =
+      typeof req.temperature === 'number' ? req.temperature : 0.7;
+    if (typeof temperature === 'number' && !Number.isNaN(temperature)) {
+      payload.temperature = temperature;
+    }
 
     if (req.response_format && typeof req.response_format === 'object') {
       payload.response_format = req.response_format;

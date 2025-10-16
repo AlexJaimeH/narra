@@ -1040,6 +1040,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                               physics: const ClampingScrollPhysics(),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
+                                mainAxisSize: MainAxisSize.min,
                                 children: editorSections,
                               ),
                             )

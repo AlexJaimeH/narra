@@ -1023,11 +1023,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                         ),
                         const SizedBox(height: 12),
                         Padding(
-                          padding: EdgeInsets.fromLTRB(
-                            12,
-                            0,
-                            12,
-                            padForBottomBar ? 16 : 24,
+                          padding: EdgeInsets.symmetric(
+                            horizontal: isCompactNav ? 12 : 24,
                           ),
                           child: tabContent,
                         ),
@@ -1073,7 +1070,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                       );
                     }
 
-                    return Column(
+                    final content = Column(
                       children: [
                         AppTopNavigationBar(
                           items: navItems,
@@ -1089,35 +1086,71 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                         Expanded(child: buildScrollableBody()),
                       ],
                     );
+
+                    if (!isCompactNav) {
+                      return content;
+                    }
+
+                    return Stack(
+                      children: [
+                        Positioned.fill(child: content),
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          child: _buildBottomBarShell(
+                            maxWidth: constraints.maxWidth,
+                            isCompactNav: true,
+                          ),
+                        ),
+                      ],
+                    );
                   },
                 ),
               ),
               bottomNavigationBar: LayoutBuilder(
                 builder: (context, constraints) {
                   final isCompactNav = constraints.maxWidth < 840;
-                  final horizontalPadding = isCompactNav ? 12.0 : 16.0;
+                  if (isCompactNav) {
+                    return const SizedBox.shrink();
+                  }
 
-                  return SafeArea(
-                    top: false,
-                    child: Padding(
-                      padding: EdgeInsets.fromLTRB(
-                        horizontalPadding,
-                        8,
-                        horizontalPadding,
-                        isCompactNav ? 12 : 16,
-                      ),
-                      child: _EditorBottomBar(
-                        isSaving: _isSaving,
-                        onSaveDraft: _saveDraft,
-                        onPublish: _showPublishDialog,
-                        onOpenDictation: _openDictationPanel,
-                        canPublish: _canPublish(),
-                      ),
-                    ),
+                  return _buildBottomBarShell(
+                    maxWidth: constraints.maxWidth,
+                    isCompactNav: false,
                   );
                 },
               ),
             ),
+    );
+  }
+
+  Widget _buildBottomBarShell({
+    required double maxWidth,
+    required bool isCompactNav,
+  }) {
+    final horizontalPadding = isCompactNav ? 12.0 : 16.0;
+
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          horizontalPadding,
+          8,
+          horizontalPadding,
+          isCompactNav ? 12 : 16,
+        ),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: maxWidth),
+          child: _EditorBottomBar(
+            isSaving: _isSaving,
+            onSaveDraft: _saveDraft,
+            onPublish: _showPublishDialog,
+            onOpenDictation: _openDictationPanel,
+            canPublish: _canPublish(),
+          ),
+        ),
+      ),
     );
   }
 

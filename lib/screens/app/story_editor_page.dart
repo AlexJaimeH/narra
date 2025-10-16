@@ -1033,25 +1033,29 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
                     final editorSections = buildEditorSections();
 
-                    Widget buildScrollableBody() {
+                    double compactScrollPadding() {
+                      const bottomBarVisibleHeight = 88.0;
+                      const scrollGap = 8.0;
+                      final safeAreaBottom =
+                          MediaQuery.of(context).viewPadding.bottom;
+                      return safeAreaBottom + bottomBarVisibleHeight + scrollGap;
+                    }
+
+                    Widget buildScrollableBody({double extraBottomPadding = 0}) {
+                      Widget buildListView(double bottomPadding) {
+                        return ListView(
+                          controller: _editorScrollController,
+                          physics: const ClampingScrollPhysics(),
+                          padding: EdgeInsets.only(bottom: bottomPadding),
+                          children: editorSections,
+                        );
+                      }
+
                       final scrollable = isCompactNav
-                          ? SingleChildScrollView(
-                              controller: _editorScrollController,
-                              physics: const ClampingScrollPhysics(),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                mainAxisSize: MainAxisSize.min,
-                                children: editorSections,
-                              ),
-                            )
+                          ? buildListView(extraBottomPadding)
                           : Scrollbar(
                               controller: _editorScrollController,
-                              child: ListView(
-                                controller: _editorScrollController,
-                                physics: const ClampingScrollPhysics(),
-                                padding: EdgeInsets.zero,
-                                children: editorSections,
-                              ),
+                              child: buildListView(extraBottomPadding),
                             );
 
                       return NotificationListener<ScrollNotification>(
@@ -1073,12 +1077,26 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                           onToggleMenu: _toggleTopMenu,
                         ),
                         const SizedBox(height: 8),
-                        Expanded(child: buildScrollableBody()),
-                        if (isCompactNav)
-                          _buildBottomBarShell(
-                            maxWidth: constraints.maxWidth,
-                            isCompactNav: true,
-                          ),
+                        Expanded(
+                          child: isCompactNav
+                              ? Stack(
+                                  children: [
+                                    Positioned.fill(
+                                      child: buildScrollableBody(
+                                        extraBottomPadding: compactScrollPadding(),
+                                      ),
+                                    ),
+                                    Align(
+                                      alignment: Alignment.bottomCenter,
+                                      child: _buildBottomBarShell(
+                                        maxWidth: constraints.maxWidth,
+                                        isCompactNav: true,
+                                      ),
+                                    ),
+                                  ],
+                                )
+                              : buildScrollableBody(),
+                        ),
                       ],
                     );
                   },

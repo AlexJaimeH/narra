@@ -1010,9 +1010,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                     ];
                     final isCompactNav = constraints.maxWidth < 840;
 
-                    List<Widget> buildEditorSections({
-                      required bool padForBottomBar,
-                    }) {
+                    List<Widget> buildEditorSections() {
                       final sections = <Widget>[
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -1030,19 +1028,10 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                         ),
                       ];
 
-                      if (padForBottomBar) {
-                        final bottomInset =
-                            MediaQuery.viewPaddingOf(context).bottom;
-                        sections.add(SizedBox(
-                          height: bottomInset + 140,
-                        ));
-                      }
-
                       return sections;
                     }
 
-                    final editorSections =
-                        buildEditorSections(padForBottomBar: isCompactNav);
+                    final editorSections = buildEditorSections();
 
                     Widget buildScrollableBody() {
                       final scrollable = isCompactNav
@@ -1070,7 +1059,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                       );
                     }
 
-                    final content = Column(
+                    return Column(
                       children: [
                         AppTopNavigationBar(
                           items: navItems,
@@ -1084,25 +1073,11 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                         ),
                         const SizedBox(height: 8),
                         Expanded(child: buildScrollableBody()),
-                      ],
-                    );
-
-                    if (!isCompactNav) {
-                      return content;
-                    }
-
-                    return Stack(
-                      children: [
-                        Positioned.fill(child: content),
-                        Positioned(
-                          left: 0,
-                          right: 0,
-                          bottom: 0,
-                          child: _buildBottomBarShell(
+                        if (isCompactNav)
+                          _buildBottomBarShell(
                             maxWidth: constraints.maxWidth,
                             isCompactNav: true,
                           ),
-                        ),
                       ],
                     );
                   },

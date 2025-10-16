@@ -1010,8 +1010,9 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                     ];
                     final isCompactNav = constraints.maxWidth < 840;
 
-                    List<Widget> buildEditorSections(
-                        bool includeInlineBottomBar) {
+                    List<Widget> buildEditorSections({
+                      required bool padForBottomBar,
+                    }) {
                       final sections = <Widget>[
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -1026,39 +1027,25 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                             12,
                             0,
                             12,
-                            includeInlineBottomBar ? 16 : 24,
+                            padForBottomBar ? 16 : 24,
                           ),
                           child: tabContent,
                         ),
                       ];
 
-                      if (includeInlineBottomBar) {
+                      if (padForBottomBar) {
                         final bottomInset =
                             MediaQuery.viewPaddingOf(context).bottom;
-                        sections.addAll([
-                          const SizedBox(height: 16),
-                          Padding(
-                            padding: EdgeInsets.fromLTRB(
-                              16,
-                              8,
-                              16,
-                              bottomInset + 16,
-                            ),
-                            child: _EditorBottomBar(
-                              isSaving: _isSaving,
-                              onSaveDraft: _saveDraft,
-                              onPublish: _showPublishDialog,
-                              onOpenDictation: _openDictationPanel,
-                              canPublish: _canPublish(),
-                            ),
-                          ),
-                        ]);
+                        sections.add(SizedBox(
+                          height: bottomInset + 140,
+                        ));
                       }
 
                       return sections;
                     }
 
-                    final editorSections = buildEditorSections(isCompactNav);
+                    final editorSections =
+                        buildEditorSections(padForBottomBar: isCompactNav);
 
                     Widget buildScrollableBody() {
                       final scrollable = isCompactNav
@@ -1108,14 +1095,17 @@ class _StoryEditorPageState extends State<StoryEditorPage>
               bottomNavigationBar: LayoutBuilder(
                 builder: (context, constraints) {
                   final isCompactNav = constraints.maxWidth < 840;
-                  if (isCompactNav) {
-                    return const SizedBox.shrink();
-                  }
+                  final horizontalPadding = isCompactNav ? 12.0 : 16.0;
 
                   return SafeArea(
                     top: false,
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                      padding: EdgeInsets.fromLTRB(
+                        horizontalPadding,
+                        8,
+                        horizontalPadding,
+                        isCompactNav ? 12 : 16,
+                      ),
                       child: _EditorBottomBar(
                         isSaving: _isSaving,
                         onSaveDraft: _saveDraft,

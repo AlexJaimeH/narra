@@ -225,7 +225,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     // Listen to content changes - debounced to prevent flickering
     _contentController.addListener(_handleContentChange);
     _titleController.addListener(_handleTitleChange);
-    _editorScrollController.addListener(_handleEditorScroll);
 
     // Generate initial AI suggestions when suggestions are shown
   }
@@ -244,12 +243,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     }
   }
 
-  void _handleEditorScroll() {
-    if (!_editorScrollController.hasClients) {
-      return;
-    }
-
-    final offset = _editorScrollController.offset;
+  bool _handleScrollNotification(ScrollNotification notification) {
+    final offset = notification.metrics.pixels;
     final shouldElevate = offset > 12;
     final shouldCloseMenu = _isTopMenuOpen && offset > 12;
 
@@ -261,6 +256,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         }
       });
     }
+
+    return false;
   }
 
   void _toggleTopMenu() {
@@ -280,7 +277,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
     Navigator.of(context).pushNamedAndRemoveUntil(
       '/app',
-      (route) => route.settings.name == '/' || route.settings.name == '/landing',
+      (route) =>
+          route.settings.name == '/' || route.settings.name == '/landing',
       arguments: index,
     );
   }
@@ -306,7 +304,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     _tabController.dispose();
     _titleController.dispose();
     _contentController.dispose();
-    _editorScrollController.removeListener(_handleEditorScroll);
     _editorScrollController.dispose();
     _transcriptScrollController.dispose();
     _ghostWriterInstructionsDebounce?.cancel();
@@ -993,6 +990,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
               body: Center(child: CircularProgressIndicator()),
             )
           : Scaffold(
+              backgroundColor: Theme.of(context).colorScheme.surface,
               body: SafeArea(
                 child: LayoutBuilder(
                   builder: (context, constraints) {
@@ -1012,7 +1010,67 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                     ];
                     final isCompactNav = constraints.maxWidth < 840;
 
-                    return Column(
+                    List<Widget> buildEditorSections({
+                      required bool padForBottomBar,
+                    }) {
+                      final sections = <Widget>[
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          child: _EditorHeader(
+                            controller: _tabController,
+                            isNewStory: widget.storyId == null,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: isCompactNav ? 12 : 24,
+                          ),
+                          child: tabContent,
+                        ),
+                      ];
+
+                      if (padForBottomBar) {
+                        final bottomInset =
+                            MediaQuery.viewPaddingOf(context).bottom;
+                        sections.add(SizedBox(
+                          height: bottomInset + 140,
+                        ));
+                      }
+
+                      return sections;
+                    }
+
+                    final editorSections =
+                        buildEditorSections(padForBottomBar: isCompactNav);
+
+                    Widget buildScrollableBody() {
+                      final scrollable = isCompactNav
+                          ? SingleChildScrollView(
+                              controller: _editorScrollController,
+                              physics: const ClampingScrollPhysics(),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: editorSections,
+                              ),
+                            )
+                          : Scrollbar(
+                              controller: _editorScrollController,
+                              child: ListView(
+                                controller: _editorScrollController,
+                                physics: const ClampingScrollPhysics(),
+                                padding: EdgeInsets.zero,
+                                children: editorSections,
+                              ),
+                            );
+
+                      return NotificationListener<ScrollNotification>(
+                        onNotification: _handleScrollNotification,
+                        child: scrollable,
+                      );
+                    }
+
+                    final content = Column(
                       children: [
                         AppTopNavigationBar(
                           items: navItems,
@@ -1025,618 +1083,74 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                           onToggleMenu: _toggleTopMenu,
                         ),
                         const SizedBox(height: 8),
-                        Expanded(
-                          child: Scrollbar(
-                            controller: _editorScrollController,
-                            child: CustomScrollView(
-                              controller: _editorScrollController,
-                              physics: const ClampingScrollPhysics(),
-                              slivers: [
-                                SliverPadding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                  ),
-                                  sliver: SliverToBoxAdapter(
-                                    child: _EditorHeader(
-                                      controller: _tabController,
-                                      isNewStory: widget.storyId == null,
-                                    ),
-                                  ),
-                                ),
-                                const SliverToBoxAdapter(
-                                  child: SizedBox(height: 12),
-                                ),
-                                SliverToBoxAdapter(
-                                  child: Padding(
-                                    padding:
-                                        const EdgeInsets.only(bottom: 24),
-                                    child: tabContent,
-                                  ),
-                                ),
-                                const SliverFillRemaining(
-                                  hasScrollBody: false,
-                                  child: SizedBox.shrink(),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
+                        Expanded(child: buildScrollableBody()),
                       ],
                     );
-                  },
-                ),
-              ),
-              bottomNavigationBar: SafeArea(
-                top: false,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                  child: _EditorBottomBar(
-                    isSaving: _isSaving,
-                    onSaveDraft: _saveDraft,
-                    onPublish: _showPublishDialog,
-                    onOpenDictation: _openDictationPanel,
-                    canPublish: _canPublish(),
-                  ),
-                ),
-              ),
-            ),
-    );
-  }
 
-  Widget _buildActiveTabContent() {
-    switch (_tabController.index) {
-      case 1:
-        return _buildPhotosTab();
-      case 2:
-        return _buildDatesTab();
-      case 3:
-        return _buildTagsTab();
-      default:
-        return _buildWritingTab();
-    }
-  }
+                    if (!isCompactNav) {
+                      return content;
+                    }
 
-  Widget _buildWritingTab() {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final wordCount = _getWordCount();
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isCompact = constraints.maxWidth < 720;
-        final cardPadding = EdgeInsets.symmetric(
-          horizontal: isCompact ? 16 : 22,
-          vertical: isCompact ? 14 : 20,
-        );
-        final bodyStyle = theme.textTheme.bodyLarge?.copyWith(
-          height: 1.45,
-        );
-        final fontSize = bodyStyle?.fontSize ?? 16;
-        final lineHeight = (bodyStyle?.height ?? 1.45) * fontSize;
-        final minContentHeight = lineHeight * 10;
-
-        Widget buildContentField() {
-          return ConstrainedBox(
-            constraints: BoxConstraints(
-              minHeight: minContentHeight,
-            ),
-            child: TextField(
-              controller: _contentController,
-              decoration: InputDecoration(
-                hintText: 'Cuenta tu historia...',
-                border: InputBorder.none,
-                hintStyle: bodyStyle?.copyWith(
-                  color: colorScheme.onSurfaceVariant.withValues(alpha: 0.55),
-                ),
-              ),
-              style: bodyStyle,
-              keyboardType: TextInputType.multiline,
-              maxLines: null,
-              minLines: 10,
-              textAlignVertical: TextAlignVertical.top,
-            ),
-          );
-        }
-
-        final editorChildren = <Widget>[
-          TextField(
-            controller: _titleController,
-            decoration: InputDecoration(
-              hintText: 'Título de tu historia...',
-              border: InputBorder.none,
-              isCollapsed: true,
-              hintStyle: theme.textTheme.titleMedium?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-              ),
-            ),
-            style: theme.textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.w700,
-              letterSpacing: -0.2,
-            ),
-            minLines: 1,
-            maxLines: 3,
-            textInputAction: TextInputAction.next,
-          ),
-          const SizedBox(height: 6),
-          buildContentField(),
-          const SizedBox(height: 18),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: Row(
-                    children: [
-                      OutlinedButton.icon(
-                        onPressed: _isGhostWriterProcessing
-                            ? null
-                            : _handleGhostWriterPressed,
-                        icon: _isGhostWriterProcessing
-                            ? SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2.5,
-                                  valueColor: AlwaysStoppedAnimation(
-                                    colorScheme.primary,
-                                  ),
-                                ),
-                              )
-                            : Icon(
-                                Icons.auto_fix_high,
-                                color: _canUseGhostWriter()
-                                    ? colorScheme.primary
-                                    : colorScheme.onSurfaceVariant,
-                              ),
-                        label: Text(
-                          _isGhostWriterProcessing
-                              ? 'Trabajando...'
-                              : 'Ghost Writer',
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: _canUseGhostWriter()
-                              ? colorScheme.primary
-                              : colorScheme.onSurfaceVariant,
-                          side: BorderSide(
-                            color: _canUseGhostWriter()
-                                ? colorScheme.primary.withValues(alpha: 0.5)
-                                : colorScheme.outlineVariant,
-                          ),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 18,
-                            vertical: 12,
-                          ),
-                          shape: const StadiumBorder(),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      OutlinedButton.icon(
-                        onPressed: () {
-                          setState(() => _showSuggestions = !_showSuggestions);
-                          if (_showSuggestions) {
-                            _generateAISuggestions();
-                          }
-                        },
-                        icon: Icon(
-                          _showSuggestions
-                              ? Icons.lightbulb
-                              : Icons.lightbulb_outline,
-                        ),
-                        label: const Text('Sugerencias'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: _showSuggestions
-                              ? colorScheme.primary
-                              : colorScheme.onSurface,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 18,
-                            vertical: 12,
-                          ),
-                          shape: const StadiumBorder(),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            if (plan.missingPieces.isNotEmpty) ...[
-              const SizedBox(height: 18),
-              Container(
-                decoration: BoxDecoration(
-                  color: colorScheme.errorContainer.withValues(alpha: 0.45),
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
+                    return Stack(
                       children: [
-                        Icon(Icons.flag_outlined, color: colorScheme.error),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Información que puedes detallar más',
-                          style: theme.textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: colorScheme.error,
+                        Positioned.fill(child: content),
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          child: _buildBottomBarShell(
+                            maxWidth: constraints.maxWidth,
+                            isCompactNav: true,
                           ),
                         ),
                       ],
-                    ),
-                    const SizedBox(height: 12),
-                    ...plan.missingPieces.map(
-                      (item) => Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Icon(
-                              Icons.radio_button_unchecked,
-                              size: 14,
-                              color: colorScheme.error,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                item,
-                                style: theme.textTheme.bodyMedium,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ];
-
-        if (_showSuggestions) {
-          editorChildren.add(const SizedBox(height: 16));
-          if (isCompact) {
-            editorChildren.add(
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Acompañamiento inteligente para tu historia',
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  FilledButton.tonalIcon(
-                    onPressed: _isSuggestionsLoading
-                        ? null
-                        : () => _generateAISuggestions(force: true),
-                    icon: const Icon(Icons.auto_awesome),
-                    label: const Text('Generar nueva sugerencia'),
-                  ),
-                ],
-              ),
-            );
-          } else {
-            editorChildren.add(
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Acompañamiento inteligente para tu historia',
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  FilledButton.tonalIcon(
-                    onPressed: _isSuggestionsLoading
-                        ? null
-                        : () => _generateAISuggestions(force: true),
-                    icon: const Icon(Icons.auto_awesome),
-                    label: const Text('Generar nueva sugerencia'),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          final timestampLabel = _formattedSuggestionsTimestamp();
-
-          editorChildren.add(
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Row(
-                children: [
-                  Text(
-                    'Palabras actuales: $wordCount',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  if (timestampLabel != null) ...[
-                    const SizedBox(width: 12),
-                    Icon(
-                      Icons.schedule,
-                      size: 14,
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      timestampLabel,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant
-                            .withValues(alpha: 0.85),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          );
-
-          editorChildren.add(const SizedBox(height: 12));
-
-          Widget suggestionsContent;
-          if (_isSuggestionsLoading && _storyCoachPlan == null) {
-            suggestionsContent = _buildSuggestionsLoading(theme, colorScheme);
-          } else if (_suggestionsError != null) {
-            suggestionsContent =
-                _buildSuggestionsError(theme, colorScheme, _suggestionsError!);
-          } else if (_storyCoachPlan != null) {
-            suggestionsContent = _buildStoryCoachPlanCard(
-              theme,
-              colorScheme,
-              _storyCoachPlan!,
-            );
-          } else {
-            suggestionsContent =
-                _buildSuggestionsPlaceholder(theme, colorScheme);
-          }
-
-          editorChildren.add(suggestionsContent);
-        }
-
-        return Padding(
-          padding: EdgeInsets.fromLTRB(
-            12,
-            isCompact ? 0 : 4,
-            12,
-            0,
-          ),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: colorScheme.surface,
-              borderRadius: BorderRadius.circular(28),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Container(
-                  width: 5,
-                  decoration: BoxDecoration(
-                    color: colorScheme.primary.withValues(alpha: 0.7),
-                    borderRadius: const BorderRadius.horizontal(
-                      left: Radius.circular(28),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStoryCoachSection(
-    StoryCoachSection section,
-    ThemeData theme,
-    ColorScheme colorScheme,
-  ) {
-    final backgroundColor =
-        _suggestionsSectionColor(section.purpose, colorScheme);
-    final icon = _suggestionsSectionIcon(section.purpose);
-
-    return Container(
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(18),
-      ),
-      padding: const EdgeInsets.all(18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: colorScheme.surface,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(
-                  icon,
-                  color: colorScheme.primary,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      section.title,
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    if (section.description?.isNotEmpty == true) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        section.description!,
-                        style: theme.textTheme.bodySmall,
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          ...section.items.map(
-            (item) => Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(
-                    Icons.arrow_forward_ios,
-                    size: 14,
-                    color: colorScheme.primary,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      item,
-                      style: theme.textTheme.bodyMedium,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSuggestionsPlaceholder(
-    ThemeData theme,
-    ColorScheme colorScheme,
-  ) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceVariant.withValues(alpha: 0.22),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: colorScheme.outlineVariant),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.lightbulb_outline, color: colorScheme.primary),
-                const SizedBox(width: 8),
-                Text(
-                  'Obtén orientación personalizada',
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Presiona "Generar nueva sugerencia" para recibir ideas y preguntas que te acompañen a escribir tu historia.',
-              style: theme.textTheme.bodyMedium?.copyWith(height: 1.5),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  int _getWordCount() {
-    final text = _contentController.text.trim();
-    if (text.isEmpty) return 0;
-    return text.split(RegExp(r'\s+')).length;
-  }
-
-  bool _canUseGhostWriter() {
-    return _getWordCount() >= 300;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return PopScope(
-      canPop: !_hasChanges,
-      onPopInvoked: (didPop) {
-        if (!didPop && _hasChanges) {
-          _showDiscardChangesDialog();
-        }
-      },
-      child: _isLoading
-          ? const Scaffold(
-              body: Center(child: CircularProgressIndicator()),
-            )
-          : Scaffold(
-              body: SafeArea(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final tabContent = _buildActiveTabContent();
-
-                    return Scrollbar(
-                      controller: _editorScrollController,
-                      child: CustomScrollView(
-                        controller: _editorScrollController,
-                        physics: const ClampingScrollPhysics(),
-                        slivers: [
-                          const SliverToBoxAdapter(
-                            child: SizedBox(height: 4),
-                          ),
-                          SliverPadding(
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            sliver: SliverToBoxAdapter(
-                              child: _EditorHeader(
-                                isSaving: _isSaving,
-                                onSave: _saveDraft,
-                                controller: _tabController,
-                                isNewStory: widget.storyId == null,
-                              ),
-                            ),
-                          ),
-                          const SliverToBoxAdapter(
-                            child: SizedBox(height: 12),
-                          ),
-                          SliverToBoxAdapter(
-                            child: Padding(
-                              padding: const EdgeInsets.only(bottom: 24),
-                              child: tabContent,
-                            ),
-                          ),
-                          const SliverFillRemaining(
-                            hasScrollBody: false,
-                            child: SizedBox.shrink(),
-                          ),
-                        ],
-                      ),
                     );
                   },
                 ),
               ),
-              bottomNavigationBar: SafeArea(
-                top: false,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                  child: _EditorBottomBar(
-                    isSaving: _isSaving,
-                    onSaveDraft: _saveDraft,
-                    onPublish: _showPublishDialog,
-                    onOpenDictation: _openDictationPanel,
-                    canPublish: _canPublish(),
-                  ),
-                ),
+              bottomNavigationBar: LayoutBuilder(
+                builder: (context, constraints) {
+                  final isCompactNav = constraints.maxWidth < 840;
+                  if (isCompactNav) {
+                    return const SizedBox.shrink();
+                  }
+
+                  return _buildBottomBarShell(
+                    maxWidth: constraints.maxWidth,
+                    isCompactNav: false,
+                  );
+                },
               ),
             ),
+    );
+  }
+
+  Widget _buildBottomBarShell({
+    required double maxWidth,
+    required bool isCompactNav,
+  }) {
+    final horizontalPadding = isCompactNav ? 12.0 : 16.0;
+
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          horizontalPadding,
+          8,
+          horizontalPadding,
+          isCompactNav ? 12 : 16,
+        ),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: maxWidth),
+          child: _EditorBottomBar(
+            isSaving: _isSaving,
+            onSaveDraft: _saveDraft,
+            onPublish: _showPublishDialog,
+            onOpenDictation: _openDictationPanel,
+            canPublish: _canPublish(),
+          ),
+        ),
+      ),
     );
   }
 
@@ -5989,98 +5503,171 @@ class _EditorBottomBar extends StatelessWidget {
           ),
         ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final isCompact = constraints.maxWidth < 640;
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isCompact = constraints.maxWidth < 640;
+          final horizontalPadding = isCompact ? 12.0 : 18.0;
+          final verticalPadding = isCompact ? 12.0 : 14.0;
+          final buttonHeight = isCompact ? 44.0 : 48.0;
+          final compactButtonPadding = EdgeInsets.symmetric(
+            horizontal: isCompact ? 12 : 20,
+            vertical: isCompact ? 10 : 14,
+          );
+          final compactIconSize = isCompact ? 20.0 : 24.0;
+          final compactSpacing = isCompact ? 6.0 : 8.0;
 
-            Widget micButton() => IconButton(
-                  onPressed: onOpenDictation,
-                  icon: const Icon(Icons.mic_rounded),
-                  style: IconButton.styleFrom(
-                    backgroundColor:
-                        colorScheme.primary.withValues(alpha: 0.12),
-                    foregroundColor: colorScheme.primary,
-                    padding: const EdgeInsets.all(14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                  ),
-                );
-
-            Widget draftButton() => FilledButton.tonalIcon(
-                  onPressed: isSaving ? null : onSaveDraft,
-                  icon: isSaving
-                      ? SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: const CircularProgressIndicator(
-                            strokeWidth: 2,
-                          ),
-                        )
-                      : const Icon(Icons.save_outlined),
-                  label: Text(isSaving ? 'Guardando...' : 'Borrador'),
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 14,
-                    ),
-                    shape: const StadiumBorder(),
-                  ),
-                );
-
-            Widget publishButton() => FilledButton.icon(
-                  onPressed: canPublish ? onPublish : null,
-                  icon: const Icon(Icons.publish_rounded),
-                  label: const Text('Publicar'),
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 22,
-                      vertical: 14,
-                    ),
-                    shape: const StadiumBorder(),
-                  ),
-                );
-
-            if (isCompact) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    children: [
-                      micButton(),
-                      const SizedBox(width: 12),
-                      Expanded(child: draftButton()),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: publishButton(),
-                  ),
-                ],
-              );
-            }
-
-            return Row(
-              children: [
-                micButton(),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      draftButton(),
-                      const SizedBox(width: 12),
-                      publishButton(),
-                    ],
+          Widget micButton() => IconButton(
+                onPressed: onOpenDictation,
+                icon: Icon(
+                  Icons.mic_rounded,
+                  size: compactIconSize + (isCompact ? 2 : 0),
+                ),
+                style: IconButton.styleFrom(
+                  backgroundColor: colorScheme.primary.withValues(alpha: 0.12),
+                  foregroundColor: colorScheme.primary,
+                  minimumSize: Size.square(buttonHeight),
+                  padding: EdgeInsets.all(isCompact ? 12 : 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
                   ),
                 ),
-              ],
+              );
+
+          ButtonStyle buildButtonStyle({required bool compact}) {
+            final base = FilledButton.styleFrom(
+              padding: compact
+                  ? compactButtonPadding
+                  : const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              minimumSize: Size(compact ? 0 : 64, compact ? buttonHeight : 48),
+              shape: const StadiumBorder(),
+              textStyle: compact ? Theme.of(context).textTheme.labelLarge : null,
             );
-          },
-        ),
+
+            if (!compact) {
+              return base;
+            }
+
+            return base.copyWith(
+              visualDensity: const VisualDensity(horizontal: -1, vertical: -1),
+            );
+          }
+
+          Widget draftButton(bool compact) {
+            final button = FilledButton.tonal(
+              onPressed: isSaving ? null : onSaveDraft,
+              style: buildButtonStyle(compact: compact).copyWith(
+                padding: WidgetStatePropertyAll(
+                  compact
+                      ? EdgeInsets.symmetric(horizontal: 12, vertical: 10)
+                      : const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (isSaving)
+                    SizedBox(
+                      width: compact ? 18 : 20,
+                      height: compact ? 18 : 20,
+                      child: const CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  else
+                    Icon(
+                      Icons.save_outlined,
+                      size: compactIconSize,
+                    ),
+                  SizedBox(width: compactSpacing),
+                  Flexible(
+                    child: Text(
+                      isSaving ? 'Guardando...' : 'Borrador',
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            );
+
+            if (!compact) {
+              return button;
+            }
+
+            return SizedBox(height: buttonHeight, child: button);
+          }
+
+          Widget publishButton(bool compact) {
+            final button = FilledButton(
+              onPressed: canPublish ? onPublish : null,
+              style: buildButtonStyle(compact: compact).copyWith(
+                padding: WidgetStatePropertyAll(
+                  compact
+                      ? EdgeInsets.symmetric(horizontal: 12, vertical: 10)
+                      : const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.publish_rounded,
+                    size: compactIconSize,
+                  ),
+                  SizedBox(width: compactSpacing),
+                  Flexible(
+                    child: const Text(
+                      'Publicar',
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            );
+
+            if (!compact) {
+              return button;
+            }
+
+            return SizedBox(height: buttonHeight, child: button);
+          }
+
+          return Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: horizontalPadding,
+              vertical: verticalPadding,
+            ),
+            child: isCompact
+                ? Row(
+                    children: [
+                      micButton(),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Row(
+                          children: [
+                            Expanded(child: draftButton(true)),
+                            const SizedBox(width: 10),
+                            Expanded(child: publishButton(true)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  )
+                : Row(
+                    children: [
+                      micButton(),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            draftButton(false),
+                            const SizedBox(width: 12),
+                            publishButton(false),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+          );
+        },
       ),
     );
   }

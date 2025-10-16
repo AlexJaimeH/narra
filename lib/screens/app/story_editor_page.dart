@@ -5523,55 +5523,71 @@ class _EditorBottomBar extends StatelessWidget {
                   ),
                 );
 
-            Widget draftButton() => FilledButton.tonalIcon(
-                  onPressed: isSaving ? null : onSaveDraft,
-                  icon: isSaving
-                      ? SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: const CircularProgressIndicator(
-                            strokeWidth: 2,
-                          ),
-                        )
-                      : const Icon(Icons.save_outlined),
-                  label: Text(isSaving ? 'Guardando...' : 'Borrador'),
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 14,
-                    ),
-                    shape: const StadiumBorder(),
+            Widget draftButton(bool compact) {
+              final button = FilledButton.tonalIcon(
+                onPressed: isSaving ? null : onSaveDraft,
+                icon: isSaving
+                    ? SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: const CircularProgressIndicator(
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : const Icon(Icons.save_outlined),
+                label: Text(isSaving ? 'Guardando...' : 'Borrador'),
+                style: FilledButton.styleFrom(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: compact ? 14 : 20,
+                    vertical: compact ? 10 : 14,
                   ),
-                );
+                  minimumSize: Size(compact ? 0 : 64, compact ? 44 : 48),
+                  shape: const StadiumBorder(),
+                ),
+              );
 
-            Widget publishButton() => FilledButton.icon(
-                  onPressed: canPublish ? onPublish : null,
-                  icon: const Icon(Icons.publish_rounded),
-                  label: const Text('Publicar'),
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 22,
-                      vertical: 14,
-                    ),
-                    shape: const StadiumBorder(),
+              if (!compact) {
+                return button;
+              }
+
+              return SizedBox(height: 44, child: button);
+            }
+
+            Widget publishButton(bool compact) {
+              final button = FilledButton.icon(
+                onPressed: canPublish ? onPublish : null,
+                icon: const Icon(Icons.publish_rounded),
+                label: const Text('Publicar'),
+                style: FilledButton.styleFrom(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: compact ? 14 : 22,
+                    vertical: compact ? 10 : 14,
                   ),
-                );
+                  minimumSize: Size(compact ? 0 : 64, compact ? 44 : 48),
+                  shape: const StadiumBorder(),
+                ),
+              );
+
+              if (!compact) {
+                return button;
+              }
+
+              return SizedBox(height: 44, child: button);
+            }
 
             if (isCompact) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+              return Row(
                 children: [
-                  Row(
-                    children: [
-                      micButton(),
-                      const SizedBox(width: 12),
-                      Expanded(child: draftButton()),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: publishButton(),
+                  micButton(),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Expanded(child: draftButton(true)),
+                        const SizedBox(width: 12),
+                        Expanded(child: publishButton(true)),
+                      ],
+                    ),
                   ),
                 ],
               );
@@ -5585,9 +5601,9 @@ class _EditorBottomBar extends StatelessWidget {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      draftButton(),
+                      draftButton(false),
                       const SizedBox(width: 12),
-                      publishButton(),
+                      publishButton(false),
                     ],
                   ),
                 ),

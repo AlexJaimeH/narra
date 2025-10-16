@@ -1034,25 +1034,33 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                     final editorSections = buildEditorSections();
 
                     Widget buildScrollableBody({double extraBottomPadding = 0}) {
-                      Widget buildListView(double bottomPadding) {
-                        return ListView(
+                      Widget buildScrollView(double bottomPadding) {
+                        final body = Padding(
+                          padding: EdgeInsets.only(bottom: bottomPadding),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: editorSections,
+                          ),
+                        );
+
+                        final scrollView = SingleChildScrollView(
                           controller: _editorScrollController,
                           physics: const ClampingScrollPhysics(),
-                          padding: EdgeInsets.only(bottom: bottomPadding),
-                          children: editorSections,
+                          child: body,
                         );
-                      }
 
-                      final scrollable = isCompactNav
-                          ? buildListView(extraBottomPadding)
-                          : Scrollbar(
-                              controller: _editorScrollController,
-                              child: buildListView(extraBottomPadding),
-                            );
+                        return isCompactNav
+                            ? scrollView
+                            : Scrollbar(
+                                controller: _editorScrollController,
+                                child: scrollView,
+                              );
+                      }
 
                       return NotificationListener<ScrollNotification>(
                         onNotification: _handleScrollNotification,
-                        child: scrollable,
+                        child: buildScrollView(extraBottomPadding),
                       );
                     }
 
@@ -1316,6 +1324,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           if (isCompact) {
             editorChildren.add(
               Column(
+                mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
@@ -1445,6 +1454,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                   child: Padding(
                     padding: cardPadding,
                     child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: editorChildren,
                     ),

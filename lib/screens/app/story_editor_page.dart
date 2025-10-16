@@ -225,7 +225,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     // Listen to content changes - debounced to prevent flickering
     _contentController.addListener(_handleContentChange);
     _titleController.addListener(_handleTitleChange);
-    _editorScrollController.addListener(_handleEditorScroll);
 
     // Generate initial AI suggestions when suggestions are shown
   }
@@ -244,12 +243,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     }
   }
 
-  void _handleEditorScroll() {
-    if (!_editorScrollController.hasClients) {
-      return;
-    }
-
-    final offset = _editorScrollController.offset;
+  bool _handleScrollNotification(ScrollNotification notification) {
+    final offset = notification.metrics.pixels;
     final shouldElevate = offset > 12;
     final shouldCloseMenu = _isTopMenuOpen && offset > 12;
 
@@ -261,6 +256,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         }
       });
     }
+
+    return false;
   }
 
   void _toggleTopMenu() {
@@ -280,7 +277,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
     Navigator.of(context).pushNamedAndRemoveUntil(
       '/app',
-      (route) => route.settings.name == '/' || route.settings.name == '/landing',
+      (route) =>
+          route.settings.name == '/' || route.settings.name == '/landing',
       arguments: index,
     );
   }
@@ -306,7 +304,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     _tabController.dispose();
     _titleController.dispose();
     _contentController.dispose();
-    _editorScrollController.removeListener(_handleEditorScroll);
     _editorScrollController.dispose();
     _transcriptScrollController.dispose();
     _ghostWriterInstructionsDebounce?.cancel();
@@ -1013,11 +1010,9 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                     ];
                     final isCompactNav = constraints.maxWidth < 840;
 
-                    final scrollableContent = ListView(
-                      controller: _editorScrollController,
-                      physics: const ClampingScrollPhysics(),
-                      padding: EdgeInsets.zero,
-                      children: [
+                    List<Widget> buildEditorSections(
+                        bool includeInlineBottomBar) {
+                      final sections = <Widget>[
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 12),
                           child: _EditorHeader(
@@ -1027,11 +1022,69 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                         ),
                         const SizedBox(height: 12),
                         Padding(
-                          padding: const EdgeInsets.fromLTRB(12, 0, 12, 24),
+                          padding: EdgeInsets.fromLTRB(
+                            12,
+                            0,
+                            12,
+                            includeInlineBottomBar ? 16 : 24,
+                          ),
                           child: tabContent,
                         ),
-                      ],
-                    );
+                      ];
+
+                      if (includeInlineBottomBar) {
+                        final bottomInset =
+                            MediaQuery.viewPaddingOf(context).bottom;
+                        sections.addAll([
+                          const SizedBox(height: 16),
+                          Padding(
+                            padding: EdgeInsets.fromLTRB(
+                              16,
+                              8,
+                              16,
+                              bottomInset + 16,
+                            ),
+                            child: _EditorBottomBar(
+                              isSaving: _isSaving,
+                              onSaveDraft: _saveDraft,
+                              onPublish: _showPublishDialog,
+                              onOpenDictation: _openDictationPanel,
+                              canPublish: _canPublish(),
+                            ),
+                          ),
+                        ]);
+                      }
+
+                      return sections;
+                    }
+
+                    final editorSections = buildEditorSections(isCompactNav);
+
+                    Widget buildScrollableBody() {
+                      final scrollable = isCompactNav
+                          ? SingleChildScrollView(
+                              controller: _editorScrollController,
+                              physics: const ClampingScrollPhysics(),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: editorSections,
+                              ),
+                            )
+                          : Scrollbar(
+                              controller: _editorScrollController,
+                              child: ListView(
+                                controller: _editorScrollController,
+                                physics: const ClampingScrollPhysics(),
+                                padding: EdgeInsets.zero,
+                                children: editorSections,
+                              ),
+                            );
+
+                      return NotificationListener<ScrollNotification>(
+                        onNotification: _handleScrollNotification,
+                        child: scrollable,
+                      );
+                    }
 
                     return Column(
                       children: [
@@ -1046,31 +1099,33 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                           onToggleMenu: _toggleTopMenu,
                         ),
                         const SizedBox(height: 8),
-                        Expanded(
-                          child: isCompactNav
-                              ? scrollableContent
-                              : Scrollbar(
-                                  controller: _editorScrollController,
-                                  child: scrollableContent,
-                                ),
-                        ),
+                        Expanded(child: buildScrollableBody()),
                       ],
                     );
                   },
                 ),
               ),
-              bottomNavigationBar: SafeArea(
-                top: false,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                  child: _EditorBottomBar(
-                    isSaving: _isSaving,
-                    onSaveDraft: _saveDraft,
-                    onPublish: _showPublishDialog,
-                    onOpenDictation: _openDictationPanel,
-                    canPublish: _canPublish(),
-                  ),
-                ),
+              bottomNavigationBar: LayoutBuilder(
+                builder: (context, constraints) {
+                  final isCompactNav = constraints.maxWidth < 840;
+                  if (isCompactNav) {
+                    return const SizedBox.shrink();
+                  }
+
+                  return SafeArea(
+                    top: false,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                      child: _EditorBottomBar(
+                        isSaving: _isSaving,
+                        onSaveDraft: _saveDraft,
+                        onPublish: _showPublishDialog,
+                        onOpenDictation: _openDictationPanel,
+                        canPublish: _canPublish(),
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
     );

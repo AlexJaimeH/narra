@@ -1013,6 +1013,26 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                     ];
                     final isCompactNav = constraints.maxWidth < 840;
 
+                    final scrollableContent = ListView(
+                      controller: _editorScrollController,
+                      physics: const ClampingScrollPhysics(),
+                      padding: EdgeInsets.zero,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          child: _EditorHeader(
+                            controller: _tabController,
+                            isNewStory: widget.storyId == null,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(12, 0, 12, 24),
+                          child: tabContent,
+                        ),
+                      ],
+                    );
+
                     return Column(
                       children: [
                         AppTopNavigationBar(
@@ -1027,40 +1047,12 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                         ),
                         const SizedBox(height: 8),
                         Expanded(
-                          child: Scrollbar(
-                            controller: _editorScrollController,
-                            child: CustomScrollView(
-                              controller: _editorScrollController,
-                              physics: const ClampingScrollPhysics(),
-                              slivers: [
-                                SliverPadding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                  ),
-                                  sliver: SliverToBoxAdapter(
-                                    child: _EditorHeader(
-                                      controller: _tabController,
-                                      isNewStory: widget.storyId == null,
-                                    ),
-                                  ),
+                          child: isCompactNav
+                              ? scrollableContent
+                              : Scrollbar(
+                                  controller: _editorScrollController,
+                                  child: scrollableContent,
                                 ),
-                                const SliverToBoxAdapter(
-                                  child: SizedBox(height: 12),
-                                ),
-                                SliverToBoxAdapter(
-                                  child: Padding(
-                                    padding:
-                                        const EdgeInsets.only(bottom: 24),
-                                    child: tabContent,
-                                  ),
-                                ),
-                                const SliverFillRemaining(
-                                  hasScrollBody: false,
-                                  child: SizedBox.shrink(),
-                                ),
-                              ],
-                            ),
-                          ),
                         ),
                       ],
                     );

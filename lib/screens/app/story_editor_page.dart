@@ -5503,114 +5503,171 @@ class _EditorBottomBar extends StatelessWidget {
           ),
         ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final isCompact = constraints.maxWidth < 640;
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isCompact = constraints.maxWidth < 640;
+          final horizontalPadding = isCompact ? 12.0 : 18.0;
+          final verticalPadding = isCompact ? 12.0 : 14.0;
+          final buttonHeight = isCompact ? 44.0 : 48.0;
+          final compactButtonPadding = EdgeInsets.symmetric(
+            horizontal: isCompact ? 12 : 20,
+            vertical: isCompact ? 10 : 14,
+          );
+          final compactIconSize = isCompact ? 20.0 : 24.0;
+          final compactSpacing = isCompact ? 6.0 : 8.0;
 
-            Widget micButton() => IconButton(
-                  onPressed: onOpenDictation,
-                  icon: const Icon(Icons.mic_rounded),
-                  style: IconButton.styleFrom(
-                    backgroundColor:
-                        colorScheme.primary.withValues(alpha: 0.12),
-                    foregroundColor: colorScheme.primary,
-                    padding: const EdgeInsets.all(14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(18),
-                    ),
+          Widget micButton() => IconButton(
+                onPressed: onOpenDictation,
+                icon: Icon(
+                  Icons.mic_rounded,
+                  size: compactIconSize + (isCompact ? 2 : 0),
+                ),
+                style: IconButton.styleFrom(
+                  backgroundColor: colorScheme.primary.withValues(alpha: 0.12),
+                  foregroundColor: colorScheme.primary,
+                  minimumSize: Size.square(buttonHeight),
+                  padding: EdgeInsets.all(isCompact ? 12 : 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
                   ),
-                );
-
-            Widget draftButton(bool compact) {
-              final button = FilledButton.tonalIcon(
-                onPressed: isSaving ? null : onSaveDraft,
-                icon: isSaving
-                    ? SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: const CircularProgressIndicator(
-                          strokeWidth: 2,
-                        ),
-                      )
-                    : const Icon(Icons.save_outlined),
-                label: Text(isSaving ? 'Guardando...' : 'Borrador'),
-                style: FilledButton.styleFrom(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: compact ? 14 : 20,
-                    vertical: compact ? 10 : 14,
-                  ),
-                  minimumSize: Size(compact ? 0 : 64, compact ? 44 : 48),
-                  shape: const StadiumBorder(),
                 ),
               );
 
-              if (!compact) {
-                return button;
-              }
+          ButtonStyle buildButtonStyle({required bool compact}) {
+            final base = FilledButton.styleFrom(
+              padding: compact
+                  ? compactButtonPadding
+                  : const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              minimumSize: Size(compact ? 0 : 64, compact ? buttonHeight : 48),
+              shape: const StadiumBorder(),
+              textStyle: compact ? Theme.of(context).textTheme.labelLarge : null,
+            );
 
-              return SizedBox(height: 44, child: button);
+            if (!compact) {
+              return base;
             }
 
-            Widget publishButton(bool compact) {
-              final button = FilledButton.icon(
-                onPressed: canPublish ? onPublish : null,
-                icon: const Icon(Icons.publish_rounded),
-                label: const Text('Publicar'),
-                style: FilledButton.styleFrom(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: compact ? 14 : 22,
-                    vertical: compact ? 10 : 14,
-                  ),
-                  minimumSize: Size(compact ? 0 : 64, compact ? 44 : 48),
-                  shape: const StadiumBorder(),
+            return base.copyWith(
+              visualDensity: const VisualDensity(horizontal: -1, vertical: -1),
+            );
+          }
+
+          Widget draftButton(bool compact) {
+            final button = FilledButton.tonal(
+              onPressed: isSaving ? null : onSaveDraft,
+              style: buildButtonStyle(compact: compact).copyWith(
+                padding: WidgetStatePropertyAll(
+                  compact
+                      ? EdgeInsets.symmetric(horizontal: 12, vertical: 10)
+                      : const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                 ),
-              );
-
-              if (!compact) {
-                return button;
-              }
-
-              return SizedBox(height: 44, child: button);
-            }
-
-            if (isCompact) {
-              return Row(
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  micButton(),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Row(
-                      children: [
-                        Expanded(child: draftButton(true)),
-                        const SizedBox(width: 12),
-                        Expanded(child: publishButton(true)),
-                      ],
+                  if (isSaving)
+                    SizedBox(
+                      width: compact ? 18 : 20,
+                      height: compact ? 18 : 20,
+                      child: const CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  else
+                    Icon(
+                      Icons.save_outlined,
+                      size: compactIconSize,
+                    ),
+                  SizedBox(width: compactSpacing),
+                  Flexible(
+                    child: Text(
+                      isSaving ? 'Guardando...' : 'Borrador',
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
-              );
+              ),
+            );
+
+            if (!compact) {
+              return button;
             }
 
-            return Row(
-              children: [
-                micButton(),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
+            return SizedBox(height: buttonHeight, child: button);
+          }
+
+          Widget publishButton(bool compact) {
+            final button = FilledButton(
+              onPressed: canPublish ? onPublish : null,
+              style: buildButtonStyle(compact: compact).copyWith(
+                padding: WidgetStatePropertyAll(
+                  compact
+                      ? EdgeInsets.symmetric(horizontal: 12, vertical: 10)
+                      : const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.publish_rounded,
+                    size: compactIconSize,
+                  ),
+                  SizedBox(width: compactSpacing),
+                  Flexible(
+                    child: const Text(
+                      'Publicar',
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            );
+
+            if (!compact) {
+              return button;
+            }
+
+            return SizedBox(height: buttonHeight, child: button);
+          }
+
+          return Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: horizontalPadding,
+              vertical: verticalPadding,
+            ),
+            child: isCompact
+                ? Row(
                     children: [
-                      draftButton(false),
-                      const SizedBox(width: 12),
-                      publishButton(false),
+                      micButton(),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Row(
+                          children: [
+                            Expanded(child: draftButton(true)),
+                            const SizedBox(width: 10),
+                            Expanded(child: publishButton(true)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  )
+                : Row(
+                    children: [
+                      micButton(),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            draftButton(false),
+                            const SizedBox(width: 12),
+                            publishButton(false),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
-                ),
-              ],
-            );
-          },
-        ),
+          );
+        },
       ),
     );
   }

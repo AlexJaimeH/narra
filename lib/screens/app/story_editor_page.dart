@@ -1033,14 +1033,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
                     final editorSections = buildEditorSections();
 
-                    double compactScrollPadding() {
-                      const bottomBarVisibleHeight = 88.0;
-                      const scrollGap = 8.0;
-                      final safeAreaBottom =
-                          MediaQuery.of(context).viewPadding.bottom;
-                      return safeAreaBottom + bottomBarVisibleHeight + scrollGap;
-                    }
-
                     Widget buildScrollableBody({double extraBottomPadding = 0}) {
                       Widget buildListView(double bottomPadding) {
                         return ListView(
@@ -1078,25 +1070,15 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                         ),
                         const SizedBox(height: 8),
                         Expanded(
-                          child: isCompactNav
-                              ? Stack(
-                                  children: [
-                                    Positioned.fill(
-                                      child: buildScrollableBody(
-                                        extraBottomPadding: compactScrollPadding(),
-                                      ),
-                                    ),
-                                    Align(
-                                      alignment: Alignment.bottomCenter,
-                                      child: _buildBottomBarShell(
-                                        maxWidth: constraints.maxWidth,
-                                        isCompactNav: true,
-                                      ),
-                                    ),
-                                  ],
-                                )
-                              : buildScrollableBody(),
+                          child: buildScrollableBody(
+                            extraBottomPadding: isCompactNav ? 16 : 0,
+                          ),
                         ),
+                        if (isCompactNav)
+                          _buildBottomBarShell(
+                            maxWidth: constraints.maxWidth,
+                            isCompactNav: true,
+                          ),
                       ],
                     );
                   },

@@ -1041,14 +1041,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                         );
                       }
 
-                      slivers.add(
-                        const SliverFillRemaining(
-                          hasScrollBody: false,
-                          fillOverscroll: false,
-                          child: SizedBox.shrink(),
-                        ),
-                      );
-
                       return slivers;
                     }
 

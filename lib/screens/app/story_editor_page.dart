@@ -992,6 +992,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           : Scaffold(
               backgroundColor: Theme.of(context).colorScheme.surface,
               body: SafeArea(
+                bottom: false,
                 child: LayoutBuilder(
                   builder: (context, constraints) {
                     final tabContent = _buildActiveTabContent();
@@ -1010,57 +1011,63 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                     ];
                     final isCompactNav = constraints.maxWidth < 840;
 
-                    List<Widget> buildEditorSections() {
-                      final sections = <Widget>[
-                        Padding(
+                    List<Widget> buildEditorSlivers(double extraBottomPadding) {
+                      final slivers = <Widget>[
+                        SliverPadding(
                           padding: const EdgeInsets.symmetric(horizontal: 12),
-                          child: _EditorHeader(
-                            controller: _tabController,
-                            isNewStory: widget.storyId == null,
+                          sliver: SliverToBoxAdapter(
+                            child: _EditorHeader(
+                              controller: _tabController,
+                              isNewStory: widget.storyId == null,
+                            ),
                           ),
                         ),
-                        const SizedBox(height: 12),
-                        Padding(
+                        const SliverToBoxAdapter(
+                          child: SizedBox(height: 12),
+                        ),
+                        SliverPadding(
                           padding: EdgeInsets.symmetric(
                             horizontal: isCompactNav ? 12 : 24,
                           ),
-                          child: tabContent,
+                          sliver: SliverToBoxAdapter(child: tabContent),
                         ),
                       ];
 
-                      return sections;
-                    }
-
-                    final editorSections = buildEditorSections();
-
-                    Widget buildScrollableBody({double extraBottomPadding = 0}) {
-                      Widget buildScrollView(double bottomPadding) {
-                        final body = Padding(
-                          padding: EdgeInsets.only(bottom: bottomPadding),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: editorSections,
+                      if (extraBottomPadding > 0) {
+                        slivers.add(
+                          SliverToBoxAdapter(
+                            child: SizedBox(height: extraBottomPadding),
                           ),
                         );
-
-                        final scrollView = SingleChildScrollView(
-                          controller: _editorScrollController,
-                          physics: const _EditorScrollPhysics(),
-                          child: body,
-                        );
-
-                        return isCompactNav
-                            ? scrollView
-                            : Scrollbar(
-                                controller: _editorScrollController,
-                                child: scrollView,
-                              );
                       }
+
+                      slivers.add(
+                        const SliverFillRemaining(
+                          hasScrollBody: false,
+                          child: SizedBox.shrink(),
+                        ),
+                      );
+
+                      return slivers;
+                    }
+
+                    Widget buildScrollableBody({double extraBottomPadding = 0}) {
+                      final scrollView = CustomScrollView(
+                        controller: _editorScrollController,
+                        physics: const ClampingScrollPhysics(),
+                        slivers: buildEditorSlivers(extraBottomPadding),
+                      );
+
+                      final decoratedScrollView = isCompactNav
+                          ? scrollView
+                          : Scrollbar(
+                              controller: _editorScrollController,
+                              child: scrollView,
+                            );
 
                       return NotificationListener<ScrollNotification>(
                         onNotification: _handleScrollNotification,
-                        child: buildScrollView(extraBottomPadding),
+                        child: decoratedScrollView,
                       );
                     }
 

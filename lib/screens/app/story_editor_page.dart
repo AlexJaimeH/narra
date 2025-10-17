@@ -131,11 +131,63 @@ class StoryCoachPlan {
   }
 }
 
+class _TagOption {
+  const _TagOption({
+    required this.name,
+    required this.color,
+    required this.category,
+    this.emoji,
+  });
+
+  final String name;
+  final Color color;
+  final String category;
+  final String? emoji;
+
+  _TagOption copyWith({
+    String? name,
+    Color? color,
+    String? category,
+    String? emoji,
+  }) {
+    return _TagOption(
+      name: name ?? this.name,
+      color: color ?? this.color,
+      category: category ?? this.category,
+      emoji: emoji ?? this.emoji,
+    );
+  }
+}
+
+class _TagPaletteSection {
+  const _TagPaletteSection({
+    required this.title,
+    required this.description,
+    required this.icon,
+    required this.tags,
+  });
+
+  final String title;
+  final String description;
+  final IconData icon;
+  final List<_TagOption> tags;
+
+  _TagPaletteSection copyWith({List<_TagOption>? tags}) {
+    return _TagPaletteSection(
+      title: title,
+      description: description,
+      icon: icon,
+      tags: tags ?? this.tags,
+    );
+  }
+}
+
 class _StoryEditorPageState extends State<StoryEditorPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _contentController = TextEditingController();
+  final TextEditingController _tagSearchController = TextEditingController();
   final ScrollController _editorScrollController = ScrollController();
   final ScrollController _transcriptScrollController = ScrollController();
 
@@ -177,6 +229,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   bool _isLoading = false;
   bool _isSaving = false;
   final List<String> _selectedTags = [];
+  final Map<String, _TagOption> _tagLookup = {};
   final List<Map<String, dynamic>> _photos = [];
   DateTime? _startDate;
   DateTime? _endDate;
@@ -184,7 +237,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   String _status = 'draft'; // draft, published
   Story? _currentStory;
 
-  List<String> _availableTags = [];
+  String _tagSearchQuery = '';
+  List<_TagPaletteSection> _tagSections = [];
   StoryCoachPlan? _storyCoachPlan;
   bool _showSuggestions = false;
   bool _isSuggestionsLoading = false;
@@ -204,6 +258,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   bool _isGhostWriterProcessing = false;
   Timer? _ghostWriterInstructionsDebounce;
 
+  static const String _personalTagsTitle = 'Tus etiquetas únicas';
+
   @override
   void initState() {
     super.initState();
@@ -212,6 +268,17 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       if (!_tabController.indexIsChanging && mounted) {
         setState(() {});
       }
+    });
+
+    _tagSections = _buildCuratedTagSections();
+    _registerTagLookup(_tagSections);
+    _tagSearchController.addListener(() {
+      final nextQuery = _tagSearchController.text;
+      if (_tagSearchQuery == nextQuery) return;
+      if (!mounted) return;
+      setState(() {
+        _tagSearchQuery = nextQuery;
+      });
     });
 
     _loadAvailableTags();
@@ -306,6 +373,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     _contentController.dispose();
     _editorScrollController.dispose();
     _transcriptScrollController.dispose();
+    _tagSearchController.dispose();
     _ghostWriterInstructionsDebounce?.cancel();
     super.dispose();
   }
@@ -314,31 +382,12 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     try {
       final tags = await TagService.getAllTags();
       if (mounted) {
-        setState(() {
-          _availableTags = tags.map((tag) => tag.name).toList();
-        });
+        final sections = _mergeTagSectionsWithUserTags(tags);
+        _updateTagSections(sections);
       }
     } catch (e) {
       if (mounted) {
-        setState(() {
-          _availableTags = [
-            'infancia',
-            'familia',
-            'trabajo',
-            'viaje',
-            'celebración',
-            'cambio',
-            'aprendizaje',
-            'amistad',
-            'amor',
-            'pérdida',
-            'logro',
-            'aventura',
-            'hogar',
-            'tradición',
-            'guerra'
-          ];
-        });
+        _updateTagSections(_buildCuratedTagSections());
       }
     }
   }
@@ -415,6 +464,10 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           _photos.addAll(photos);
           _hasChanges = false;
           _isLoading = false;
+        });
+        SchedulerBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          _ensureSelectedTagsInPalette();
         });
         // Initialize AI suggestions
       }
@@ -1044,7 +1097,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                       return slivers;
                     }
 
-                    Widget buildScrollableBody({double extraBottomPadding = 0}) {
+                    Widget buildScrollableBody(
+                        {double extraBottomPadding = 0}) {
                       final scrollView = CustomScrollView(
                         controller: _editorScrollController,
                         physics: const ClampingScrollPhysics(),
@@ -1707,6 +1761,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   Widget _buildTagsTab() {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final visibleSections = _visibleTagSections;
+    final hasSearch = _tagSearchQuery.trim().isNotEmpty;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -1734,74 +1790,113 @@ class _StoryEditorPageState extends State<StoryEditorPage>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Etiquetas temáticas',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+                  Row(
+                    children: [
+                      Icon(Icons.local_offer_outlined,
+                          color: colorScheme.primary),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Etiquetas temáticas',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'Organiza y clasifica tus historias con etiquetas claras.',
+                    'Elige etiquetas que ayuden a tu familia a navegar por tus recuerdos.',
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: colorScheme.onSurfaceVariant,
                     ),
                   ),
                   const SizedBox(height: 18),
-                  if (_selectedTags.isNotEmpty) ...[
-                    Text(
-                      'Seleccionadas (${_selectedTags.length})',
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: colorScheme.primary,
+                  TextField(
+                    controller: _tagSearchController,
+                    decoration: InputDecoration(
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: _tagSearchQuery.isNotEmpty
+                          ? IconButton(
+                              tooltip: 'Limpiar búsqueda',
+                              onPressed: () {
+                                _tagSearchController.clear();
+                                FocusScope.of(context).unfocus();
+                              },
+                              icon: const Icon(Icons.close_rounded),
+                            )
+                          : null,
+                      hintText:
+                          'Busca momentos como infancia, viajes, amistades...',
+                      filled: true,
+                      fillColor: colorScheme.surfaceVariant
+                          .withValues(alpha: isCompact ? 0.25 : 0.18),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        borderSide: BorderSide(
+                          color: colorScheme.outlineVariant.withValues(
+                            alpha: 0.25,
+                          ),
+                        ),
                       ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        borderSide: BorderSide(
+                          color: colorScheme.primary.withValues(alpha: 0.5),
+                        ),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 14),
                     ),
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: _selectedTags
-                          .map(
-                            (tag) => Chip(
-                              label: Text(tag),
-                              onDeleted: () => _toggleTag(tag),
-                              deleteIcon: const Icon(Icons.close, size: 18),
-                              backgroundColor: colorScheme.primaryContainer
-                                  .withValues(alpha: 0.8),
-                              labelStyle: theme.textTheme.labelLarge?.copyWith(
-                                color: colorScheme.primary,
-                                fontWeight: FontWeight.w700,
+                    textInputAction: TextInputAction.search,
+                  ),
+                  const SizedBox(height: 18),
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 250),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    child: _selectedTags.isEmpty
+                        ? const SizedBox.shrink()
+                        : Column(
+                            key: const ValueKey('selected-tags'),
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Ya elegiste (${_selectedTags.length})',
+                                style: theme.textTheme.titleSmall?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  color: colorScheme.primary,
+                                ),
                               ),
-                            ),
-                          )
-                          .toList(),
-                    ),
-                    const SizedBox(height: 24),
-                  ],
+                              const SizedBox(height: 10),
+                              Wrap(
+                                spacing: 10,
+                                runSpacing: 10,
+                                children: _selectedTags
+                                    .map((tag) => _buildSelectedTagChip(tag))
+                                    .toList(),
+                              ),
+                              const SizedBox(height: 22),
+                            ],
+                          ),
+                  ),
                   Text(
-                    'Disponibles',
+                    hasSearch
+                        ? 'Resultados para "${_tagSearchQuery.trim()}"'
+                        : 'Explora por categorías',
                     style: theme.textTheme.titleSmall?.copyWith(
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: _availableTags
-                        .where((tag) => !_selectedTags.contains(tag))
-                        .map(
-                          (tag) => ActionChip(
-                            label: Text(tag),
-                            onPressed: () => _toggleTag(tag),
-                            labelStyle: theme.textTheme.labelLarge?.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
-                            shape: const StadiumBorder(),
-                          ),
-                        )
-                        .toList(),
-                  ),
+                  const SizedBox(height: 12),
+                  if (visibleSections.isEmpty)
+                    _buildEmptyTagSearchState(theme, isCompact)
+                  else
+                    Column(
+                      children: visibleSections
+                          .map((section) =>
+                              _buildTagSectionCard(section, isCompact))
+                          .toList(),
+                    ),
                 ],
               ),
             ),
@@ -1809,6 +1904,695 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         );
       },
     );
+  }
+
+  List<_TagPaletteSection> get _visibleTagSections {
+    final query = _tagSearchQuery.trim().toLowerCase();
+    if (query.isEmpty) return _tagSections;
+
+    return _tagSections
+        .map((section) {
+          final matches = section.tags
+              .where((tag) => tag.name.toLowerCase().contains(query))
+              .toList();
+          if (matches.isEmpty) return null;
+          return section.copyWith(tags: matches);
+        })
+        .whereType<_TagPaletteSection>()
+        .toList();
+  }
+
+  Widget _buildSelectedTagChip(String tagName) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final option = _getTagOption(tagName);
+    final color = option?.color ?? colorScheme.secondaryContainer;
+    final onColor = _onColorFor(color);
+
+    return InputChip(
+      avatar: option?.emoji != null
+          ? Text(option!.emoji!, style: const TextStyle(fontSize: 18))
+          : null,
+      label: Text(tagName),
+      onDeleted: () => _toggleTag(tagName),
+      deleteIcon: const Icon(Icons.close_rounded, size: 18),
+      deleteIconColor: onColor.withValues(alpha: 0.9),
+      backgroundColor: color.withValues(alpha: 0.3),
+      side: BorderSide(color: color.withValues(alpha: 0.35)),
+      labelStyle: theme.textTheme.labelLarge?.copyWith(
+        color: onColor,
+        fontWeight: FontWeight.w700,
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    );
+  }
+
+  Widget _buildEmptyTagSearchState(ThemeData theme, bool isCompact) {
+    final colorScheme = theme.colorScheme;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      width: double.infinity,
+      padding: EdgeInsets.symmetric(
+        horizontal: isCompact ? 18 : 26,
+        vertical: isCompact ? 28 : 34,
+      ),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        color: colorScheme.surfaceVariant.withValues(alpha: 0.18),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.35),
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Icon(Icons.travel_explore,
+              color: colorScheme.primary, size: isCompact ? 32 : 36),
+          const SizedBox(height: 12),
+          Text(
+            'No encontramos etiquetas con esa búsqueda.',
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Prueba con palabras como familia, escuela, viajes, salud o tecnología.',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+              height: 1.4,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTagSectionCard(
+      _TagPaletteSection section, bool isCompactLayout) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final accent = section.tags.isNotEmpty
+        ? section.tags.first.color
+        : colorScheme.primary;
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: isCompactLayout ? 16 : 20),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(24),
+          gradient: LinearGradient(
+            colors: [
+              accent.withValues(alpha: 0.14),
+              accent.withValues(alpha: 0.05),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          border: Border.all(color: accent.withValues(alpha: 0.25)),
+        ),
+        child: Padding(
+          padding: EdgeInsets.all(isCompactLayout ? 18 : 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(section.icon, color: accent, size: 22),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      section.title,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                section.description,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                  height: 1.45,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children:
+                    section.tags.map((tag) => _buildTagChip(tag)).toList(),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTagChip(_TagOption tag) {
+    final theme = Theme.of(context);
+    final isSelected = _isTagSelected(tag.name);
+    final baseColor = tag.color;
+    final onBase = _onColorFor(baseColor);
+
+    return FilterChip(
+      avatar: tag.emoji != null
+          ? Text(tag.emoji!, style: const TextStyle(fontSize: 18))
+          : null,
+      label: Text(tag.name),
+      selected: isSelected,
+      onSelected: (_) => _toggleTag(tag.name),
+      showCheckmark: true,
+      checkmarkColor: onBase,
+      backgroundColor: baseColor.withValues(alpha: 0.12),
+      selectedColor: baseColor.withValues(alpha: 0.24),
+      labelStyle: theme.textTheme.labelLarge?.copyWith(
+        fontWeight: FontWeight.w600,
+        color: isSelected ? onBase : theme.colorScheme.onSurface,
+      ),
+      side: BorderSide(
+        color: baseColor.withValues(alpha: isSelected ? 0.6 : 0.35),
+      ),
+      shape: const StadiumBorder(),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    );
+  }
+
+  void _updateTagSections(List<_TagPaletteSection> sections) {
+    setState(() {
+      _tagSections = sections;
+      _registerTagLookup(_tagSections);
+    });
+  }
+
+  void _registerTagLookup(List<_TagPaletteSection> sections) {
+    _tagLookup
+      ..clear()
+      ..addEntries(sections.expand((section) => section.tags).map(
+            (tag) => MapEntry(tag.name.toLowerCase(), tag),
+          ));
+  }
+
+  List<_TagPaletteSection> _mergeTagSectionsWithUserTags(List<Tag> userTags) {
+    final sections = _buildCuratedTagSections();
+
+    for (final userTag in userTags) {
+      final rawName = userTag.name.trim();
+      if (rawName.isEmpty) continue;
+      final normalized = rawName.toLowerCase();
+      bool matchedCurated = false;
+
+      for (var sectionIndex = 0;
+          sectionIndex < sections.length && !matchedCurated;
+          sectionIndex++) {
+        final section = sections[sectionIndex];
+        final tagIndex = section.tags.indexWhere(
+          (tag) => tag.name.toLowerCase() == normalized,
+        );
+        if (tagIndex != -1) {
+          final updatedTags = List<_TagOption>.from(section.tags);
+          updatedTags[tagIndex] = updatedTags[tagIndex]
+              .copyWith(color: _colorFromHex(userTag.color));
+          sections[sectionIndex] = section.copyWith(tags: updatedTags);
+          matchedCurated = true;
+        }
+      }
+
+      if (!matchedCurated) {
+        final customTag = _TagOption(
+          name: rawName,
+          color: _colorFromHex(userTag.color),
+          category: _personalTagsTitle,
+          emoji: null,
+        );
+        _applyCustomTags(sections, [customTag]);
+      }
+    }
+
+    return sections;
+  }
+
+  void _ensureSelectedTagsInPalette() {
+    if (_selectedTags.isEmpty) return;
+    final theme = Theme.of(context);
+    final accent = theme.colorScheme.secondary;
+    final missing = <_TagOption>[];
+
+    for (final tag in _selectedTags) {
+      final normalized = tag.toLowerCase();
+      if (_tagLookup.containsKey(normalized)) continue;
+      missing.add(_TagOption(
+        name: tag,
+        color: accent,
+        category: _personalTagsTitle,
+      ));
+    }
+
+    if (missing.isEmpty) return;
+    setState(() {
+      _applyCustomTags(_tagSections, missing);
+      _registerTagLookup(_tagSections);
+    });
+  }
+
+  void _applyCustomTags(
+    List<_TagPaletteSection> sections,
+    List<_TagOption> newTags,
+  ) {
+    if (newTags.isEmpty) return;
+
+    final sortedTags = List<_TagOption>.from(newTags)
+      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
+    final existingIndex =
+        sections.indexWhere((section) => section.title == _personalTagsTitle);
+
+    if (existingIndex != -1) {
+      final existingSection = sections[existingIndex];
+      final existingNames =
+          existingSection.tags.map((tag) => tag.name.toLowerCase()).toSet();
+      final mergedTags = List<_TagOption>.from(existingSection.tags);
+
+      for (final tag in sortedTags) {
+        if (existingNames.contains(tag.name.toLowerCase())) continue;
+        mergedTags.add(tag);
+        existingNames.add(tag.name.toLowerCase());
+      }
+
+      mergedTags
+          .sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+      sections[existingIndex] = existingSection.copyWith(tags: mergedTags);
+    } else {
+      sections.insert(
+        0,
+        _TagPaletteSection(
+          title: _personalTagsTitle,
+          description:
+              'Etiquetas personalizadas que has creado para tu familia.',
+          icon: Icons.auto_awesome,
+          tags: sortedTags,
+        ),
+      );
+    }
+  }
+
+  List<_TagPaletteSection> _buildCuratedTagSections() {
+    return [
+      _TagPaletteSection(
+        title: 'Raíces y familia',
+        description:
+            'Recuerdos del hogar, figuras importantes y tradiciones que marcaron tu infancia.',
+        icon: Icons.family_restroom,
+        tags: [
+          _TagOption(
+            name: 'Familia',
+            color: const Color(0xFFF97362),
+            category: 'Raíces y familia',
+            emoji: '🏡',
+          ),
+          _TagOption(
+            name: 'Infancia',
+            color: const Color(0xFFFABF58),
+            category: 'Raíces y familia',
+            emoji: '🧸',
+          ),
+          _TagOption(
+            name: 'Padres',
+            color: const Color(0xFFFF8A80),
+            category: 'Raíces y familia',
+            emoji: '❤️',
+          ),
+          _TagOption(
+            name: 'Hermanos',
+            color: const Color(0xFFFFAFCC),
+            category: 'Raíces y familia',
+            emoji: '🤗',
+          ),
+          _TagOption(
+            name: 'Tradiciones familiares',
+            color: const Color(0xFFFFD166),
+            category: 'Raíces y familia',
+            emoji: '🎎',
+          ),
+          _TagOption(
+            name: 'Hogar',
+            color: const Color(0xFFFFC4A8),
+            category: 'Raíces y familia',
+            emoji: '🏠',
+          ),
+        ],
+      ),
+      _TagPaletteSection(
+        title: 'Amor y amistades',
+        description:
+            'Personas especiales, vínculos afectivos y momentos que hicieron latir tu corazón.',
+        icon: Icons.favorite_outline,
+        tags: [
+          _TagOption(
+            name: 'Historia de amor',
+            color: const Color(0xFFFF8FA2),
+            category: 'Amor y amistades',
+            emoji: '💕',
+          ),
+          _TagOption(
+            name: 'Pareja',
+            color: const Color(0xFFFB6F92),
+            category: 'Amor y amistades',
+            emoji: '💑',
+          ),
+          _TagOption(
+            name: 'Matrimonio',
+            color: const Color(0xFFFFC6A5),
+            category: 'Amor y amistades',
+            emoji: '💍',
+          ),
+          _TagOption(
+            name: 'Hijos',
+            color: const Color(0xFFFFB347),
+            category: 'Amor y amistades',
+            emoji: '👶',
+          ),
+          _TagOption(
+            name: 'Nietos',
+            color: const Color(0xFFFFD6BA),
+            category: 'Amor y amistades',
+            emoji: '👵',
+          ),
+          _TagOption(
+            name: 'Amistad',
+            color: const Color(0xFF74C69D),
+            category: 'Amor y amistades',
+            emoji: '🤝',
+          ),
+        ],
+      ),
+      _TagPaletteSection(
+        title: 'Escuela y formación',
+        description:
+            'Aulas, aprendizajes, maestros y descubrimientos que formaron tu manera de ver la vida.',
+        icon: Icons.school,
+        tags: [
+          _TagOption(
+            name: 'Escuela',
+            color: const Color(0xFF4BA3C3),
+            category: 'Escuela y formación',
+            emoji: '🏫',
+          ),
+          _TagOption(
+            name: 'Universidad',
+            color: const Color(0xFF6C63FF),
+            category: 'Escuela y formación',
+            emoji: '🎓',
+          ),
+          _TagOption(
+            name: 'Mentores',
+            color: const Color(0xFF89A1EF),
+            category: 'Escuela y formación',
+            emoji: '🧑‍🏫',
+          ),
+          _TagOption(
+            name: 'Primer día de clases',
+            color: const Color(0xFF80C7FF),
+            category: 'Escuela y formación',
+            emoji: '📚',
+          ),
+          _TagOption(
+            name: 'Graduación',
+            color: const Color(0xFF9381FF),
+            category: 'Escuela y formación',
+            emoji: '🎉',
+          ),
+          _TagOption(
+            name: 'Actividades escolares',
+            color: const Color(0xFF59C3C3),
+            category: 'Escuela y formación',
+            emoji: '🎨',
+          ),
+        ],
+      ),
+      _TagPaletteSection(
+        title: 'Trabajo y propósito',
+        description:
+            'Profesiones, vocaciones y proyectos que te dieron identidad y sentido.',
+        icon: Icons.work_outline,
+        tags: [
+          _TagOption(
+            name: 'Primer trabajo',
+            color: const Color(0xFF0077B6),
+            category: 'Trabajo y propósito',
+            emoji: '💼',
+          ),
+          _TagOption(
+            name: 'Carrera profesional',
+            color: const Color(0xFF00B4D8),
+            category: 'Trabajo y propósito',
+            emoji: '📈',
+          ),
+          _TagOption(
+            name: 'Emprendimiento',
+            color: const Color(0xFF48CAE4),
+            category: 'Trabajo y propósito',
+            emoji: '🚀',
+          ),
+          _TagOption(
+            name: 'Mentoría laboral',
+            color: const Color(0xFF8ECAE6),
+            category: 'Trabajo y propósito',
+            emoji: '🧭',
+          ),
+          _TagOption(
+            name: 'Jubilación',
+            color: const Color(0xFF90E0EF),
+            category: 'Trabajo y propósito',
+            emoji: '⛱️',
+          ),
+          _TagOption(
+            name: 'Servicio comunitario',
+            color: const Color(0xFF6BCB77),
+            category: 'Trabajo y propósito',
+            emoji: '🤲',
+          ),
+        ],
+      ),
+      _TagPaletteSection(
+        title: 'Aventuras y viajes',
+        description:
+            'Travesías, cambios de ciudad y experiencias que te mostraron nuevos horizontes.',
+        icon: Icons.flight_takeoff,
+        tags: [
+          _TagOption(
+            name: 'Viajes',
+            color: const Color(0xFF00A6FB),
+            category: 'Aventuras y viajes',
+            emoji: '✈️',
+          ),
+          _TagOption(
+            name: 'Mudanzas',
+            color: const Color(0xFF72EFDD),
+            category: 'Aventuras y viajes',
+            emoji: '🚚',
+          ),
+          _TagOption(
+            name: 'Naturaleza',
+            color: const Color(0xFF2BB673),
+            category: 'Aventuras y viajes',
+            emoji: '🌿',
+          ),
+          _TagOption(
+            name: 'Cultura',
+            color: const Color(0xFFFFC857),
+            category: 'Aventuras y viajes',
+            emoji: '🎭',
+          ),
+          _TagOption(
+            name: 'Descubrimientos',
+            color: const Color(0xFF4D96FF),
+            category: 'Aventuras y viajes',
+            emoji: '🧭',
+          ),
+          _TagOption(
+            name: 'Aventura en carretera',
+            color: const Color(0xFF5E60CE),
+            category: 'Aventuras y viajes',
+            emoji: '🛣️',
+          ),
+        ],
+      ),
+      _TagPaletteSection(
+        title: 'Logros y celebraciones',
+        description:
+            'Metas alcanzadas, sorpresas y momentos brillantes para compartir con los tuyos.',
+        icon: Icons.emoji_events_outlined,
+        tags: [
+          _TagOption(
+            name: 'Logros',
+            color: const Color(0xFFFFB703),
+            category: 'Logros y celebraciones',
+            emoji: '🏆',
+          ),
+          _TagOption(
+            name: 'Sueños cumplidos',
+            color: const Color(0xFFFF9E00),
+            category: 'Logros y celebraciones',
+            emoji: '🌟',
+          ),
+          _TagOption(
+            name: 'Celebraciones familiares',
+            color: const Color(0xFFFFD670),
+            category: 'Logros y celebraciones',
+            emoji: '🎊',
+          ),
+          _TagOption(
+            name: 'Reconocimientos',
+            color: const Color(0xFFFFC8DD),
+            category: 'Logros y celebraciones',
+            emoji: '🥇',
+          ),
+          _TagOption(
+            name: 'Momentos de orgullo',
+            color: const Color(0xFFFF8FAB),
+            category: 'Logros y celebraciones',
+            emoji: '🙌',
+          ),
+          _TagOption(
+            name: 'Cumpleaños memorables',
+            color: const Color(0xFFFFC4D6),
+            category: 'Logros y celebraciones',
+            emoji: '🎂',
+          ),
+        ],
+      ),
+      _TagPaletteSection(
+        title: 'Desafíos y resiliencia',
+        description:
+            'Historias de fortaleza, aprendizajes difíciles y caminos de sanación.',
+        icon: Icons.psychology_alt_outlined,
+        tags: [
+          _TagOption(
+            name: 'Enfermedad',
+            color: const Color(0xFF9D4EDD),
+            category: 'Desafíos y resiliencia',
+            emoji: '💜',
+          ),
+          _TagOption(
+            name: 'Recuperación',
+            color: const Color(0xFFB15EFF),
+            category: 'Desafíos y resiliencia',
+            emoji: '🦋',
+          ),
+          _TagOption(
+            name: 'Momentos difíciles',
+            color: const Color(0xFF845EC2),
+            category: 'Desafíos y resiliencia',
+            emoji: '⛈️',
+          ),
+          _TagOption(
+            name: 'Pérdidas',
+            color: const Color(0xFF6D597A),
+            category: 'Desafíos y resiliencia',
+            emoji: '🕯️',
+          ),
+          _TagOption(
+            name: 'Fe y esperanza',
+            color: const Color(0xFF80CED7),
+            category: 'Desafíos y resiliencia',
+            emoji: '🕊️',
+          ),
+          _TagOption(
+            name: 'Lecciones de vida',
+            color: const Color(0xFF577590),
+            category: 'Desafíos y resiliencia',
+            emoji: '📖',
+          ),
+        ],
+      ),
+      _TagPaletteSection(
+        title: 'Momentos cotidianos',
+        description:
+            'Pequeños detalles, pasatiempos y costumbres que hacen tu vida única.',
+        icon: Icons.local_florist_outlined,
+        tags: [
+          _TagOption(
+            name: 'Hobbies',
+            color: const Color(0xFF06D6A0),
+            category: 'Momentos cotidianos',
+            emoji: '🎨',
+          ),
+          _TagOption(
+            name: 'Mascotas',
+            color: const Color(0xFFFFA69E),
+            category: 'Momentos cotidianos',
+            emoji: '🐾',
+          ),
+          _TagOption(
+            name: 'Recetas favoritas',
+            color: const Color(0xFFFFC15E),
+            category: 'Momentos cotidianos',
+            emoji: '🍲',
+          ),
+          _TagOption(
+            name: 'Música',
+            color: const Color(0xFF118AB2),
+            category: 'Momentos cotidianos',
+            emoji: '🎶',
+          ),
+          _TagOption(
+            name: 'Tecnología',
+            color: const Color(0xFF73B0FF),
+            category: 'Momentos cotidianos',
+            emoji: '💡',
+          ),
+          _TagOption(
+            name: 'Conversaciones especiales',
+            color: const Color(0xFF9EADC8),
+            category: 'Momentos cotidianos',
+            emoji: '🗣️',
+          ),
+        ],
+      ),
+    ];
+  }
+
+  _TagOption? _getTagOption(String name) {
+    return _tagLookup[name.toLowerCase()];
+  }
+
+  Color _colorFromHex(String? hex) {
+    if (hex == null || hex.isEmpty) {
+      return Theme.of(context).colorScheme.primary;
+    }
+
+    final sanitized = hex.replaceAll('#', '').trim();
+
+    try {
+      if (sanitized.length == 6) {
+        return Color(int.parse('FF$sanitized', radix: 16));
+      }
+      if (sanitized.length == 8) {
+        return Color(int.parse(sanitized, radix: 16));
+      }
+    } catch (_) {
+      // Ignore and fallback below
+    }
+
+    return Theme.of(context).colorScheme.primary;
+  }
+
+  Color _onColorFor(Color color) {
+    return color.computeLuminance() > 0.6 ? Colors.black87 : Colors.white;
+  }
+
+  bool _isTagSelected(String tag) {
+    final normalized = tag.toLowerCase();
+    return _selectedTags
+        .any((selected) => selected.toLowerCase() == normalized);
   }
 
   // Helper Methods
@@ -4508,10 +5292,14 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
   void _toggleTag(String tag) {
     setState(() {
-      if (_selectedTags.contains(tag)) {
-        _selectedTags.remove(tag);
+      final normalized = tag.toLowerCase();
+      final existingIndex =
+          _selectedTags.indexWhere((item) => item.toLowerCase() == normalized);
+      if (existingIndex != -1) {
+        _selectedTags.removeAt(existingIndex);
       } else {
-        _selectedTags.add(tag);
+        final display = _getTagOption(tag)?.name ?? tag;
+        _selectedTags.add(display);
       }
       _hasChanges = true;
     });
@@ -5526,7 +6314,8 @@ class _EditorBottomBar extends StatelessWidget {
                   : const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
               minimumSize: Size(compact ? 0 : 64, compact ? buttonHeight : 48),
               shape: const StadiumBorder(),
-              textStyle: compact ? Theme.of(context).textTheme.labelLarge : null,
+              textStyle:
+                  compact ? Theme.of(context).textTheme.labelLarge : null,
             );
 
             if (!compact) {
@@ -5545,7 +6334,8 @@ class _EditorBottomBar extends StatelessWidget {
                 padding: WidgetStatePropertyAll(
                   compact
                       ? EdgeInsets.symmetric(horizontal: 12, vertical: 10)
-                      : const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                      : const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 14),
                 ),
               ),
               child: Row(
@@ -5587,7 +6377,8 @@ class _EditorBottomBar extends StatelessWidget {
                 padding: WidgetStatePropertyAll(
                   compact
                       ? EdgeInsets.symmetric(horizontal: 12, vertical: 10)
-                      : const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+                      : const EdgeInsets.symmetric(
+                          horizontal: 22, vertical: 14),
                 ),
               ),
               child: Row(

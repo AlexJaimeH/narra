@@ -5659,6 +5659,23 @@ class _EditorBottomBar extends StatelessWidget {
   }
 }
 
+class _EditorScrollPhysics extends ClampingScrollPhysics {
+  const _EditorScrollPhysics({super.parent});
+
+  @override
+  _EditorScrollPhysics applyTo(ScrollPhysics? ancestor) {
+    return _EditorScrollPhysics(parent: buildParent(ancestor));
+  }
+
+  @override
+  bool shouldAcceptUserOffset(ScrollMetrics metrics) {
+    if (metrics.maxScrollExtent <= 0) {
+      return false;
+    }
+    return super.shouldAcceptUserOffset(metrics);
+  }
+}
+
 class _EmptyStateCard extends StatelessWidget {
   const _EmptyStateCard({
     required this.icon,

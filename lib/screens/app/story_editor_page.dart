@@ -2557,6 +2557,32 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           ),
         ],
       ),
+      _TagPaletteSection(
+        title: 'Para todo lo demás',
+        description:
+            'Etiquetas versátiles para recuerdos únicos que quieres conservar.',
+        icon: Icons.auto_awesome_outlined,
+        tags: [
+          _TagOption(
+            name: 'Otros momentos',
+            color: const Color(0xFFB0BEC5),
+            category: 'Para todo lo demás',
+            emoji: '✨',
+          ),
+          _TagOption(
+            name: 'Recuerdos únicos',
+            color: const Color(0xFFCDB4DB),
+            category: 'Para todo lo demás',
+            emoji: '🌀',
+          ),
+          _TagOption(
+            name: 'Sin categoría',
+            color: const Color(0xFFE2E2E2),
+            category: 'Para todo lo demás',
+            emoji: '📁',
+          ),
+        ],
+      ),
     ];
   }
 

@@ -210,6 +210,9 @@ class TagService {
       {'name': 'Música', 'color': '#118AB2'},
       {'name': 'Tecnología', 'color': '#73B0FF'},
       {'name': 'Conversaciones especiales', 'color': '#9EADC8'},
+      {'name': 'Otros momentos', 'color': '#B0BEC5'},
+      {'name': 'Recuerdos únicos', 'color': '#CDB4DB'},
+      {'name': 'Sin categoría', 'color': '#E2E2E2'},
     ];
 
     for (final tag in defaultTags) {

@@ -42,6 +42,7 @@ class OpenAIService {
   // experience generally available for narrative refinement tasks.
   static const String _bestNarrativeModel = 'gpt-4.1';
   static const String _fallbackNarrativeModel = 'gpt-4.1-mini';
+  static final RegExp _photoPlaceholderPattern = RegExp(r'\[img_(\d+)\]');
 
   static Future<Map<String, dynamic>> _proxyChat({
     required List<Map<String, dynamic>> messages,
@@ -441,6 +442,20 @@ Responde SOLO con un objeto JSON válido que cumpla exactamente el siguiente esq
         '- Preferencias del autor: $sanitizedInstructions',
     ];
 
+    final placeholderTokenMap = <String, String>{};
+    final originalTextForPrompt = _maskPhotoPlaceholders(
+      originalText,
+      placeholderTokenMap,
+    );
+
+    if (placeholderTokenMap.isNotEmpty) {
+      additionalInstructions.insert(
+        0,
+        '- Mantén todos los marcadores de fotos exactamente en su posición. '
+        'En el texto aparecerán como __NARRA_IMG_#__ (equivalentes a [img_#]).',
+      );
+    }
+
     final prompt = '''
 Actúa como "Narra Ghost Writer", editor senior de memorias autobiográficas reales.
 Tu misión es pulir el texto para que pueda publicarse en un libro manteniendo la verdad y la voz auténtica del autor.
@@ -454,7 +469,7 @@ Tu misión es pulir el texto para que pueda publicarse en un libro manteniendo l
 ${additionalInstructions.isNotEmpty ? additionalInstructions.join('\n') + '\n' : ''}- Respeta absolutamente los hechos, nombres, fechas y lugares aportados.
 
 ## Texto original
-"""$originalText"""
+"""$originalTextForPrompt"""
 
 ## Tareas
 1. Corrige ortografía, gramática, puntuación y acentos.
@@ -523,15 +538,40 @@ Responde únicamente con el objeto JSON y nada más.
         temperature: 0.55,
       );
       final content = jsonDecode(data['choices'][0]['message']['content']);
-      final polishedText =
-          (content['polished_text'] as String?)?.trim() ?? originalText;
-      final summary = (content['changes_summary'] as String?)?.trim() ??
+      final polishedTextRaw = (content['polished_text'] as String?)?.trim();
+      final missingTokens = placeholderTokenMap.keys
+          .where((token) =>
+              polishedTextRaw == null || !polishedTextRaw.contains(token))
+          .toList();
+      if (missingTokens.isNotEmpty) {
+        print(
+            'Ghost Writer response missing photo markers: ${missingTokens.join(', ')}');
+      }
+      final polishedText = missingTokens.isEmpty
+          ? _restorePhotoPlaceholders(
+              polishedTextRaw ?? originalText,
+              placeholderTokenMap,
+            )
+          : originalText;
+      final summaryRaw = (content['changes_summary'] as String?)?.trim() ??
           'Sin cambios reportados';
-      final toneAnalysis = (content['tone_analysis'] as String?)?.trim() ??
+      final summary = _restorePhotoPlaceholders(
+        summaryRaw,
+        placeholderTokenMap,
+      );
+      final toneAnalysisRaw = (content['tone_analysis'] as String?)?.trim() ??
           'No se proporcionó análisis de tono';
-      final suggestionsList = content['suggestions'] is List
+      final toneAnalysis = _restorePhotoPlaceholders(
+        toneAnalysisRaw,
+        placeholderTokenMap,
+      );
+      final suggestionsListRaw = content['suggestions'] is List
           ? List<String>.from(content['suggestions'])
           : <String>[];
+      final suggestionsList = suggestionsListRaw
+          .map((suggestion) =>
+              _restorePhotoPlaceholders(suggestion, placeholderTokenMap))
+          .toList();
       final wordCountValue = content['word_count'];
       final wordCount = wordCountValue is num
           ? wordCountValue.toInt()
@@ -587,6 +627,27 @@ Responde únicamente con el objeto JSON y nada más.
     String outputFormat = 'json',
     int? targetWords,
   }) async {
+    final placeholderTokenMap = <String, String>{};
+    final maskedOriginalText = _maskPhotoPlaceholders(
+      originalText,
+      placeholderTokenMap,
+    );
+    final String? maskedCurrentDraft = currentDraft != null
+        ? _maskPhotoPlaceholders(currentDraft, placeholderTokenMap)
+        : null;
+    final String? maskedSttText = sttText != null
+        ? _maskPhotoPlaceholders(sttText, placeholderTokenMap)
+        : null;
+    final inlineMarkersRule = placeholderTokenMap.isNotEmpty
+        ? '3) Keep all inline markers exactly as they are (including photo tokens '
+            'like __NARRA_IMG_1__ which represent [img_1]). Do not move or delete them.'
+        : '3) Keep all inline markers exactly as they are (e.g., [PHOTO:3], '
+            '[[person:123]], {DATE:1976-08}). Do not move or delete them.';
+    final photoPlaceholderNote = placeholderTokenMap.isNotEmpty
+        ? 'PHOTO PLACEHOLDERS: tokens __NARRA_IMG_#__ correspond to original [img_#]. '
+            'Keep them exactly in place.\n'
+        : '';
+
     final prompt = '''
 You are "Narra Ghost Writer," a careful editorial assistant.
 Goal: polish the user's story for clarity, flow, and warmth **without inventing facts**.
@@ -613,24 +674,24 @@ STORY METADATA:
 PRIVACY:
   - PRIVATE PEOPLE: ${privatePeople.isNotEmpty ? privatePeople : 'none'}
 
-SOURCE TEXTS:
+${photoPlaceholderNote}SOURCE TEXTS:
   - ORIGINAL TEXT (immutable reference):
     """
-    $originalText
+    $maskedOriginalText
     """
   - RAW SPEECH-TO-TEXT (may contain errors):
     """
-    ${sttText ?? 'not provided'}
+    ${maskedSttText ?? 'not provided'}
     """
   - CURRENT DRAFT (the version to polish):
     """
-    ${currentDraft ?? originalText}
+    ${maskedCurrentDraft ?? maskedOriginalText}
     """
 
 EDITORIAL RULES:
 1) Do not invent events, names, dates, places, or dialogue. If something is unclear, keep it neutral or omit.
 2) Preserve meaning and chronology; improve clarity, coherence, and pacing.
-3) Keep all inline markers exactly as they are (e.g., [PHOTO:3], [[person:123]], {DATE:1976-08}). Do not move or delete them.
+$inlineMarkersRule
 4) Respect LANGUAGE, TONE, VOICE PERSON, PROFANITY POLICY, and READING LEVEL.
 5) If ANONYMIZE PRIVATE PERSONS = true, replace occurrences of names in PRIVATE PEOPLE with roles (e.g., "my aunt").
 6) Avoid clichés; prefer concrete details already present.
@@ -686,15 +747,52 @@ OUTPUT FORMAT: $outputFormat
       final content = data['choices'][0]['message']['content'];
       if (outputFormat == 'json') {
         final jsonContent = jsonDecode(content);
+        final polishedRaw = (jsonContent['polished_text'] as String?)?.trim();
+        final missingTokens = placeholderTokenMap.keys
+            .where(
+                (token) => polishedRaw == null || !polishedRaw.contains(token))
+            .toList();
+        if (missingTokens.isNotEmpty) {
+          print(
+              'Ghost Writer advanced response missing photo markers: ${missingTokens.join(', ')}');
+        }
+        final polished = missingTokens.isEmpty
+            ? _restorePhotoPlaceholders(
+                polishedRaw ?? originalText,
+                placeholderTokenMap,
+              )
+            : originalText;
+        final changesSummaryRaw = jsonContent['changes_summary'] is List
+            ? List<dynamic>.from(jsonContent['changes_summary'])
+            : const <dynamic>[];
+        final notesForAuthorRaw = jsonContent['notes_for_author'] is List
+            ? List<dynamic>.from(jsonContent['notes_for_author'])
+            : const <dynamic>[];
+
         return {
-          'polished_text': jsonContent['polished_text'] ?? originalText,
-          'changes_summary':
-              List<String>.from(jsonContent['changes_summary'] ?? []),
-          'notes_for_author':
-              List<String>.from(jsonContent['notes_for_author'] ?? []),
+          'polished_text': polished,
+          'changes_summary': _restorePhotoPlaceholdersInList(
+            changesSummaryRaw,
+            placeholderTokenMap,
+          ),
+          'notes_for_author': _restorePhotoPlaceholdersInList(
+            notesForAuthorRaw,
+            placeholderTokenMap,
+          ),
         };
       } else {
-        return {'polished_text': content};
+        final polishedRaw = content.trim();
+        final missingTokens = placeholderTokenMap.keys
+            .where((token) => !polishedRaw.contains(token))
+            .toList();
+        if (missingTokens.isNotEmpty) {
+          print(
+              'Ghost Writer advanced response missing photo markers: ${missingTokens.join(', ')}');
+        }
+        final polished = missingTokens.isEmpty
+            ? _restorePhotoPlaceholders(polishedRaw, placeholderTokenMap)
+            : originalText;
+        return {'polished_text': polished};
       }
     } catch (e) {
       print('Error improving story text (advanced): $e');
@@ -781,6 +879,49 @@ Responde SOLO con un objeto JSON:
         'strengths': ['Historia personal auténtica'],
       };
     }
+  }
+
+  static String _maskPhotoPlaceholders(
+    String text,
+    Map<String, String> tokenMap,
+  ) {
+    if (text.isEmpty) {
+      return text;
+    }
+    return text.replaceAllMapped(_photoPlaceholderPattern, (match) {
+      final number = match.group(1)!;
+      final placeholder = match.group(0)!;
+      final token = '__NARRA_IMG_${number}__';
+      tokenMap[token] = placeholder;
+      return token;
+    });
+  }
+
+  static String _restorePhotoPlaceholders(
+    String text,
+    Map<String, String> tokenMap,
+  ) {
+    if (tokenMap.isEmpty || text.isEmpty) {
+      return text;
+    }
+    var restored = text;
+    tokenMap.forEach((token, placeholder) {
+      restored = restored.replaceAll(token, placeholder);
+    });
+    return restored;
+  }
+
+  static List<String> _restorePhotoPlaceholdersInList(
+    List<dynamic> items,
+    Map<String, String> tokenMap,
+  ) {
+    if (items.isEmpty) {
+      return const <String>[];
+    }
+    return items
+        .whereType<String>()
+        .map((item) => _restorePhotoPlaceholders(item, tokenMap))
+        .toList();
   }
 
   // Generar ideas de títulos para historias

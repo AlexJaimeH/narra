@@ -33,6 +33,8 @@ class StoryEditorPage extends StatefulWidget {
 
 enum _GhostWriterResultAction { apply, retry, cancel }
 
+enum _EditorExitDecision { cancel, discard, save }
+
 class StoryCoachSection {
   const StoryCoachSection({
     required this.title,
@@ -333,12 +335,97 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     });
   }
 
-  void _handleTopNavSelection(int index) {
+  Future<bool> _confirmLeaveEditor() async {
+    if (!mounted) {
+      return false;
+    }
+
+    if (!_hasChanges) {
+      final shouldLeave = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('¿Salir del editor?'),
+          content: const Text(
+            'Estás por salir del editor de historias. ¿Quieres continuar?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Salir'),
+            ),
+          ],
+        ),
+      );
+
+      return shouldLeave ?? false;
+    }
+
+    final decision = await showDialog<_EditorExitDecision>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('¿Salir del editor?'),
+        content: const Text(
+          'Tienes cambios sin guardar. ¿Qué deseas hacer antes de salir?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () =>
+                Navigator.pop(dialogContext, _EditorExitDecision.cancel),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () =>
+                Navigator.pop(dialogContext, _EditorExitDecision.discard),
+            child: const Text('Descartar'),
+          ),
+          ElevatedButton(
+            onPressed: () =>
+                Navigator.pop(dialogContext, _EditorExitDecision.save),
+            child: const Text('Guardar'),
+          ),
+        ],
+      ),
+    );
+
+    switch (decision) {
+      case _EditorExitDecision.discard:
+        if (mounted) {
+          setState(() => _hasChanges = false);
+        } else {
+          _hasChanges = false;
+        }
+        return true;
+      case _EditorExitDecision.save:
+        final saved = await _saveDraft();
+        if (saved) {
+          if (mounted) {
+            setState(() => _hasChanges = false);
+          } else {
+            _hasChanges = false;
+          }
+          return true;
+        }
+        return false;
+      case _EditorExitDecision.cancel:
+      case null:
+        return false;
+    }
+  }
+
+  void _handleTopNavSelection(int index) async {
     setState(() {
       _isTopMenuOpen = false;
     });
 
-    if (index == 1) {
+    if (!await _confirmLeaveEditor()) {
+      return;
+    }
+
+    if (!mounted) {
       return;
     }
 
@@ -355,7 +442,15 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       _isTopMenuOpen = false;
     });
 
-    await Navigator.of(context).push(
+    if (!await _confirmLeaveEditor()) {
+      return;
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    await Navigator.of(context).pushReplacement(
       MaterialPageRoute(
         builder: (context) => const StoryEditorPage(),
       ),
@@ -1182,7 +1277,9 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           constraints: BoxConstraints(maxWidth: maxWidth),
           child: _EditorBottomBar(
             isSaving: _isSaving,
-            onSaveDraft: _saveDraft,
+            onSaveDraft: () {
+              unawaited(_saveDraft());
+            },
             onPublish: _showPublishDialog,
             onOpenDictation: _openDictationPanel,
             canPublish: _canPublish(),
@@ -3951,12 +4048,12 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         _contentController.text.isNotEmpty;
   }
 
-  Future<void> _saveDraft() async {
+  Future<bool> _saveDraft() async {
     if (_titleController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('El título es obligatorio')),
       );
-      return;
+      return false;
     }
 
     setState(() => _isSaving = true);
@@ -4034,11 +4131,13 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           ),
         ),
       );
+      return true;
     } catch (e) {
       setState(() => _isSaving = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error al guardar: $e')),
       );
+      return false;
     }
   }
 

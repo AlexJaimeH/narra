@@ -50,13 +50,21 @@ class _AppNavigationState extends State<AppNavigation> {
     ),
   ];
 
-  late final List<Widget> _pages =
-      _items.map((item) => item.builder()).toList(growable: false);
+  late final List<int> _pageVersions;
+  late List<Widget> _pages;
 
   @override
   void initState() {
     super.initState();
     _currentIndex = widget.initialIndex.clamp(0, _items.length - 1).toInt();
+    _pageVersions = List<int>.filled(_items.length, 0);
+    _pages = List<Widget>.generate(
+      _items.length,
+      (index) => _items[index].builder(
+        key: ValueKey('app-page-$index-${_pageVersions[index]}'),
+      ),
+      growable: false,
+    );
     _checkAuthentication();
   }
 
@@ -130,7 +138,9 @@ class _AppNavigationState extends State<AppNavigation> {
                       switchInCurve: Curves.easeOut,
                       switchOutCurve: Curves.easeIn,
                       child: _PageContainer(
-                        key: ValueKey(_currentIndex),
+                        key: ValueKey(
+                          '$_currentIndex-${_pageVersions[_currentIndex]}',
+                        ),
                         child: _pages[_currentIndex],
                       ),
                     ),
@@ -145,15 +155,15 @@ class _AppNavigationState extends State<AppNavigation> {
   }
 
   void _handleNavigationTap(int index) {
-    if (index == _currentIndex) {
-      setState(() {
-        _isMenuOpen = false;
-      });
-      return;
-    }
-
     setState(() {
-      _currentIndex = index;
+      if (index == _currentIndex) {
+        _pageVersions[index]++;
+        _pages[index] = _items[index].builder(
+          key: ValueKey('app-page-$index-${_pageVersions[index]}'),
+        );
+      } else {
+        _currentIndex = index;
+      }
       _isMenuOpen = false;
     });
   }
@@ -180,7 +190,7 @@ class _NavigationItem {
 
   final String label;
   final IconData icon;
-  final Widget Function() builder;
+  final Widget Function({Key? key}) builder;
 
   AppNavigationItem get asNavigationItem =>
       AppNavigationItem(label: label, icon: icon);

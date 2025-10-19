@@ -198,6 +198,20 @@ class _StoryVersionEntry {
   final String reason;
 }
 
+class _VersionHistoryVisuals {
+  const _VersionHistoryVisuals({
+    required this.icon,
+    required this.accent,
+    required this.iconBackground,
+    required this.metaColor,
+  });
+
+  final IconData icon;
+  final Color accent;
+  final Color iconBackground;
+  final Color metaColor;
+}
+
 class _StoryEditorPageState extends State<StoryEditorPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
@@ -3278,6 +3292,60 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       alwaysUse24HourFormat: true,
     );
     return '$dateLabel · $timeLabel';
+  }
+
+  _VersionHistoryVisuals _resolveVersionHistoryVisuals(
+    String reason,
+    ThemeData theme,
+  ) {
+    final colorScheme = theme.colorScheme;
+    final normalized = reason.toLowerCase();
+
+    bool matchesAny(Iterable<String> values) {
+      for (final candidate in values) {
+        if (normalized.contains(candidate)) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    IconData icon = Icons.history_rounded;
+    Color accent = colorScheme.primary;
+
+    void assign(IconData newIcon, Color newAccent) {
+      icon = newIcon;
+      accent = newAccent;
+    }
+
+    if (matchesAny(['estado previo', 'estado antes'])) {
+      assign(Icons.layers_rounded, colorScheme.outline);
+    } else if (matchesAny(['versión inicial', 'version inicial'])) {
+      assign(Icons.auto_awesome_rounded, colorScheme.secondary);
+    } else if (matchesAny(['borrador'])) {
+      assign(Icons.save_alt_rounded, colorScheme.primary);
+    } else if (matchesAny(['ghost writer', 'ghostwriter'])) {
+      assign(Icons.auto_fix_high_rounded, colorScheme.tertiary);
+    } else if (matchesAny(
+        ['dictado', 'transcrip', 'transcripción', 'transcripcion'])) {
+      assign(Icons.mic_rounded, colorScheme.secondary);
+    } else if (matchesAny(['restaur', 'restaurar'])) {
+      assign(Icons.restart_alt_rounded, colorScheme.secondary);
+    } else if (matchesAny(['automático', 'automatico', '5 minutos'])) {
+      assign(Icons.schedule_rounded, colorScheme.outline);
+    }
+
+    final Color iconBackground = accent == colorScheme.outline
+        ? colorScheme.outlineVariant.withValues(alpha: 0.18)
+        : accent.withValues(alpha: 0.16);
+    final Color metaColor = colorScheme.onSurfaceVariant.withValues(alpha: 0.8);
+
+    return _VersionHistoryVisuals(
+      icon: icon,
+      accent: accent,
+      iconBackground: iconBackground,
+      metaColor: metaColor,
+    );
   }
 
   void _insertAtCursor(String text) {
@@ -6379,63 +6447,107 @@ class _StoryEditorPageState extends State<StoryEditorPage>
               return ClipRRect(
                 borderRadius: BorderRadius.circular(16),
                 child: Material(
-                  color: colorScheme.surfaceContainerHigh.withValues(alpha: 0.55),
+                  color:
+                      colorScheme.surfaceContainerHigh.withValues(alpha: 0.55),
                   child: ListView.separated(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 8,
+                    ),
                     itemCount: _versionHistory.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 4),
+                    separatorBuilder: (_, __) => const SizedBox(height: 6),
                     itemBuilder: (context, index) {
                       final entry = _versionHistory[index];
+                      final visuals =
+                          _resolveVersionHistoryVisuals(entry.reason, theme);
                       final isSelected = identical(entry, selectedEntry);
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: ListTile(
-                            onTap: () {
-                              setDialogState(() {
-                                selectedEntry = entry;
-                              });
-                            },
-                            selected: isSelected,
-                            selectedTileColor:
-                                colorScheme.primary.withValues(alpha: 0.12),
-                            leading: Icon(
-                              Icons.save_alt,
+                      return InkWell(
+                        borderRadius: BorderRadius.circular(14),
+                        onTap: () {
+                          setDialogState(() {
+                            selectedEntry = entry;
+                          });
+                        },
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
+                          curve: Curves.easeOut,
+                          margin: const EdgeInsets.symmetric(horizontal: 6),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 18,
+                            vertical: 14,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? visuals.accent.withValues(alpha: 0.14)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
                               color: isSelected
-                                  ? colorScheme.primary
-                                  : colorScheme.onSurfaceVariant,
+                                  ? visuals.accent.withValues(alpha: 0.38)
+                                  : colorScheme.outlineVariant
+                                      .withValues(alpha: 0.18),
                             ),
-                            title: Text(
-                              entry.reason,
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                fontWeight:
-                                    isSelected ? FontWeight.w700 : FontWeight.w600,
-                              ),
-                            ),
-                            subtitle: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  _formatVersionTimestamp(entry.savedAt),
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    color: colorScheme.onSurfaceVariant,
-                                  ),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  color: visuals.iconBackground,
+                                  borderRadius: BorderRadius.circular(14),
                                 ),
-                                if (entry.content.trim().isNotEmpty)
-                                  Padding(
-                                    padding: const EdgeInsets.only(top: 4),
-                                    child: Text(
-                                      entry.content.trim(),
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: theme.textTheme.bodySmall?.copyWith(
-                                        color: colorScheme.onSurfaceVariant,
+                                alignment: Alignment.center,
+                                child: Icon(
+                                  visuals.icon,
+                                  size: 20,
+                                  color: visuals.accent == colorScheme.outline
+                                      ? colorScheme.onSurfaceVariant
+                                      : visuals.accent,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      entry.reason,
+                                      style:
+                                          theme.textTheme.bodyMedium?.copyWith(
+                                        fontWeight: isSelected
+                                            ? FontWeight.w700
+                                            : FontWeight.w600,
+                                        color: colorScheme.onSurface,
                                       ),
                                     ),
-                                  ),
-                              ],
-                            ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      _formatVersionTimestamp(entry.savedAt),
+                                      style:
+                                          theme.textTheme.bodySmall?.copyWith(
+                                        color: visuals.metaColor,
+                                      ),
+                                    ),
+                                    if (entry.content.trim().isNotEmpty) ...[
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        entry.content.trim(),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style:
+                                            theme.textTheme.bodySmall?.copyWith(
+                                          color: colorScheme.onSurfaceVariant
+                                              .withValues(alpha: 0.75),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       );
@@ -6450,7 +6562,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
               return Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: colorScheme.surfaceContainerHigh.withValues(alpha: 0.35),
+                  color:
+                      colorScheme.surfaceContainerHigh.withValues(alpha: 0.35),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Column(
@@ -6485,8 +6598,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                           color: colorScheme.surface,
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
-                            color:
-                                colorScheme.outlineVariant.withValues(alpha: 0.4),
+                            color: colorScheme.outlineVariant
+                                .withValues(alpha: 0.4),
                           ),
                         ),
                         child: Padding(

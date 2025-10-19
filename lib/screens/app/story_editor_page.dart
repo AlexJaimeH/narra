@@ -184,6 +184,20 @@ class _TagPaletteSection {
   }
 }
 
+class _StoryVersionEntry {
+  const _StoryVersionEntry({
+    required this.title,
+    required this.content,
+    required this.savedAt,
+    required this.reason,
+  });
+
+  final String title;
+  final String content;
+  final DateTime savedAt;
+  final String reason;
+}
+
 class _StoryEditorPageState extends State<StoryEditorPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
@@ -238,6 +252,9 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   String _datesPrecision = 'day'; // day, month, year
   String _status = 'draft'; // draft, published
   Story? _currentStory;
+  final List<_StoryVersionEntry> _versionHistory = [];
+  Timer? _autoVersionTimer;
+  String? _lastVersionSignature;
 
   String _tagSearchQuery = '';
   List<_TagPaletteSection> _tagSections = [];
@@ -294,6 +311,18 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     // Listen to content changes - debounced to prevent flickering
     _contentController.addListener(_handleContentChange);
     _titleController.addListener(_handleTitleChange);
+
+    _startAutoVersionTimer();
+
+    if (widget.storyId == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _captureVersion(
+          reason: 'Versión inicial',
+          includeIfUnchanged: true,
+        );
+      });
+    }
 
     // Generate initial AI suggestions when suggestions are shown
   }
@@ -470,6 +499,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     _transcriptScrollController.dispose();
     _tagSearchController.dispose();
     _ghostWriterInstructionsDebounce?.cancel();
+    _autoVersionTimer?.cancel();
     super.dispose();
   }
 
@@ -519,7 +549,11 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   Future<void> _loadStory() async {
     if (widget.storyId == null) return;
 
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _versionHistory.clear();
+    });
+    _lastVersionSignature = null;
     try {
       final story = await StoryServiceNew.getStoryById(widget.storyId!);
       if (story != null && mounted) {
@@ -560,6 +594,11 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           _hasChanges = false;
           _isLoading = false;
         });
+        _captureVersion(
+          reason: 'Versión original',
+          includeIfUnchanged: true,
+          savedAt: story.updatedAt,
+        );
         SchedulerBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
           _ensureSelectedTagsInPalette();
@@ -1451,12 +1490,12 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                 onSelected: _handleAppBarAction,
                 itemBuilder: (context) => const [
                   PopupMenuItem(
-                    value: 'view_originals',
+                    value: 'view_versions',
                     child: Row(
                       children: [
                         Icon(Icons.history),
                         SizedBox(width: 8),
-                        Text('Ver originales'),
+                        Text('Historial de versiones'),
                       ],
                     ),
                   ),
@@ -3171,10 +3210,74 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
   void _handleAppBarAction(String action) {
     switch (action) {
-      case 'view_originals':
-        _showOriginalsDialog();
+      case 'view_versions':
+        _showVersionHistory();
         break;
     }
+  }
+
+  void _startAutoVersionTimer() {
+    _autoVersionTimer?.cancel();
+    _autoVersionTimer = Timer.periodic(const Duration(minutes: 5), (_) {
+      if (!mounted) return;
+      if (!_hasChanges) return;
+      if (_titleController.text.trim().isEmpty &&
+          _contentController.text.trim().isEmpty) {
+        return;
+      }
+      _captureVersion(reason: 'Guardado automático (5 minutos)');
+    });
+  }
+
+  String _buildVersionSignature(String title, String content) {
+    return '${title.trim()}\n${content.trim()}';
+  }
+
+  void _captureVersion({
+    required String reason,
+    bool includeIfUnchanged = false,
+    DateTime? savedAt,
+  }) {
+    if (!mounted) return;
+    final title = _titleController.text;
+    final content = _contentController.text;
+    final signature = _buildVersionSignature(title, content);
+
+    if (!includeIfUnchanged && signature == _lastVersionSignature) {
+      return;
+    }
+
+    final entry = _StoryVersionEntry(
+      title: title,
+      content: content,
+      savedAt: (savedAt ?? DateTime.now()).toLocal(),
+      reason: reason,
+    );
+
+    setState(() {
+      _versionHistory.insert(0, entry);
+      if (_versionHistory.length > 60) {
+        _versionHistory.removeRange(60, _versionHistory.length);
+      }
+      _lastVersionSignature = signature;
+    });
+  }
+
+  void _applyTranscriptInsertion(VoidCallback insertion) {
+    _captureVersion(reason: 'Estado previo al dictado');
+    insertion();
+    _captureVersion(reason: 'Se añadió un dictado');
+  }
+
+  String _formatVersionTimestamp(DateTime timestamp) {
+    final localizations = MaterialLocalizations.of(context);
+    final localTime = timestamp.toLocal();
+    final dateLabel = localizations.formatShortDate(localTime);
+    final timeLabel = localizations.formatTimeOfDay(
+      TimeOfDay.fromDateTime(localTime),
+      alwaysUse24HourFormat: true,
+    );
+    return '$dateLabel · $timeLabel';
   }
 
   void _insertAtCursor(String text) {
@@ -3184,14 +3287,17 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       _contentController.text += text;
       _contentController.selection =
           TextSelection.collapsed(offset: _contentController.text.length);
-      return;
+    } else {
+      final start = selection.start;
+      final end = selection.end;
+      final newText = full.replaceRange(start, end, text);
+      _contentController.text = newText;
+      final caret = start + text.length;
+      _contentController.selection = TextSelection.collapsed(offset: caret);
     }
-    final start = selection.start;
-    final end = selection.end;
-    final newText = full.replaceRange(start, end, text);
-    _contentController.text = newText;
-    final caret = start + text.length;
-    _contentController.selection = TextSelection.collapsed(offset: caret);
+    setState(() {
+      _hasChanges = true;
+    });
   }
 
   void _scrollTranscriptToBottom() {
@@ -3773,13 +3879,17 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   Future<void> _showTranscriptPlacementDialog(String transcript) async {
     final text = _contentController.text;
     if (text.trim().isEmpty) {
-      _insertAtCursor('$transcript\n\n');
+      _applyTranscriptInsertion(() {
+        _insertAtCursor('$transcript\n\n');
+      });
       return;
     }
 
     final paragraphs = _parseParagraphs(text);
     if (paragraphs.isEmpty) {
-      _insertTextAtPosition('\n\n$transcript\n\n', text.length);
+      _applyTranscriptInsertion(() {
+        _insertTextAtPosition('\n\n$transcript\n\n', text.length);
+      });
       return;
     }
 
@@ -3881,7 +3991,9 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           OutlinedButton.icon(
             onPressed: () {
               Navigator.pop(dialogContext);
-              _insertTextAtPosition('$transcript\n\n', 0);
+              _applyTranscriptInsertion(() {
+                _insertTextAtPosition('$transcript\n\n', 0);
+              });
             },
             icon: const Icon(Icons.first_page),
             label: const Text('Al inicio'),
@@ -3889,8 +4001,10 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           ElevatedButton.icon(
             onPressed: () {
               Navigator.pop(dialogContext);
-              _insertTextAtPosition(
-                  '\n\n$transcript\n\n', _contentController.text.length);
+              _applyTranscriptInsertion(() {
+                _insertTextAtPosition(
+                    '\n\n$transcript\n\n', _contentController.text.length);
+              });
             },
             icon: const Icon(Icons.last_page),
             label: const Text('Al final'),
@@ -3938,8 +4052,10 @@ class _StoryEditorPageState extends State<StoryEditorPage>
             onPressed: () {
               Navigator.pop(context);
               Navigator.pop(parentDialog);
-              _insertTextAtPosition(
-                  '$transcript\n\n', paragraph['position'] as int);
+              _applyTranscriptInsertion(() {
+                _insertTextAtPosition(
+                    '$transcript\n\n', paragraph['position'] as int);
+              });
             },
             icon: const Icon(Icons.vertical_align_top),
             label: const Text('Antes'),
@@ -3948,8 +4064,10 @@ class _StoryEditorPageState extends State<StoryEditorPage>
             onPressed: () {
               Navigator.pop(context);
               Navigator.pop(parentDialog);
-              _insertTextAtPosition(
-                  '\n\n$transcript\n\n', paragraph['endPosition'] as int);
+              _applyTranscriptInsertion(() {
+                _insertTextAtPosition(
+                    '\n\n$transcript\n\n', paragraph['endPosition'] as int);
+              });
             },
             icon: const Icon(Icons.vertical_align_bottom),
             label: const Text('Después'),
@@ -3995,8 +4113,10 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                       onPressed: () {
                         Navigator.pop(context);
                         Navigator.pop(parentDialog);
-                        _insertTextAtPosition(
-                            '$transcript\n\n', paragraph['position'] as int);
+                        _applyTranscriptInsertion(() {
+                          _insertTextAtPosition(
+                              '$transcript\n\n', paragraph['position'] as int);
+                        });
                       },
                       icon: const Icon(Icons.vertical_align_top),
                       label: const Text('Antes'),
@@ -4008,8 +4128,10 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                       onPressed: () {
                         Navigator.pop(context);
                         Navigator.pop(parentDialog);
-                        _insertTextAtPosition('\n\n$transcript\n\n',
-                            paragraph['endPosition'] as int);
+                        _applyTranscriptInsertion(() {
+                          _insertTextAtPosition('\n\n$transcript\n\n',
+                              paragraph['endPosition'] as int);
+                        });
                       },
                       icon: const Icon(Icons.vertical_align_bottom),
                       label: const Text('Después'),
@@ -4131,6 +4253,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           ),
         ),
       );
+      _captureVersion(reason: 'Borrador guardado');
       return true;
     } catch (e) {
       setState(() => _isSaving = false);
@@ -5586,10 +5709,12 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       if (action == _GhostWriterResultAction.apply) {
         final polished =
             (result['polished_text'] as String?) ?? _contentController.text;
+        _captureVersion(reason: 'Estado previo a Ghost Writer');
         setState(() {
           _contentController.text = polished;
           _hasChanges = true;
         });
+        _captureVersion(reason: 'Ghost Writer afinó tu historia');
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('✓ Texto mejorado por Ghost Writer'),
@@ -6204,32 +6329,278 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     return parts.join(' · ');
   }
 
-  void _showOriginalsDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Versiones originales'),
-        content: const Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.history, size: 48, color: Colors.blue),
-            SizedBox(height: 16),
-            Text('No hay versiones anteriores guardadas.'),
-            SizedBox(height: 16),
-            Text(
-              'Las versiones originales se guardan automáticamente cuando usas el Ghost Writer.',
-              style: TextStyle(fontSize: 12),
-              textAlign: TextAlign.center,
+  Future<void> _showVersionHistory() async {
+    if (!mounted) return;
+
+    if (_versionHistory.isEmpty) {
+      await showDialog(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Historial de versiones'),
+          content: const Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.history, size: 48, color: Colors.blue),
+              SizedBox(height: 16),
+              Text('Aún no hay versiones guardadas para esta historia.'),
+              SizedBox(height: 16),
+              Text(
+                'Guarda borradores, usa Ghost Writer o pega tus transcripciones para ir creando un historial.',
+                style: TextStyle(fontSize: 12),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cerrar'),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cerrar'),
-          ),
-        ],
-      ),
+      );
+      return;
+    }
+
+    _StoryVersionEntry? selectedEntry = _versionHistory.first;
+
+    final restored = await showDialog<_StoryVersionEntry>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final theme = Theme.of(context);
+            final colorScheme = theme.colorScheme;
+            final media = MediaQuery.of(context);
+            final maxWidth = math.min(media.size.width * 0.9, 780.0);
+            final maxHeight = math.min(media.size.height * 0.8, 520.0);
+
+            Widget buildHistoryList() {
+              return ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: Material(
+                  color: colorScheme.surfaceContainerHigh.withValues(alpha: 0.55),
+                  child: ListView.separated(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    itemCount: _versionHistory.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 4),
+                    itemBuilder: (context, index) {
+                      final entry = _versionHistory[index];
+                      final isSelected = identical(entry, selectedEntry);
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(12),
+                          onTap: () {
+                            setDialogState(() {
+                              selectedEntry = entry;
+                            });
+                          },
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 180),
+                            curve: Curves.easeOut,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 14,
+                            ),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? colorScheme.primary.withValues(alpha: 0.12)
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Icon(
+                                  Icons.save_alt,
+                                  color: isSelected
+                                      ? colorScheme.primary
+                                      : colorScheme.onSurfaceVariant,
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        entry.reason,
+                                        style: theme.textTheme.bodyMedium?.copyWith(
+                                          fontWeight: isSelected
+                                              ? FontWeight.w700
+                                              : FontWeight.w600,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        _formatVersionTimestamp(entry.savedAt),
+                                        style: theme.textTheme.bodySmall?.copyWith(
+                                          color: colorScheme.onSurfaceVariant,
+                                        ),
+                                      ),
+                                      if (entry.content.trim().isNotEmpty) ...[
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          entry.content.trim(),
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: theme.textTheme.bodySmall?.copyWith(
+                                            color: colorScheme.onSurfaceVariant,
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              );
+            }
+
+            Widget buildPreview() {
+              final entry = selectedEntry!;
+              return Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: colorScheme.surfaceContainerHigh.withValues(alpha: 0.35),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      entry.reason,
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: colorScheme.primary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      _formatVersionTimestamp(entry.savedAt),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      entry.title.isEmpty ? 'Sin título' : entry.title,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Expanded(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: colorScheme.surface,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color:
+                                colorScheme.outlineVariant.withValues(alpha: 0.4),
+                          ),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Scrollbar(
+                            thumbVisibility: true,
+                            child: SingleChildScrollView(
+                              child: Text(
+                                entry.content.isEmpty
+                                    ? 'Esta versión no tenía contenido aún.'
+                                    : entry.content,
+                                style: theme.textTheme.bodyMedium,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            return AlertDialog(
+              title: Row(
+                children: [
+                  Icon(Icons.history, color: colorScheme.primary),
+                  const SizedBox(width: 12),
+                  Text(
+                    'Historial de versiones',
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+              content: SizedBox(
+                width: maxWidth,
+                child: SizedBox(
+                  height: maxHeight,
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final isCompact = constraints.maxWidth < 640;
+                      if (isCompact) {
+                        return Column(
+                          children: [
+                            Expanded(child: buildHistoryList()),
+                            const SizedBox(height: 12),
+                            Expanded(child: buildPreview()),
+                          ],
+                        );
+                      }
+                      return Row(
+                        children: [
+                          Expanded(flex: 3, child: buildHistoryList()),
+                          const SizedBox(width: 16),
+                          Expanded(flex: 4, child: buildPreview()),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Cerrar'),
+                ),
+                FilledButton.icon(
+                  onPressed: () => Navigator.pop(dialogContext, selectedEntry),
+                  icon: const Icon(Icons.restart_alt),
+                  label: const Text('Restaurar versión'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (restored == null) return;
+
+    final restoredLabel = _formatVersionTimestamp(restored.savedAt);
+    _captureVersion(
+      reason: 'Estado antes de restaurar',
+      includeIfUnchanged: true,
+    );
+    setState(() {
+      _titleController.text = restored.title;
+      _contentController.text = restored.content;
+      _hasChanges = true;
+    });
+    _captureVersion(reason: 'Versión restaurada ($restoredLabel)');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Restauraste la versión de $restoredLabel')),
     );
   }
 }

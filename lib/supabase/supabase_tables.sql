@@ -38,7 +38,8 @@ CREATE TABLE IF NOT EXISTS stories (
   word_count INTEGER DEFAULT 0,
   reading_time INTEGER DEFAULT 0, -- en minutos
   created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  published_at TIMESTAMPTZ
 );
 
 -- Tabla de etiquetas

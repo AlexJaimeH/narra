@@ -7,6 +7,7 @@ import 'package:narra/repositories/story_repository.dart';
 import 'package:narra/screens/public/story_blog_page.dart';
 import 'package:narra/services/story_service_new.dart';
 import 'package:narra/services/story_share_link_builder.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'story_editor_page.dart';
 
@@ -751,6 +752,7 @@ class StoryListCard extends StatelessWidget {
         ? story.excerpt!.trim()
         : _fallbackExcerpt(story.content);
     final statusColors = _statusColors(story.status, colorScheme);
+    final publishedDisplayDate = story.publishedAt ?? story.updatedAt;
     final metadataChips = <Widget>[
       _MetadataBadge(
         icon: Icons.calendar_today,
@@ -868,8 +870,7 @@ class StoryListCard extends StatelessWidget {
                                               color: statusColors.foreground,
                                               background:
                                                   statusColors.background,
-                                              icon: story.status ==
-                                                      StoryStatus.published
+                                              icon: story.isPublished
                                                   ? Icons.check_circle
                                                   : Icons.edit_note,
                                             ),
@@ -892,6 +893,29 @@ class StoryListCard extends StatelessWidget {
                                         ),
                                       ],
                                     ),
+                                    if (story.isPublished) ...[
+                                      const SizedBox(height: 8),
+                                      Row(
+                                        children: [
+                                          Icon(
+                                            Icons.public,
+                                            size: 18,
+                                            color: colorScheme.primary,
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            'Publicado el '
+                                            '${_formatFullDate(publishedDisplayDate)}',
+                                            style: theme.textTheme.bodySmall
+                                                ?.copyWith(
+                                              color:
+                                                  colorScheme.onSurfaceVariant,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
                                     if (excerpt.isNotEmpty) ...[
                                       const SizedBox(height: 6),
                                       Text(
@@ -927,14 +951,8 @@ class StoryListCard extends StatelessWidget {
                                       const SizedBox(height: 20),
                                       _PublicStoryPreview(
                                         story: story,
-                                        onViewPage: () {
-                                          Navigator.of(context).pushNamed(
-                                            '/story/${story.id}',
-                                            arguments: StoryBlogPageArguments(
-                                              story: story,
-                                            ),
-                                          );
-                                        },
+                                        onViewPage: () =>
+                                            _openStoryPublicPage(context, story),
                                       ),
                                     ],
                                   ],
@@ -979,6 +997,7 @@ class _PublicStoryPreview extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final link = StoryShareLinkBuilder.buildStoryLink(story: story).toString();
+    final publishedAt = story.publishedAt ?? story.updatedAt;
 
     return Container(
       width: double.infinity,
@@ -1006,6 +1025,16 @@ class _PublicStoryPreview extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
+          if (publishedAt != null) ...[
+            Text(
+              'Publicado el ${_formatFullDate(publishedAt)}',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
           SelectableText(
             link,
             style: theme.textTheme.bodySmall?.copyWith(
@@ -1027,7 +1056,8 @@ class _PublicStoryPreview extends StatelessWidget {
                   final messenger = ScaffoldMessenger.of(context);
                   await Clipboard.setData(ClipboardData(text: link));
                   messenger.showSnackBar(
-                    const SnackBar(content: Text('Enlace copiado al portapapeles')),
+                    const SnackBar(
+                        content: Text('Enlace copiado al portapapeles')),
                   );
                 },
                 icon: const Icon(Icons.copy),
@@ -1039,6 +1069,43 @@ class _PublicStoryPreview extends StatelessWidget {
       ),
     );
   }
+}
+
+Future<void> _openStoryPublicPage(BuildContext context, Story story) async {
+  final link = StoryShareLinkBuilder.buildStoryLink(story: story);
+  final messenger = ScaffoldMessenger.of(context);
+  final navigator = Navigator.of(context);
+  final routeName = '/story/${story.id}';
+  final routeArguments = StoryBlogPageArguments(
+    story: story,
+  );
+
+  try {
+    final launched = await launchUrl(
+      link,
+      mode: LaunchMode.platformDefault,
+      webOnlyWindowName: '_blank',
+    );
+
+    if (launched) {
+      return;
+    }
+  } catch (_) {
+    // Fall back to the in-app viewer below when launching the browser fails.
+  }
+
+  messenger.showSnackBar(
+    const SnackBar(
+      content: Text(
+        'No se pudo abrir la página pública en una pestaña nueva. Mostrando la vista dentro de la app.',
+      ),
+    ),
+  );
+
+  navigator.pushNamed(
+    routeName,
+    arguments: routeArguments,
+  );
 }
 
 Future<void> _handleStoryAction(
@@ -1134,7 +1201,7 @@ List<PopupMenuEntry<String>> _buildStoryMenuItems(Story story) {
         label: 'Editar',
       ),
     ),
-    if (story.status == StoryStatus.draft)
+    if (story.isDraft)
       const PopupMenuItem(
         value: 'publish',
         child: _PopupMenuRow(
@@ -1142,7 +1209,7 @@ List<PopupMenuEntry<String>> _buildStoryMenuItems(Story story) {
           label: 'Publicar',
         ),
       ),
-    if (story.status == StoryStatus.published)
+    if (story.isPublished)
       const PopupMenuItem(
         value: 'unpublish',
         child: _PopupMenuRow(
@@ -1208,6 +1275,26 @@ String _formatStoryDate(DateTime date) {
   ];
 
   return '${date.day} ${months[date.month - 1]}';
+}
+
+String _formatFullDate(DateTime date) {
+  const months = [
+    'enero',
+    'febrero',
+    'marzo',
+    'abril',
+    'mayo',
+    'junio',
+    'julio',
+    'agosto',
+    'septiembre',
+    'octubre',
+    'noviembre',
+    'diciembre',
+  ];
+
+  final month = months[date.month - 1];
+  return '${date.day} de $month de ${date.year}';
 }
 
 String _fallbackStoryExcerpt(String? content) {

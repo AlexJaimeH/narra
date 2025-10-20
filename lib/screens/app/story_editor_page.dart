@@ -1470,8 +1470,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     return LayoutBuilder(
       builder: (context, constraints) {
         final isCompact = constraints.maxWidth < 720;
-        final maxWidth =
-            isCompact ? constraints.maxWidth : math.min(920.0, constraints.maxWidth);
         final verticalSpacing = isCompact ? 18.0 : 24.0;
         final sectionSpacing = isCompact ? 12.0 : 16.0;
         final bodyStyle = theme.textTheme.bodyLarge?.copyWith(height: 1.46);
@@ -1559,27 +1557,82 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
         return Padding(
           padding: EdgeInsets.fromLTRB(
-            isCompact ? 12 : 18,
+            isCompact ? 8 : 14,
             isCompact ? 8 : 12,
-            isCompact ? 12 : 18,
-            isCompact ? 18 : 26,
+            isCompact ? 8 : 14,
+            isCompact ? 20 : 28,
           ),
-          child: Align(
-            alignment: Alignment.topCenter,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: maxWidth),
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: colorScheme.surface,
-                  borderRadius: BorderRadius.circular(isCompact ? 26 : 30),
-                  border: Border.all(
-                    color: colorScheme.outlineVariant.withValues(alpha: 0.3),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Tu historia',
+                style: theme.textTheme.labelLarge?.copyWith(
+                  letterSpacing: 0.3,
+                  fontWeight: FontWeight.w700,
+                  color: colorScheme.primary,
+                ),
+              ),
+              SizedBox(height: sectionSpacing),
+              TextField(
+                controller: _titleController,
+                decoration: buildFieldDecoration(
+                  isCompact: isCompact,
+                  hint: 'Título de tu historia...',
+                  hintStyle: theme.textTheme.titleMedium?.copyWith(
+                    color:
+                        colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
                   ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: colorScheme.shadow.withValues(alpha: 0.05),
-                      blurRadius: 24,
-                      offset: const Offset(0, 14),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isCompact ? 14 : 18,
+                    vertical: isCompact ? 14 : 18,
+                  ),
+                ),
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.2,
+                ),
+                minLines: 1,
+                maxLines: 3,
+                textInputAction: TextInputAction.next,
+                enableSuggestions: false,
+                autocorrect: false,
+                smartDashesType: SmartDashesType.disabled,
+                smartQuotesType: SmartQuotesType.disabled,
+                textCapitalization: TextCapitalization.sentences,
+                enableIMEPersonalizedLearning: false,
+                spellCheckConfiguration:
+                    const SpellCheckConfiguration.disabled(),
+                autofillHints: const <String>[],
+              ),
+              SizedBox(height: verticalSpacing),
+              Text(
+                'Narración',
+                style: theme.textTheme.labelLarge?.copyWith(
+                  letterSpacing: 0.2,
+                  fontWeight: FontWeight.w700,
+                  color:
+                      colorScheme.onSurfaceVariant.withValues(alpha: 0.9),
+                ),
+              ),
+              SizedBox(height: sectionSpacing),
+              ConstrainedBox(
+                constraints: BoxConstraints(minHeight: minBodyHeight),
+                child: TextField(
+                  controller: _contentController,
+                  decoration: buildFieldDecoration(
+                    isCompact: isCompact,
+                    hint: 'Cuenta tu historia...',
+                    hintStyle: bodyStyle?.copyWith(
+                      color: colorScheme.onSurfaceVariant
+                          .withValues(alpha: 0.55),
+                    ),
+                    padding: EdgeInsets.fromLTRB(
+                      isCompact ? 14 : 18,
+                      isCompact ? 16 : 22,
+                      isCompact ? 14 : 18,
+                      isCompact ? 20 : 26,
                     ),
                   ],
                 ),
@@ -1747,9 +1800,90 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                       suggestionsSection(),
                     ],
                   ),
+                  style: bodyStyle,
+                  keyboardType: TextInputType.multiline,
+                  maxLines: null,
+                  minLines: 10,
+                  textAlignVertical: TextAlignVertical.top,
+                  enableSuggestions: false,
+                  autocorrect: false,
+                  smartDashesType: SmartDashesType.disabled,
+                  smartQuotesType: SmartQuotesType.disabled,
+                  textCapitalization: TextCapitalization.sentences,
+                  enableIMEPersonalizedLearning: false,
+                  spellCheckConfiguration:
+                      const SpellCheckConfiguration.disabled(),
+                  autofillHints: const <String>[],
                 ),
               ),
-            ),
+              SizedBox(height: verticalSpacing),
+              Wrap(
+                spacing: isCompact ? 10 : 14,
+                runSpacing: isCompact ? 10 : 14,
+                children: [
+                  buildActionButton(
+                    isCompact: isCompact,
+                    onPressed: _isGhostWriterProcessing
+                        ? null
+                        : _handleGhostWriterPressed,
+                    icon: _isGhostWriterProcessing
+                        ? SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              valueColor:
+                                  AlwaysStoppedAnimation(colorScheme.primary),
+                            ),
+                          )
+                        : Icon(
+                            Icons.auto_fix_high,
+                            color: _canUseGhostWriter()
+                                ? colorScheme.primary
+                                : colorScheme.onSurfaceVariant,
+                          ),
+                    label: _isGhostWriterProcessing
+                        ? 'Trabajando...'
+                        : 'Ghost Writer',
+                  ),
+                  buildActionButton(
+                    isCompact: isCompact,
+                    onPressed: () {
+                      setState(() => _showSuggestions = !_showSuggestions);
+                      if (_showSuggestions) {
+                        _generateAISuggestions();
+                      }
+                    },
+                    icon: Icon(
+                      _showSuggestions
+                          ? Icons.lightbulb
+                          : Icons.lightbulb_outline,
+                      color: _showSuggestions
+                          ? colorScheme.primary
+                          : colorScheme.onSurfaceVariant,
+                    ),
+                    label: 'Sugerencias',
+                  ),
+                ],
+              ),
+              SizedBox(height: verticalSpacing),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  buildInfoChip(
+                    icon: Icons.text_fields_rounded,
+                    label: 'Palabras: $wordCount',
+                  ),
+                  if (_showSuggestions && timestampLabel != null)
+                    buildInfoChip(
+                      icon: Icons.schedule,
+                      label: timestampLabel,
+                    ),
+                ],
+              ),
+              suggestionsSection(),
+            ],
           ),
         );
       },

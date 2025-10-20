@@ -7,6 +7,7 @@ import 'package:narra/repositories/story_repository.dart';
 import 'package:narra/screens/public/story_blog_page.dart';
 import 'package:narra/services/story_service_new.dart';
 import 'package:narra/services/story_share_link_builder.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'story_editor_page.dart';
 
@@ -869,8 +870,7 @@ class StoryListCard extends StatelessWidget {
                                               color: statusColors.foreground,
                                               background:
                                                   statusColors.background,
-                                              icon: story.status ==
-                                                      StoryStatus.published
+                                              icon: story.isPublished
                                                   ? Icons.check_circle
                                                   : Icons.edit_note,
                                             ),
@@ -893,8 +893,7 @@ class StoryListCard extends StatelessWidget {
                                         ),
                                       ],
                                     ),
-                                    if (story.status ==
-                                        StoryStatus.published) ...[
+                                    if (story.isPublished) ...[
                                       const SizedBox(height: 8),
                                       Row(
                                         children: [
@@ -952,14 +951,8 @@ class StoryListCard extends StatelessWidget {
                                       const SizedBox(height: 20),
                                       _PublicStoryPreview(
                                         story: story,
-                                        onViewPage: () {
-                                          Navigator.of(context).pushNamed(
-                                            '/story/${story.id}',
-                                            arguments: StoryBlogPageArguments(
-                                              story: story,
-                                            ),
-                                          );
-                                        },
+                                        onViewPage: () =>
+                                            _openStoryPublicPage(context, story),
                                       ),
                                     ],
                                   ],
@@ -1078,6 +1071,43 @@ class _PublicStoryPreview extends StatelessWidget {
   }
 }
 
+Future<void> _openStoryPublicPage(BuildContext context, Story story) async {
+  final link = StoryShareLinkBuilder.buildStoryLink(story: story);
+  final messenger = ScaffoldMessenger.of(context);
+  final navigator = Navigator.of(context);
+  final routeName = '/story/${story.id}';
+  final routeArguments = StoryBlogPageArguments(
+    story: story,
+  );
+
+  try {
+    final launched = await launchUrl(
+      link,
+      mode: LaunchMode.platformDefault,
+      webOnlyWindowName: '_blank',
+    );
+
+    if (launched) {
+      return;
+    }
+  } catch (_) {
+    // Fall back to the in-app viewer below when launching the browser fails.
+  }
+
+  messenger.showSnackBar(
+    const SnackBar(
+      content: Text(
+        'No se pudo abrir la página pública en una pestaña nueva. Mostrando la vista dentro de la app.',
+      ),
+    ),
+  );
+
+  navigator.pushNamed(
+    routeName,
+    arguments: routeArguments,
+  );
+}
+
 Future<void> _handleStoryAction(
   BuildContext context, {
   required Story story,
@@ -1171,7 +1201,7 @@ List<PopupMenuEntry<String>> _buildStoryMenuItems(Story story) {
         label: 'Editar',
       ),
     ),
-    if (story.status == StoryStatus.draft)
+    if (story.isDraft)
       const PopupMenuItem(
         value: 'publish',
         child: _PopupMenuRow(
@@ -1179,7 +1209,7 @@ List<PopupMenuEntry<String>> _buildStoryMenuItems(Story story) {
           label: 'Publicar',
         ),
       ),
-    if (story.status == StoryStatus.published)
+    if (story.isPublished)
       const PopupMenuItem(
         value: 'unpublish',
         child: _PopupMenuRow(

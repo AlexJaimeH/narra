@@ -226,13 +226,28 @@ class Story {
     this.authorAvatarUrl,
   });
 
+  bool get isDraft => status == StoryStatus.draft;
+  bool get isPublished => status == StoryStatus.published;
+  bool get isArchived => status == StoryStatus.archived;
+
   factory Story.fromMap(Map<String, dynamic> map) {
     try {
-      final rawStatus = (map['status'] as String? ?? '').toLowerCase();
-      final status = StoryStatus.values.firstWhere(
-        (s) => s.name == rawStatus,
-        orElse: () => StoryStatus.draft,
-      );
+      final rawPublishedAt = map['published_at'];
+      DateTime? publishedAt;
+      if (rawPublishedAt is String && rawPublishedAt.isNotEmpty) {
+        publishedAt = DateTime.tryParse(rawPublishedAt);
+      } else if (rawPublishedAt is DateTime) {
+        publishedAt = rawPublishedAt;
+      }
+
+      final rawStatus = (map['status'] as String? ?? '').trim().toLowerCase();
+      final fallbackStatus = publishedAt != null ? StoryStatus.published : StoryStatus.draft;
+      final status = rawStatus.isNotEmpty
+          ? StoryStatus.values.firstWhere(
+              (s) => s.name == rawStatus,
+              orElse: () => fallbackStatus,
+            )
+          : fallbackStatus;
 
       final authorProfile = map['author_profile'] as Map<String, dynamic>? ??
           map['author'] as Map<String, dynamic>? ??
@@ -275,9 +290,7 @@ class Story {
         updatedAt: map['updated_at'] != null
             ? DateTime.parse(map['updated_at'] as String)
             : DateTime.now(),
-        publishedAt: map['published_at'] != null
-            ? DateTime.parse(map['published_at'] as String)
-            : null,
+        publishedAt: publishedAt,
         tags: map['tags'] != null ? List<String>.from(map['tags']) : null,
         storyTags: map['story_tags'] != null
             ? (map['story_tags'] as List)

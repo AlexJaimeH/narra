@@ -851,6 +851,90 @@ class _StoryEditorPageState extends State<StoryEditorPage>
             .map((row) => _StoryVersionEntry.fromMap(row))
             .toList()
           ..sort((a, b) => b.savedAt.compareTo(a.savedAt));
+        final latestVersion =
+            versionEntries.isNotEmpty ? versionEntries.first : null;
+
+        final resolvedTags = LinkedHashMap<String, String>();
+        void seedTags(Iterable<String>? values) {
+          if (values == null) return;
+          for (final tag in values) {
+            final trimmed = tag.trim();
+            if (trimmed.isEmpty) continue;
+            final normalized = trimmed.toLowerCase();
+            resolvedTags.putIfAbsent(normalized, () => trimmed);
+          }
+        }
+
+        seedTags(story.tags);
+        if (resolvedTags.isEmpty) {
+          seedTags(story.storyTags.map((tag) => tag.name));
+        }
+
+        if (resolvedTags.isEmpty && storyData != null) {
+          final rawStoryTags = storyData['story_tags'];
+          if (rawStoryTags is List) {
+            for (final entry in rawStoryTags) {
+              if (entry is! Map) continue;
+              final Map entryMap = entry;
+              final baseMap = entryMap is Map<String, dynamic>
+                  ? entryMap
+                  : Map<String, dynamic>.from(entryMap);
+              final nested = baseMap['tags'];
+              String? name;
+              if (nested is Map) {
+                final Map nestedMap = nested;
+                final normalizedMap = nestedMap is Map<String, dynamic>
+                    ? nestedMap
+                    : Map<String, dynamic>.from(nestedMap);
+                name = normalizedMap['name']?.toString();
+              } else {
+                name = baseMap['name']?.toString();
+              }
+              if (name != null) {
+                seedTags([name]);
+              }
+            }
+          }
+        }
+
+        if (resolvedTags.isEmpty && latestVersion != null) {
+          seedTags(latestVersion.tags);
+        }
+
+        DateTime? resolveDate(DateTime? primary, DateTime? fallback) {
+          return primary ?? fallback;
+        }
+
+        String normalizePrecision(String? value) {
+          final raw = value?.trim().toLowerCase();
+          if (raw == null || raw.isEmpty) return '';
+          if (raw == 'day' || raw == 'month' || raw == 'year') {
+            return raw;
+          }
+          switch (raw) {
+            case 'exact':
+              return 'day';
+            case 'month_year':
+              return 'month';
+            default:
+              return '';
+          }
+        }
+
+        final resolvedStartDate =
+            resolveDate(story.startDate, latestVersion?.startDate);
+        final resolvedEndDate =
+            resolveDate(story.endDate, latestVersion?.endDate);
+        final resolvedPrecision = () {
+          final primary = normalizePrecision(story.datesPrecision);
+          if (primary.isNotEmpty) return primary;
+          final fromVersion = normalizePrecision(latestVersion?.datesPrecision);
+          if (fromVersion.isNotEmpty) return fromVersion;
+          return 'day';
+        }();
+
+        final displayTags = resolvedTags.values.toList();
+
         final photos = <Map<String, dynamic>>[];
 
         if (storyData != null && storyData['story_photos'] != null) {
@@ -874,11 +958,12 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           _currentStory = story;
           _titleController.text = story.title;
           _contentController.text = story.content ?? '';
-          _selectedTags.clear();
-          _selectedTags.addAll(story.tags ?? []);
-          _startDate = story.startDate;
-          _endDate = story.endDate;
-          _datesPrecision = story.datesPrecision ?? 'day';
+          _selectedTags
+            ..clear()
+            ..addAll(displayTags);
+          _startDate = resolvedStartDate;
+          _endDate = resolvedEndDate;
+          _datesPrecision = resolvedPrecision;
           _status = story.status.name;
           _photos.clear();
           _photos.addAll(photos);
@@ -4758,6 +4843,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
       if (_currentStory != null) {
         await _flushPendingVersionEntries(_currentStory!.id);
+        await _syncStoryTags(_currentStory!.id);
       }
 
       // Upload and save photos
@@ -4786,6 +4872,58 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         SnackBar(content: Text('Error al guardar: $e')),
       );
       return false;
+    }
+  }
+
+  Future<void> _syncStoryTags(String storyId) async {
+    final normalizedSelection = LinkedHashMap<String, String>();
+    for (final tag in _selectedTags) {
+      final trimmed = tag.trim();
+      if (trimmed.isEmpty) continue;
+      final normalized = trimmed.toLowerCase();
+      normalizedSelection.putIfAbsent(normalized, () => trimmed);
+    }
+
+    final existingRows = await NarraSupabaseClient.client
+        .from('story_tags')
+        .select('tag_id, tags (id, name)')
+        .eq('story_id', storyId);
+
+    final existingByName = <String, String>{};
+    for (final row in existingRows) {
+      if (row is! Map<String, dynamic>) continue;
+      String? tagId = row['tag_id']?.toString();
+      String? tagName;
+      final tagsMap = row['tags'];
+      if (tagsMap is Map) {
+        final Map tagEntry = tagsMap;
+        final normalizedMap = tagEntry is Map<String, dynamic>
+            ? tagEntry
+            : Map<String, dynamic>.from(tagEntry);
+        tagId = normalizedMap['id']?.toString() ?? tagId;
+        tagName = normalizedMap['name']?.toString();
+      }
+      tagName ??= row['name']?.toString();
+      if (tagId == null || tagName == null) continue;
+      existingByName[tagName.toLowerCase()] = tagId;
+    }
+
+    final selectedKeys = normalizedSelection.keys.toSet();
+
+    for (final entry in existingByName.entries) {
+      if (!selectedKeys.contains(entry.key)) {
+        await NarraSupabaseClient.removeTagFromStory(storyId, entry.value);
+      }
+    }
+
+    for (final entry in normalizedSelection.entries) {
+      if (existingByName.containsKey(entry.key)) {
+        continue;
+      }
+      final tagRecord = await NarraSupabaseClient.getOrCreateTag(entry.value);
+      final tagId = tagRecord['id']?.toString();
+      if (tagId == null) continue;
+      await NarraSupabaseClient.addTagToStory(storyId, tagId);
     }
   }
 

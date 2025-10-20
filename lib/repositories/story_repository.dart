@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:narra/supabase/narra_client.dart';
 
 /// Repository for story-related operations
@@ -24,8 +26,7 @@ class StoryRepository {
 
   /// Get story by ID
   static Future<Story?> getStoryById(String id) async {
-    final stories = await NarraSupabaseClient.getUserStories();
-    final storyData = stories.where((s) => s['id'] == id).firstOrNull;
+    final storyData = await NarraSupabaseClient.getStoryById(id);
     return storyData != null ? Story.fromMap(storyData) : null;
   }
 
@@ -241,7 +242,8 @@ class Story {
       }
 
       final rawStatus = (map['status'] as String? ?? '').trim().toLowerCase();
-      final fallbackStatus = publishedAt != null ? StoryStatus.published : StoryStatus.draft;
+      final fallbackStatus =
+          publishedAt != null ? StoryStatus.published : StoryStatus.draft;
       final status = rawStatus.isNotEmpty
           ? StoryStatus.values.firstWhere(
               (s) => s.name == rawStatus,
@@ -256,6 +258,112 @@ class Story {
           authorProfile?['user_settings'] as Map<String, dynamic>? ??
               map['author_settings'] as Map<String, dynamic>?;
 
+      DateTime? parseDate(dynamic value) {
+        if (value is String && value.trim().isNotEmpty) {
+          try {
+            return DateTime.parse(value.trim());
+          } catch (_) {
+            return null;
+          }
+        }
+        if (value is DateTime) {
+          return value;
+        }
+        return null;
+      }
+
+      String? normalizePrecision(String? value) {
+        final raw = value?.trim().toLowerCase();
+        if (raw == null || raw.isEmpty) return null;
+        if (raw == 'day' || raw == 'month' || raw == 'year') {
+          return raw;
+        }
+        switch (raw) {
+          case 'exact':
+            return 'day';
+          case 'month_year':
+            return 'month';
+          default:
+            return null;
+        }
+      }
+
+      final tagNames = <String>[];
+      void addTag(dynamic raw) {
+        if (raw == null) return;
+        final display = raw.toString().trim();
+        if (display.isEmpty) return;
+        final normalized = display.toLowerCase();
+        final alreadyExists =
+            tagNames.any((existing) => existing.toLowerCase() == normalized);
+        if (!alreadyExists) {
+          tagNames.add(display);
+        }
+      }
+
+      void addTags(dynamic raw) {
+        if (raw == null) return;
+        if (raw is List) {
+          for (final item in raw) {
+            addTag(item);
+          }
+          return;
+        }
+        if (raw is String && raw.trim().isNotEmpty) {
+          try {
+            final decoded = jsonDecode(raw);
+            if (decoded is List) {
+              addTags(decoded);
+              return;
+            }
+          } catch (_) {
+            // Not JSON - fall through to treat as plain string
+          }
+          addTag(raw);
+        }
+      }
+
+      final storyTagObjects = <StoryTag>[];
+      final rawStoryTags = map['story_tags'];
+      if (rawStoryTags is List) {
+        for (final entry in rawStoryTags) {
+          if (entry is! Map) continue;
+          final Map entryMap = entry;
+          final baseMap = entryMap is Map<String, dynamic>
+              ? entryMap
+              : Map<String, dynamic>.from(entryMap);
+          final nested = baseMap['tags'];
+          Map<String, dynamic>? tagMap;
+          if (nested is Map<String, dynamic>) {
+            tagMap = nested;
+          } else if (nested is Map) {
+            final Map nestedMap = nested;
+            tagMap = Map<String, dynamic>.from(nestedMap);
+          } else {
+            tagMap = baseMap;
+          }
+
+          if (tagMap != null) {
+            try {
+              final tag = StoryTag.fromMap(tagMap);
+              storyTagObjects.add(tag);
+              addTag(tag.name);
+            } catch (_) {
+              addTag(tagMap['name']);
+            }
+          }
+        }
+      }
+
+      addTags(map['tags']);
+
+      final storyDate = parseDate(map['story_date']);
+      final startDate = parseDate(map['start_date']) ?? storyDate;
+      final endDate = parseDate(map['end_date']);
+      final normalizedPrecision =
+          normalizePrecision(map['dates_precision'] as String?) ??
+              (storyDate != null ? 'day' : null);
+
       return Story(
         id: map['id'] as String? ?? '',
         userId: map['user_id'] as String? ?? '',
@@ -264,16 +372,10 @@ class Story {
         excerpt: map['excerpt'] as String? ??
             _generateExcerpt(map['content'] as String? ?? ''),
         status: status,
-        storyDate: map['story_date'] != null
-            ? DateTime.parse(map['story_date'] as String)
-            : null,
-        startDate: map['story_date'] != null
-            ? DateTime.parse(map['story_date'] as String)
-            : null,
-        endDate: null,
-        datesPrecision: map.containsKey('dates_precision')
-            ? map['dates_precision'] as String?
-            : null,
+        storyDate: storyDate,
+        startDate: startDate,
+        endDate: endDate,
+        datesPrecision: normalizedPrecision,
         storyDateText: map['story_date_text'] as String?,
         location: map['location'] as String?,
         isVoiceGenerated: map['is_voice_generated'] as bool? ?? false,
@@ -291,12 +393,8 @@ class Story {
             ? DateTime.parse(map['updated_at'] as String)
             : DateTime.now(),
         publishedAt: publishedAt,
-        tags: map['tags'] != null ? List<String>.from(map['tags']) : null,
-        storyTags: map['story_tags'] != null
-            ? (map['story_tags'] as List)
-                .map((tag) => StoryTag.fromMap(tag['tags']))
-                .toList()
-            : [],
+        tags: tagNames.isEmpty ? null : tagNames,
+        storyTags: storyTagObjects,
         photos: map['story_photos'] != null
             ? (map['story_photos'] as List)
                 .map((photo) => StoryPhoto.fromMap(photo))

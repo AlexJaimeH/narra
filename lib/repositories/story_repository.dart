@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:narra/supabase/narra_client.dart';
 
 /// Repository for story-related operations
@@ -24,8 +26,7 @@ class StoryRepository {
 
   /// Get story by ID
   static Future<Story?> getStoryById(String id) async {
-    final stories = await NarraSupabaseClient.getUserStories();
-    final storyData = stories.where((s) => s['id'] == id).firstOrNull;
+    final storyData = await NarraSupabaseClient.getStoryById(id);
     return storyData != null ? Story.fromMap(storyData) : null;
   }
 
@@ -182,6 +183,7 @@ class Story {
   final int readingTime;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final DateTime? publishedAt;
 
   // Author metadata for public sharing
   final String? authorName;
@@ -215,6 +217,7 @@ class Story {
     required this.readingTime,
     required this.createdAt,
     required this.updatedAt,
+    this.publishedAt,
     this.tags,
     required this.storyTags,
     required this.photos,
@@ -224,13 +227,29 @@ class Story {
     this.authorAvatarUrl,
   });
 
+  bool get isDraft => status == StoryStatus.draft;
+  bool get isPublished => status == StoryStatus.published;
+  bool get isArchived => status == StoryStatus.archived;
+
   factory Story.fromMap(Map<String, dynamic> map) {
     try {
-      final rawStatus = (map['status'] as String? ?? '').toLowerCase();
-      final status = StoryStatus.values.firstWhere(
-        (s) => s.name == rawStatus,
-        orElse: () => StoryStatus.draft,
-      );
+      final rawPublishedAt = map['published_at'];
+      DateTime? publishedAt;
+      if (rawPublishedAt is String && rawPublishedAt.isNotEmpty) {
+        publishedAt = DateTime.tryParse(rawPublishedAt);
+      } else if (rawPublishedAt is DateTime) {
+        publishedAt = rawPublishedAt;
+      }
+
+      final rawStatus = (map['status'] as String? ?? '').trim().toLowerCase();
+      final fallbackStatus =
+          publishedAt != null ? StoryStatus.published : StoryStatus.draft;
+      final status = rawStatus.isNotEmpty
+          ? StoryStatus.values.firstWhere(
+              (s) => s.name == rawStatus,
+              orElse: () => fallbackStatus,
+            )
+          : fallbackStatus;
 
       final authorProfile = map['author_profile'] as Map<String, dynamic>? ??
           map['author'] as Map<String, dynamic>? ??
@@ -238,6 +257,112 @@ class Story {
       final authorSettings =
           authorProfile?['user_settings'] as Map<String, dynamic>? ??
               map['author_settings'] as Map<String, dynamic>?;
+
+      DateTime? parseDate(dynamic value) {
+        if (value is String && value.trim().isNotEmpty) {
+          try {
+            return DateTime.parse(value.trim());
+          } catch (_) {
+            return null;
+          }
+        }
+        if (value is DateTime) {
+          return value;
+        }
+        return null;
+      }
+
+      String? normalizePrecision(String? value) {
+        final raw = value?.trim().toLowerCase();
+        if (raw == null || raw.isEmpty) return null;
+        if (raw == 'day' || raw == 'month' || raw == 'year') {
+          return raw;
+        }
+        switch (raw) {
+          case 'exact':
+            return 'day';
+          case 'month_year':
+            return 'month';
+          default:
+            return null;
+        }
+      }
+
+      final tagNames = <String>[];
+      void addTag(dynamic raw) {
+        if (raw == null) return;
+        final display = raw.toString().trim();
+        if (display.isEmpty) return;
+        final normalized = display.toLowerCase();
+        final alreadyExists =
+            tagNames.any((existing) => existing.toLowerCase() == normalized);
+        if (!alreadyExists) {
+          tagNames.add(display);
+        }
+      }
+
+      void addTags(dynamic raw) {
+        if (raw == null) return;
+        if (raw is List) {
+          for (final item in raw) {
+            addTag(item);
+          }
+          return;
+        }
+        if (raw is String && raw.trim().isNotEmpty) {
+          try {
+            final decoded = jsonDecode(raw);
+            if (decoded is List) {
+              addTags(decoded);
+              return;
+            }
+          } catch (_) {
+            // Not JSON - fall through to treat as plain string
+          }
+          addTag(raw);
+        }
+      }
+
+      final storyTagObjects = <StoryTag>[];
+      final rawStoryTags = map['story_tags'];
+      if (rawStoryTags is List) {
+        for (final entry in rawStoryTags) {
+          if (entry is! Map) continue;
+          final Map entryMap = entry;
+          final baseMap = entryMap is Map<String, dynamic>
+              ? entryMap
+              : Map<String, dynamic>.from(entryMap);
+          final nested = baseMap['tags'];
+          Map<String, dynamic>? tagMap;
+          if (nested is Map<String, dynamic>) {
+            tagMap = nested;
+          } else if (nested is Map) {
+            final Map nestedMap = nested;
+            tagMap = Map<String, dynamic>.from(nestedMap);
+          } else {
+            tagMap = baseMap;
+          }
+
+          if (tagMap != null) {
+            try {
+              final tag = StoryTag.fromMap(tagMap);
+              storyTagObjects.add(tag);
+              addTag(tag.name);
+            } catch (_) {
+              addTag(tagMap['name']);
+            }
+          }
+        }
+      }
+
+      addTags(map['tags']);
+
+      final storyDate = parseDate(map['story_date']);
+      final startDate = parseDate(map['start_date']) ?? storyDate;
+      final endDate = parseDate(map['end_date']);
+      final normalizedPrecision =
+          normalizePrecision(map['dates_precision'] as String?) ??
+              (storyDate != null ? 'day' : null);
 
       return Story(
         id: map['id'] as String? ?? '',
@@ -247,16 +372,10 @@ class Story {
         excerpt: map['excerpt'] as String? ??
             _generateExcerpt(map['content'] as String? ?? ''),
         status: status,
-        storyDate: map['story_date'] != null
-            ? DateTime.parse(map['story_date'] as String)
-            : null,
-        startDate: map['story_date'] != null
-            ? DateTime.parse(map['story_date'] as String)
-            : null,
-        endDate: null,
-        datesPrecision: map.containsKey('dates_precision')
-            ? map['dates_precision'] as String?
-            : null,
+        storyDate: storyDate,
+        startDate: startDate,
+        endDate: endDate,
+        datesPrecision: normalizedPrecision,
         storyDateText: map['story_date_text'] as String?,
         location: map['location'] as String?,
         isVoiceGenerated: map['is_voice_generated'] as bool? ?? false,
@@ -273,12 +392,9 @@ class Story {
         updatedAt: map['updated_at'] != null
             ? DateTime.parse(map['updated_at'] as String)
             : DateTime.now(),
-        tags: map['tags'] != null ? List<String>.from(map['tags']) : null,
-        storyTags: map['story_tags'] != null
-            ? (map['story_tags'] as List)
-                .map((tag) => StoryTag.fromMap(tag['tags']))
-                .toList()
-            : [],
+        publishedAt: publishedAt,
+        tags: tagNames.isEmpty ? null : tagNames,
+        storyTags: storyTagObjects,
         photos: map['story_photos'] != null
             ? (map['story_photos'] as List)
                 .map((photo) => StoryPhoto.fromMap(photo))
@@ -289,10 +405,9 @@ class Story {
                 .map((person) => StoryPerson.fromMap(person['people']))
                 .toList()
             : [],
-        authorName: authorProfile?['name'] as String? ??
-            map['author_name'] as String?,
-        authorDisplayName: authorSettings?['public_author_name']
-                as String? ??
+        authorName:
+            authorProfile?['name'] as String? ?? map['author_name'] as String?,
+        authorDisplayName: authorSettings?['public_author_name'] as String? ??
             map['author_display_name'] as String?,
         authorAvatarUrl: authorProfile?['avatar_url'] as String? ??
             map['author_avatar_url'] as String?,
@@ -314,6 +429,7 @@ class Story {
         readingTime: 0,
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
+        publishedAt: null,
         storyTags: [],
         photos: [],
         people: [],
@@ -344,6 +460,7 @@ class Story {
       'reading_time': readingTime,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
+      'published_at': publishedAt?.toIso8601String(),
       // UI-specific fields (not stored in DB)
       'excerpt': excerpt ?? _generateExcerpt(content ?? ''),
       'tags': tags ?? [],
@@ -389,6 +506,7 @@ class Story {
     int? completenessScore,
     int? wordCount,
     int? readingTime,
+    DateTime? publishedAt,
   }) {
     return Story(
       id: id,
@@ -407,6 +525,7 @@ class Story {
       readingTime: readingTime ?? this.readingTime,
       createdAt: createdAt,
       updatedAt: DateTime.now(),
+      publishedAt: publishedAt ?? this.publishedAt,
       tags: tags,
       photos: photos,
       people: people,

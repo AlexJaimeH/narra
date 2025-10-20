@@ -1557,9 +1557,9 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
         return Padding(
           padding: EdgeInsets.fromLTRB(
-            isCompact ? 8 : 14,
+            isCompact ? 6 : 14,
             isCompact ? 8 : 12,
-            isCompact ? 8 : 14,
+            isCompact ? 6 : 14,
             isCompact ? 20 : 28,
           ),
           child: Column(
@@ -1585,8 +1585,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                         colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
                   ),
                   padding: EdgeInsets.symmetric(
-                    horizontal: isCompact ? 14 : 18,
-                    vertical: isCompact ? 14 : 18,
+                    horizontal: isCompact ? 12 : 18,
+                    vertical: isCompact ? 12 : 18,
                   ),
                 ),
                 style: theme.textTheme.headlineSmall?.copyWith(
@@ -1629,9 +1629,9 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                           .withValues(alpha: 0.55),
                     ),
                     padding: EdgeInsets.fromLTRB(
-                      isCompact ? 14 : 18,
+                      isCompact ? 12 : 18,
                       isCompact ? 16 : 22,
-                      isCompact ? 14 : 18,
+                      isCompact ? 12 : 18,
                       isCompact ? 20 : 26,
                     ),
                   ),
@@ -1698,6 +1698,17 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                           : colorScheme.onSurfaceVariant,
                     ),
                     label: 'Sugerencias',
+                  ),
+                  buildActionButton(
+                    isCompact: isCompact,
+                    onPressed:
+                        _versionHistory.isEmpty ? null : _showVersionHistory,
+                    icon: Icon(
+                      Icons.history_rounded,
+                      color:
+                          _versionHistory.isEmpty ? null : colorScheme.primary,
+                    ),
+                    label: 'Historial',
                   ),
                 ],
               ),

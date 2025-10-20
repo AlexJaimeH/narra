@@ -2,8 +2,11 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:narra/repositories/story_repository.dart';
+import 'package:narra/screens/public/story_blog_page.dart';
 import 'package:narra/services/story_service_new.dart';
+import 'package:narra/services/story_share_link_builder.dart';
 
 import 'story_editor_page.dart';
 
@@ -919,6 +922,21 @@ class StoryListCard extends StatelessWidget {
                                         children: metadataChips,
                                       ),
                                     ],
+                                    if (story.status ==
+                                        StoryStatus.published) ...[
+                                      const SizedBox(height: 20),
+                                      _PublicStoryPreview(
+                                        story: story,
+                                        onViewPage: () {
+                                          Navigator.of(context).pushNamed(
+                                            '/story/${story.id}',
+                                            arguments: StoryBlogPageArguments(
+                                              story: story,
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                    ],
                                   ],
                                 ),
                               ),
@@ -945,6 +963,82 @@ class StoryListCard extends StatelessWidget {
 
   static String _fallbackExcerpt(String? content) =>
       _fallbackStoryExcerpt(content);
+}
+
+class _PublicStoryPreview extends StatelessWidget {
+  const _PublicStoryPreview({
+    required this.story,
+    required this.onViewPage,
+  });
+
+  final Story story;
+  final VoidCallback onViewPage;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final link = StoryShareLinkBuilder.buildStoryLink(story: story).toString();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.4),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.public, color: colorScheme.primary),
+              const SizedBox(width: 8),
+              Text(
+                'Página pública disponible',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          SelectableText(
+            link,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            children: [
+              FilledButton.tonalIcon(
+                onPressed: onViewPage,
+                icon: const Icon(Icons.visibility_outlined),
+                label: const Text('Ver página'),
+              ),
+              TextButton.icon(
+                onPressed: () async {
+                  final messenger = ScaffoldMessenger.of(context);
+                  await Clipboard.setData(ClipboardData(text: link));
+                  messenger.showSnackBar(
+                    const SnackBar(content: Text('Enlace copiado al portapapeles')),
+                  );
+                },
+                icon: const Icon(Icons.copy),
+                label: const Text('Copiar enlace'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 Future<void> _handleStoryAction(

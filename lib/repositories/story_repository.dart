@@ -29,6 +29,27 @@ class StoryRepository {
     return storyData != null ? Story.fromMap(storyData) : null;
   }
 
+  /// Get a published story that can be shared publicly
+  static Future<Story?> getPublishedStoryForPublic(String id) async {
+    final data = await NarraSupabaseClient.getPublishedStoryById(id);
+    return data != null ? Story.fromMap(data) : null;
+  }
+
+  /// Get other published stories from the same author for recommendations
+  static Future<List<Story>> getPublishedStoriesByAuthor(
+    String authorId, {
+    int limit = 4,
+    String? excludeStoryId,
+  }) async {
+    final stories = await NarraSupabaseClient.getPublishedStoriesByAuthor(
+      authorId,
+      limit: limit,
+      excludeStoryId: excludeStoryId,
+    );
+
+    return stories.map((item) => Story.fromMap(item)).toList();
+  }
+
   /// Create new story
   static Future<Story> createStory({
     required String title,
@@ -162,6 +183,11 @@ class Story {
   final DateTime createdAt;
   final DateTime updatedAt;
 
+  // Author metadata for public sharing
+  final String? authorName;
+  final String? authorDisplayName;
+  final String? authorAvatarUrl;
+
   // Related data
   final List<String>? tags; // Simplified tags as strings
   final List<StoryTag> storyTags; // Full tag objects
@@ -193,6 +219,9 @@ class Story {
     required this.storyTags,
     required this.photos,
     required this.people,
+    this.authorName,
+    this.authorDisplayName,
+    this.authorAvatarUrl,
   });
 
   factory Story.fromMap(Map<String, dynamic> map) {
@@ -202,6 +231,13 @@ class Story {
         (s) => s.name == rawStatus,
         orElse: () => StoryStatus.draft,
       );
+
+      final authorProfile = map['author_profile'] as Map<String, dynamic>? ??
+          map['author'] as Map<String, dynamic>? ??
+          map['users'] as Map<String, dynamic>?;
+      final authorSettings =
+          authorProfile?['user_settings'] as Map<String, dynamic>? ??
+              map['author_settings'] as Map<String, dynamic>?;
 
       return Story(
         id: map['id'] as String? ?? '',
@@ -253,6 +289,13 @@ class Story {
                 .map((person) => StoryPerson.fromMap(person['people']))
                 .toList()
             : [],
+        authorName: authorProfile?['name'] as String? ??
+            map['author_name'] as String?,
+        authorDisplayName: authorSettings?['public_author_name']
+                as String? ??
+            map['author_display_name'] as String?,
+        authorAvatarUrl: authorProfile?['avatar_url'] as String? ??
+            map['author_avatar_url'] as String?,
       );
     } catch (e) {
       // Fallback for corrupted data - create a minimal story object
@@ -274,6 +317,9 @@ class Story {
         storyTags: [],
         photos: [],
         people: [],
+        authorName: null,
+        authorDisplayName: null,
+        authorAvatarUrl: null,
       );
     }
   }
@@ -306,6 +352,10 @@ class Story {
       'comments': 0, // TODO: get actual comments when implemented
       'coverImage': photos.isNotEmpty ? photos.first.photoUrl : null,
       'date': createdAt.toIso8601String(), // Fallback for date field
+      'author_display_name':
+          authorDisplayName ?? authorName ?? 'Autor/a de Narra',
+      'author_name': authorName,
+      'author_avatar_url': authorAvatarUrl,
     };
   }
 

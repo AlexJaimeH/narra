@@ -16,6 +16,10 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _isLoading = true;
   bool _isPremium = true; // Todos pagados por requerimiento
 
+  final TextEditingController _authorNameController = TextEditingController();
+  String _publicAuthorName = '';
+  bool _isSavingAuthorName = false;
+
   String _selectedLanguage = 'es';
   double _textScale = 1.0;
   String _fontFamily = 'Montserrat';
@@ -30,6 +34,12 @@ class _SettingsPageState extends State<SettingsPage> {
   void initState() {
     super.initState();
     _loadUserData();
+  }
+
+  @override
+  void dispose() {
+    _authorNameController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadUserData() async {
@@ -57,7 +67,12 @@ class _SettingsPageState extends State<SettingsPage> {
             _noBadWords = (settings['ai_no_bad_words'] as bool?) ?? false;
             _ghostFidelity = (settings['ai_fidelity'] as String?) ?? 'balanced';
           }
-          
+
+          _publicAuthorName =
+              settings?['public_author_name'] as String? ??
+                  (profile?['name'] as String? ?? '');
+          _authorNameController.text = _publicAuthorName;
+
           _isLoading = false;
         });
       }
@@ -94,6 +109,41 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _upgradeToPremiun() async {}
+
+  Future<void> _saveAuthorName() async {
+    final newName = _authorNameController.text.trim();
+
+    setState(() {
+      _isSavingAuthorName = true;
+    });
+
+    try {
+      await UserService.updateUserSettings({
+        'public_author_name': newName,
+      });
+
+      if (!mounted) return;
+      setState(() {
+        _publicAuthorName = newName;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Nombre público actualizado')),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo guardar el nombre: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSavingAuthorName = false;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -144,6 +194,65 @@ class _SettingsPageState extends State<SettingsPage> {
                             ),
                           )
                         : const SizedBox.shrink(),
+                  ),
+                  const Divider(height: 0),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Nombre público del autor',
+                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Así verán tu nombre quienes reciban tus historias publicadas.',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: _authorNameController,
+                          decoration: const InputDecoration(
+                            labelText: 'Nombre público',
+                            hintText: 'Ej. Familia García',
+                            border: OutlineInputBorder(),
+                          ),
+                          textInputAction: TextInputAction.done,
+                          onSubmitted: (_) => _saveAuthorName(),
+                        ),
+                        const SizedBox(height: 12),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: FilledButton.tonal(
+                            onPressed:
+                                _isSavingAuthorName ? null : () => _saveAuthorName(),
+                            child: _isSavingAuthorName
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  )
+                                : const Text('Guardar nombre público'),
+                          ),
+                        ),
+                        if (_publicAuthorName.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            'Vista previa: $_publicAuthorName',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                ),
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
                 ],
               ),

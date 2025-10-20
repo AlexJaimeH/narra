@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:narra/api/narra_api.dart';
+import 'package:narra/openai/openai_service.dart';
 import 'package:narra/repositories/story_repository.dart';
 
 /// Enhanced story service using the new API client
@@ -91,15 +93,40 @@ class StoryServiceNew {
     // Evaluate completeness before publishing
     final story = await NarraAPI.getStoryById(id);
     if (story != null && story.content?.isNotEmpty == true) {
-      final evaluation = await NarraAPI.evaluateStoryCompleteness(
-        storyText: story.content!,
-        title: story.title,
-      );
-      
-      // Update completeness score
-      await NarraAPI.updateStory(id, StoryUpdate(
-        completenessScore: evaluation['completeness_score'],
-      ));
+      try {
+        final evaluation = await NarraAPI.evaluateStoryCompleteness(
+          storyText: story.content!,
+          title: story.title,
+        );
+
+        final rawScore = evaluation['completeness_score'];
+        int? completenessScore;
+
+        if (rawScore is int) {
+          completenessScore = rawScore;
+        } else if (rawScore is double) {
+          completenessScore = rawScore.round();
+        } else if (rawScore is String) {
+          completenessScore = int.tryParse(rawScore) ??
+              double.tryParse(rawScore)?.round();
+        }
+
+        if (completenessScore != null) {
+          await NarraAPI.updateStory(id, StoryUpdate(
+            completenessScore: completenessScore,
+          ));
+        }
+      } on OpenAIProxyException catch (error, stackTrace) {
+        debugPrint(
+          'Skipping completeness evaluation during publish due to OpenAI proxy error: $error',
+        );
+        debugPrintStack(stackTrace: stackTrace);
+      } catch (error, stackTrace) {
+        debugPrint(
+          'Skipping completeness evaluation during publish due to unexpected error: $error',
+        );
+        debugPrintStack(stackTrace: stackTrace);
+      }
     }
 
     return await NarraAPI.publishStory(id);

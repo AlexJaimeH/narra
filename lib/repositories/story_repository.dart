@@ -182,6 +182,7 @@ class Story {
   final int readingTime;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final DateTime? publishedAt;
 
   // Author metadata for public sharing
   final String? authorName;
@@ -215,6 +216,7 @@ class Story {
     required this.readingTime,
     required this.createdAt,
     required this.updatedAt,
+    this.publishedAt,
     this.tags,
     required this.storyTags,
     required this.photos,
@@ -273,6 +275,9 @@ class Story {
         updatedAt: map['updated_at'] != null
             ? DateTime.parse(map['updated_at'] as String)
             : DateTime.now(),
+        publishedAt: map['published_at'] != null
+            ? DateTime.parse(map['published_at'] as String)
+            : null,
         tags: map['tags'] != null ? List<String>.from(map['tags']) : null,
         storyTags: map['story_tags'] != null
             ? (map['story_tags'] as List)
@@ -289,10 +294,9 @@ class Story {
                 .map((person) => StoryPerson.fromMap(person['people']))
                 .toList()
             : [],
-        authorName: authorProfile?['name'] as String? ??
-            map['author_name'] as String?,
-        authorDisplayName: authorSettings?['public_author_name']
-                as String? ??
+        authorName:
+            authorProfile?['name'] as String? ?? map['author_name'] as String?,
+        authorDisplayName: authorSettings?['public_author_name'] as String? ??
             map['author_display_name'] as String?,
         authorAvatarUrl: authorProfile?['avatar_url'] as String? ??
             map['author_avatar_url'] as String?,
@@ -314,6 +318,7 @@ class Story {
         readingTime: 0,
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
+        publishedAt: null,
         storyTags: [],
         photos: [],
         people: [],
@@ -344,6 +349,7 @@ class Story {
       'reading_time': readingTime,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
+      'published_at': publishedAt?.toIso8601String(),
       // UI-specific fields (not stored in DB)
       'excerpt': excerpt ?? _generateExcerpt(content ?? ''),
       'tags': tags ?? [],
@@ -389,6 +395,7 @@ class Story {
     int? completenessScore,
     int? wordCount,
     int? readingTime,
+    DateTime? publishedAt,
   }) {
     return Story(
       id: id,
@@ -407,6 +414,7 @@ class Story {
       readingTime: readingTime ?? this.readingTime,
       createdAt: createdAt,
       updatedAt: DateTime.now(),
+      publishedAt: publishedAt ?? this.publishedAt,
       tags: tags,
       photos: photos,
       people: people,

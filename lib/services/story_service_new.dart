@@ -88,20 +88,6 @@ class StoryServiceNew {
 
   /// Publish story
   static Future<Story> publishStory(String id) async {
-    // Evaluate completeness before publishing
-    final story = await NarraAPI.getStoryById(id);
-    if (story != null && story.content?.isNotEmpty == true) {
-      final evaluation = await NarraAPI.evaluateStoryCompleteness(
-        storyText: story.content!,
-        title: story.title,
-      );
-      
-      // Update completeness score
-      await NarraAPI.updateStory(id, StoryUpdate(
-        completenessScore: evaluation['completeness_score'],
-      ));
-    }
-
     return await NarraAPI.publishStory(id);
   }
 

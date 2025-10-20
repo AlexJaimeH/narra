@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:narra/theme.dart';
 import 'package:narra/theme_controller.dart';
 import 'package:narra/screens/landing_page.dart';
 import 'package:narra/screens/app/app_navigation.dart';
+import 'package:narra/repositories/story_repository.dart';
+import 'package:narra/screens/public/story_blog_page.dart';
 import 'package:narra/supabase/supabase_config.dart';
 
 void main() async {
@@ -46,23 +47,53 @@ class NarraApp extends StatelessWidget {
       themeMode: ThemeMode.system,
       home: const LandingPage(),
       onGenerateRoute: (settings) {
-        switch (settings.name) {
-          case '/app':
-            final initialIndex = settings.arguments is int
-                ? settings.arguments as int
-                : 0;
-            return MaterialPageRoute(
-              builder: (_) => AppNavigation(initialIndex: initialIndex),
-              settings: settings,
-            );
-          case '/landing':
-            return MaterialPageRoute(
-              builder: (_) => const LandingPage(),
-              settings: settings,
-            );
-          default:
-            return null;
+        final routeName = settings.name;
+
+        if (routeName != null) {
+          final uri = Uri.tryParse(routeName);
+          if (uri != null && uri.pathSegments.isNotEmpty) {
+            final firstSegment = uri.pathSegments.first;
+            if (firstSegment == 'story' && uri.pathSegments.length >= 2) {
+              final storyId = uri.pathSegments[1];
+              Story? initialStory;
+              StorySharePayload? sharePayload;
+
+              if (settings.arguments is StoryBlogPageArguments) {
+                final args = settings.arguments as StoryBlogPageArguments;
+                initialStory = args.story;
+                sharePayload = args.share;
+              }
+
+              sharePayload ??= StorySharePayload.fromUri(uri);
+
+              return MaterialPageRoute(
+                builder: (_) => StoryBlogPage(
+                  storyId: storyId,
+                  initialStory: initialStory,
+                  initialShare: sharePayload,
+                ),
+                settings: settings,
+              );
+            }
+          }
+
+          switch (routeName) {
+            case '/app':
+              final initialIndex = settings.arguments is int
+                  ? settings.arguments as int
+                  : 0;
+              return MaterialPageRoute(
+                builder: (_) => AppNavigation(initialIndex: initialIndex),
+                settings: settings,
+              );
+            case '/landing':
+              return MaterialPageRoute(
+                builder: (_) => const LandingPage(),
+                settings: settings,
+              );
+          }
         }
+        return null;
       },
           ),
         );

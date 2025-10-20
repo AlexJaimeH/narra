@@ -275,6 +275,114 @@ class NarraSupabaseClient {
     return result;
   }
 
+  /// Fetch a published story for public sharing without requiring authentication
+  static Future<Map<String, dynamic>?> getPublishedStoryById(
+      String storyId) async {
+    final result = await _client.from('stories').select('''
+          *,
+          story_tags (
+            tag_id,
+            tags (
+              id,
+              name,
+              color
+            )
+          ),
+          story_photos (
+            id,
+            photo_url,
+            caption,
+            position
+          ),
+          story_people (
+            person_id,
+            people (
+              id,
+              name,
+              relationship
+            )
+          )
+        ''').eq('id', storyId).eq('status', 'published').maybeSingle();
+
+    if (result == null) return null;
+
+    final authorId = result['user_id'] as String?;
+    if (authorId != null) {
+      final profile = await getAuthorPublicProfile(authorId);
+      if (profile != null) {
+        result['author_profile'] = profile;
+      }
+    }
+
+    return result;
+  }
+
+  /// Get other published stories from the same author to recommend
+  static Future<List<Map<String, dynamic>>> getPublishedStoriesByAuthor(
+    String authorId, {
+    int limit = 4,
+    String? excludeStoryId,
+  }) async {
+    final List<dynamic> results = await _client
+        .from('stories')
+        .select('''
+          *,
+          story_tags (
+            tag_id,
+            tags (
+              id,
+              name,
+              color
+            )
+          ),
+          story_photos (
+            id,
+            photo_url,
+            caption,
+            position
+          )
+        ''')
+        .eq('user_id', authorId)
+        .eq('status', 'published')
+        .order('updated_at', ascending: false)
+        .limit(limit);
+
+    final profile = await getAuthorPublicProfile(authorId);
+
+    return results
+        .map((row) {
+          final data = row as Map<String, dynamic>;
+          if (excludeStoryId != null && data['id'] == excludeStoryId) {
+            return null;
+          }
+          if (profile != null) {
+            data['author_profile'] = profile;
+          }
+          return data;
+        })
+        .whereType<Map<String, dynamic>>()
+        .toList();
+  }
+
+  /// Minimal public profile for authors displayed in public story pages
+  static Future<Map<String, dynamic>?> getAuthorPublicProfile(
+      String authorId) async {
+    final result = await _client
+        .from('users')
+        .select('''
+          id,
+          name,
+          avatar_url,
+          user_settings (
+            public_author_name
+          )
+        ''')
+        .eq('id', authorId)
+        .maybeSingle();
+
+    return result;
+  }
+
   /// Get story versions ordered from newest to oldest
   static Future<List<Map<String, dynamic>>> getStoryVersions(
       String storyId) async {

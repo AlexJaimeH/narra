@@ -4390,7 +4390,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         _contentController.text.isNotEmpty;
   }
 
-  Future<bool> _saveDraft() async {
+  Future<bool> _saveDraft({bool showSuccessSnackBar = true}) async {
     if (_titleController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('El título es obligatorio')),
@@ -4468,15 +4468,17 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         _isSaving = false;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            audioUploaded
-                ? 'Borrador guardado'
-                : 'Borrador guardado. Audio pendiente por subir',
+      if (showSuccessSnackBar) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              audioUploaded
+                  ? 'Borrador guardado'
+                  : 'Borrador guardado. Audio pendiente por subir',
+            ),
           ),
-        ),
-      );
+        );
+      }
       _captureVersion(reason: 'Borrador guardado');
       return true;
     } catch (e) {
@@ -4589,7 +4591,10 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     try {
       // Save first if there are changes
       if (_hasChanges) {
-        await _saveDraft();
+        final saved = await _saveDraft(showSuccessSnackBar: false);
+        if (!saved) {
+          return;
+        }
       }
 
       if (_currentStory == null) {
@@ -4599,19 +4604,39 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         return;
       }
 
-      await StoryServiceNew.publishStory(_currentStory!.id);
+      final publishedStory = await StoryServiceNew.publishStory(
+        _currentStory!.id,
+      );
+
+      if (!mounted) {
+        return;
+      }
 
       setState(() {
         _status = 'published';
+        _currentStory = publishedStory;
       });
 
-      Navigator.pop(context); // Return to previous screen
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('✓ Historia publicada y enviada a suscriptores'),
+      final messenger = ScaffoldMessenger.of(context);
+      messenger
+        ..clearSnackBars()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('✓ Historia publicada y enviada a suscriptores'),
+          ),
+        );
+
+      unawaited(
+        Navigator.of(context).pushNamedAndRemoveUntil(
+          '/app',
+          (route) => false,
+          arguments: 0,
         ),
       );
     } catch (e) {
+      if (!mounted) {
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error al publicar: $e')),
       );

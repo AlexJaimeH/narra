@@ -6,8 +6,8 @@ import 'dart:typed_data' as typed;
 // ignore: avoid_web_libraries_in_flutter
 import 'dart:html' as html;
 
-import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
@@ -1360,335 +1360,152 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     final colorScheme = theme.colorScheme;
     final wordCount = _getWordCount();
 
+    InputDecoration buildFieldDecoration({
+      required bool isCompact,
+      required String hint,
+      TextStyle? hintStyle,
+      EdgeInsetsGeometry? padding,
+    }) {
+      final borderRadius = BorderRadius.circular(isCompact ? 20 : 24);
+      final baseBorder = OutlineInputBorder(
+        borderRadius: borderRadius,
+        borderSide: BorderSide(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.45),
+        ),
+      );
+
+      return InputDecoration(
+        hintText: hint,
+        hintStyle: hintStyle,
+        filled: true,
+        fillColor: colorScheme.surfaceContainerHighest
+            .withValues(alpha: isCompact ? 0.72 : 0.6),
+        contentPadding: padding,
+        border: baseBorder,
+        enabledBorder: baseBorder,
+        focusedBorder: baseBorder.copyWith(
+          borderSide: BorderSide(
+            color: colorScheme.primary,
+            width: 1.6,
+          ),
+        ),
+        focusedErrorBorder: baseBorder,
+      );
+    }
+
+    Widget buildInfoChip({required IconData icon, required String label}) {
+      return DecoratedBox(
+        decoration: BoxDecoration(
+          color: colorScheme.surfaceContainerHigh.withValues(alpha: 0.6),
+          borderRadius: BorderRadius.circular(30),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 16, color: colorScheme.onSurfaceVariant),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    Widget buildActionButton({
+      required bool isCompact,
+      required VoidCallback? onPressed,
+      required Widget icon,
+      required String label,
+      bool isPrimary = false,
+    }) {
+      final padding = EdgeInsets.symmetric(
+        horizontal: isCompact ? 18 : 22,
+        vertical: isCompact ? 12 : 14,
+      );
+
+      final shape = RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(22),
+      );
+
+      if (isPrimary) {
+        return SizedBox(
+          height: isCompact ? 46 : 50,
+          child: FilledButton.icon(
+            onPressed: onPressed,
+            style: FilledButton.styleFrom(
+              padding: padding,
+              shape: shape,
+            ),
+            icon: icon,
+            label: Text(label),
+          ),
+        );
+      }
+
+      return SizedBox(
+        height: isCompact ? 46 : 50,
+        child: OutlinedButton.icon(
+          onPressed: onPressed,
+          style: OutlinedButton.styleFrom(
+            padding: padding,
+            shape: shape,
+            side: BorderSide(
+              color: colorScheme.outlineVariant.withValues(alpha: 0.6),
+            ),
+          ),
+          icon: icon,
+          label: Text(label),
+        ),
+      );
+    }
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final isCompact = constraints.maxWidth < 720;
-        final cardPadding = EdgeInsets.symmetric(
-          horizontal: isCompact ? 20 : 28,
-          vertical: isCompact ? 20 : 28,
-        );
-        final bodyStyle = theme.textTheme.bodyLarge?.copyWith(
-          height: 1.48,
-        );
+        final maxWidth =
+            isCompact ? constraints.maxWidth : math.min(920.0, constraints.maxWidth);
+        final verticalSpacing = isCompact ? 18.0 : 24.0;
+        final sectionSpacing = isCompact ? 12.0 : 16.0;
+        final bodyStyle = theme.textTheme.bodyLarge?.copyWith(height: 1.46);
         final fontSize = bodyStyle?.fontSize ?? 16;
-        final lineHeight = (bodyStyle?.height ?? 1.48) * fontSize;
-        final minContentHeight = lineHeight * 10;
-        final fieldRadius = BorderRadius.circular(isCompact ? 22 : 24);
-        final fieldFillColor =
-            colorScheme.surfaceContainerHighest.withValues(alpha: isCompact ? 0.75 : 0.6);
-        final fieldBorderColor =
-            colorScheme.outlineVariant.withValues(alpha: 0.28);
-
-        BoxDecoration buildFieldDecoration() {
-          return BoxDecoration(
-            color: fieldFillColor,
-            borderRadius: fieldRadius,
-            border: Border.all(color: fieldBorderColor),
-            boxShadow: [
-              BoxShadow(
-                color: colorScheme.shadow.withValues(alpha: 0.05),
-                blurRadius: 18,
-                offset: const Offset(0, 10),
-              ),
-            ],
-          );
-        }
-
-        Widget buildTitleField() {
-          return DecoratedBox(
-            decoration: buildFieldDecoration(),
-            child: Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: isCompact ? 18 : 24,
-                vertical: isCompact ? 14 : 18,
-              ),
-              child: TextField(
-                controller: _titleController,
-                decoration: InputDecoration(
-                  hintText: 'Título de tu historia...',
-                  border: InputBorder.none,
-                  isCollapsed: true,
-                  hintStyle: theme.textTheme.titleMedium?.copyWith(
-                    color: colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
-                  ),
-                ),
-                style: theme.textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.2,
-                ),
-                minLines: 1,
-                maxLines: 3,
-                textInputAction: TextInputAction.next,
-                enableSuggestions: false,
-                autocorrect: false,
-                smartDashesType: SmartDashesType.disabled,
-                smartQuotesType: SmartQuotesType.disabled,
-                textCapitalization: TextCapitalization.sentences,
-              ),
-            ),
-          );
-        }
-
-        Widget buildContentField() {
-          return DecoratedBox(
-            decoration: buildFieldDecoration(),
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(
-                isCompact ? 18 : 24,
-                isCompact ? 16 : 22,
-                isCompact ? 18 : 24,
-                isCompact ? 22 : 28,
-              ),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  minHeight: minContentHeight,
-                ),
-                child: TextField(
-                  controller: _contentController,
-                  decoration: InputDecoration(
-                    hintText: 'Cuenta tu historia...',
-                    border: InputBorder.none,
-                    hintStyle: bodyStyle?.copyWith(
-                      color: colorScheme.onSurfaceVariant.withValues(alpha: 0.55),
-                    ),
-                  ),
-                  style: bodyStyle,
-                  keyboardType: TextInputType.multiline,
-                  maxLines: null,
-                  minLines: 10,
-                  textAlignVertical: TextAlignVertical.top,
-                  enableSuggestions: false,
-                  autocorrect: false,
-                  smartDashesType: SmartDashesType.disabled,
-                  smartQuotesType: SmartQuotesType.disabled,
-                  textCapitalization: TextCapitalization.sentences,
-                ),
-              ),
-            ),
-          );
-        }
-
-        Widget buildInfoPill(IconData icon, String label) {
-          return DecoratedBox(
-            decoration: BoxDecoration(
-              color: colorScheme.surfaceContainerHigh.withValues(
-                alpha: isCompact ? 0.65 : 0.55,
-              ),
-              borderRadius: BorderRadius.circular(24),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    icon,
-                    size: 16,
-                    color: colorScheme.onSurfaceVariant.withValues(alpha: 0.9),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    label,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: colorScheme.onSurfaceVariant.withValues(alpha: 0.9),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        }
-
-        final actionHeight = isCompact ? 42.0 : 46.0;
-        final actionSpacing = isCompact ? 10.0 : 14.0;
-        final actionRunSpacing = isCompact ? 10.0 : 12.0;
-
-        final editorChildren = <Widget>[
-          Text(
-            'Tu historia',
-            style: theme.textTheme.labelLarge?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: colorScheme.primary,
-              letterSpacing: 0.3,
-            ),
-          ),
-          SizedBox(height: isCompact ? 12 : 16),
-          buildTitleField(),
-          SizedBox(height: isCompact ? 18 : 24),
-          Text(
-            'Narración',
-            style: theme.textTheme.labelLarge?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: colorScheme.onSurfaceVariant.withValues(alpha: 0.9),
-              letterSpacing: 0.2,
-            ),
-          ),
-          SizedBox(height: isCompact ? 12 : 16),
-          buildContentField(),
-          SizedBox(height: isCompact ? 18 : 26),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Wrap(
-                  spacing: actionSpacing,
-                  runSpacing: actionRunSpacing,
-                  children: [
-                    SizedBox(
-                      height: actionHeight,
-                      child: OutlinedButton.icon(
-                        onPressed: _isGhostWriterProcessing
-                            ? null
-                            : _handleGhostWriterPressed,
-                        icon: _isGhostWriterProcessing
-                            ? SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2.5,
-                                  valueColor: AlwaysStoppedAnimation(
-                                    colorScheme.primary,
-                                  ),
-                                ),
-                              )
-                            : Icon(
-                                Icons.auto_fix_high,
-                                color: _canUseGhostWriter()
-                                    ? colorScheme.primary
-                                    : colorScheme.onSurfaceVariant,
-                              ),
-                        label: Text(
-                          _isGhostWriterProcessing
-                              ? 'Trabajando...'
-                              : 'Ghost Writer',
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: isCompact ? 16 : 20,
-                            vertical: isCompact ? 10 : 12,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          foregroundColor: _canUseGhostWriter()
-                              ? colorScheme.primary
-                              : colorScheme.onSurfaceVariant,
-                          side: BorderSide(
-                            color: _canUseGhostWriter()
-                                ? colorScheme.primary.withValues(alpha: 0.55)
-                                : colorScheme.outlineVariant.withValues(alpha: 0.7),
-                          ),
-                          textStyle: theme.textTheme.labelLarge,
-                        ),
-                      ),
-                    ),
-                    SizedBox(
-                      height: actionHeight,
-                      child: OutlinedButton.icon(
-                        onPressed: () {
-                          setState(() => _showSuggestions = !_showSuggestions);
-                          if (_showSuggestions) {
-                            _generateAISuggestions();
-                          }
-                        },
-                        icon: Icon(
-                          _showSuggestions
-                              ? Icons.lightbulb
-                              : Icons.lightbulb_outline,
-                        ),
-                        label: const Text('Sugerencias'),
-                        style: OutlinedButton.styleFrom(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: isCompact ? 16 : 20,
-                            vertical: isCompact ? 10 : 12,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          foregroundColor: _showSuggestions
-                              ? colorScheme.primary
-                              : colorScheme.onSurfaceVariant,
-                          side: BorderSide(
-                            color: _showSuggestions
-                                ? colorScheme.primary.withValues(alpha: 0.55)
-                                : colorScheme.outlineVariant.withValues(alpha: 0.6),
-                          ),
-                          textStyle: theme.textTheme.labelLarge,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              SizedBox(width: isCompact ? 8 : 12),
-              Container(
-                decoration: BoxDecoration(
-                  color: colorScheme.surfaceContainerHighest.withValues(
-                    alpha: isCompact ? 0.7 : 0.55,
-                  ),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: colorScheme.outlineVariant.withValues(alpha: 0.25),
-                  ),
-                ),
-                child: PopupMenuButton<String>(
-                  tooltip: 'Más opciones',
-                  onSelected: _handleAppBarAction,
-                  position: PopupMenuPosition.under,
-                  offset: const Offset(0, 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  padding: EdgeInsets.symmetric(
-                    horizontal: isCompact ? 10 : 12,
-                    vertical: isCompact ? 6 : 8,
-                  ),
-                  icon: Icon(
-                    Icons.more_horiz_rounded,
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                  itemBuilder: (context) => const [
-                    PopupMenuItem(
-                      value: 'view_versions',
-                      child: Row(
-                        children: [
-                          Icon(Icons.history),
-                          SizedBox(width: 8),
-                          Text('Historial de versiones'),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ];
+        final minBodyHeight = (bodyStyle?.height ?? 1.46) * fontSize * 10;
 
         final timestampLabel = _formattedSuggestionsTimestamp();
-        editorChildren.add(
-          Padding(
-            padding: EdgeInsets.only(top: isCompact ? 10 : 12),
-            child: Wrap(
-              spacing: 10,
-              runSpacing: 8,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                buildInfoPill(Icons.text_fields_rounded, 'Palabras: $wordCount'),
-                if (_showSuggestions && timestampLabel != null)
-                  buildInfoPill(Icons.schedule, timestampLabel),
-              ],
-            ),
-          ),
-        );
 
-        if (_showSuggestions) {
-          editorChildren.add(SizedBox(height: isCompact ? 18 : 24));
+        Widget suggestionsSection() {
+          if (!_showSuggestions) {
+            return const SizedBox.shrink();
+          }
+
+          Widget content;
+          if (_isSuggestionsLoading && _storyCoachPlan == null) {
+            content = _buildSuggestionsLoading(theme, colorScheme);
+          } else if (_suggestionsError != null) {
+            content = _buildSuggestionsError(
+              theme,
+              colorScheme,
+              _suggestionsError!,
+            );
+          } else if (_storyCoachPlan != null) {
+            content = _buildStoryCoachPlanCard(
+              theme,
+              colorScheme,
+              _storyCoachPlan!,
+            );
+          } else {
+            content = _buildSuggestionsPlaceholder(theme, colorScheme);
+          }
 
           final header = isCompact
               ? Column(
-                  mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
@@ -1718,7 +1535,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                         ),
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 16),
                     FilledButton.tonalIcon(
                       onPressed: _isSuggestionsLoading
                           ? null
@@ -1729,71 +1546,209 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                   ],
                 );
 
-          editorChildren.add(header);
-          editorChildren.add(SizedBox(height: isCompact ? 14 : 18));
-
-          Widget suggestionsContent;
-          if (_isSuggestionsLoading && _storyCoachPlan == null) {
-            suggestionsContent = _buildSuggestionsLoading(theme, colorScheme);
-          } else if (_suggestionsError != null) {
-            suggestionsContent =
-                _buildSuggestionsError(theme, colorScheme, _suggestionsError!);
-          } else if (_storyCoachPlan != null) {
-            suggestionsContent = _buildStoryCoachPlanCard(
-              theme,
-              colorScheme,
-              _storyCoachPlan!,
-            );
-          } else {
-            suggestionsContent =
-                _buildSuggestionsPlaceholder(theme, colorScheme);
-          }
-
-          editorChildren.add(suggestionsContent);
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Divider(height: 40),
+              header,
+              SizedBox(height: isCompact ? 14 : 18),
+              content,
+            ],
+          );
         }
 
         return Padding(
           padding: EdgeInsets.fromLTRB(
-            12,
-            isCompact ? 6 : 10,
-            12,
-            isCompact ? 16 : 20,
+            isCompact ? 12 : 18,
+            isCompact ? 8 : 12,
+            isCompact ? 12 : 18,
+            isCompact ? 18 : 26,
           ),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: colorScheme.surface,
-              borderRadius: BorderRadius.circular(28),
-              boxShadow: [
-                BoxShadow(
-                  color: colorScheme.shadow.withValues(alpha: 0.06),
-                  blurRadius: 22,
-                  offset: const Offset(0, 12),
-                ),
-              ],
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Container(
-                  width: 5,
-                  decoration: BoxDecoration(
-                    color: colorScheme.primary.withValues(alpha: 0.7),
-                    borderRadius: const BorderRadius.horizontal(
-                      left: Radius.circular(28),
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: maxWidth),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: colorScheme.surface,
+                  borderRadius: BorderRadius.circular(isCompact ? 26 : 30),
+                  border: Border.all(
+                    color: colorScheme.outlineVariant.withValues(alpha: 0.3),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: colorScheme.shadow.withValues(alpha: 0.05),
+                      blurRadius: 24,
+                      offset: const Offset(0, 14),
                     ),
+                  ],
+                ),
+                child: Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isCompact ? 20 : 32,
+                    vertical: isCompact ? 22 : 32,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Tu historia',
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          letterSpacing: 0.3,
+                          fontWeight: FontWeight.w700,
+                          color: colorScheme.primary,
+                        ),
+                      ),
+                      SizedBox(height: sectionSpacing),
+                      TextField(
+                        controller: _titleController,
+                        decoration: buildFieldDecoration(
+                          isCompact: isCompact,
+                          hint: 'Título de tu historia...',
+                          hintStyle: theme.textTheme.titleMedium?.copyWith(
+                            color: colorScheme.onSurfaceVariant
+                                .withValues(alpha: 0.7),
+                          ),
+                          padding: EdgeInsets.symmetric(
+                            horizontal: isCompact ? 20 : 26,
+                            vertical: isCompact ? 18 : 22,
+                          ),
+                        ),
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.2,
+                        ),
+                        minLines: 1,
+                        maxLines: 3,
+                        textInputAction: TextInputAction.next,
+                        enableSuggestions: false,
+                        autocorrect: false,
+                        smartDashesType: SmartDashesType.disabled,
+                        smartQuotesType: SmartQuotesType.disabled,
+                        textCapitalization: TextCapitalization.sentences,
+                        enableIMEPersonalizedLearning: false,
+                        spellCheckConfiguration:
+                            const SpellCheckConfiguration.disabled(),
+                        autofillHints: const <String>[],
+                      ),
+                      SizedBox(height: verticalSpacing),
+                      Text(
+                        'Narración',
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          letterSpacing: 0.2,
+                          fontWeight: FontWeight.w700,
+                          color: colorScheme.onSurfaceVariant
+                              .withValues(alpha: 0.9),
+                        ),
+                      ),
+                      SizedBox(height: sectionSpacing),
+                      ConstrainedBox(
+                        constraints: BoxConstraints(minHeight: minBodyHeight),
+                        child: TextField(
+                          controller: _contentController,
+                          decoration: buildFieldDecoration(
+                            isCompact: isCompact,
+                            hint: 'Cuenta tu historia...',
+                            hintStyle: bodyStyle?.copyWith(
+                              color: colorScheme.onSurfaceVariant
+                                  .withValues(alpha: 0.55),
+                            ),
+                            padding: EdgeInsets.fromLTRB(
+                              isCompact ? 20 : 26,
+                              isCompact ? 20 : 28,
+                              isCompact ? 20 : 26,
+                              isCompact ? 26 : 34,
+                            ),
+                          ),
+                          style: bodyStyle,
+                          keyboardType: TextInputType.multiline,
+                          maxLines: null,
+                          minLines: 10,
+                          textAlignVertical: TextAlignVertical.top,
+                          enableSuggestions: false,
+                          autocorrect: false,
+                          smartDashesType: SmartDashesType.disabled,
+                          smartQuotesType: SmartQuotesType.disabled,
+                          textCapitalization: TextCapitalization.sentences,
+                          enableIMEPersonalizedLearning: false,
+                          spellCheckConfiguration:
+                              const SpellCheckConfiguration.disabled(),
+                          autofillHints: const <String>[],
+                        ),
+                      ),
+                      SizedBox(height: verticalSpacing),
+                      Wrap(
+                        spacing: isCompact ? 10 : 14,
+                        runSpacing: isCompact ? 10 : 14,
+                        children: [
+                          buildActionButton(
+                            isCompact: isCompact,
+                            onPressed: _isGhostWriterProcessing
+                                ? null
+                                : _handleGhostWriterPressed,
+                            icon: _isGhostWriterProcessing
+                                ? SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.5,
+                                      valueColor: AlwaysStoppedAnimation(
+                                        colorScheme.primary,
+                                      ),
+                                    ),
+                                  )
+                                : Icon(
+                                    Icons.auto_fix_high,
+                                    color: _canUseGhostWriter()
+                                        ? colorScheme.primary
+                                        : colorScheme.onSurfaceVariant,
+                                  ),
+                            label: _isGhostWriterProcessing
+                                ? 'Trabajando...'
+                                : 'Ghost Writer',
+                          ),
+                          buildActionButton(
+                            isCompact: isCompact,
+                            onPressed: () {
+                              setState(() => _showSuggestions = !_showSuggestions);
+                              if (_showSuggestions) {
+                                _generateAISuggestions();
+                              }
+                            },
+                            icon: Icon(
+                              _showSuggestions
+                                  ? Icons.lightbulb
+                                  : Icons.lightbulb_outline,
+                              color: _showSuggestions
+                                  ? colorScheme.primary
+                                  : colorScheme.onSurfaceVariant,
+                            ),
+                            label: 'Sugerencias',
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: verticalSpacing),
+                      Wrap(
+                        spacing: 10,
+                        runSpacing: 10,
+                        children: [
+                          buildInfoChip(
+                            icon: Icons.text_fields_rounded,
+                            label: 'Palabras: $wordCount',
+                          ),
+                          if (_showSuggestions && timestampLabel != null)
+                            buildInfoChip(
+                              icon: Icons.schedule,
+                              label: timestampLabel,
+                            ),
+                        ],
+                      ),
+                      suggestionsSection(),
+                    ],
                   ),
                 ),
-                Expanded(
-                  child: Padding(
-                    padding: cardPadding,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: editorChildren,
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         );

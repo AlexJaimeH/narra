@@ -221,7 +221,11 @@ class NarraSupabaseClient {
         ''').eq('user_id', userId).order('updated_at', ascending: false);
 
     if (status != null) {
-      query = query.eq('status', status);
+      if (status == 'published') {
+        query = query.or('status.eq.published,published_at.not.is.null');
+      } else {
+        query = query.eq('status', status);
+      }
     }
 
     if (searchQuery != null && searchQuery.isNotEmpty) {

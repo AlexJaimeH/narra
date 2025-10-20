@@ -235,13 +235,71 @@ class Story {
 
   factory Story.fromMap(Map<String, dynamic> map) {
     try {
-      final rawPublishedAt = map['published_at'];
-      DateTime? publishedAt;
-      if (rawPublishedAt is String && rawPublishedAt.isNotEmpty) {
-        publishedAt = DateTime.tryParse(rawPublishedAt);
-      } else if (rawPublishedAt is DateTime) {
-        publishedAt = rawPublishedAt;
+      DateTime? parseTimestamp(dynamic value) {
+        if (value == null) return null;
+
+        if (value is DateTime) {
+          return value;
+        }
+
+        if (value is String) {
+          final trimmed = value.trim();
+          if (trimmed.isEmpty) return null;
+
+          DateTime? parsed = DateTime.tryParse(trimmed);
+          if (parsed != null) return parsed;
+
+          final normalized =
+              trimmed.contains('T') ? trimmed : trimmed.replaceFirst(' ', 'T');
+          parsed = DateTime.tryParse(normalized);
+          if (parsed != null) return parsed;
+
+          if (!normalized.endsWith('Z')) {
+            parsed = DateTime.tryParse('${normalized}Z');
+            if (parsed != null) return parsed;
+          }
+
+          return null;
+        }
+
+        if (value is int) {
+          if (value > 1000000000000) {
+            return DateTime.fromMillisecondsSinceEpoch(value, isUtc: true)
+                .toLocal();
+          }
+          if (value > 1000000000) {
+            return DateTime.fromMillisecondsSinceEpoch(value * 1000,
+                    isUtc: true)
+                .toLocal();
+          }
+        }
+
+        if (value is double) {
+          final intValue = value.round();
+          if (intValue > 1000000000000) {
+            return DateTime.fromMillisecondsSinceEpoch(intValue, isUtc: true)
+                .toLocal();
+          }
+          if (intValue > 1000000000) {
+            return DateTime.fromMillisecondsSinceEpoch((value * 1000).round(),
+                    isUtc: true)
+                .toLocal();
+          }
+        }
+
+        if (value is Map && value.isNotEmpty) {
+          for (final entry in value.entries) {
+            final parsed = parseTimestamp(entry.value);
+            if (parsed != null) return parsed;
+          }
+        }
+
+        return null;
       }
+
+      final rawPublishedAt =
+          map['published_at'] ?? map['publishedAt'] ?? map['publish_date'];
+      final publishedAt = parseTimestamp(rawPublishedAt);
 
       StoryStatus resolveStatus(String rawStatus, DateTime? publishedAt) {
         final normalized = rawStatus.trim().toLowerCase();
@@ -290,19 +348,7 @@ class Story {
           authorProfile?['user_settings'] as Map<String, dynamic>? ??
               map['author_settings'] as Map<String, dynamic>?;
 
-      DateTime? parseDate(dynamic value) {
-        if (value is String && value.trim().isNotEmpty) {
-          try {
-            return DateTime.parse(value.trim());
-          } catch (_) {
-            return null;
-          }
-        }
-        if (value is DateTime) {
-          return value;
-        }
-        return null;
-      }
+      DateTime? parseDate(dynamic value) => parseTimestamp(value);
 
       String? normalizePrecision(String? value) {
         final raw = value?.trim().toLowerCase();
@@ -418,12 +464,8 @@ class Story {
         completenessScore: map['completeness_score'] as int? ?? 0,
         wordCount: map['word_count'] as int? ?? 0,
         readingTime: map['reading_time'] as int? ?? 0,
-        createdAt: map['created_at'] != null
-            ? DateTime.parse(map['created_at'] as String)
-            : DateTime.now(),
-        updatedAt: map['updated_at'] != null
-            ? DateTime.parse(map['updated_at'] as String)
-            : DateTime.now(),
+        createdAt: parseTimestamp(map['created_at']) ?? DateTime.now(),
+        updatedAt: parseTimestamp(map['updated_at']) ?? DateTime.now(),
         publishedAt: publishedAt,
         tags: tagNames.isEmpty ? null : tagNames,
         storyTags: storyTagObjects,

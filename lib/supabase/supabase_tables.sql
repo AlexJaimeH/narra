@@ -71,6 +71,26 @@ CREATE TABLE IF NOT EXISTS story_photos (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Tabla de historial de versiones de historias
+CREATE TABLE IF NOT EXISTS story_versions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  story_id UUID NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  title TEXT NOT NULL DEFAULT '',
+  content TEXT NOT NULL DEFAULT '',
+  reason TEXT NOT NULL DEFAULT '',
+  tags JSONB NOT NULL DEFAULT '[]'::jsonb,
+  start_date TIMESTAMPTZ,
+  end_date TIMESTAMPTZ,
+  dates_precision TEXT,
+  photos JSONB NOT NULL DEFAULT '[]'::jsonb,
+  saved_at TIMESTAMPTZ NOT NULL DEFAULT TIMEZONE('utc', NOW()),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT TIMEZONE('utc', NOW())
+);
+
+CREATE INDEX IF NOT EXISTS story_versions_story_id_saved_at_idx
+  ON story_versions(story_id, saved_at DESC);
+
 -- Tabla de personas mencionadas en historias
 CREATE TABLE IF NOT EXISTS people (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:collection';
+import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data' as typed;
 
@@ -184,18 +185,193 @@ class _TagPaletteSection {
   }
 }
 
+class _StoryVersionPhotoSnapshot {
+  const _StoryVersionPhotoSnapshot({
+    this.id,
+    this.path,
+    this.fileName,
+    this.caption,
+    this.alt,
+    this.uploaded = false,
+    this.position = 0,
+    this.bytes,
+  });
+
+  final String? id;
+  final String? path;
+  final String? fileName;
+  final String? caption;
+  final String? alt;
+  final bool uploaded;
+  final int position;
+  final typed.Uint8List? bytes;
+
+  factory _StoryVersionPhotoSnapshot.fromEditableMap(
+    Map<String, dynamic> map, {
+    required int fallbackPosition,
+  }) {
+    int position = fallbackPosition;
+    final rawPosition = map['position'];
+    if (rawPosition is num) {
+      position = rawPosition.toInt();
+    }
+
+    typed.Uint8List? bytes;
+    final rawBytes = map['bytes'];
+    if (rawBytes is typed.Uint8List) {
+      bytes = typed.Uint8List.fromList(rawBytes);
+    } else if (rawBytes is List<int>) {
+      bytes = typed.Uint8List.fromList(rawBytes);
+    }
+
+    return _StoryVersionPhotoSnapshot(
+      id: map['id']?.toString(),
+      path: map['path'] as String?,
+      fileName: map['fileName'] as String?,
+      caption: (map['caption'] as String?) ?? '',
+      alt: (map['alt'] as String?) ?? '',
+      uploaded: map['uploaded'] == true,
+      position: position,
+      bytes: bytes,
+    );
+  }
+
+  factory _StoryVersionPhotoSnapshot.fromMap(Map<String, dynamic> map) {
+    int position = 0;
+    final rawPosition = map['position'];
+    if (rawPosition is num) {
+      position = rawPosition.toInt();
+    }
+
+    bool uploaded = false;
+    final rawUploaded = map['uploaded'];
+    if (rawUploaded is bool) {
+      uploaded = rawUploaded;
+    } else if (rawUploaded is num) {
+      uploaded = rawUploaded != 0;
+    } else if (rawUploaded is String) {
+      uploaded = rawUploaded.toLowerCase() == 'true';
+    } else if ((map['path'] ?? map['photo_url']) != null) {
+      uploaded = true;
+    }
+
+    return _StoryVersionPhotoSnapshot(
+      id: map['id']?.toString(),
+      path: (map['path'] ?? map['photo_url']) as String?,
+      fileName: (map['fileName'] ?? map['file_name']) as String?,
+      caption: (map['caption'] as String?) ?? '',
+      alt: (map['alt'] as String?) ?? '',
+      uploaded: uploaded,
+      position: position,
+    );
+  }
+
+  Map<String, dynamic> toPersistenceMap() {
+    return <String, dynamic>{
+      'id': id,
+      'path': path,
+      'fileName': fileName,
+      'caption': caption ?? '',
+      'alt': alt ?? '',
+      'uploaded': uploaded,
+      'position': position,
+    }..removeWhere((key, value) => value == null);
+  }
+
+  Map<String, dynamic> toEditableMap() {
+    return {
+      'id': id,
+      'path': path,
+      'fileName':
+          fileName ?? (path != null ? path!.split('/').last : 'imagen.jpg'),
+      'caption': caption ?? '',
+      'alt': alt ?? '',
+      'uploaded': uploaded,
+      'position': position,
+      'bytes': bytes != null ? typed.Uint8List.fromList(bytes!) : null,
+    };
+  }
+
+  String get signature {
+    final buffer = StringBuffer()
+      ..write(position)
+      ..write('|')
+      ..write(uploaded ? '1' : '0')
+      ..write('|')
+      ..write((path ?? '').trim())
+      ..write('|')
+      ..write((fileName ?? '').trim())
+      ..write('|')
+      ..write((caption ?? '').trim())
+      ..write('|')
+      ..write((alt ?? '').trim())
+      ..write('|')
+      ..write(id ?? '');
+    return buffer.toString();
+  }
+}
+
 class _StoryVersionEntry {
   const _StoryVersionEntry({
     required this.title,
     required this.content,
     required this.savedAt,
     required this.reason,
+    this.tags = const [],
+    this.photos = const [],
+    this.startDate,
+    this.endDate,
+    this.datesPrecision,
   });
 
   final String title;
   final String content;
   final DateTime savedAt;
   final String reason;
+  final List<String> tags;
+  final List<_StoryVersionPhotoSnapshot> photos;
+  final DateTime? startDate;
+  final DateTime? endDate;
+  final String? datesPrecision;
+
+  Map<String, dynamic> toPersistencePayload() {
+    return <String, dynamic>{
+      'title': title,
+      'content': content,
+      'reason': reason,
+      'saved_at': savedAt.toUtc().toIso8601String(),
+      'tags': tags,
+      'photos': photos.map((photo) => photo.toPersistenceMap()).toList(),
+      'start_date': startDate?.toUtc().toIso8601String(),
+      'end_date': endDate?.toUtc().toIso8601String(),
+      'dates_precision':
+          datesPrecision?.trim().isEmpty == true ? null : datesPrecision,
+    }..removeWhere((key, value) => value == null);
+  }
+
+  String computeSignature() {
+    final normalizedTags = tags
+        .map((tag) => tag.trim().toLowerCase())
+        .where((tag) => tag.isNotEmpty)
+        .toList()
+      ..sort();
+    final sortedPhotos = List<_StoryVersionPhotoSnapshot>.from(photos)
+      ..sort((a, b) => a.position.compareTo(b.position));
+
+    final buffer = StringBuffer()
+      ..writeln(title.trim())
+      ..writeln(content.trim())
+      ..writeln(normalizedTags.join('|'))
+      ..writeln(startDate?.toUtc().toIso8601String() ?? '')
+      ..writeln(endDate?.toUtc().toIso8601String() ?? '')
+      ..writeln((datesPrecision ?? '').trim());
+
+    for (final photo in sortedPhotos) {
+      buffer.writeln(photo.signature);
+    }
+
+    return buffer.toString();
+  }
 
   factory _StoryVersionEntry.fromMap(Map<String, dynamic> map) {
     DateTime savedAt;
@@ -212,11 +388,81 @@ class _StoryVersionEntry {
       savedAt = DateTime.now();
     }
 
+    DateTime? parseOptionalDate(dynamic value) {
+      if (value is String && value.trim().isNotEmpty) {
+        try {
+          return DateTime.parse(value).toLocal();
+        } catch (_) {
+          return null;
+        }
+      }
+      if (value is DateTime) {
+        return value.toLocal();
+      }
+      return null;
+    }
+
+    List<String> parsedTags = const <String>[];
+    final rawTags = map['tags'];
+    if (rawTags is List) {
+      parsedTags = rawTags
+          .map((tag) => tag?.toString().trim() ?? '')
+          .where((tag) => tag.isNotEmpty)
+          .toList();
+    } else if (rawTags is String && rawTags.trim().isNotEmpty) {
+      try {
+        final decoded = jsonDecode(rawTags);
+        if (decoded is List) {
+          parsedTags = decoded
+              .map((tag) => tag?.toString().trim() ?? '')
+              .where((tag) => tag.isNotEmpty)
+              .toList();
+        }
+      } catch (_) {
+        parsedTags = [rawTags.trim()];
+      }
+    }
+
+    List<_StoryVersionPhotoSnapshot> parsePhotos(dynamic rawPhotos) {
+      if (rawPhotos is List) {
+        return rawPhotos
+            .map((item) {
+              if (item is Map<String, dynamic>) {
+                return item;
+              }
+              if (item is Map) {
+                return Map<String, dynamic>.from(item);
+              }
+              return null;
+            })
+            .whereType<Map<String, dynamic>>()
+            .map(_StoryVersionPhotoSnapshot.fromMap)
+            .toList()
+          ..sort((a, b) => a.position.compareTo(b.position));
+      }
+      if (rawPhotos is String && rawPhotos.trim().isNotEmpty) {
+        try {
+          final decoded = jsonDecode(rawPhotos);
+          return parsePhotos(decoded);
+        } catch (_) {
+          return <_StoryVersionPhotoSnapshot>[];
+        }
+      }
+      return <_StoryVersionPhotoSnapshot>[];
+    }
+
+    final photos = parsePhotos(map['photos']);
+
     return _StoryVersionEntry(
       title: (map['title'] as String?) ?? '',
       content: (map['content'] as String?) ?? '',
       reason: (map['reason'] as String?) ?? 'Versión guardada',
       savedAt: savedAt,
+      tags: parsedTags,
+      photos: photos,
+      startDate: parseOptionalDate(map['start_date']),
+      endDate: parseOptionalDate(map['end_date']),
+      datesPrecision: (map['dates_precision'] as String?)?.trim(),
     );
   }
 }
@@ -641,10 +887,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
             ..clear()
             ..addAll(versionEntries);
           if (_versionHistory.isNotEmpty) {
-            _lastVersionSignature = _buildVersionSignature(
-              _versionHistory.first.title,
-              _versionHistory.first.content,
-            );
+            _lastVersionSignature = _versionHistory.first.computeSignature();
           }
           _isLoading = false;
         });
@@ -3348,10 +3591,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     });
   }
 
-  String _buildVersionSignature(String title, String content) {
-    return '${title.trim()}\n${content.trim()}';
-  }
-
   void _captureVersion({
     required String reason,
     bool includeIfUnchanged = false,
@@ -3360,18 +3599,36 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     if (!mounted) return;
     final title = _titleController.text;
     final content = _contentController.text;
-    final signature = _buildVersionSignature(title, content);
-
-    if (!includeIfUnchanged && signature == _lastVersionSignature) {
-      return;
-    }
+    final normalizedTags = _selectedTags
+        .map((tag) => tag.trim())
+        .where((tag) => tag.isNotEmpty)
+        .toList();
+    final photoSnapshots = _photos.asMap().entries.map((entry) {
+      final raw = Map<String, dynamic>.from(entry.value);
+      raw['position'] = entry.key;
+      return _StoryVersionPhotoSnapshot.fromEditableMap(
+        raw,
+        fallbackPosition: entry.key,
+      );
+    }).toList();
 
     final entry = _StoryVersionEntry(
       title: title,
       content: content,
       savedAt: (savedAt ?? DateTime.now()).toLocal(),
       reason: reason,
+      tags: normalizedTags,
+      photos: photoSnapshots,
+      startDate: _startDate,
+      endDate: _endDate,
+      datesPrecision: _datesPrecision,
     );
+
+    final signature = entry.computeSignature();
+
+    if (!includeIfUnchanged && signature == _lastVersionSignature) {
+      return;
+    }
 
     setState(() {
       _versionHistory.insert(0, entry);
@@ -3401,6 +3658,13 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         content: entry.content,
         reason: entry.reason,
         savedAt: entry.savedAt,
+        tags: entry.tags,
+        startDate: entry.startDate,
+        endDate: entry.endDate,
+        datesPrecision: (entry.datesPrecision?.trim().isEmpty ?? true)
+            ? null
+            : entry.datesPrecision,
+        photos: entry.photos.map((photo) => photo.toPersistenceMap()).toList(),
       );
       return true;
     } catch (error) {
@@ -3444,6 +3708,43 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       alwaysUse24HourFormat: true,
     );
     return '$dateLabel · $timeLabel';
+  }
+
+  String _formatVersionDateRange(
+    DateTime? start,
+    DateTime? end,
+    String? precision,
+  ) {
+    if (start == null && end == null) {
+      return 'Sin fecha';
+    }
+
+    final fallbackPrecision =
+        _datesPrecision.isNotEmpty ? _datesPrecision : 'day';
+    final rawPrecision =
+        (precision?.isNotEmpty == true ? precision!.trim() : fallbackPrecision);
+    final normalizedPrecision = () {
+      switch (rawPrecision) {
+        case 'year':
+        case 'month':
+        case 'day':
+          return rawPrecision;
+        default:
+          return 'day';
+      }
+    }();
+
+    if (start != null && end != null) {
+      final startLabel = _formatDate(start, normalizedPrecision);
+      final endLabel = _formatDate(end, normalizedPrecision);
+      if (startLabel == endLabel) {
+        return startLabel;
+      }
+      return '$startLabel – $endLabel';
+    }
+
+    final singleDate = start ?? end!;
+    return _formatDate(singleDate, normalizedPrecision);
   }
 
   _VersionHistoryVisuals _resolveVersionHistoryVisuals(
@@ -6759,6 +7060,82 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                       ),
                     ),
                     const SizedBox(height: 12),
+                    if (entry.tags.isNotEmpty ||
+                        entry.startDate != null ||
+                        entry.endDate != null ||
+                        entry.photos.isNotEmpty) ...[
+                      if (entry.tags.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: entry.tags
+                                .map(
+                                  (tag) => Chip(
+                                    label: Text(tag),
+                                    labelStyle:
+                                        theme.textTheme.bodySmall?.copyWith(
+                                      color: colorScheme.onSurface,
+                                    ),
+                                    backgroundColor: colorScheme
+                                        .surfaceContainerHighest
+                                        .withValues(alpha: 0.6),
+                                    visualDensity: VisualDensity.compact,
+                                    materialTapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                  ),
+                                )
+                                .toList(),
+                          ),
+                        ),
+                      if (entry.startDate != null || entry.endDate != null)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.event,
+                                size: 16,
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                _formatVersionDateRange(
+                                  entry.startDate,
+                                  entry.endDate,
+                                  entry.datesPrecision,
+                                ),
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      if (entry.photos.isNotEmpty)
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.photo_library_rounded,
+                              size: 16,
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              entry.photos.length == 1
+                                  ? '1 foto'
+                                  : '${entry.photos.length} fotos',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                      const SizedBox(height: 12),
+                    ],
                     Expanded(
                       child: DecoratedBox(
                         decoration: BoxDecoration(
@@ -6854,10 +7231,31 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       reason: 'Estado antes de restaurar',
       includeIfUnchanged: true,
     );
+    final restoredPhotos =
+        List<_StoryVersionPhotoSnapshot>.from(restored.photos)
+          ..sort((a, b) => a.position.compareTo(b.position));
     setState(() {
       _titleController.text = restored.title;
       _contentController.text = restored.content;
+      _selectedTags
+        ..clear()
+        ..addAll(restored.tags);
+      _startDate = restored.startDate;
+      _endDate = restored.endDate;
+      if (restored.datesPrecision != null &&
+          restored.datesPrecision!.isNotEmpty) {
+        _datesPrecision = restored.datesPrecision!;
+      } else if (_datesPrecision.isEmpty) {
+        _datesPrecision = 'day';
+      }
+      _photos
+        ..clear()
+        ..addAll(restoredPhotos.map((photo) => photo.toEditableMap()));
       _hasChanges = true;
+    });
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _ensureSelectedTagsInPalette();
     });
     _captureVersion(reason: 'Versión restaurada ($restoredLabel)');
     ScaffoldMessenger.of(context).showSnackBar(

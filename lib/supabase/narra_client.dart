@@ -367,18 +367,14 @@ class NarraSupabaseClient {
   /// Minimal public profile for authors displayed in public story pages
   static Future<Map<String, dynamic>?> getAuthorPublicProfile(
       String authorId) async {
-    final result = await _client
-        .from('users')
-        .select('''
+    final result = await _client.from('users').select('''
           id,
           name,
           avatar_url,
           user_settings (
             public_author_name
           )
-        ''')
-        .eq('id', authorId)
-        .maybeSingle();
+        ''').eq('id', authorId).maybeSingle();
 
     return result;
   }
@@ -406,18 +402,35 @@ class NarraSupabaseClient {
     required String content,
     required String reason,
     required DateTime savedAt,
+    List<String>? tags,
+    DateTime? startDate,
+    DateTime? endDate,
+    String? datesPrecision,
+    List<Map<String, dynamic>>? photos,
   }) async {
     final userId = currentUser?.id;
     if (userId == null) throw Exception('User not authenticated');
 
-    final payload = {
+    final payload = <String, dynamic>{
       'story_id': storyId,
       'user_id': userId,
       'title': title,
       'content': content,
       'reason': reason,
       'saved_at': savedAt.toUtc().toIso8601String(),
+      'tags': tags ?? <String>[],
+      'photos': photos ?? <Map<String, dynamic>>[],
     };
+
+    if (startDate != null) {
+      payload['start_date'] = startDate.toUtc().toIso8601String();
+    }
+    if (endDate != null) {
+      payload['end_date'] = endDate.toUtc().toIso8601String();
+    }
+    if (datesPrecision != null && datesPrecision.trim().isNotEmpty) {
+      payload['dates_precision'] = datesPrecision.trim();
+    }
 
     final result =
         await _client.from('story_versions').insert(payload).select().single();

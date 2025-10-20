@@ -10,6 +10,11 @@ create table if not exists public.story_versions (
   title text not null default '',
   content text not null default '',
   reason text not null default '',
+  tags jsonb not null default '[]'::jsonb,
+  start_date timestamptz,
+  end_date timestamptz,
+  dates_precision text,
+  photos jsonb not null default '[]'::jsonb,
   saved_at timestamptz not null default timezone('utc', now()),
   created_at timestamptz not null default timezone('utc', now())
 );
@@ -83,6 +88,26 @@ begin
   end if;
 end
 $$;
+
+commit;
+
+-- Ensure metadata columns exist for story version history
+begin;
+
+alter table public.story_versions
+  add column if not exists tags jsonb not null default '[]'::jsonb,
+  add column if not exists start_date timestamptz,
+  add column if not exists end_date timestamptz,
+  add column if not exists dates_precision text,
+  add column if not exists photos jsonb not null default '[]'::jsonb;
+
+update public.story_versions
+set tags = '[]'::jsonb
+where tags is null;
+
+update public.story_versions
+set photos = '[]'::jsonb
+where photos is null;
 
 commit;
 

@@ -196,6 +196,29 @@ class _StoryVersionEntry {
   final String content;
   final DateTime savedAt;
   final String reason;
+
+  factory _StoryVersionEntry.fromMap(Map<String, dynamic> map) {
+    DateTime savedAt;
+    final rawSavedAt = map['saved_at'];
+    if (rawSavedAt is String) {
+      try {
+        savedAt = DateTime.parse(rawSavedAt).toLocal();
+      } catch (_) {
+        savedAt = DateTime.now();
+      }
+    } else if (rawSavedAt is DateTime) {
+      savedAt = rawSavedAt.toLocal();
+    } else {
+      savedAt = DateTime.now();
+    }
+
+    return _StoryVersionEntry(
+      title: (map['title'] as String?) ?? '',
+      content: (map['content'] as String?) ?? '',
+      reason: (map['reason'] as String?) ?? 'Versión guardada',
+      savedAt: savedAt,
+    );
+  }
 }
 
 class _VersionHistoryVisuals {
@@ -267,6 +290,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   String _status = 'draft'; // draft, published
   Story? _currentStory;
   final List<_StoryVersionEntry> _versionHistory = [];
+  final List<_StoryVersionEntry> _pendingVersionEntries = [];
   Timer? _autoVersionTimer;
   String? _lastVersionSignature;
 
@@ -566,6 +590,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     setState(() {
       _isLoading = true;
       _versionHistory.clear();
+      _pendingVersionEntries.clear();
     });
     _lastVersionSignature = null;
     try {
@@ -574,6 +599,12 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         // Load story photos from database
         final storyData =
             await NarraSupabaseClient.getStoryById(widget.storyId!);
+        final versionRows =
+            await NarraSupabaseClient.getStoryVersions(widget.storyId!);
+        final versionEntries = versionRows
+            .map((row) => _StoryVersionEntry.fromMap(row))
+            .toList()
+          ..sort((a, b) => b.savedAt.compareTo(a.savedAt));
         final photos = <Map<String, dynamic>>[];
 
         if (storyData != null && storyData['story_photos'] != null) {
@@ -606,13 +637,24 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           _photos.clear();
           _photos.addAll(photos);
           _hasChanges = false;
+          _versionHistory
+            ..clear()
+            ..addAll(versionEntries);
+          if (_versionHistory.isNotEmpty) {
+            _lastVersionSignature = _buildVersionSignature(
+              _versionHistory.first.title,
+              _versionHistory.first.content,
+            );
+          }
           _isLoading = false;
         });
-        _captureVersion(
-          reason: 'Versión original',
-          includeIfUnchanged: true,
-          savedAt: story.updatedAt,
-        );
+        if (_versionHistory.isEmpty) {
+          _captureVersion(
+            reason: 'Versión original',
+            includeIfUnchanged: true,
+            savedAt: story.updatedAt,
+          );
+        }
         SchedulerBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
           _ensureSelectedTagsInPalette();
@@ -1581,8 +1623,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                   isCompact: isCompact,
                   hint: 'Título de tu historia...',
                   hintStyle: theme.textTheme.titleMedium?.copyWith(
-                    color:
-                        colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+                    color: colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
                   ),
                   padding: EdgeInsets.symmetric(
                     horizontal: isCompact ? 12 : 18,
@@ -1612,8 +1653,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                 style: theme.textTheme.labelLarge?.copyWith(
                   letterSpacing: 0.2,
                   fontWeight: FontWeight.w700,
-                  color:
-                      colorScheme.onSurfaceVariant.withValues(alpha: 0.9),
+                  color: colorScheme.onSurfaceVariant.withValues(alpha: 0.9),
                 ),
               ),
               SizedBox(height: sectionSpacing),
@@ -1625,8 +1665,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                     isCompact: isCompact,
                     hint: 'Cuenta tu historia...',
                     hintStyle: bodyStyle?.copyWith(
-                      color: colorScheme.onSurfaceVariant
-                          .withValues(alpha: 0.55),
+                      color:
+                          colorScheme.onSurfaceVariant.withValues(alpha: 0.55),
                     ),
                     padding: EdgeInsets.fromLTRB(
                       isCompact ? 12 : 18,
@@ -3340,6 +3380,53 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       }
       _lastVersionSignature = signature;
     });
+
+    final storyId = _currentStory?.id ?? widget.storyId;
+    if (storyId != null) {
+      unawaited(_persistVersionEntry(storyId, entry));
+    } else {
+      _pendingVersionEntries.add(entry);
+    }
+  }
+
+  Future<bool> _persistVersionEntry(
+    String storyId,
+    _StoryVersionEntry entry, {
+    bool allowRetryQueue = true,
+  }) async {
+    try {
+      await NarraSupabaseClient.createStoryVersion(
+        storyId: storyId,
+        title: entry.title,
+        content: entry.content,
+        reason: entry.reason,
+        savedAt: entry.savedAt,
+      );
+      return true;
+    } catch (error) {
+      if (allowRetryQueue) {
+        _pendingVersionEntries.add(entry);
+      }
+      if (kDebugMode) {
+        debugPrint('No se pudo guardar la versión: $error');
+      }
+      return false;
+    }
+  }
+
+  Future<void> _flushPendingVersionEntries(String storyId) async {
+    if (_pendingVersionEntries.isEmpty) return;
+
+    final entries = List<_StoryVersionEntry>.from(_pendingVersionEntries);
+    _pendingVersionEntries.clear();
+
+    for (final entry in entries) {
+      final success =
+          await _persistVersionEntry(storyId, entry, allowRetryQueue: false);
+      if (!success) {
+        _pendingVersionEntries.add(entry);
+      }
+    }
   }
 
   void _applyTranscriptInsertion(VoidCallback insertion) {
@@ -4366,6 +4453,10 @@ class _StoryEditorPageState extends State<StoryEditorPage>
             .update(updates)
             .eq('id', _currentStory!.id)
             .eq('user_id', user.id);
+      }
+
+      if (_currentStory != null) {
+        await _flushPendingVersionEntries(_currentStory!.id);
       }
 
       // Upload and save photos

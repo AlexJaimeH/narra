@@ -4,7 +4,7 @@ import 'package:narra/supabase/supabase_config.dart';
 /// Narra-specific Supabase client with all required methods
 class NarraSupabaseClient {
   static final _client = Supabase.instance.client;
-  
+
   /// Get the Supabase client instance
   static SupabaseClient get client => _client;
 
@@ -48,7 +48,8 @@ class NarraSupabaseClient {
   static bool get isAuthenticated => currentUser != null;
 
   /// Listen to auth state changes
-  static Stream<AuthState> get authStateChanges => _client.auth.onAuthStateChange;
+  static Stream<AuthState> get authStateChanges =>
+      _client.auth.onAuthStateChange;
 
   // ================================
   // USER PROFILE METHODS
@@ -59,12 +60,9 @@ class NarraSupabaseClient {
     final id = userId ?? currentUser?.id;
     if (id == null) return null;
 
-    final result = await _client
-        .from('users')
-        .select()
-        .eq('id', id)
-        .maybeSingle();
-    
+    final result =
+        await _client.from('users').select().eq('id', id).maybeSingle();
+
     return result;
   }
 
@@ -77,7 +75,7 @@ class NarraSupabaseClient {
     String? location,
   }) async {
     final now = DateTime.now().toIso8601String();
-    
+
     final profileData = {
       'id': userId,
       'email': email,
@@ -94,25 +92,20 @@ class NarraSupabaseClient {
     };
 
     try {
-      final result = await _client
-          .from('users')
-          .upsert(profileData)
-          .select()
-          .single();
+      final result =
+          await _client.from('users').upsert(profileData).select().single();
 
       return result;
     } catch (e) {
       // Si falla el upsert, intentar con insert simple
       try {
-        final result = await _client
-            .from('users')
-            .insert(profileData)
-            .select()
-            .single();
+        final result =
+            await _client.from('users').insert(profileData).select().single();
         return result;
       } catch (insertError) {
         // Si ya existe el usuario, obtener el perfil existente
-        if (insertError.toString().contains('duplicate') || insertError.toString().contains('unique')) {
+        if (insertError.toString().contains('duplicate') ||
+            insertError.toString().contains('unique')) {
           final existingProfile = await getUserProfile(userId);
           if (existingProfile != null) {
             return existingProfile;
@@ -135,7 +128,9 @@ class NarraSupabaseClient {
         await createUserProfile(
           userId: user.id,
           email: user.email ?? '',
-          name: user.userMetadata?['name'] ?? user.email?.split('@').first ?? 'Usuario',
+          name: user.userMetadata?['name'] ??
+              user.email?.split('@').first ??
+              'Usuario',
           phone: user.userMetadata?['phone'],
           location: user.userMetadata?['location'],
         );
@@ -158,7 +153,7 @@ class NarraSupabaseClient {
     await ensureUserProfileExists();
 
     updates['updated_at'] = DateTime.now().toIso8601String();
-    
+
     final result = await _client
         .from('users')
         .update(updates)
@@ -176,7 +171,7 @@ class NarraSupabaseClient {
 
     // Delete user profile (cascade will handle related data)
     await _client.from('users').delete().eq('id', userId);
-    
+
     // Sign out
     await signOut();
   }
@@ -199,9 +194,7 @@ class NarraSupabaseClient {
     // Ensure user profile exists
     await ensureUserProfileExists();
 
-    dynamic query = _client
-        .from('stories')
-        .select('''
+    dynamic query = _client.from('stories').select('''
           *,
           story_tags (
             tag_id,
@@ -225,16 +218,15 @@ class NarraSupabaseClient {
               relationship
             )
           )
-        ''')
-        .eq('user_id', userId)
-        .order('updated_at', ascending: false);
+        ''').eq('user_id', userId).order('updated_at', ascending: false);
 
     if (status != null) {
       query = query.eq('status', status);
     }
 
     if (searchQuery != null && searchQuery.isNotEmpty) {
-      query = query.or('title.ilike.%$searchQuery%,content.ilike.%$searchQuery%');
+      query =
+          query.or('title.ilike.%$searchQuery%,content.ilike.%$searchQuery%');
     }
 
     if (limit != null) {
@@ -254,9 +246,7 @@ class NarraSupabaseClient {
     final userId = currentUser?.id;
     if (userId == null) throw Exception('User not authenticated');
 
-    final result = await _client
-        .from('stories')
-        .select('''
+    final result = await _client.from('stories').select('''
           *,
           story_tags (
             tag_id,
@@ -280,10 +270,49 @@ class NarraSupabaseClient {
               relationship
             )
           )
-        ''')
-        .eq('id', storyId)
+        ''').eq('id', storyId).eq('user_id', userId).maybeSingle();
+
+    return result;
+  }
+
+  /// Get story versions ordered from newest to oldest
+  static Future<List<Map<String, dynamic>>> getStoryVersions(
+      String storyId) async {
+    final userId = currentUser?.id;
+    if (userId == null) throw Exception('User not authenticated');
+
+    final List<dynamic> result = await _client
+        .from('story_versions')
+        .select()
+        .eq('story_id', storyId)
         .eq('user_id', userId)
-        .maybeSingle();
+        .order('saved_at', ascending: false);
+
+    return result.map((row) => row as Map<String, dynamic>).toList();
+  }
+
+  /// Create a story version entry for version history
+  static Future<Map<String, dynamic>> createStoryVersion({
+    required String storyId,
+    required String title,
+    required String content,
+    required String reason,
+    required DateTime savedAt,
+  }) async {
+    final userId = currentUser?.id;
+    if (userId == null) throw Exception('User not authenticated');
+
+    final payload = {
+      'story_id': storyId,
+      'user_id': userId,
+      'title': title,
+      'content': content,
+      'reason': reason,
+      'saved_at': savedAt.toUtc().toIso8601String(),
+    };
+
+    final result =
+        await _client.from('story_versions').insert(payload).select().single();
 
     return result;
   }
@@ -305,7 +334,7 @@ class NarraSupabaseClient {
     await ensureUserProfileExists();
 
     final now = DateTime.now().toIso8601String();
-    
+
     final storyData = {
       'title': title,
       'content': content,
@@ -318,11 +347,8 @@ class NarraSupabaseClient {
       'updated_at': now,
     };
 
-    final result = await _client
-        .from('stories')
-        .insert(storyData)
-        .select()
-        .single();
+    final result =
+        await _client.from('stories').insert(storyData).select().single();
 
     // Add tags if provided
     if (tags != null && tags.isNotEmpty) {
@@ -406,11 +432,8 @@ class NarraSupabaseClient {
     final userId = currentUser?.id;
     if (userId == null) throw Exception('User not authenticated');
 
-    final results = await _client
-        .from('tags')
-        .select()
-        .eq('user_id', userId)
-        .order('name');
+    final results =
+        await _client.from('tags').select().eq('user_id', userId).order('name');
 
     return results.map((e) => e as Map<String, dynamic>).toList();
   }
@@ -430,11 +453,7 @@ class NarraSupabaseClient {
       'created_at': DateTime.now().toIso8601String(),
     };
 
-    final result = await _client
-        .from('tags')
-        .insert(tagData)
-        .select()
-        .single();
+    final result = await _client.from('tags').insert(tagData).select().single();
 
     return result;
   }
@@ -484,11 +503,7 @@ class NarraSupabaseClient {
     final userId = currentUser?.id;
     if (userId == null) throw Exception('User not authenticated');
 
-    await _client
-        .from('tags')
-        .delete()
-        .eq('id', tagId)
-        .eq('user_id', userId);
+    await _client.from('tags').delete().eq('id', tagId).eq('user_id', userId);
   }
 
   // ================================
@@ -528,11 +543,8 @@ class NarraSupabaseClient {
       'created_at': DateTime.now().toIso8601String(),
     };
 
-    final result = await _client
-        .from('people')
-        .insert(personData)
-        .select()
-        .single();
+    final result =
+        await _client.from('people').insert(personData).select().single();
 
     return result;
   }
@@ -668,11 +680,8 @@ class NarraSupabaseClient {
       'created_at': DateTime.now().toIso8601String(),
     };
 
-    final result = await _client
-        .from('story_photos')
-        .insert(photoData)
-        .select()
-        .single();
+    final result =
+        await _client.from('story_photos').insert(photoData).select().single();
 
     return result;
   }
@@ -720,7 +729,8 @@ class NarraSupabaseClient {
   }
 
   /// Remove person from story
-  static Future<void> removePersonFromStory(String storyId, String personId) async {
+  static Future<void> removePersonFromStory(
+      String storyId, String personId) async {
     final userId = currentUser?.id;
     if (userId == null) throw Exception('User not authenticated');
 
@@ -742,19 +752,17 @@ class NarraSupabaseClient {
 
     // Get user profile with stats
     final userProfile = await getUserProfile(userId);
-    
+
     // Get stories count by status
-    final totalStories = await _client
-        .from('stories')
-        .select('id')
-        .eq('user_id', userId);
-        
+    final totalStories =
+        await _client.from('stories').select('id').eq('user_id', userId);
+
     final publishedStories = await _client
         .from('stories')
         .select('id')
         .eq('user_id', userId)
         .eq('status', 'published');
-        
+
     final draftStories = await _client
         .from('stories')
         .select('id')
@@ -762,11 +770,9 @@ class NarraSupabaseClient {
         .eq('status', 'draft');
 
     // Get subscribers count
-    final subscribersCount = await _client
-        .from('subscribers')
-        .select('id')
-        .eq('user_id', userId)
-        ; // .eq('is_active', true); // Column doesn't exist in current schema
+    final subscribersCount = await _client.from('subscribers').select('id').eq(
+        'user_id',
+        userId); // .eq('is_active', true); // Column doesn't exist in current schema
 
     return {
       'user_profile': userProfile,

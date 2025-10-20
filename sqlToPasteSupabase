@@ -1,0 +1,87 @@
+-- Create table to store story version history
+create extension if not exists "pgcrypto";
+
+begin;
+
+create table if not exists public.story_versions (
+  id uuid primary key default gen_random_uuid(),
+  story_id uuid not null references public.stories (id) on delete cascade,
+  user_id uuid not null references auth.users (id) on delete cascade,
+  title text not null default '',
+  content text not null default '',
+  reason text not null default '',
+  saved_at timestamptz not null default timezone('utc', now()),
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create index if not exists story_versions_story_id_saved_at_idx
+  on public.story_versions (story_id, saved_at desc);
+
+alter table public.story_versions enable row level security;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'story_versions'
+      and policyname = 'Story versions are viewable by owner'
+  ) then
+    create policy "Story versions are viewable by owner"
+      on public.story_versions
+      for select
+      using (auth.uid() = user_id);
+  end if;
+end
+$$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'story_versions'
+      and policyname = 'Story versions are insertable by owner'
+  ) then
+    create policy "Story versions are insertable by owner"
+      on public.story_versions
+      for insert
+      with check (auth.uid() = user_id);
+  end if;
+end
+$$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'story_versions'
+      and policyname = 'Story versions are updatable by owner'
+  ) then
+    create policy "Story versions are updatable by owner"
+      on public.story_versions
+      for update
+      using (auth.uid() = user_id)
+      with check (auth.uid() = user_id);
+  end if;
+end
+$$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'story_versions'
+      and policyname = 'Story versions are deletable by owner'
+  ) then
+    create policy "Story versions are deletable by owner"
+      on public.story_versions
+      for delete
+      using (auth.uid() = user_id);
+  end if;
+end
+$$;
+
+commit;

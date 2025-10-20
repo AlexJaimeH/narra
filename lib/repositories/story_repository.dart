@@ -227,8 +227,10 @@ class Story {
     this.authorAvatarUrl,
   });
 
-  bool get isDraft => status == StoryStatus.draft;
-  bool get isPublished => status == StoryStatus.published;
+  bool get isDraft => status == StoryStatus.draft && !isPublished;
+  bool get isPublished =>
+      status == StoryStatus.published ||
+      (publishedAt != null && status != StoryStatus.archived);
   bool get isArchived => status == StoryStatus.archived;
 
   factory Story.fromMap(Map<String, dynamic> map) {
@@ -241,15 +243,45 @@ class Story {
         publishedAt = rawPublishedAt;
       }
 
-      final rawStatus = (map['status'] as String? ?? '').trim().toLowerCase();
-      final fallbackStatus =
-          publishedAt != null ? StoryStatus.published : StoryStatus.draft;
-      final status = rawStatus.isNotEmpty
-          ? StoryStatus.values.firstWhere(
-              (s) => s.name == rawStatus,
-              orElse: () => fallbackStatus,
-            )
-          : fallbackStatus;
+      StoryStatus resolveStatus(String rawStatus, DateTime? publishedAt) {
+        final normalized = rawStatus.trim().toLowerCase();
+        if (normalized.isEmpty) {
+          return publishedAt != null
+              ? StoryStatus.published
+              : StoryStatus.draft;
+        }
+
+        if (normalized == StoryStatus.archived.name) {
+          return StoryStatus.archived;
+        }
+
+        if (normalized == StoryStatus.published.name) {
+          return StoryStatus.published;
+        }
+
+        if (normalized == StoryStatus.draft.name) {
+          return publishedAt != null
+              ? StoryStatus.published
+              : StoryStatus.draft;
+        }
+
+        try {
+          final status = StoryStatus.values.firstWhere(
+            (value) => value.name == normalized,
+          );
+          if (status == StoryStatus.draft && publishedAt != null) {
+            return StoryStatus.published;
+          }
+          return status;
+        } catch (_) {
+          return publishedAt != null
+              ? StoryStatus.published
+              : StoryStatus.draft;
+        }
+      }
+
+      final rawStatus = (map['status'] as String? ?? '');
+      final status = resolveStatus(rawStatus, publishedAt);
 
       final authorProfile = map['author_profile'] as Map<String, dynamic>? ??
           map['author'] as Map<String, dynamic>? ??

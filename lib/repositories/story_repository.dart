@@ -189,6 +189,11 @@ class Story {
   final String? authorDisplayName;
   final String? authorAvatarUrl;
 
+  // Author metadata for public sharing
+  final String? authorName;
+  final String? authorDisplayName;
+  final String? authorAvatarUrl;
+
   // Related data
   final List<String>? tags; // Simplified tags as strings
   final List<StoryTag> storyTags; // Full tag objects

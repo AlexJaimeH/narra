@@ -516,19 +516,47 @@ class NarraSupabaseClient {
     final userId = currentUser?.id;
     if (userId == null) throw Exception('User not authenticated');
 
-    final result = await _client
-        .from('stories')
-        .update({
-          'status': 'published',
-          'published_at': DateTime.now().toIso8601String(),
-          'updated_at': DateTime.now().toIso8601String(),
-        })
-        .eq('id', storyId)
-        .eq('user_id', userId)
-        .select()
-        .single();
+    final now = DateTime.now().toIso8601String();
+    final baseUpdate = {
+      'status': 'published',
+      'updated_at': now,
+    };
 
-    return result;
+    try {
+      final result = await _client
+          .from('stories')
+          .update({
+            ...baseUpdate,
+            'published_at': now,
+          })
+          .eq('id', storyId)
+          .eq('user_id', userId)
+          .select()
+          .single();
+
+      return result;
+    } on PostgrestException catch (error) {
+      final message = error.message ?? '';
+      if (message.contains('published_at') ||
+          message.contains('column') && message.contains('published')) {
+        // Fallback for databases that don't yet have the published_at column.
+        print(
+          'publishStory: published_at column missing, proceeding without storing publish timestamp. Error: ${error.message}',
+        );
+
+        final fallbackResult = await _client
+            .from('stories')
+            .update(baseUpdate)
+            .eq('id', storyId)
+            .eq('user_id', userId)
+            .select()
+            .single();
+
+        return fallbackResult;
+      }
+
+      rethrow;
+    }
   }
 
   // ================================

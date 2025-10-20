@@ -85,3 +85,15 @@ end
 $$;
 
 commit;
+
+-- Ensure stories table stores publication timestamps
+begin;
+
+alter table public.stories
+  add column if not exists published_at timestamptz;
+
+update public.stories
+set published_at = coalesce(published_at, updated_at)
+where status = 'published' and published_at is null;
+
+commit;

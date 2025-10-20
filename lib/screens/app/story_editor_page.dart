@@ -4599,17 +4599,28 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         return;
       }
 
-      await StoryServiceNew.publishStory(_currentStory!.id);
+      final messenger = ScaffoldMessenger.of(context);
+      final publishedStory =
+          await StoryServiceNew.publishStory(_currentStory!.id);
+
+      if (!mounted) return;
 
       setState(() {
-        _status = 'published';
+        _currentStory = publishedStory;
+        _status = publishedStory.status.name;
+        _hasChanges = false;
       });
 
-      Navigator.pop(context); // Return to previous screen
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         const SnackBar(
           content: Text('✓ Historia publicada y enviada a suscriptores'),
         ),
+      );
+
+      Navigator.of(context).pushNamedAndRemoveUntil(
+        '/app',
+        (route) => false,
+        arguments: 0,
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(

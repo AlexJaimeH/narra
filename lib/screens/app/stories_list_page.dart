@@ -751,6 +751,7 @@ class StoryListCard extends StatelessWidget {
         ? story.excerpt!.trim()
         : _fallbackExcerpt(story.content);
     final statusColors = _statusColors(story.status, colorScheme);
+    final publishedDisplayDate = story.publishedAt ?? story.updatedAt;
     final metadataChips = <Widget>[
       _MetadataBadge(
         icon: Icons.calendar_today,
@@ -892,6 +893,30 @@ class StoryListCard extends StatelessWidget {
                                         ),
                                       ],
                                     ),
+                                    if (story.status ==
+                                        StoryStatus.published) ...[
+                                      const SizedBox(height: 8),
+                                      Row(
+                                        children: [
+                                          Icon(
+                                            Icons.public,
+                                            size: 18,
+                                            color: colorScheme.primary,
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            'Publicado el '
+                                            '${_formatFullDate(publishedDisplayDate)}',
+                                            style: theme.textTheme.bodySmall
+                                                ?.copyWith(
+                                              color:
+                                                  colorScheme.onSurfaceVariant,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
                                     if (excerpt.isNotEmpty) ...[
                                       const SizedBox(height: 6),
                                       Text(
@@ -979,6 +1004,7 @@ class _PublicStoryPreview extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final link = StoryShareLinkBuilder.buildStoryLink(story: story).toString();
+    final publishedAt = story.publishedAt ?? story.updatedAt;
 
     return Container(
       width: double.infinity,
@@ -1006,6 +1032,16 @@ class _PublicStoryPreview extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
+          if (publishedAt != null) ...[
+            Text(
+              'Publicado el ${_formatFullDate(publishedAt)}',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
           SelectableText(
             link,
             style: theme.textTheme.bodySmall?.copyWith(
@@ -1027,7 +1063,8 @@ class _PublicStoryPreview extends StatelessWidget {
                   final messenger = ScaffoldMessenger.of(context);
                   await Clipboard.setData(ClipboardData(text: link));
                   messenger.showSnackBar(
-                    const SnackBar(content: Text('Enlace copiado al portapapeles')),
+                    const SnackBar(
+                        content: Text('Enlace copiado al portapapeles')),
                   );
                 },
                 icon: const Icon(Icons.copy),
@@ -1208,6 +1245,26 @@ String _formatStoryDate(DateTime date) {
   ];
 
   return '${date.day} ${months[date.month - 1]}';
+}
+
+String _formatFullDate(DateTime date) {
+  const months = [
+    'enero',
+    'febrero',
+    'marzo',
+    'abril',
+    'mayo',
+    'junio',
+    'julio',
+    'agosto',
+    'septiembre',
+    'octubre',
+    'noviembre',
+    'diciembre',
+  ];
+
+  final month = months[date.month - 1];
+  return '${date.day} de $month de ${date.year}';
 }
 
 String _fallbackStoryExcerpt(String? content) {

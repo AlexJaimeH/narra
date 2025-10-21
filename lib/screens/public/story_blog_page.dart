@@ -389,9 +389,8 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
             });
           },
           style: FilledButton.styleFrom(
-            backgroundColor: _isHearted
-                ? colorScheme.primary
-                : colorScheme.primaryContainer,
+            backgroundColor:
+                _isHearted ? colorScheme.primary : colorScheme.primaryContainer,
             foregroundColor:
                 _isHearted ? colorScheme.onPrimary : colorScheme.primary,
           ),
@@ -653,7 +652,8 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
     if (!mounted) return;
     messenger.showSnackBar(
       const SnackBar(
-        content: Text('¡Gracias! Tu comentario se registrará cuando esté disponible.'),
+        content: Text(
+            '¡Gracias! Tu comentario se registrará cuando esté disponible.'),
       ),
     );
   }
@@ -696,15 +696,29 @@ class StorySharePayload {
   final String? source;
 
   static StorySharePayload? fromUri(Uri uri) {
-    final subscriberId = uri.queryParameters['subscriber'];
+    final params = <String, String>{};
+    params.addAll(uri.queryParameters);
+
+    if ((params['subscriber'] == null || params['subscriber']!.isEmpty) &&
+        uri.hasFragment &&
+        uri.fragment.isNotEmpty) {
+      final fragment =
+          uri.fragment.startsWith('/') ? uri.fragment : '/${uri.fragment}';
+      final fragmentUri = Uri.tryParse(fragment);
+      if (fragmentUri != null) {
+        params.addAll(fragmentUri.queryParameters);
+      }
+    }
+
+    final subscriberId = params['subscriber'];
     if (subscriberId == null || subscriberId.isEmpty) {
       return null;
     }
     return StorySharePayload(
       subscriberId: subscriberId,
-      subscriberName: uri.queryParameters['name'],
-      token: uri.queryParameters['token'],
-      source: uri.queryParameters['source'],
+      subscriberName: params['name'],
+      token: params['token'],
+      source: params['source'],
     );
   }
 }
@@ -821,8 +835,9 @@ class _AuthorAvatar extends StatelessWidget {
     return CircleAvatar(
       radius: 28,
       backgroundColor: colorScheme.primary.withValues(alpha: 0.2),
-      backgroundImage:
-          avatarUrl != null && avatarUrl!.isNotEmpty ? NetworkImage(avatarUrl!) : null,
+      backgroundImage: avatarUrl != null && avatarUrl!.isNotEmpty
+          ? NetworkImage(avatarUrl!)
+          : null,
       child: avatarUrl == null || avatarUrl!.isEmpty
           ? Icon(Icons.person, color: colorScheme.primary)
           : null,
@@ -861,7 +876,8 @@ class _RecommendedCard extends StatelessWidget {
           children: [
             if (cover != null)
               ClipRRect(
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(20)),
                 child: AspectRatio(
                   aspectRatio: 16 / 9,
                   child: Image.network(
@@ -896,7 +912,8 @@ class _RecommendedCard extends StatelessWidget {
                   const SizedBox(height: 12),
                   Row(
                     children: [
-                      Icon(Icons.arrow_forward, size: 18, color: colorScheme.primary),
+                      Icon(Icons.arrow_forward,
+                          size: 18, color: colorScheme.primary),
                       const SizedBox(width: 6),
                       Text(
                         'Leer historia',

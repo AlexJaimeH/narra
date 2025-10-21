@@ -206,9 +206,11 @@ class NarraSupabaseClient {
           ),
           story_photos (
             id,
+            story_id,
             photo_url,
             caption,
-            position
+            position,
+            created_at
           ),
           story_people (
             person_id,
@@ -221,7 +223,11 @@ class NarraSupabaseClient {
         ''').eq('user_id', userId).order('updated_at', ascending: false);
 
     if (status != null) {
-      query = query.eq('status', status);
+      if (status == 'published') {
+        query = query.or('status.eq.published,published_at.not.is.null');
+      } else {
+        query = query.eq('status', status);
+      }
     }
 
     if (searchQuery != null && searchQuery.isNotEmpty) {
@@ -258,9 +264,11 @@ class NarraSupabaseClient {
           ),
           story_photos (
             id,
+            story_id,
             photo_url,
             caption,
-            position
+            position,
+            created_at
           ),
           story_people (
             person_id,
@@ -290,9 +298,11 @@ class NarraSupabaseClient {
           ),
           story_photos (
             id,
+            story_id,
             photo_url,
             caption,
-            position
+            position,
+            created_at
           ),
           story_people (
             person_id,
@@ -337,9 +347,11 @@ class NarraSupabaseClient {
           ),
           story_photos (
             id,
+            story_id,
             photo_url,
             caption,
-            position
+            position,
+            created_at
           )
         ''')
         .eq('user_id', authorId)
@@ -367,18 +379,14 @@ class NarraSupabaseClient {
   /// Minimal public profile for authors displayed in public story pages
   static Future<Map<String, dynamic>?> getAuthorPublicProfile(
       String authorId) async {
-    final result = await _client
-        .from('users')
-        .select('''
+    final result = await _client.from('users').select('''
           id,
           name,
           avatar_url,
           user_settings (
             public_author_name
           )
-        ''')
-        .eq('id', authorId)
-        .maybeSingle();
+        ''').eq('id', authorId).maybeSingle();
 
     return result;
   }
@@ -406,18 +414,35 @@ class NarraSupabaseClient {
     required String content,
     required String reason,
     required DateTime savedAt,
+    List<String>? tags,
+    DateTime? startDate,
+    DateTime? endDate,
+    String? datesPrecision,
+    List<Map<String, dynamic>>? photos,
   }) async {
     final userId = currentUser?.id;
     if (userId == null) throw Exception('User not authenticated');
 
-    final payload = {
+    final payload = <String, dynamic>{
       'story_id': storyId,
       'user_id': userId,
       'title': title,
       'content': content,
       'reason': reason,
       'saved_at': savedAt.toUtc().toIso8601String(),
+      'tags': tags ?? <String>[],
+      'photos': photos ?? <Map<String, dynamic>>[],
     };
+
+    if (startDate != null) {
+      payload['start_date'] = startDate.toUtc().toIso8601String();
+    }
+    if (endDate != null) {
+      payload['end_date'] = endDate.toUtc().toIso8601String();
+    }
+    if (datesPrecision != null && datesPrecision.trim().isNotEmpty) {
+      payload['dates_precision'] = datesPrecision.trim();
+    }
 
     final result =
         await _client.from('story_versions').insert(payload).select().single();
@@ -516,19 +541,47 @@ class NarraSupabaseClient {
     final userId = currentUser?.id;
     if (userId == null) throw Exception('User not authenticated');
 
-    final result = await _client
-        .from('stories')
-        .update({
-          'status': 'published',
-          'published_at': DateTime.now().toIso8601String(),
-          'updated_at': DateTime.now().toIso8601String(),
-        })
-        .eq('id', storyId)
-        .eq('user_id', userId)
-        .select()
-        .single();
+    final now = DateTime.now().toIso8601String();
+    final baseUpdate = {
+      'status': 'published',
+      'updated_at': now,
+    };
 
-    return result;
+    try {
+      final result = await _client
+          .from('stories')
+          .update({
+            ...baseUpdate,
+            'published_at': now,
+          })
+          .eq('id', storyId)
+          .eq('user_id', userId)
+          .select()
+          .single();
+
+      return result;
+    } on PostgrestException catch (error) {
+      final message = error.message ?? '';
+      if (message.contains('published_at') ||
+          message.contains('column') && message.contains('published')) {
+        // Fallback for databases that don't yet have the published_at column.
+        print(
+          'publishStory: published_at column missing, proceeding without storing publish timestamp. Error: ${error.message}',
+        );
+
+        final fallbackResult = await _client
+            .from('stories')
+            .update(baseUpdate)
+            .eq('id', storyId)
+            .eq('user_id', userId)
+            .select()
+            .single();
+
+        return fallbackResult;
+      }
+
+      rethrow;
+    }
   }
 
   // ================================

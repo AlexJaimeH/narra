@@ -5,8 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:narra/repositories/story_repository.dart';
 import 'package:narra/screens/public/story_blog_page.dart';
+import 'package:narra/services/email/email_service.dart';
+import 'package:narra/services/email/subscriber_email_service.dart';
 import 'package:narra/services/story_service_new.dart';
 import 'package:narra/services/story_share_link_builder.dart';
+import 'package:narra/services/subscriber_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'story_editor_page.dart';
@@ -26,6 +29,7 @@ class _StoriesListPageState extends State<StoriesListPage>
   String _searchQuery = '';
   List<Story> _allStories = [];
   bool _isLoading = true;
+  final Set<String> _sendingStoryEmails = <String>{};
 
   @override
   void initState() {
@@ -56,6 +60,110 @@ class _StoriesListPageState extends State<StoriesListPage>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error al cargar historias: $e')),
       );
+    }
+  }
+
+  Future<void> _sendStoryToSubscribers(
+      BuildContext context, Story story) async {
+    final storyId = story.id;
+    if (_sendingStoryEmails.contains(storyId)) {
+      return;
+    }
+
+    setState(() {
+      _sendingStoryEmails.add(storyId);
+    });
+
+    final messenger = ScaffoldMessenger.of(context);
+
+    try {
+      final subscribers = await SubscriberService.getConfirmedSubscribers();
+      if (!mounted) return;
+
+      if (subscribers.isEmpty) {
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('Todavía no tienes suscriptores confirmados.'),
+          ),
+        );
+        return;
+      }
+
+      final summary = await SubscriberEmailService.sendStoryPublished(
+        story: story,
+        subscribers: subscribers,
+        authorDisplayName:
+            story.authorDisplayName ?? story.authorName ?? 'Autor/a de Narra',
+        baseUri: Uri.base,
+      );
+
+      if (!mounted) return;
+
+      if (summary.sent == 0 && summary.hasFailures) {
+        final failedNames = summary.failures
+            .map((failure) => failure.subscriber.name)
+            .where((name) => name.isNotEmpty)
+            .toList();
+        final message = failedNames.isNotEmpty
+            ? 'No se pudo enviar la historia a ${failedNames.take(3).join(', ')}.'
+            : 'No se pudo enviar la historia por correo.';
+        messenger.showSnackBar(SnackBar(content: Text(message)));
+        return;
+      }
+
+      final baseMessage = summary.sent == 1
+          ? 'Historia enviada por correo a 1 suscriptor.'
+          : 'Historia enviada por correo a ${summary.sent} suscriptores.';
+
+      if (summary.hasFailures) {
+        final failedNames = summary.failures
+            .map((failure) => failure.subscriber.name)
+            .where((name) => name.isNotEmpty)
+            .toList();
+        if (failedNames.isEmpty) {
+          messenger.showSnackBar(
+            SnackBar(
+              content: Text(
+                '$baseMessage Algunos correos no se pudieron entregar.',
+              ),
+            ),
+          );
+        } else {
+          final truncated = failedNames.take(3).join(', ');
+          final extra = summary.failures.length > 3
+              ? ' y ${summary.failures.length - 3} más'
+              : '';
+          messenger.showSnackBar(
+            SnackBar(
+              content: Text(
+                '$baseMessage No se pudo enviar a $truncated$extra.',
+              ),
+            ),
+          );
+        }
+      } else {
+        messenger.showSnackBar(SnackBar(content: Text(baseMessage)));
+      }
+    } on EmailServiceException catch (error) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+            content: Text('No se pudo enviar el correo: ${error.message}')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+              'Ocurrió un problema al enviar la historia: ${error.toString()}'),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _sendingStoryEmails.remove(storyId);
+        });
+      }
     }
   }
 
@@ -188,6 +296,8 @@ class _StoriesListPageState extends State<StoriesListPage>
                       onRefresh: () => _loadStories(silent: true),
                       onStoriesChanged: () => _loadStories(silent: true),
                       onCreateStory: _openStoryCreator,
+                      sendingStoryEmails: _sendingStoryEmails,
+                      onSendStoryToSubscribers: _sendStoryToSubscribers,
                     ),
                     StoriesTab(
                       stories: _allStories,
@@ -196,6 +306,8 @@ class _StoriesListPageState extends State<StoriesListPage>
                       onRefresh: () => _loadStories(silent: true),
                       onStoriesChanged: () => _loadStories(silent: true),
                       onCreateStory: _openStoryCreator,
+                      sendingStoryEmails: _sendingStoryEmails,
+                      onSendStoryToSubscribers: _sendStoryToSubscribers,
                     ),
                     StoriesTab(
                       stories: _allStories,
@@ -204,6 +316,8 @@ class _StoriesListPageState extends State<StoriesListPage>
                       onRefresh: () => _loadStories(silent: true),
                       onStoriesChanged: () => _loadStories(silent: true),
                       onCreateStory: _openStoryCreator,
+                      sendingStoryEmails: _sendingStoryEmails,
+                      onSendStoryToSubscribers: _sendStoryToSubscribers,
                     ),
                   ],
                 ),
@@ -390,6 +504,8 @@ class StoriesTab extends StatelessWidget {
     required this.onRefresh,
     required this.onStoriesChanged,
     required this.onCreateStory,
+    required this.sendingStoryEmails,
+    this.onSendStoryToSubscribers,
   });
 
   final List<Story> stories;
@@ -398,6 +514,9 @@ class StoriesTab extends StatelessWidget {
   final Future<void> Function() onRefresh;
   final VoidCallback onStoriesChanged;
   final Future<void> Function() onCreateStory;
+  final Set<String> sendingStoryEmails;
+  final Future<void> Function(BuildContext context, Story story)?
+      onSendStoryToSubscribers;
 
   @override
   Widget build(BuildContext context) {
@@ -467,6 +586,10 @@ class StoriesTab extends StatelessWidget {
             story: story,
             onActionComplete: onStoriesChanged,
             accentColor: _cardAccentColor(context, index),
+            onSendToSubscribers: onSendStoryToSubscribers == null
+                ? null
+                : () => onSendStoryToSubscribers!(context, story),
+            isSendingToSubscribers: sendingStoryEmails.contains(story.id),
           );
         },
       ),
@@ -735,11 +858,15 @@ class StoryListCard extends StatelessWidget {
     required this.story,
     required this.onActionComplete,
     required this.accentColor,
+    this.onSendToSubscribers,
+    this.isSendingToSubscribers = false,
   });
 
   final Story story;
   final VoidCallback onActionComplete;
   final Color accentColor;
+  final Future<void> Function()? onSendToSubscribers;
+  final bool isSendingToSubscribers;
 
   @override
   Widget build(BuildContext context) {
@@ -957,6 +1084,10 @@ class StoryListCard extends StatelessWidget {
                                           onViewPage: () =>
                                               _openStoryPublicPage(
                                                   context, story),
+                                          onSendToSubscribers:
+                                              onSendToSubscribers,
+                                          isSendingToSubscribers:
+                                              isSendingToSubscribers,
                                         ),
                                       ],
                                     ],
@@ -1029,10 +1160,14 @@ class _PublicStoryPreview extends StatelessWidget {
   const _PublicStoryPreview({
     required this.story,
     required this.onViewPage,
+    this.onSendToSubscribers,
+    this.isSendingToSubscribers = false,
   });
 
   final Story story;
   final VoidCallback onViewPage;
+  final Future<void> Function()? onSendToSubscribers;
+  final bool isSendingToSubscribers;
 
   @override
   Widget build(BuildContext context) {
@@ -1088,6 +1223,26 @@ class _PublicStoryPreview extends StatelessWidget {
             width: double.infinity,
             child: _PublicStoryLinkButton(onPressed: onViewPage),
           ),
+          if (onSendToSubscribers != null) ...[
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              onPressed: isSendingToSubscribers
+                  ? null
+                  : () {
+                      onSendToSubscribers?.call();
+                    },
+              icon: isSendingToSubscribers
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.mark_email_read_outlined),
+              label: Text(
+                isSendingToSubscribers ? 'Enviando...' : 'Compartir por correo',
+              ),
+            ),
+          ],
           const SizedBox(height: 14),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,

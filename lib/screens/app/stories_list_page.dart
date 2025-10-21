@@ -787,6 +787,7 @@ class StoryListCard extends StatelessWidget {
                 : theme.textTheme.titleLarge)
             ?.copyWith(fontWeight: FontWeight.w700);
         final cardRadius = BorderRadius.circular(18);
+        final coverSize = isCompact ? 84.0 : 108.0;
 
         return Material(
           color: Colors.transparent,
@@ -804,178 +805,165 @@ class StoryListCard extends StatelessWidget {
               decoration: BoxDecoration(
                 borderRadius: cardRadius,
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (coverUrl != null)
-                    ClipRRect(
-                      borderRadius: const BorderRadius.vertical(
-                        top: Radius.circular(18),
-                      ),
-                      child: AspectRatio(
-                        aspectRatio: 16 / 9,
-                        child: Image.network(
-                          coverUrl,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) =>
-                              Container(
-                            color: colorScheme.surfaceContainerHighest,
-                            alignment: Alignment.center,
-                            child: Icon(
-                              Icons.image_not_supported_outlined,
-                              size: 42,
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  Padding(
-                    padding: EdgeInsets.fromLTRB(
-                      horizontalPadding,
-                      verticalPadding,
-                      horizontalPadding,
-                      isCompact ? 14 : 16,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        IntrinsicHeight(
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Container(
-                                width: 5,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(999),
-                                  color: accentColor,
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  horizontalPadding,
+                  verticalPadding,
+                  horizontalPadding,
+                  isCompact ? 14 : 16,
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          IntrinsicHeight(
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Container(
+                                  width: 5,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(999),
+                                    color: accentColor,
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.center,
-                                      children: [
-                                        Expanded(
-                                          child: Text(
-                                            story.title.isEmpty
-                                                ? 'Sin título'
-                                                : story.title,
-                                            style: titleStyle,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 12),
-                                        Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            _StatusPill(
-                                              label:
-                                                  statusForDisplay.displayName,
-                                              color: statusColors.foreground,
-                                              background:
-                                                  statusColors.background,
-                                              icon: switch (statusForDisplay) {
-                                                StoryStatus.published =>
-                                                  Icons.check_circle,
-                                                StoryStatus.archived =>
-                                                  Icons.inventory_2_outlined,
-                                                _ => Icons.edit_note,
-                                              },
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.center,
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              story.title.isEmpty
+                                                  ? 'Sin título'
+                                                  : story.title,
+                                              style: titleStyle,
                                             ),
-                                            const SizedBox(width: 8),
-                                            _StoryActionsButton(
-                                              onSelected: (action) =>
-                                                  _handleStoryAction(
-                                                context,
-                                                story: story,
-                                                onActionComplete:
-                                                    onActionComplete,
-                                                action: action,
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              _StatusPill(
+                                                label: statusForDisplay
+                                                    .displayName,
+                                                color: statusColors.foreground,
+                                                background:
+                                                    statusColors.background,
+                                                icon: switch (
+                                                    statusForDisplay) {
+                                                  StoryStatus.published =>
+                                                    Icons.check_circle,
+                                                  StoryStatus.archived =>
+                                                    Icons.inventory_2_outlined,
+                                                  _ => Icons.edit_note,
+                                                },
                                               ),
-                                              itemBuilder: (menuContext) =>
-                                                  _buildStoryMenuItems(
-                                                story,
+                                              const SizedBox(width: 8),
+                                              _StoryActionsButton(
+                                                onSelected: (action) =>
+                                                    _handleStoryAction(
+                                                  context,
+                                                  story: story,
+                                                  onActionComplete:
+                                                      onActionComplete,
+                                                  action: action,
+                                                ),
+                                                itemBuilder: (menuContext) =>
+                                                    _buildStoryMenuItems(
+                                                  story,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                      if (story.isPublished) ...[
+                                        const SizedBox(height: 8),
+                                        Row(
+                                          children: [
+                                            Icon(
+                                              Icons.public,
+                                              size: 18,
+                                              color: colorScheme.primary,
+                                            ),
+                                            const SizedBox(width: 6),
+                                            Text(
+                                              'Publicado el '
+                                              '${_formatFullDate(publishedDisplayDate)}',
+                                              style: theme.textTheme.bodySmall
+                                                  ?.copyWith(
+                                                color: colorScheme
+                                                    .onSurfaceVariant,
+                                                fontWeight: FontWeight.w600,
                                               ),
                                             ),
                                           ],
                                         ),
                                       ],
-                                    ),
-                                    if (story.isPublished) ...[
-                                      const SizedBox(height: 8),
-                                      Row(
-                                        children: [
-                                          Icon(
-                                            Icons.public,
-                                            size: 18,
-                                            color: colorScheme.primary,
+                                      if (excerpt.isNotEmpty) ...[
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          excerpt,
+                                          style: theme.textTheme.bodyMedium
+                                              ?.copyWith(
+                                            height: 1.45,
                                           ),
-                                          const SizedBox(width: 6),
-                                          Text(
-                                            'Publicado el '
-                                            '${_formatFullDate(publishedDisplayDate)}',
-                                            style: theme.textTheme.bodySmall
-                                                ?.copyWith(
-                                              color:
-                                                  colorScheme.onSurfaceVariant,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ],
-                                    if (excerpt.isNotEmpty) ...[
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        excerpt,
-                                        style: theme.textTheme.bodyMedium
-                                            ?.copyWith(
-                                          height: 1.45,
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
                                         ),
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
+                                      ],
+                                      if (tags.isNotEmpty) ...[
+                                        const SizedBox(height: 12),
+                                        Wrap(
+                                          spacing: 8,
+                                          runSpacing: 8,
+                                          children: tags
+                                              .map(
+                                                  (tag) => _TagChip(label: tag))
+                                              .toList(),
+                                        ),
+                                      ],
+                                      if (metadataChips.isNotEmpty) ...[
+                                        const SizedBox(height: 12),
+                                        Wrap(
+                                          spacing: 8,
+                                          runSpacing: 6,
+                                          children: metadataChips,
+                                        ),
+                                      ],
+                                      if (story.isPublished) ...[
+                                        const SizedBox(height: 20),
+                                        _PublicStoryPreview(
+                                          story: story,
+                                          onViewPage: () =>
+                                              _openStoryPublicPage(
+                                                  context, story),
+                                        ),
+                                      ],
                                     ],
-                                    if (tags.isNotEmpty) ...[
-                                      const SizedBox(height: 12),
-                                      Wrap(
-                                        spacing: 8,
-                                        runSpacing: 8,
-                                        children: tags
-                                            .map((tag) => _TagChip(label: tag))
-                                            .toList(),
-                                      ),
-                                    ],
-                                    if (metadataChips.isNotEmpty) ...[
-                                      const SizedBox(height: 12),
-                                      Wrap(
-                                        spacing: 8,
-                                        runSpacing: 6,
-                                        children: metadataChips,
-                                      ),
-                                    ],
-                                    if (story.isPublished) ...[
-                                      const SizedBox(height: 20),
-                                      _PublicStoryPreview(
-                                        story: story,
-                                        onViewPage: () => _openStoryPublicPage(
-                                            context, story),
-                                      ),
-                                    ],
-                                  ],
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                    if (coverUrl != null) ...[
+                      const SizedBox(width: 18),
+                      _StoryCoverThumbnail(url: coverUrl, size: coverSize),
+                    ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -992,6 +980,43 @@ class StoryListCard extends StatelessWidget {
 
   static String _fallbackExcerpt(String? content) =>
       _fallbackStoryExcerpt(content);
+}
+
+class _StoryCoverThumbnail extends StatelessWidget {
+  const _StoryCoverThumbnail({
+    required this.url,
+    required this.size,
+  });
+
+  final String url;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: colorScheme.surfaceContainerHighest,
+          ),
+          child: Image.network(
+            url,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) => Icon(
+              Icons.image_not_supported_outlined,
+              size: 32,
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _PublicStoryPreview extends StatelessWidget {

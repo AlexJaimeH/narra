@@ -19,11 +19,12 @@ class StoryAccessRecord {
     String? subscriberName,
     String? accessToken,
     String? source,
+    DateTime? grantedAt,
   }) {
     return StoryAccessRecord(
       authorId: authorId,
       subscriberId: subscriberId,
-      grantedAt: grantedAt,
+      grantedAt: grantedAt ?? this.grantedAt,
       subscriberName: subscriberName ?? this.subscriberName,
       accessToken: accessToken ?? this.accessToken,
       source: source ?? this.source,

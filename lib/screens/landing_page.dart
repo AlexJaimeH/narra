@@ -55,12 +55,35 @@ class _LandingPageState extends State<LandingPage> {
   }
 
   void _checkAuthState() {
-    // Si ya está autenticado, redirigir a la app
-    if (SupabaseAuth.isAuthenticated) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        Navigator.pushReplacementNamed(context, '/app');
-      });
+    if (!SupabaseAuth.isAuthenticated) {
+      return;
     }
+
+    final baseUri = Uri.base;
+    final hasStoryPath = baseUri.pathSegments.isNotEmpty &&
+        baseUri.pathSegments.first == 'story';
+
+    final fragment = baseUri.hasFragment ? baseUri.fragment : '';
+    final fragmentPath =
+        fragment.startsWith('/') ? fragment.substring(1) : fragment;
+    final fragmentIndicatesStory = fragmentPath.startsWith('story/');
+
+    final defaultRouteName =
+        WidgetsBinding.instance.platformDispatcher.defaultRouteName;
+    final defaultRouteIndicatesStory = defaultRouteName.isNotEmpty &&
+        defaultRouteName != '/' &&
+        (defaultRouteName.startsWith('story/') ||
+            defaultRouteName.startsWith('/story/'));
+
+    if (hasStoryPath || fragmentIndicatesStory || defaultRouteIndicatesStory) {
+      // Mantener al autor en la vista pública cuando abre su propio enlace.
+      return;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      Navigator.pushReplacementNamed(context, '/app');
+    });
   }
 
   void _navigateToAuth(bool isLogin) {

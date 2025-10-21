@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:narra/api/narra_api.dart';
+import 'package:narra/openai/openai_service.dart';
 import 'package:narra/repositories/story_repository.dart';
 
 /// Enhanced story service using the new API client

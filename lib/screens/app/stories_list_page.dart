@@ -7,6 +7,7 @@ import 'package:narra/repositories/story_repository.dart';
 import 'package:narra/screens/public/story_blog_page.dart';
 import 'package:narra/services/story_service_new.dart';
 import 'package:narra/services/story_share_link_builder.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'story_editor_page.dart';
 
@@ -403,7 +404,10 @@ class StoriesTab extends StatelessWidget {
     final filteredStories = stories.where((story) {
       final matchesFilter = switch (filterStatus) {
         null => true,
-        _ => story.status == filterStatus,
+        StoryStatus.published => story.isPublished,
+        StoryStatus.draft =>
+          !story.isPublished && story.status == StoryStatus.draft,
+        StoryStatus.archived => story.status == StoryStatus.archived,
       };
       final matchesSearch = _matchesSearch(story, searchQuery);
       return matchesFilter && matchesSearch;
@@ -750,7 +754,12 @@ class StoryListCard extends StatelessWidget {
     final excerpt = story.excerpt?.trim().isNotEmpty == true
         ? story.excerpt!.trim()
         : _fallbackExcerpt(story.content);
-    final statusColors = _statusColors(story.status, colorScheme);
+    final statusForDisplay =
+        story.isPublished && story.status != StoryStatus.archived
+            ? StoryStatus.published
+            : story.status;
+    final statusColors = _statusColors(statusForDisplay, colorScheme);
+    final publishedDisplayDate = story.publishedAt ?? story.updatedAt;
     final metadataChips = <Widget>[
       _MetadataBadge(
         icon: Icons.calendar_today,
@@ -778,6 +787,7 @@ class StoryListCard extends StatelessWidget {
                 : theme.textTheme.titleLarge)
             ?.copyWith(fontWeight: FontWeight.w700);
         final cardRadius = BorderRadius.circular(18);
+        final coverSize = isCompact ? 88.0 : 104.0;
 
         return Material(
           color: Colors.transparent,
@@ -795,158 +805,165 @@ class StoryListCard extends StatelessWidget {
               decoration: BoxDecoration(
                 borderRadius: cardRadius,
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (coverUrl != null)
-                    ClipRRect(
-                      borderRadius: const BorderRadius.vertical(
-                        top: Radius.circular(18),
-                      ),
-                      child: AspectRatio(
-                        aspectRatio: 16 / 9,
-                        child: Image.network(
-                          coverUrl,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) =>
-                              Container(
-                            color: colorScheme.surfaceContainerHighest,
-                            alignment: Alignment.center,
-                            child: Icon(
-                              Icons.image_not_supported_outlined,
-                              size: 42,
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  Padding(
-                    padding: EdgeInsets.fromLTRB(
-                      horizontalPadding,
-                      verticalPadding,
-                      horizontalPadding,
-                      isCompact ? 14 : 16,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        IntrinsicHeight(
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Container(
-                                width: 5,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(999),
-                                  color: accentColor,
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  horizontalPadding,
+                  verticalPadding,
+                  horizontalPadding,
+                  isCompact ? 14 : 16,
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (coverUrl != null) ...[
+                      _StoryCoverThumbnail(url: coverUrl, size: coverSize),
+                      const SizedBox(width: 18),
+                    ],
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          IntrinsicHeight(
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Container(
+                                  width: 5,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(999),
+                                    color: accentColor,
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.center,
-                                      children: [
-                                        Expanded(
-                                          child: Text(
-                                            story.title.isEmpty
-                                                ? 'Sin título'
-                                                : story.title,
-                                            style: titleStyle,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 12),
-                                        Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            _StatusPill(
-                                              label: story.status.displayName,
-                                              color: statusColors.foreground,
-                                              background:
-                                                  statusColors.background,
-                                              icon: story.status ==
-                                                      StoryStatus.published
-                                                  ? Icons.check_circle
-                                                  : Icons.edit_note,
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.center,
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              story.title.isEmpty
+                                                  ? 'Sin título'
+                                                  : story.title,
+                                              style: titleStyle,
                                             ),
-                                            const SizedBox(width: 8),
-                                            _StoryActionsButton(
-                                              onSelected: (action) =>
-                                                  _handleStoryAction(
-                                                context,
-                                                story: story,
-                                                onActionComplete:
-                                                    onActionComplete,
-                                                action: action,
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              _StatusPill(
+                                                label: statusForDisplay
+                                                    .displayName,
+                                                color: statusColors.foreground,
+                                                background:
+                                                    statusColors.background,
+                                                icon: switch (
+                                                    statusForDisplay) {
+                                                  StoryStatus.published =>
+                                                    Icons.check_circle,
+                                                  StoryStatus.archived =>
+                                                    Icons.inventory_2_outlined,
+                                                  _ => Icons.edit_note,
+                                                },
                                               ),
-                                              itemBuilder: (menuContext) =>
-                                                  _buildStoryMenuItems(
-                                                story,
+                                              const SizedBox(width: 8),
+                                              _StoryActionsButton(
+                                                onSelected: (action) =>
+                                                    _handleStoryAction(
+                                                  context,
+                                                  story: story,
+                                                  onActionComplete:
+                                                      onActionComplete,
+                                                  action: action,
+                                                ),
+                                                itemBuilder: (menuContext) =>
+                                                    _buildStoryMenuItems(
+                                                  story,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                      if (story.isPublished) ...[
+                                        const SizedBox(height: 8),
+                                        Row(
+                                          children: [
+                                            Icon(
+                                              Icons.public,
+                                              size: 18,
+                                              color: colorScheme.primary,
+                                            ),
+                                            const SizedBox(width: 6),
+                                            Text(
+                                              'Publicado el '
+                                              '${_formatFullDate(publishedDisplayDate)}',
+                                              style: theme.textTheme.bodySmall
+                                                  ?.copyWith(
+                                                color: colorScheme
+                                                    .onSurfaceVariant,
+                                                fontWeight: FontWeight.w600,
                                               ),
                                             ),
                                           ],
                                         ),
                                       ],
-                                    ),
-                                    if (excerpt.isNotEmpty) ...[
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        excerpt,
-                                        style: theme.textTheme.bodyMedium
-                                            ?.copyWith(
-                                          height: 1.45,
+                                      if (excerpt.isNotEmpty) ...[
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          excerpt,
+                                          style: theme.textTheme.bodyMedium
+                                              ?.copyWith(
+                                            height: 1.45,
+                                          ),
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
                                         ),
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
+                                      ],
+                                      if (tags.isNotEmpty) ...[
+                                        const SizedBox(height: 12),
+                                        Wrap(
+                                          spacing: 8,
+                                          runSpacing: 8,
+                                          children: tags
+                                              .map(
+                                                  (tag) => _TagChip(label: tag))
+                                              .toList(),
+                                        ),
+                                      ],
+                                      if (metadataChips.isNotEmpty) ...[
+                                        const SizedBox(height: 12),
+                                        Wrap(
+                                          spacing: 8,
+                                          runSpacing: 6,
+                                          children: metadataChips,
+                                        ),
+                                      ],
+                                      if (story.isPublished) ...[
+                                        const SizedBox(height: 20),
+                                        _PublicStoryPreview(
+                                          story: story,
+                                          onViewPage: () =>
+                                              _openStoryPublicPage(
+                                                  context, story),
+                                        ),
+                                      ],
                                     ],
-                                    if (tags.isNotEmpty) ...[
-                                      const SizedBox(height: 12),
-                                      Wrap(
-                                        spacing: 8,
-                                        runSpacing: 8,
-                                        children: tags
-                                            .map((tag) => _TagChip(label: tag))
-                                            .toList(),
-                                      ),
-                                    ],
-                                    if (metadataChips.isNotEmpty) ...[
-                                      const SizedBox(height: 12),
-                                      Wrap(
-                                        spacing: 8,
-                                        runSpacing: 6,
-                                        children: metadataChips,
-                                      ),
-                                    ],
-                                    if (story.status ==
-                                        StoryStatus.published) ...[
-                                      const SizedBox(height: 20),
-                                      _PublicStoryPreview(
-                                        story: story,
-                                        onViewPage: () {
-                                          Navigator.of(context).pushNamed(
-                                            '/story/${story.id}',
-                                            arguments: StoryBlogPageArguments(
-                                              story: story,
-                                            ),
-                                          );
-                                        },
-                                      ),
-                                    ],
-                                  ],
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -965,6 +982,43 @@ class StoryListCard extends StatelessWidget {
       _fallbackStoryExcerpt(content);
 }
 
+class _StoryCoverThumbnail extends StatelessWidget {
+  const _StoryCoverThumbnail({
+    required this.url,
+    required this.size,
+  });
+
+  final String url;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: colorScheme.surfaceContainerHighest,
+          ),
+          child: Image.network(
+            url,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) => Icon(
+              Icons.image_not_supported_outlined,
+              size: 32,
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _PublicStoryPreview extends StatelessWidget {
   const _PublicStoryPreview({
     required this.story,
@@ -979,6 +1033,7 @@ class _PublicStoryPreview extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final link = StoryShareLinkBuilder.buildStoryLink(story: story).toString();
+    final publishedAt = story.publishedAt ?? story.updatedAt;
 
     return Container(
       width: double.infinity,
@@ -1006,39 +1061,216 @@ class _PublicStoryPreview extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          SelectableText(
-            link,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: colorScheme.onSurfaceVariant,
+          if (publishedAt != null) ...[
+            Text(
+              'Publicado el ${_formatFullDate(publishedAt)}',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+              ),
             ),
+            const SizedBox(height: 4),
+            Text(
+              'Comparte tu historia con quien tú decidas a través de este enlace.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant.withValues(alpha: 0.8),
+              ),
+            ),
+          ],
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: _PublicStoryLinkButton(onPressed: onViewPage),
           ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 12,
-            runSpacing: 8,
+          const SizedBox(height: 14),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              FilledButton.tonalIcon(
-                onPressed: onViewPage,
-                icon: const Icon(Icons.visibility_outlined),
-                label: const Text('Ver página'),
+              Expanded(
+                child: _PublicStoryLinkField(link: link),
               ),
-              TextButton.icon(
-                onPressed: () async {
-                  final messenger = ScaffoldMessenger.of(context);
-                  await Clipboard.setData(ClipboardData(text: link));
-                  messenger.showSnackBar(
-                    const SnackBar(content: Text('Enlace copiado al portapapeles')),
-                  );
-                },
-                icon: const Icon(Icons.copy),
-                label: const Text('Copiar enlace'),
-              ),
+              const SizedBox(width: 12),
+              _CopyLinkButton(link: link),
             ],
           ),
         ],
       ),
     );
   }
+}
+
+class _PublicStoryLinkButton extends StatelessWidget {
+  const _PublicStoryLinkButton({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final accent = Color.lerp(colorScheme.primary, colorScheme.tertiary, 0.35)!;
+
+    return Material(
+      color: Colors.transparent,
+      child: Ink(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [colorScheme.primary, accent],
+          ),
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: colorScheme.primary.withValues(alpha: 0.22),
+              blurRadius: 18,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: onPressed,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+            child: Row(
+              mainAxisSize: MainAxisSize.max,
+              children: [
+                Icon(
+                  Icons.open_in_new_rounded,
+                  color: colorScheme.onPrimary,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Visitar página publicada',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      color: colorScheme.onPrimary,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.1,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Icon(
+                  Icons.arrow_forward_rounded,
+                  color: colorScheme.onPrimary,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PublicStoryLinkField extends StatelessWidget {
+  const _PublicStoryLinkField({required this.link});
+
+  final String link;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHigh.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.4),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: SelectableText(
+          link,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: colorScheme.onSurfaceVariant,
+            fontFeatures: const [ui.FontFeature.tabularFigures()],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CopyLinkButton extends StatelessWidget {
+  const _CopyLinkButton({required this.link});
+
+  final String link;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return SizedBox(
+      height: 48,
+      child: OutlinedButton.icon(
+        onPressed: () async {
+          final messenger = ScaffoldMessenger.of(context);
+          await Clipboard.setData(ClipboardData(text: link));
+          messenger.showSnackBar(
+            const SnackBar(content: Text('Enlace copiado al portapapeles')),
+          );
+        },
+        icon: const Icon(Icons.copy_rounded),
+        label: const Text('Copiar enlace'),
+        style: OutlinedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          side: BorderSide(
+            color: colorScheme.primary.withValues(alpha: 0.45),
+            width: 1.4,
+          ),
+          foregroundColor: colorScheme.primary,
+          textStyle: theme.textTheme.labelLarge?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+Future<void> _openStoryPublicPage(BuildContext context, Story story) async {
+  final link = StoryShareLinkBuilder.buildStoryLink(story: story);
+  final messenger = ScaffoldMessenger.of(context);
+  final navigator = Navigator.of(context);
+  final routeName = '/story/${story.id}';
+  final routeArguments = StoryBlogPageArguments(
+    story: story,
+  );
+
+  try {
+    final launched = await launchUrl(
+      link,
+      mode: LaunchMode.platformDefault,
+      webOnlyWindowName: '_blank',
+    );
+
+    if (launched) {
+      return;
+    }
+  } catch (_) {
+    // Fall back to the in-app viewer below when launching the browser fails.
+  }
+
+  messenger.showSnackBar(
+    const SnackBar(
+      content: Text(
+        'No se pudo abrir la página pública en una pestaña nueva. Mostrando la vista dentro de la app.',
+      ),
+    ),
+  );
+
+  navigator.pushNamed(
+    routeName,
+    arguments: routeArguments,
+  );
 }
 
 Future<void> _handleStoryAction(
@@ -1134,7 +1366,7 @@ List<PopupMenuEntry<String>> _buildStoryMenuItems(Story story) {
         label: 'Editar',
       ),
     ),
-    if (story.status == StoryStatus.draft)
+    if (story.isDraft)
       const PopupMenuItem(
         value: 'publish',
         child: _PopupMenuRow(
@@ -1142,7 +1374,7 @@ List<PopupMenuEntry<String>> _buildStoryMenuItems(Story story) {
           label: 'Publicar',
         ),
       ),
-    if (story.status == StoryStatus.published)
+    if (story.isPublished)
       const PopupMenuItem(
         value: 'unpublish',
         child: _PopupMenuRow(
@@ -1208,6 +1440,26 @@ String _formatStoryDate(DateTime date) {
   ];
 
   return '${date.day} ${months[date.month - 1]}';
+}
+
+String _formatFullDate(DateTime date) {
+  const months = [
+    'enero',
+    'febrero',
+    'marzo',
+    'abril',
+    'mayo',
+    'junio',
+    'julio',
+    'agosto',
+    'septiembre',
+    'octubre',
+    'noviembre',
+    'diciembre',
+  ];
+
+  final month = months[date.month - 1];
+  return '${date.day} de $month de ${date.year}';
 }
 
 String _fallbackStoryExcerpt(String? content) {

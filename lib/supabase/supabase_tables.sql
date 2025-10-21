@@ -127,6 +127,64 @@ CREATE TABLE IF NOT EXISTS subscribers (
   UNIQUE(user_id, email)
 );
 
+-- Tabla de comentarios hechos por suscriptores en historias publicadas
+CREATE TABLE IF NOT EXISTS story_comments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  story_id UUID NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
+  subscriber_id UUID REFERENCES subscribers(id) ON DELETE SET NULL,
+  author_name TEXT NOT NULL DEFAULT '',
+  author_email TEXT,
+  content TEXT NOT NULL,
+  source TEXT,
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  status TEXT NOT NULL DEFAULT 'visible' CHECK (status IN ('visible', 'hidden', 'flagged')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_story_comments_story_id
+  ON story_comments(story_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_story_comments_subscriber_id
+  ON story_comments(subscriber_id, created_at DESC);
+
+-- Tabla de reacciones (corazones) de suscriptores sobre historias publicadas
+CREATE TABLE IF NOT EXISTS story_reactions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  story_id UUID NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
+  subscriber_id UUID REFERENCES subscribers(id) ON DELETE SET NULL,
+  reaction_type TEXT NOT NULL DEFAULT 'heart' CHECK (reaction_type IN ('heart')),
+  source TEXT,
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_story_reactions_unique
+  ON story_reactions(story_id, subscriber_id, reaction_type)
+  WHERE subscriber_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_story_reactions_story_id
+  ON story_reactions(story_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_story_reactions_subscriber_id
+  ON story_reactions(subscriber_id, created_at DESC);
+
+-- Vista de resumen de interacción por suscriptor
+CREATE OR REPLACE VIEW subscriber_engagement_summary AS
+SELECT
+  s.id AS subscriber_id,
+  s.user_id,
+  COALESCE(COUNT(DISTINCT sr.id), 0) AS total_reactions,
+  COALESCE(COUNT(DISTINCT sc.id), 0) AS total_comments,
+  MAX(sr.created_at) AS last_reaction_at,
+  MAX(sc.created_at) AS last_comment_at
+FROM subscribers s
+LEFT JOIN story_reactions sr ON sr.subscriber_id = s.id
+LEFT JOIN story_comments sc ON sc.subscriber_id = s.id
+GROUP BY s.id, s.user_id;
+
 -- Tabla de configuraciones de usuario
 CREATE TABLE IF NOT EXISTS user_settings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -191,5 +249,9 @@ BEGIN
     
     IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'update_user_settings_updated_at') THEN
         CREATE TRIGGER update_user_settings_updated_at BEFORE UPDATE ON user_settings FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'update_story_comments_updated_at') THEN
+        CREATE TRIGGER update_story_comments_updated_at BEFORE UPDATE ON story_comments FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
     END IF;
 END $$;

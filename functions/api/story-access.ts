@@ -1,7 +1,11 @@
-interface Env {
-  SUPABASE_URL: string;
-  SUPABASE_SERVICE_ROLE_KEY: string;
-}
+import {
+  resolveSupabaseConfig,
+  supabaseHeaders,
+  type SupabaseCredentials,
+  type SupabaseEnv,
+} from "./_supabase";
+
+interface Env extends SupabaseEnv {}
 
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -16,9 +20,13 @@ export const onRequestOptions: PagesFunction<Env> = async () => {
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   try {
-    if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
+    const { credentials, diagnostics } = resolveSupabaseConfig(env);
+    if (!credentials) {
+      console.error("[story-access] Missing Supabase credentials", diagnostics);
       return json({ error: 'Supabase credentials not configured' }, 500);
     }
+    const supabase = credentials;
+    const { url: supabaseUrl, serviceKey } = supabase;
 
     const body = await request.json().catch(() => null);
     if (!body || typeof body !== 'object') {
@@ -44,7 +52,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       return json({ error: 'authorId, subscriberId and token are required' }, 400);
     }
 
-    const subscriber = await fetchSubscriber(env, authorId, subscriberId);
+    const subscriber = await fetchSubscriber(supabase, authorId, subscriberId);
     if (!subscriber) {
       return json({ error: 'Subscriber not found' }, 404);
     }
@@ -69,16 +77,22 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       ?? undefined;
     const userAgent = request.headers.get('user-agent') ?? undefined;
 
-    await updateSubscriber(env, authorId, subscriberId, {
+    const updates: Record<string, unknown> = {
       last_access_at: nowIso,
       last_access_ip: ip ?? subscriber.last_access_ip ?? null,
       last_access_user_agent: userAgent
         ? userAgent.substring(0, 512)
         : subscriber.last_access_user_agent ?? null,
       last_access_source: source ?? subscriber.last_access_source ?? 'link',
-    });
+    };
 
-    await insertAccessEvent(env, {
+    if (status !== 'confirmed') {
+      updates.status = 'confirmed';
+    }
+
+    await updateSubscriber(supabase, authorId, subscriberId, updates);
+
+    await insertAccessEvent(supabase, {
       user_id: authorId,
       subscriber_id: subscriberId,
       story_id: storyId ?? null,
@@ -91,6 +105,15 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       },
     });
 
+    console.log('[story-access] Access granted', {
+      authorId,
+      subscriberId,
+      storyId,
+      eventType,
+      source: source ?? 'link',
+      status: (updates.status as string | undefined) ?? status,
+    });
+
     return json({
       grantedAt: nowIso,
       token: storedToken,
@@ -99,9 +122,11 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         id: subscriber.id,
         name: subscriber.name,
         email: subscriber.email,
+        status: 'confirmed',
       },
     });
   } catch (error) {
+    console.error('[story-access] Access validation failed', error);
     return json({ error: 'Access validation failed', detail: String(error) }, 500);
   }
 };
@@ -112,8 +137,12 @@ function normalizeId(value: unknown): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
-async function fetchSubscriber(env: Env, authorId: string, subscriberId: string) {
-  const url = new URL('/rest/v1/subscribers', env.SUPABASE_URL);
+async function fetchSubscriber(
+  config: SupabaseCredentials,
+  authorId: string,
+  subscriberId: string,
+) {
+  const url = new URL('/rest/v1/subscribers', config.url);
   url.searchParams.set('id', `eq.${subscriberId}`);
   url.searchParams.set('user_id', `eq.${authorId}`);
   url.searchParams.set('select',
@@ -124,7 +153,7 @@ async function fetchSubscriber(env: Env, authorId: string, subscriberId: string)
   url.searchParams.set('limit', '1');
 
   const response = await fetch(url.toString(), {
-    headers: supabaseHeaders(env),
+    headers: supabaseHeaders(config.serviceKey),
   });
 
   if (!response.ok) {
@@ -136,19 +165,19 @@ async function fetchSubscriber(env: Env, authorId: string, subscriberId: string)
 }
 
 async function updateSubscriber(
-  env: Env,
+  config: SupabaseCredentials,
   authorId: string,
   subscriberId: string,
   updates: Record<string, unknown>,
 ) {
-  const url = new URL('/rest/v1/subscribers', env.SUPABASE_URL);
+  const url = new URL('/rest/v1/subscribers', config.url);
   url.searchParams.set('id', `eq.${subscriberId}`);
   url.searchParams.set('user_id', `eq.${authorId}`);
 
   const response = await fetch(url.toString(), {
     method: 'PATCH',
     headers: {
-      ...supabaseHeaders(env),
+      ...supabaseHeaders(config.serviceKey),
       Prefer: 'return=minimal',
     },
     body: JSON.stringify(updates),
@@ -159,12 +188,15 @@ async function updateSubscriber(
   }
 }
 
-async function insertAccessEvent(env: Env, payload: Record<string, unknown>) {
-  const url = new URL('/rest/v1/subscriber_access_events', env.SUPABASE_URL);
+async function insertAccessEvent(
+  config: SupabaseCredentials,
+  payload: Record<string, unknown>,
+) {
+  const url = new URL('/rest/v1/subscriber_access_events', config.url);
   const response = await fetch(url.toString(), {
     method: 'POST',
     headers: {
-      ...supabaseHeaders(env),
+      ...supabaseHeaders(config.serviceKey),
       Prefer: 'return=minimal',
     },
     body: JSON.stringify(payload),
@@ -175,13 +207,6 @@ async function insertAccessEvent(env: Env, payload: Record<string, unknown>) {
   }
 }
 
-function supabaseHeaders(env: Env): Record<string, string> {
-  return {
-    'Content-Type': 'application/json',
-    apikey: env.SUPABASE_SERVICE_ROLE_KEY,
-    Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
-  };
-}
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {

@@ -1,7 +1,11 @@
-interface Env {
-  SUPABASE_URL: string;
-  SUPABASE_SERVICE_ROLE_KEY: string;
-}
+import {
+  resolveSupabaseConfig,
+  supabaseHeaders,
+  type SupabaseCredentials,
+  type SupabaseEnv,
+} from "./_supabase";
+
+interface Env extends SupabaseEnv {}
 
 const CORS_HEADERS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -16,9 +20,12 @@ export const onRequestOptions: PagesFunction<Env> = async () => {
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   try {
-    if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
+    const { credentials, diagnostics } = resolveSupabaseConfig(env);
+    if (!credentials) {
+      console.error("[story-feedback] Missing Supabase credentials", diagnostics);
       return json({ error: "Supabase credentials not configured" }, 500);
     }
+    const supabase = credentials;
 
     const body = await request.json().catch(() => null);
     if (!body || typeof body !== "object") {
@@ -53,7 +60,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       );
     }
 
-    const subscriber = await fetchSubscriber(env, authorId, subscriberId);
+    const subscriber = await fetchSubscriber(supabase, authorId, subscriberId);
     if (!subscriber) {
       return json({ error: "Subscriber not found" }, 404);
     }
@@ -83,8 +90,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     switch (action) {
       case "fetch": {
         const [comments, reaction] = await Promise.all([
-          fetchComments(env, authorId, storyId),
-          fetchReaction(env, authorId, storyId, subscriberId),
+          fetchComments(supabase, authorId, storyId),
+          fetchReaction(supabase, authorId, storyId, subscriberId),
         ]);
 
         return json({
@@ -110,7 +117,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
             ? (subscriber.email as string).trim()
             : undefined;
 
-        const comment = await insertComment(env, {
+        const comment = await insertComment(supabase, {
           user_id: authorId,
           story_id: storyId,
           subscriber_id: subscriberId,
@@ -138,7 +145,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         }
 
         if (active) {
-          await upsertReaction(env, {
+          await upsertReaction(supabase, {
             user_id: authorId,
             story_id: storyId,
             subscriber_id: subscriberId,
@@ -152,7 +159,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
           });
         } else {
           await deleteReaction(
-            env,
+            supabase,
             authorId,
             storyId,
             subscriberId,
@@ -171,6 +178,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         return json({ error: `Unsupported action: ${action}` }, 400);
     }
   } catch (error) {
+    console.error("[story-feedback] Feedback processing failed", error);
     return json(
       { error: "Feedback processing failed", detail: String(error) },
       500,
@@ -234,18 +242,18 @@ function hashedToken(token: string): string {
 }
 
 async function fetchSubscriber(
-  env: Env,
+  config: SupabaseCredentials,
   authorId: string,
   subscriberId: string,
 ) {
-  const url = new URL("/rest/v1/subscribers", env.SUPABASE_URL);
+  const url = new URL("/rest/v1/subscribers", config.url);
   url.searchParams.set("id", `eq.${subscriberId}`);
   url.searchParams.set("user_id", `eq.${authorId}`);
   url.searchParams.set("select", "id,name,email,status,access_token");
   url.searchParams.set("limit", "1");
 
   const response = await fetch(url.toString(), {
-    headers: supabaseHeaders(env),
+    headers: supabaseHeaders(config.serviceKey),
   });
 
   if (!response.ok) {
@@ -256,8 +264,12 @@ async function fetchSubscriber(
   return Array.isArray(data) && data.length > 0 ? data[0] : null;
 }
 
-async function fetchComments(env: Env, authorId: string, storyId: string) {
-  const url = new URL("/rest/v1/story_comments", env.SUPABASE_URL);
+async function fetchComments(
+  config: SupabaseCredentials,
+  authorId: string,
+  storyId: string,
+) {
+  const url = new URL("/rest/v1/story_comments", config.url);
   url.searchParams.set("user_id", `eq.${authorId}`);
   url.searchParams.set("story_id", `eq.${storyId}`);
   url.searchParams.set(
@@ -268,7 +280,7 @@ async function fetchComments(env: Env, authorId: string, storyId: string) {
   url.searchParams.set("limit", "50");
 
   const response = await fetch(url.toString(), {
-    headers: supabaseHeaders(env),
+    headers: supabaseHeaders(config.serviceKey),
   });
 
   if (!response.ok) {
@@ -279,12 +291,12 @@ async function fetchComments(env: Env, authorId: string, storyId: string) {
 }
 
 async function fetchReaction(
-  env: Env,
+  config: SupabaseCredentials,
   authorId: string,
   storyId: string,
   subscriberId: string,
 ) {
-  const url = new URL("/rest/v1/story_reactions", env.SUPABASE_URL);
+  const url = new URL("/rest/v1/story_reactions", config.url);
   url.searchParams.set("user_id", `eq.${authorId}`);
   url.searchParams.set("story_id", `eq.${storyId}`);
   url.searchParams.set("subscriber_id", `eq.${subscriberId}`);
@@ -293,7 +305,7 @@ async function fetchReaction(
   url.searchParams.set("limit", "1");
 
   const response = await fetch(url.toString(), {
-    headers: supabaseHeaders(env),
+    headers: supabaseHeaders(config.serviceKey),
   });
 
   if (!response.ok) {
@@ -307,12 +319,15 @@ async function fetchReaction(
   return { reactionType: "heart", active: false };
 }
 
-async function insertComment(env: Env, payload: Record<string, unknown>) {
-  const url = new URL("/rest/v1/story_comments", env.SUPABASE_URL);
+async function insertComment(
+  config: SupabaseCredentials,
+  payload: Record<string, unknown>,
+) {
+  const url = new URL("/rest/v1/story_comments", config.url);
   const response = await fetch(url.toString(), {
     method: "POST",
     headers: {
-      ...supabaseHeaders(env),
+      ...supabaseHeaders(config.serviceKey),
       Prefer: "return=representation",
     },
     body: JSON.stringify(payload),
@@ -329,14 +344,17 @@ async function insertComment(env: Env, payload: Record<string, unknown>) {
   return data;
 }
 
-async function upsertReaction(env: Env, payload: Record<string, unknown>) {
-  const url = new URL("/rest/v1/story_reactions", env.SUPABASE_URL);
+async function upsertReaction(
+  config: SupabaseCredentials,
+  payload: Record<string, unknown>,
+) {
+  const url = new URL("/rest/v1/story_reactions", config.url);
   url.searchParams.set("on_conflict", "story_id,subscriber_id,reaction_type");
 
   const response = await fetch(url.toString(), {
     method: "POST",
     headers: {
-      ...supabaseHeaders(env),
+      ...supabaseHeaders(config.serviceKey),
       Prefer: "return=representation,resolution=merge-duplicates",
     },
     body: JSON.stringify(payload),
@@ -348,13 +366,13 @@ async function upsertReaction(env: Env, payload: Record<string, unknown>) {
 }
 
 async function deleteReaction(
-  env: Env,
+  config: SupabaseCredentials,
   authorId: string,
   storyId: string,
   subscriberId: string,
   reactionType: string,
 ) {
-  const url = new URL("/rest/v1/story_reactions", env.SUPABASE_URL);
+  const url = new URL("/rest/v1/story_reactions", config.url);
   url.searchParams.set("user_id", `eq.${authorId}`);
   url.searchParams.set("story_id", `eq.${storyId}`);
   url.searchParams.set("subscriber_id", `eq.${subscriberId}`);
@@ -363,7 +381,7 @@ async function deleteReaction(
   const response = await fetch(url.toString(), {
     method: "DELETE",
     headers: {
-      ...supabaseHeaders(env),
+      ...supabaseHeaders(config.serviceKey),
       Prefer: "return=minimal",
     },
   });
@@ -387,14 +405,6 @@ function formatCommentResponse(comment: any) {
     content: comment.content,
     source: comment.source ?? null,
     createdAt: comment.created_at,
-  };
-}
-
-function supabaseHeaders(env: Env): Record<string, string> {
-  return {
-    "Content-Type": "application/json",
-    apikey: env.SUPABASE_SERVICE_ROLE_KEY,
-    Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
   };
 }
 

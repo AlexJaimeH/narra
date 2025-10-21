@@ -214,6 +214,14 @@ class _SubscriberWelcomePageState extends State<SubscriberWelcomePage> {
                             height: 1.5,
                           ),
                         ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'También te enviaremos por correo cada nueva historia que publique $authorName para que no te pierdas ninguna.',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            height: 1.5,
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                        ),
                         const SizedBox(height: 16),
                         Container(
                           padding: const EdgeInsets.all(20),

@@ -1359,6 +1359,11 @@ class _SubscriberCard extends StatelessWidget {
                     icon: const Icon(Icons.visibility_outlined),
                     label: const Text('Ver detalles'),
                   ),
+                  FilledButton.tonalIcon(
+                    onPressed: onView,
+                    icon: const Icon(Icons.visibility_outlined),
+                    label: const Text('Ver detalles'),
+                  ),
                   if (lastInteraction != null)
                     _MetricChip(
                       icon: Icons.schedule,

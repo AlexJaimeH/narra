@@ -1359,6 +1359,20 @@ class _SubscriberCard extends StatelessWidget {
                     icon: const Icon(Icons.visibility_outlined),
                     label: const Text('Ver detalles'),
                   ),
+                  if (lastInteraction != null)
+                    _MetricChip(
+                      icon: Icons.schedule,
+                      label: 'Última actividad',
+                      valueLabel: _formatRelativeDate(lastInteraction),
+                      color: theme.colorScheme.outline,
+                    )
+                  else
+                    _MetricChip(
+                      icon: Icons.schedule,
+                      label: 'Sin actividad aún',
+                      valueLabel: '—',
+                      color: theme.colorScheme.outline,
+                    ),
                 ],
               ),
             ],
@@ -1728,6 +1742,16 @@ class _SubscriberDetailSheetState extends State<_SubscriberDetailSheet> {
                                         ? 'Enviando enlace…'
                                         : 'Reenviar enlace mágico',
                                   ),
+                                  color: theme.colorScheme.outline,
+                                ),
+                                _MetricChip(
+                                  icon: Icons.schedule,
+                                  label: 'Último acceso',
+                                  valueLabel: subscriber.lastAccessAt != null
+                                      ? _formatRelativeDate(
+                                          subscriber.lastAccessAt!)
+                                      : 'Sin registro',
+                                  color: theme.colorScheme.outline,
                                 ),
                               ],
                             ),
@@ -1922,9 +1946,9 @@ class _SubscriberFeedbackEntry extends StatelessWidget {
                 children: content,
               ),
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }

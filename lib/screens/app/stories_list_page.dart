@@ -787,7 +787,7 @@ class StoryListCard extends StatelessWidget {
                 : theme.textTheme.titleLarge)
             ?.copyWith(fontWeight: FontWeight.w700);
         final cardRadius = BorderRadius.circular(18);
-        final coverSize = isCompact ? 84.0 : 108.0;
+        final coverSize = isCompact ? 88.0 : 104.0;
 
         return Material(
           color: Colors.transparent,
@@ -815,6 +815,10 @@ class StoryListCard extends StatelessWidget {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (coverUrl != null) ...[
+                      _StoryCoverThumbnail(url: coverUrl, size: coverSize),
+                      const SizedBox(width: 18),
+                    ],
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -958,10 +962,6 @@ class StoryListCard extends StatelessWidget {
                         ],
                       ),
                     ),
-                    if (coverUrl != null) ...[
-                      const SizedBox(width: 18),
-                      _StoryCoverThumbnail(url: coverUrl, size: coverSize),
-                    ],
                   ],
                 ),
               ),

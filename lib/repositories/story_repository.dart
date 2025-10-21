@@ -246,17 +246,78 @@ class Story {
           final trimmed = value.trim();
           if (trimmed.isEmpty) return null;
 
-          DateTime? parsed = DateTime.tryParse(trimmed);
-          if (parsed != null) return parsed;
+          String normalizeTimestamp(String input) {
+            var normalized = input.trim();
 
-          final normalized =
-              trimmed.contains('T') ? trimmed : trimmed.replaceFirst(' ', 'T');
-          parsed = DateTime.tryParse(normalized);
-          if (parsed != null) return parsed;
+            if (normalized.isEmpty) {
+              return normalized;
+            }
 
-          if (!normalized.endsWith('Z')) {
-            parsed = DateTime.tryParse('${normalized}Z');
-            if (parsed != null) return parsed;
+            if (!normalized.contains('T') &&
+                RegExp(r'^\d{4}-\d{2}-\d{2} ').hasMatch(normalized)) {
+              normalized = normalized.replaceFirst(' ', 'T');
+            }
+
+            if (normalized.endsWith(' UTC')) {
+              normalized =
+                  '${normalized.substring(0, normalized.length - 4)}Z';
+            }
+
+            final offsetWithoutColon =
+                RegExp(r'([+\-]\d{2})(\d{2})(?!:)').firstMatch(normalized);
+            if (offsetWithoutColon != null) {
+              normalized = normalized.replaceRange(
+                offsetWithoutColon.start,
+                offsetWithoutColon.end,
+                '${offsetWithoutColon.group(1)}:${offsetWithoutColon.group(2)}',
+              );
+            }
+
+            final shortOffset =
+                RegExp(r'([+\-]\d{2})(?!:)(?!\d)').firstMatch(normalized);
+            if (shortOffset != null) {
+              normalized = normalized.replaceRange(
+                shortOffset.start,
+                shortOffset.end,
+                '${shortOffset.group(1)}:00',
+              );
+            }
+
+            if (normalized.endsWith('+00:00') ||
+                normalized.endsWith('-00:00') ||
+                normalized.endsWith('+00')) {
+              final plusIndex = normalized.lastIndexOf('+');
+              final minusIndex = normalized.lastIndexOf('-');
+              final tzIndex = plusIndex > minusIndex ? plusIndex : minusIndex;
+              if (tzIndex != -1) {
+                normalized = '${normalized.substring(0, tzIndex)}Z';
+              }
+            }
+
+            return normalized;
+          }
+
+          final normalizedInitial = normalizeTimestamp(trimmed);
+
+          final candidates = <String>{
+            trimmed,
+            normalizedInitial,
+          };
+
+          candidates.removeWhere((candidate) => candidate.isEmpty);
+
+          for (final candidate in candidates.toList()) {
+            if (!candidate.endsWith('Z') &&
+                !RegExp(r'[+\-]\d{2}:\d{2}$').hasMatch(candidate)) {
+              candidates.add('${candidate}Z');
+            }
+          }
+
+          for (final candidate in candidates) {
+            final parsed = DateTime.tryParse(candidate);
+            if (parsed != null) {
+              return parsed.isUtc ? parsed.toLocal() : parsed;
+            }
           }
 
           return null;

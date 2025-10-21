@@ -29,6 +29,34 @@ BEGIN
     END IF;
 END $$;
 
+-- Políticas para la tabla story_comments
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies
+        WHERE policyname = 'Authors manage own story comments'
+          AND tablename = 'story_comments'
+    ) THEN
+        CREATE POLICY "Authors manage own story comments" ON story_comments
+          FOR ALL USING (auth.uid() = user_id)
+          WITH CHECK (auth.uid() = user_id);
+    END IF;
+END $$;
+
+-- Políticas para la tabla story_reactions
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies
+        WHERE policyname = 'Authors manage own story reactions'
+          AND tablename = 'story_reactions'
+    ) THEN
+        CREATE POLICY "Authors manage own story reactions" ON story_reactions
+          FOR ALL USING (auth.uid() = user_id)
+          WITH CHECK (auth.uid() = user_id);
+    END IF;
+END $$;
+
 -- Políticas para la tabla stories
 DO $$
 BEGIN
@@ -51,6 +79,18 @@ BEGIN
         CREATE POLICY "Users can delete own stories" ON stories
           FOR DELETE USING (auth.uid() = user_id);
     END IF;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_policies
+      WHERE policyname = 'Published stories are viewable publicly'
+        AND tablename = 'stories'
+    ) THEN
+        CREATE POLICY "Published stories are viewable publicly" ON stories
+          FOR SELECT USING (
+            status = 'published'
+            OR published_at IS NOT NULL
+          );
+    END IF;
 END $$;
 
 -- Políticas para la tabla tags
@@ -60,7 +100,23 @@ BEGIN
         CREATE POLICY "Users can view own tags" ON tags
           FOR SELECT USING (auth.uid() = user_id);
     END IF;
-    
+
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_policies
+      WHERE policyname = 'Published tags are viewable publicly'
+        AND tablename = 'tags'
+    ) THEN
+        CREATE POLICY "Published tags are viewable publicly" ON tags
+          FOR SELECT USING (
+            EXISTS (
+              SELECT 1 FROM story_tags st
+              JOIN stories s ON s.id = st.story_id
+              WHERE st.tag_id = tags.id
+                AND (s.status = 'published' OR s.published_at IS NOT NULL)
+            )
+          );
+    END IF;
+
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can insert own tags' AND tablename = 'tags') THEN
         CREATE POLICY "Users can insert own tags" ON tags
           FOR INSERT WITH CHECK (auth.uid() = user_id);
@@ -88,7 +144,22 @@ BEGIN
             )
           );
     END IF;
-    
+
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_policies
+      WHERE policyname = 'Published story tags are viewable publicly'
+        AND tablename = 'story_tags'
+    ) THEN
+        CREATE POLICY "Published story tags are viewable publicly" ON story_tags
+          FOR SELECT USING (
+            EXISTS (
+              SELECT 1 FROM stories s
+              WHERE s.id = story_tags.story_id
+                AND (s.status = 'published' OR s.published_at IS NOT NULL)
+            )
+          );
+    END IF;
+
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can insert own story tags' AND tablename = 'story_tags') THEN
         CREATE POLICY "Users can insert own story tags" ON story_tags
           FOR INSERT WITH CHECK (
@@ -116,6 +187,21 @@ BEGIN
           FOR SELECT USING (
             auth.uid() IN (
               SELECT user_id FROM stories WHERE id = story_id
+            )
+          );
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_policies
+      WHERE policyname = 'Published story photos are viewable publicly'
+        AND tablename = 'story_photos'
+    ) THEN
+        CREATE POLICY "Published story photos are viewable publicly" ON story_photos
+          FOR SELECT USING (
+            EXISTS (
+              SELECT 1 FROM stories s
+              WHERE s.id = story_photos.story_id
+                AND (s.status = 'published' OR s.published_at IS NOT NULL)
             )
           );
     END IF;
@@ -155,6 +241,22 @@ BEGIN
         CREATE POLICY "Users can view own people" ON people
           FOR SELECT USING (auth.uid() = user_id);
     END IF;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_policies
+      WHERE policyname = 'Published people are viewable publicly'
+        AND tablename = 'people'
+    ) THEN
+        CREATE POLICY "Published people are viewable publicly" ON people
+          FOR SELECT USING (
+            EXISTS (
+              SELECT 1 FROM story_people sp
+              JOIN stories s ON s.id = sp.story_id
+              WHERE sp.person_id = people.id
+                AND (s.status = 'published' OR s.published_at IS NOT NULL)
+            )
+          );
+    END IF;
     
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can insert own people' AND tablename = 'people') THEN
         CREATE POLICY "Users can insert own people" ON people
@@ -180,6 +282,21 @@ BEGIN
           FOR SELECT USING (
             auth.uid() IN (
               SELECT user_id FROM stories WHERE id = story_id
+            )
+          );
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_policies
+      WHERE policyname = 'Published story people are viewable publicly'
+        AND tablename = 'story_people'
+    ) THEN
+        CREATE POLICY "Published story people are viewable publicly" ON story_people
+          FOR SELECT USING (
+            EXISTS (
+              SELECT 1 FROM stories s
+              WHERE s.id = story_people.story_id
+                AND (s.status = 'published' OR s.published_at IS NOT NULL)
             )
           );
     END IF;
@@ -233,6 +350,21 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can view own settings' AND tablename = 'user_settings') THEN
         CREATE POLICY "Users can view own settings" ON user_settings
           FOR SELECT USING (auth.uid() = user_id);
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_policies
+      WHERE policyname = 'Published author settings are viewable publicly'
+        AND tablename = 'user_settings'
+    ) THEN
+        CREATE POLICY "Published author settings are viewable publicly" ON user_settings
+          FOR SELECT USING (
+            EXISTS (
+              SELECT 1 FROM stories s
+              WHERE s.user_id = user_settings.user_id
+                AND (s.status = 'published' OR s.published_at IS NOT NULL)
+            )
+          );
     END IF;
     
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users can insert own settings' AND tablename = 'user_settings') THEN

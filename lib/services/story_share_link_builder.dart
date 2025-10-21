@@ -10,6 +10,7 @@ class StoryShareLinkBuilder {
     required Story story,
     StoryShareTarget? subscriber,
     Uri? baseUri,
+    String? source,
   }) {
     final detectedBase = baseUri ?? _detectBaseUri();
     final origin = _sanitizeBaseUri(detectedBase);
@@ -27,6 +28,13 @@ class StoryShareLinkBuilder {
       if (subscriber.name?.isNotEmpty == true) {
         queryParameters['name'] = subscriber.name!;
       }
+      if (subscriber.source?.isNotEmpty == true) {
+        queryParameters['source'] = subscriber.source!;
+      }
+    }
+
+    if (source != null && source.isNotEmpty) {
+      queryParameters['source'] = source;
     }
 
     if (_usesHashRouting(detectedBase)) {
@@ -92,9 +100,11 @@ class StoryShareTarget {
     required this.id,
     this.name,
     this.token,
+    this.source,
   });
 
   final String id;
   final String? name;
   final String? token;
+  final String? source;
 }

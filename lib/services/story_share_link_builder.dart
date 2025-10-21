@@ -11,8 +11,8 @@ class StoryShareLinkBuilder {
     StoryShareTarget? subscriber,
     Uri? baseUri,
   }) {
-    final origin = baseUri ?? _detectBaseUri();
-    final pathSegments = <String>[...origin.pathSegments, 'story', story.id];
+    final origin = _sanitizeBaseUri(baseUri ?? _detectBaseUri());
+    final pathSegments = <String>['story', story.id];
 
     final queryParameters = <String, String>{
       'author': story.userId,
@@ -41,6 +41,24 @@ class StoryShareLinkBuilder {
 
     // For non-web builds we default to production origin to keep links stable.
     return Uri.parse('https://narra.app');
+  }
+
+  static Uri _sanitizeBaseUri(Uri origin) {
+    if (origin.pathSegments.isEmpty &&
+        (origin.path.isEmpty || origin.path == '/')) {
+      return origin.replace(
+        path: '',
+        queryParameters: null,
+        fragment: null,
+      );
+    }
+
+    return Uri(
+      scheme: origin.scheme,
+      userInfo: origin.userInfo.isEmpty ? null : origin.userInfo,
+      host: origin.host,
+      port: origin.hasPort ? origin.port : null,
+    );
   }
 }
 

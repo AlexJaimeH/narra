@@ -18,6 +18,7 @@ dependencies:
   file_picker: '>=8.1.2'
   image: ^4.0.0
   uuid: ^4.0.0
+  url_launcher: ^6.3.0
   # (Opcional) agregar plugin de grabación para mobile en una iteración futura
 
 dev_dependencies:

@@ -46,18 +46,26 @@ class SubscriberEmailService {
     var sentCount = 0;
 
     for (final subscriber in subscribers) {
-      final token = subscriber.magicKey.trim();
+      Subscriber current = subscriber;
+      var token = current.magicKey.trim();
+
       if (token.isEmpty) {
-        failures.add(SubscriberEmailFailure(
-          subscriber: subscriber,
-          message: 'El suscriptor no tiene un enlace mágico configurado.',
-        ));
-        continue;
+        try {
+          current = await SubscriberService.ensureMagicKey(subscriber.id);
+          token = current.magicKey.trim();
+        } catch (error) {
+          failures.add(SubscriberEmailFailure(
+            subscriber: subscriber,
+            message:
+                'No pudimos preparar un enlace mágico para ${subscriber.email}: $error',
+          ));
+          continue;
+        }
       }
 
       final shareTarget = StoryShareTarget(
-        id: subscriber.id,
-        name: subscriber.name,
+        id: current.id,
+        name: current.name,
         token: token,
         source: 'email',
       );
@@ -71,7 +79,7 @@ class SubscriberEmailService {
 
       final html = EmailTemplates.storyPublishedHtml(
         story: story,
-        subscriber: subscriber,
+        subscriber: current,
         storyLink: link,
         authorDisplayName: authorDisplayName,
         previewText: previewText,
@@ -80,7 +88,7 @@ class SubscriberEmailService {
 
       final text = EmailTemplates.storyPublishedPlainText(
         story: story,
-        subscriber: subscriber,
+        subscriber: current,
         storyLink: link,
         authorDisplayName: authorDisplayName,
         previewText: previewText,
@@ -95,28 +103,110 @@ class SubscriberEmailService {
 
       try {
         await EmailService.sendEmail(
-          to: [subscriber.email],
+          to: [current.email],
           subject: subject,
           html: html,
           text: text,
           tags: const ['story-published'],
         );
-        await SubscriberService.markMagicLinkSent(subscriber.id);
+        await SubscriberService.markMagicLinkSent(current.id);
+        try {
+          await SubscriberService.recordAccessEvent(
+            subscriberId: current.id,
+            storyId: story.id,
+            eventType: 'link_sent',
+            accessToken: token,
+            metadata: const {
+              'channel': 'email',
+              'template': 'story-published',
+            },
+          );
+        } catch (_) {
+          // El correo se envió correctamente; ignoramos fallas de auditoría.
+        }
         sentCount += 1;
       } on EmailServiceException catch (error) {
         failures.add(SubscriberEmailFailure(
-          subscriber: subscriber,
+          subscriber: current,
           message: error.message,
         ));
       } catch (error) {
         failures.add(SubscriberEmailFailure(
-          subscriber: subscriber,
+          subscriber: current,
           message: error.toString(),
         ));
       }
     }
 
     return SubscriberEmailSummary(sent: sentCount, failures: failures);
+  }
+
+  static Future<void> sendSubscriptionInvite({
+    required String authorId,
+    required Subscriber subscriber,
+    required String authorDisplayName,
+    Uri? baseUri,
+  }) async {
+    final token = subscriber.magicKey.trim();
+    if (token.isEmpty) {
+      throw StateError('El suscriptor no tiene un enlace mágico configurado.');
+    }
+
+    final shareTarget = StoryShareTarget(
+      id: subscriber.id,
+      name: subscriber.name,
+      token: token,
+      source: 'email-invite',
+    );
+
+    final link = StoryShareLinkBuilder.buildSubscriberLink(
+      authorId: authorId,
+      subscriber: shareTarget,
+      baseUri: baseUri,
+      source: 'email-invite',
+      authorDisplayName: authorDisplayName,
+    );
+
+    final html = EmailTemplates.subscriberInviteHtml(
+      subscriber: subscriber,
+      inviteLink: link,
+      authorDisplayName: authorDisplayName,
+    );
+
+    final text = EmailTemplates.subscriberInvitePlainText(
+      subscriber: subscriber,
+      inviteLink: link,
+      authorDisplayName: authorDisplayName,
+    );
+
+    final normalizedAuthor = authorDisplayName.trim().isEmpty
+        ? 'Tu autor en Narra'
+        : authorDisplayName.trim();
+    final subject =
+        '$normalizedAuthor te invita a sus historias privadas en Narra';
+
+    await EmailService.sendEmail(
+      to: [subscriber.email],
+      subject: subject,
+      html: html,
+      text: text,
+      tags: const ['subscriber-invite'],
+    );
+
+    await SubscriberService.markMagicLinkSent(subscriber.id);
+    try {
+      await SubscriberService.recordAccessEvent(
+        subscriberId: subscriber.id,
+        eventType: 'link_sent',
+        accessToken: token,
+        metadata: const {
+          'channel': 'email',
+          'template': 'subscriber-invite',
+        },
+      );
+    } catch (_) {
+      // La invitación ya se envió; si el registro de auditoría falla no rompemos el flujo.
+    }
   }
 
   static String? _fallbackExcerpt(String? content) {

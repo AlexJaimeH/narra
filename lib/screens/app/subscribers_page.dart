@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:narra/services/email/email_service.dart';
+import 'package:narra/services/email/subscriber_email_service.dart';
 import 'package:narra/services/subscriber_service.dart';
+import 'package:narra/services/user_service.dart';
+import 'package:narra/supabase/supabase_config.dart';
 
 class SubscribersPage extends StatefulWidget {
   const SubscribersPage({super.key});
@@ -19,6 +23,8 @@ class _SubscribersPageState extends State<SubscribersPage> {
   String? _errorMessage;
   _SubscriberFilter _filter = _SubscriberFilter.all;
   String _searchTerm = '';
+  String? _authorDisplayName;
+  final Set<String> _sendingInviteIds = <String>{};
 
   @override
   void initState() {
@@ -44,13 +50,36 @@ class _SubscribersPageState extends State<SubscribersPage> {
     });
 
     try {
-      final dashboard = await SubscriberService.getDashboardData(
+      final dashboardFuture = SubscriberService.getDashboardData(
         recentCommentLimit: 12,
         recentReactionLimit: 18,
       );
+      final settingsFuture = UserService.getUserSettings();
+      final profileFuture = UserService.getCurrentUserProfile();
+
+      final dashboard = await dashboardFuture;
+
+      Map<String, dynamic>? settings;
+      Map<String, dynamic>? profile;
+
+      try {
+        settings = await settingsFuture;
+      } catch (_) {
+        settings = null;
+      }
+
+      try {
+        profile = await profileFuture;
+      } catch (_) {
+        profile = null;
+      }
+
+      final displayName =
+          _resolveAuthorDisplayName(settings: settings, profile: profile);
       if (!mounted) return;
       setState(() {
         _dashboard = dashboard;
+        _authorDisplayName = displayName;
         if (!silent) {
           _isLoading = false;
         }
@@ -116,6 +145,23 @@ class _SubscribersPageState extends State<SubscribersPage> {
     return subscribers;
   }
 
+  String _resolveAuthorDisplayName({
+    Map<String, dynamic>? settings,
+    Map<String, dynamic>? profile,
+  }) {
+    final settingsName = (settings?['public_author_name'] as String?)?.trim();
+    if (settingsName != null && settingsName.isNotEmpty) {
+      return settingsName;
+    }
+
+    final profileName = (profile?['name'] as String?)?.trim();
+    if (profileName != null && profileName.isNotEmpty) {
+      return profileName;
+    }
+
+    return 'Tu autor/a en Narra';
+  }
+
   Future<void> _onRefresh() async {
     setState(() => _isRefreshing = true);
     await _loadDashboard(silent: true);
@@ -129,6 +175,82 @@ class _SubscribersPageState extends State<SubscribersPage> {
     });
   }
 
+  Future<void> _sendInvite(
+    Subscriber subscriber, {
+    bool showSuccessToast = true,
+    bool refreshAfter = true,
+  }) async {
+    if (_sendingInviteIds.contains(subscriber.id)) {
+      return;
+    }
+
+    final authorId = SupabaseAuth.currentUser?.id;
+    if (authorId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Debes iniciar sesión nuevamente para enviar enlaces.'),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _sendingInviteIds.add(subscriber.id);
+    });
+
+    final messenger = ScaffoldMessenger.of(context);
+    final displayName = (_authorDisplayName?.trim().isNotEmpty ?? false)
+        ? _authorDisplayName!.trim()
+        : 'Tu autor/a en Narra';
+
+    try {
+      final preparedSubscriber =
+          await SubscriberService.ensureMagicKey(subscriber.id);
+
+      await SubscriberEmailService.sendSubscriptionInvite(
+        authorId: authorId,
+        subscriber: preparedSubscriber,
+        authorDisplayName: displayName,
+        baseUri: Uri.base,
+      );
+
+      if (!mounted) return;
+
+      if (showSuccessToast) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              'Listo, enviamos el enlace mágico a ${preparedSubscriber.email}.',
+            ),
+          ),
+        );
+      }
+
+      if (refreshAfter) {
+        await _loadDashboard(silent: true);
+      }
+    } on EmailServiceException catch (error) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text(error.message)),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      final message = error is StateError
+          ? 'No pudimos preparar el enlace mágico. Actualiza la página e inténtalo de nuevo.'
+          : 'No se pudo enviar el enlace: $error';
+      messenger.showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _sendingInviteIds.remove(subscriber.id);
+        });
+      }
+    }
+  }
+
   Future<void> _showAddSubscriberDialog() async {
     final nameController = TextEditingController();
     final emailController = TextEditingController();
@@ -136,7 +258,7 @@ class _SubscribersPageState extends State<SubscribersPage> {
     final formKey = GlobalKey<FormState>();
     var isSaving = false;
 
-    final result = await showDialog<bool>(
+    final result = await showDialog<Subscriber?>(
       context: context,
       builder: (context) {
         return StatefulBuilder(
@@ -208,7 +330,7 @@ class _SubscribersPageState extends State<SubscribersPage> {
               actions: [
                 TextButton(
                   onPressed:
-                      isSaving ? null : () => Navigator.of(context).pop(false),
+                      isSaving ? null : () => Navigator.of(context).pop(),
                   child: const Text('Cancelar'),
                 ),
                 FilledButton.icon(
@@ -220,7 +342,8 @@ class _SubscribersPageState extends State<SubscribersPage> {
                           }
                           setLocalState(() => isSaving = true);
                           try {
-                            await SubscriberService.createSubscriber(
+                            final subscriber =
+                                await SubscriberService.createSubscriber(
                               name: nameController.text.trim(),
                               email: emailController.text.trim(),
                               relationship:
@@ -229,7 +352,7 @@ class _SubscribersPageState extends State<SubscribersPage> {
                                       : relationshipController.text.trim(),
                             );
                             if (context.mounted) {
-                              Navigator.of(context).pop(true);
+                              Navigator.of(context).pop(subscriber);
                             }
                           } catch (error) {
                             setLocalState(() => isSaving = false);
@@ -259,14 +382,16 @@ class _SubscribersPageState extends State<SubscribersPage> {
       },
     );
 
-    if (result == true) {
+    if (result != null) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content:
-                Text('Suscriptor agregado. Envía su enlace cuando quieras.')),
+        SnackBar(
+          content: Text(
+            'Suscriptor agregado. Enviando su enlace mágico…',
+          ),
+        ),
       );
-      await _loadDashboard();
+      await _sendInvite(result);
     }
   }
 
@@ -323,6 +448,8 @@ class _SubscribersPageState extends State<SubscribersPage> {
       builder: (context) => _SubscriberDetailSheet(
         subscriber: subscriber,
         engagement: engagement,
+        isSendingInvite: _sendingInviteIds.contains(subscriber.id),
+        onSendInvite: () => _sendInvite(subscriber),
         onRemove: () {
           Navigator.of(context).pop();
           _confirmDeleteSubscriber(subscriber);
@@ -507,6 +634,9 @@ class _SubscribersPageState extends State<SubscribersPage> {
                         engagement: engagement,
                         onView: () => _openSubscriberDetails(subscriber),
                         onDelete: () => _confirmDeleteSubscriber(subscriber),
+                        onResend: () => _sendInvite(subscriber),
+                        isSendingInvite:
+                            _sendingInviteIds.contains(subscriber.id),
                       ),
                     );
                   },
@@ -994,12 +1124,16 @@ class _SubscriberCard extends StatelessWidget {
     required this.engagement,
     required this.onView,
     required this.onDelete,
+    required this.onResend,
+    required this.isSendingInvite,
   });
 
   final Subscriber subscriber;
   final SubscriberEngagement? engagement;
   final VoidCallback onView;
   final VoidCallback onDelete;
+  final Future<void> Function() onResend;
+  final bool isSendingInvite;
 
   @override
   Widget build(BuildContext context) {
@@ -1084,6 +1218,23 @@ class _SubscriberCard extends StatelessWidget {
                                 ),
                               ),
                             ),
+                            const SizedBox(width: 4),
+                            IconButton(
+                              tooltip: 'Reenviar enlace de suscripción',
+                              onPressed:
+                                  isSendingInvite ? null : () => onResend(),
+                              icon: isSendingInvite
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(
+                                      Icons.mark_email_read_outlined,
+                                    ),
+                            ),
                           ],
                         ),
                         const SizedBox(height: 6),
@@ -1110,12 +1261,14 @@ class _SubscriberCard extends StatelessWidget {
                     onSelected: (value) {
                       if (value == 'view') {
                         onView();
+                      } else if (value == 'resend') {
+                        onResend();
                       } else if (value == 'delete') {
                         onDelete();
                       }
                     },
-                    itemBuilder: (context) => const [
-                      PopupMenuItem(
+                    itemBuilder: (context) => [
+                      const PopupMenuItem(
                         value: 'view',
                         child: Row(
                           children: [
@@ -1125,7 +1278,17 @@ class _SubscriberCard extends StatelessWidget {
                           ],
                         ),
                       ),
-                      PopupMenuItem(
+                      const PopupMenuItem(
+                        value: 'resend',
+                        child: Row(
+                          children: [
+                            Icon(Icons.mail_outline),
+                            SizedBox(width: 8),
+                            Text('Reenviar enlace'),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuItem(
                         value: 'delete',
                         child: Row(
                           children: [
@@ -1156,6 +1319,45 @@ class _SubscriberCard extends StatelessWidget {
                     label: 'Comentarios',
                     value: comments,
                     color: theme.colorScheme.secondary,
+                  ),
+                  if (lastInteraction != null)
+                    _MetricChip(
+                      icon: Icons.schedule,
+                      label: 'Última actividad',
+                      valueLabel: _formatRelativeDate(lastInteraction),
+                      color: theme.colorScheme.outline,
+                    )
+                  else
+                    _MetricChip(
+                      icon: Icons.schedule,
+                      label: 'Sin actividad aún',
+                      valueLabel: '—',
+                      color: theme.colorScheme.outline,
+                    ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: isSendingInvite ? null : onResend,
+                    icon: isSendingInvite
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.email_outlined),
+                    label: Text(isSendingInvite
+                        ? 'Enviando enlace…'
+                        : 'Reenviar enlace mágico'),
+                  ),
+                  FilledButton.tonalIcon(
+                    onPressed: onView,
+                    icon: const Icon(Icons.visibility_outlined),
+                    label: const Text('Ver detalles'),
                   ),
                   if (lastInteraction != null)
                     _MetricChip(
@@ -1331,11 +1533,15 @@ class _SubscriberDetailSheet extends StatefulWidget {
   const _SubscriberDetailSheet({
     required this.subscriber,
     this.engagement,
+    required this.onSendInvite,
+    required this.isSendingInvite,
     required this.onRemove,
   });
 
   final Subscriber subscriber;
   final SubscriberEngagement? engagement;
+  final Future<void> Function() onSendInvite;
+  final bool isSendingInvite;
   final VoidCallback onRemove;
 
   @override
@@ -1343,21 +1549,24 @@ class _SubscriberDetailSheet extends StatefulWidget {
 }
 
 class _SubscriberDetailSheetState extends State<_SubscriberDetailSheet> {
-  late final Future<_SubscriberDetailData> _detailFuture;
+  late Future<_SubscriberDetailData> _detailFuture;
+  bool _localSendingInvite = false;
+  late Subscriber _subscriber;
 
   @override
   void initState() {
     super.initState();
+    _subscriber = widget.subscriber;
     _detailFuture = _loadDetail();
   }
 
   Future<_SubscriberDetailData> _loadDetail() async {
     final comments = await SubscriberService.getCommentsForSubscriber(
-      widget.subscriber.id,
+      _subscriber.id,
       limit: 40,
     );
     final reactions = await SubscriberService.getReactionsForSubscriber(
-      widget.subscriber.id,
+      _subscriber.id,
       limit: 40,
     );
     return _SubscriberDetailData(comments: comments, reactions: reactions);
@@ -1366,8 +1575,9 @@ class _SubscriberDetailSheetState extends State<_SubscriberDetailSheet> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final subscriber = widget.subscriber;
+    final subscriber = _subscriber;
     final engagement = widget.engagement;
+    final sendingInvite = _localSendingInvite || widget.isSendingInvite;
 
     return DraggableScrollableSheet(
       expand: false,
@@ -1463,6 +1673,85 @@ class _SubscriberDetailSheetState extends State<_SubscriberDetailSheet> {
                                   color: theme.colorScheme.outline,
                                 ),
                                 _MetricChip(
+                                  icon: Icons.mark_email_read_outlined,
+                                  label: 'Último envío',
+                                  valueLabel:
+                                      subscriber.magicLinkLastSentAt != null
+                                          ? _formatRelativeDate(
+                                              subscriber.magicLinkLastSentAt!,
+                                            )
+                                          : 'Nunca enviado',
+                                  color: theme.colorScheme.primary,
+                                ),
+                                _MetricChip(
+                                  icon: Icons.schedule,
+                                  label: 'Último acceso',
+                                  valueLabel: subscriber.lastAccessAt != null
+                                      ? _formatRelativeDate(
+                                          subscriber.lastAccessAt!)
+                                      : 'Sin registro',
+                                  color: theme.colorScheme.outline,
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 20),
+                            Wrap(
+                              spacing: 12,
+                              runSpacing: 12,
+                              children: [
+                                OutlinedButton.icon(
+                                  onPressed: sendingInvite
+                                      ? null
+                                      : () async {
+                                          setState(
+                                              () => _localSendingInvite = true);
+                                          try {
+                                            await widget.onSendInvite();
+                                            try {
+                                              final refreshed =
+                                                  await SubscriberService
+                                                      .getSubscriberById(
+                                                subscriber.id,
+                                              );
+                                              if (mounted) {
+                                                setState(() {
+                                                  _subscriber = refreshed;
+                                                  _detailFuture = _loadDetail();
+                                                });
+                                              }
+                                            } catch (_) {
+                                              // Si la recarga falla, ignoramos; el envío ya fue gestionado.
+                                            }
+                                          } finally {
+                                            if (mounted) {
+                                              setState(() =>
+                                                  _localSendingInvite = false);
+                                            }
+                                          }
+                                        },
+                                  icon: sendingInvite
+                                      ? const SizedBox(
+                                          width: 16,
+                                          height: 16,
+                                          child: CircularProgressIndicator(
+                                              strokeWidth: 2),
+                                        )
+                                      : const Icon(Icons.email_outlined),
+                                  label: Text(
+                                    sendingInvite
+                                        ? 'Enviando enlace…'
+                                        : 'Reenviar enlace mágico',
+                                  ),
+                                  // ---- FIX: usar style en lugar de color ----
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor:
+                                        theme.colorScheme.outline,
+                                    side: BorderSide(
+                                      color: theme.colorScheme.outline,
+                                    ),
+                                  ),
+                                ),
+                                _MetricChip(
                                   icon: Icons.schedule,
                                   label: 'Último acceso',
                                   valueLabel: subscriber.lastAccessAt != null
@@ -1509,18 +1798,22 @@ class _SubscriberDetailSheetState extends State<_SubscriberDetailSheet> {
                           delegate: SliverChildBuilderDelegate(
                             (context, index) {
                               final comment = comments[index];
-                              return ListTile(
-                                leading: CircleAvatar(
-                                  backgroundColor:
-                                      theme.colorScheme.secondaryContainer,
-                                  child: const Icon(Icons.chat_bubble_outline),
-                                ),
-                                title: Text(
-                                    comment.subscriberName ?? subscriber.name),
-                                subtitle: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const SizedBox(height: 4),
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 4),
+                                child: _SubscriberFeedbackTile(
+                                  icon: Icons.chat_bubble_outline,
+                                  badgeColor: theme.colorScheme.secondary,
+                                  body: [
+                                    Text(
+                                      comment.subscriberName ?? subscriber.name,
+                                      style:
+                                          theme.textTheme.titleSmall?.copyWith(
+                                        fontWeight: FontWeight.w600,
+                                        color: theme.colorScheme.onSurface,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
                                     Text(
                                       comment.content,
                                       style: theme.textTheme.bodyMedium,
@@ -1568,17 +1861,31 @@ class _SubscriberDetailSheetState extends State<_SubscriberDetailSheet> {
                           delegate: SliverChildBuilderDelegate(
                             (context, index) {
                               final reaction = reactions[index];
-                              return ListTile(
-                                leading: CircleAvatar(
-                                  backgroundColor:
-                                      Colors.pink.withValues(alpha: 0.12),
-                                  child: const Icon(Icons.favorite,
-                                      color: Colors.pink),
-                                ),
-                                title: Text(reaction.storyTitle),
-                                subtitle: Text(
-                                  _formatRelativeDate(reaction.createdAt),
-                                  style: theme.textTheme.bodySmall,
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 4),
+                                child: _SubscriberFeedbackTile(
+                                  icon: Icons.favorite,
+                                  badgeColor: Colors.pink,
+                                  body: [
+                                    Text(
+                                      reaction.storyTitle,
+                                      style:
+                                          theme.textTheme.titleSmall?.copyWith(
+                                        fontWeight: FontWeight.w600,
+                                        color: theme.colorScheme.onSurface,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      _formatRelativeDate(reaction.createdAt),
+                                      style:
+                                          theme.textTheme.bodySmall?.copyWith(
+                                        color:
+                                            theme.colorScheme.onSurfaceVariant,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               );
                             },
@@ -1606,6 +1913,57 @@ class _SubscriberDetailData {
 
   final List<SubscriberCommentRecord> comments;
   final List<SubscriberReactionRecord> reactions;
+}
+
+class _SubscriberFeedbackTile extends StatelessWidget {
+  const _SubscriberFeedbackTile({
+    required this.icon,
+    required this.badgeColor,
+    required this.body,
+  });
+
+  final IconData icon;
+  final Color badgeColor;
+  final List<Widget> body;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final backgroundColor =
+        theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.35);
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: badgeColor.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(10),
+                child: Icon(icon, size: 20, color: badgeColor),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: body,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 String _truncate(String text, {int maxLength = 140}) {

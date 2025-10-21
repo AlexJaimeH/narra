@@ -84,7 +84,7 @@ class EmailService {
     }
 
     final response = await http.post(
-      Uri.parse(_endpoint),
+      _resolveEndpoint(),
       headers: const {'Content-Type': 'application/json'},
       body: jsonEncode(payload),
     );
@@ -113,5 +113,31 @@ class EmailService {
       code: decoded?['code']?.toString(),
       body: decoded,
     );
+  }
+
+  static Uri _resolveEndpoint() {
+    final parsed = Uri.parse(_endpoint);
+    if (parsed.hasScheme && parsed.host.isNotEmpty) {
+      return parsed;
+    }
+
+    final base = Uri.base;
+    if (base.hasScheme && base.host.isNotEmpty) {
+      final sanitizedBase = Uri(
+        scheme: base.scheme,
+        userInfo: base.userInfo.isEmpty ? null : base.userInfo,
+        host: base.host,
+        port: base.hasPort ? base.port : null,
+        path: '/',
+      );
+
+      return sanitizedBase.resolveUri(parsed);
+    }
+
+    if (parsed.hasScheme && parsed.host.isEmpty) {
+      throw ArgumentError('El endpoint de correo está mal configurado.');
+    }
+
+    return parsed;
   }
 }

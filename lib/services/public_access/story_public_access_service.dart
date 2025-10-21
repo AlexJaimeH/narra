@@ -31,21 +31,34 @@ class StoryPublicAccessService {
 
   static Future<StoryAccessRecord?> registerAccess({
     required String authorId,
-    required String storyId,
+    String? storyId,
     required String subscriberId,
     required String token,
     String? source,
+    String? eventType,
   }) async {
+    final payload = <String, dynamic>{
+      'authorId': authorId,
+      'subscriberId': subscriberId,
+      'token': token,
+    };
+
+    if (storyId != null && storyId.isNotEmpty) {
+      payload['storyId'] = storyId;
+    }
+
+    if (source != null && source.isNotEmpty) {
+      payload['source'] = source;
+    }
+
+    if (eventType != null && eventType.isNotEmpty) {
+      payload['eventType'] = eventType;
+    }
+
     final response = await http.post(
       Uri.parse(_endpoint),
       headers: const {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'authorId': authorId,
-        'storyId': storyId,
-        'subscriberId': subscriberId,
-        'token': token,
-        if (source != null && source.isNotEmpty) 'source': source,
-      }),
+      body: jsonEncode(payload),
     );
 
     final bodyText = utf8.decode(response.bodyBytes);

@@ -59,6 +59,63 @@ class StoryShareLinkBuilder {
     );
   }
 
+  /// Generate a deep link for a subscriber invite page so they can
+  /// authenticate their device before any story is shared with them.
+  static Uri buildSubscriberLink({
+    required String authorId,
+    required StoryShareTarget subscriber,
+    Uri? baseUri,
+    String? source,
+    String? authorDisplayName,
+  }) {
+    final detectedBase = baseUri ?? _detectBaseUri();
+    final origin = _sanitizeBaseUri(detectedBase);
+
+    final queryParameters = <String, String>{
+      'author': authorId,
+      'subscriber': subscriber.id,
+    };
+
+    if (subscriber.token != null && subscriber.token!.isNotEmpty) {
+      queryParameters['token'] = subscriber.token!;
+    }
+
+    if (subscriber.name?.isNotEmpty == true) {
+      queryParameters['name'] = subscriber.name!;
+    }
+
+    if (source != null && source.isNotEmpty) {
+      queryParameters['source'] = source;
+    }
+
+    if (authorDisplayName?.isNotEmpty == true) {
+      queryParameters['authorName'] = authorDisplayName!;
+    }
+
+    final pathSegments = <String>['subscriber', subscriber.id];
+
+    if (_usesHashRouting(detectedBase)) {
+      final fragmentUri = Uri(
+        pathSegments: pathSegments,
+        queryParameters: queryParameters,
+      );
+      final fragment = fragmentUri.toString();
+      final normalizedFragment =
+          fragment.startsWith('/') ? fragment : '/$fragment';
+
+      return origin.replace(
+        fragment: normalizedFragment,
+        queryParameters: null,
+        path: origin.path.isEmpty || origin.path == '/' ? '' : origin.path,
+      );
+    }
+
+    return origin.replace(
+      pathSegments: pathSegments,
+      queryParameters: queryParameters,
+    );
+  }
+
   static Uri _detectBaseUri() {
     if (kIsWeb) {
       return Uri.base;

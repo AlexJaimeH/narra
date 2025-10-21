@@ -1,82 +1,10 @@
+import 'dart:math';
+
 import 'package:uuid/uuid.dart';
+import 'package:narra/services/subscriber_models.dart';
 import 'package:narra/supabase/supabase_config.dart';
 
-class Subscriber {
-  final String id;
-  final String name;
-  final String email;
-  final String? phone;
-  final String? relationship;
-  final bool isActive;
-  final String status;
-  final String magicKey;
-  final DateTime? magicKeyCreatedAt;
-  final DateTime? magicLinkLastSentAt;
-  final DateTime? lastAccessAt;
-  final String? lastAccessIp;
-  final String? lastAccessUserAgent;
-  final String? lastAccessSource;
-  final DateTime createdAt;
-
-  Subscriber({
-    required this.id,
-    required this.name,
-    required this.email,
-    this.phone,
-    this.relationship,
-    this.isActive = true,
-    required this.status,
-    required this.magicKey,
-    this.magicKeyCreatedAt,
-    this.magicLinkLastSentAt,
-    this.lastAccessAt,
-    this.lastAccessIp,
-    this.lastAccessUserAgent,
-    this.lastAccessSource,
-    required this.createdAt,
-  });
-
-  factory Subscriber.fromMap(Map<String, dynamic> map) {
-    DateTime? parseDate(dynamic value) {
-      if (value == null) return null;
-      if (value is DateTime) return value;
-      if (value is String && value.isNotEmpty) {
-        return DateTime.tryParse(value);
-      }
-      return null;
-    }
-
-    return Subscriber(
-      id: map['id'] ?? '',
-      name: map['name'] ?? '',
-      email: map['email'] ?? '',
-      phone: map['phone'],
-      relationship: map['relationship'],
-      status: (map['status'] as String? ?? 'pending').toLowerCase(),
-      isActive: (map['status'] as String? ?? 'pending') != 'unsubscribed',
-      magicKey: (map['access_token'] as String? ?? '').trim(),
-      magicKeyCreatedAt: parseDate(map['access_token_created_at']),
-      magicLinkLastSentAt: parseDate(map['access_token_last_sent_at']),
-      lastAccessAt: parseDate(map['last_access_at']),
-      lastAccessIp: map['last_access_ip'] as String?,
-      lastAccessUserAgent: map['last_access_user_agent'] as String?,
-      lastAccessSource: map['last_access_source'] as String?,
-      createdAt: parseDate(map['created_at']) ?? DateTime.now(),
-    );
-  }
-
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'name': name,
-      'email': email,
-      'phone': phone,
-      'relationship': relationship,
-      // 'is_active': isActive, // Column doesn't exist in current schema
-      'created_at': createdAt.toIso8601String(),
-    };
-  }
-}
+export 'package:narra/services/subscriber_models.dart';
 
 class SubscriberEngagement {
   const SubscriberEngagement({
@@ -266,6 +194,16 @@ class SubscriberDashboardData {
 
 class SubscriberService {
   static const _uuid = Uuid();
+  static final _secureRandom = Random.secure();
+
+  static String _generateMagicKey() {
+    final bytes = List<int>.generate(24, (_) => _secureRandom.nextInt(256));
+    final buffer = StringBuffer();
+    for (final byte in bytes) {
+      buffer.write(byte.toRadixString(16).padLeft(2, '0'));
+    }
+    return buffer.toString();
+  }
 
   static List<Map<String, dynamic>> _castMapList(dynamic data) {
     if (data is List) {
@@ -366,9 +304,9 @@ class SubscriberService {
     ]);
 
     final subscribers = results[0] as List<Subscriber>;
-    final engagementMaps = _castMapList(results[1]);
-    final commentMaps = _castMapList(results[2]);
-    final reactionMaps = _castMapList(results[3]);
+    final engagementMaps = _castDynamicMapList(results[1]);
+    final commentMaps = _castDynamicMapList(results[2]);
+    final reactionMaps = _castDynamicMapList(results[3]);
 
     final engagement = <String, SubscriberEngagement>{};
     for (final map in engagementMaps) {
@@ -394,7 +332,7 @@ class SubscriberService {
   }
 
   // Crear nuevo suscriptor
-  static Future<Map<String, dynamic>> createSubscriber({
+  static Future<Subscriber> createSubscriber({
     required String name,
     required String email,
     String? phone,
@@ -403,7 +341,10 @@ class SubscriberService {
     final userId = SupabaseAuth.currentUser?.id;
     if (userId == null) throw Exception('Usuario no autenticado');
 
-    return await SupabaseService.insert('subscribers', {
+    final now = DateTime.now().toUtc();
+    final magicKey = _generateMagicKey();
+
+    final data = await SupabaseService.insert('subscribers', {
       'id': _uuid.v4(),
       'user_id': userId,
       'name': name,
@@ -411,7 +352,88 @@ class SubscriberService {
       'phone': phone,
       'relationship': relationship,
       'status': 'pending',
+      'access_token': magicKey,
+      'access_token_created_at': now.toIso8601String(),
     });
+
+    final subscriber = Subscriber.fromMap(data);
+    if (subscriber.magicKey.trim().isNotEmpty) {
+      return subscriber;
+    }
+
+    try {
+      return await ensureMagicKey(subscriber.id);
+    } catch (_) {
+      return subscriber.copyWith(
+        magicKey: magicKey,
+        magicKeyCreatedAt: now,
+      );
+    }
+  }
+
+  static Future<Subscriber> ensureMagicKey(String subscriberId) async {
+    final userId = SupabaseAuth.currentUser?.id;
+    if (userId == null) throw Exception('Usuario no autenticado');
+
+    final client = SupabaseConfig.client;
+    final response = await client
+        .from('subscribers')
+        .select()
+        .eq('user_id', userId)
+        .eq('id', subscriberId)
+        .maybeSingle();
+
+    if (response == null) {
+      throw StateError('No se encontró al suscriptor solicitado.');
+    }
+
+    final subscriber = Subscriber.fromMap(response);
+    if (subscriber.magicKey.trim().isNotEmpty) {
+      return subscriber;
+    }
+
+    final newKey = _generateMagicKey();
+    final now = DateTime.now().toUtc();
+
+    final updated = await client
+        .from('subscribers')
+        .update({
+          'access_token': newKey,
+          'access_token_created_at': now.toIso8601String(),
+          'access_token_last_sent_at': null,
+        })
+        .eq('user_id', userId)
+        .eq('id', subscriberId)
+        .select()
+        .maybeSingle();
+
+    if (updated == null) {
+      return subscriber.copyWith(
+        magicKey: newKey,
+        magicKeyCreatedAt: now,
+        magicLinkLastSentAt: null,
+      );
+    }
+
+    return Subscriber.fromMap(updated);
+  }
+
+  static Future<Subscriber> getSubscriberById(String subscriberId) async {
+    final userId = SupabaseAuth.currentUser?.id;
+    if (userId == null) throw Exception('Usuario no autenticado');
+
+    final response = await SupabaseConfig.client
+        .from('subscribers')
+        .select()
+        .eq('user_id', userId)
+        .eq('id', subscriberId)
+        .maybeSingle();
+
+    if (response == null) {
+      throw StateError('No se encontró al suscriptor solicitado.');
+    }
+
+    return Subscriber.fromMap(response);
   }
 
   // Actualizar suscriptor
@@ -443,6 +465,36 @@ class SubscriberService {
     });
   }
 
+  static Future<void> recordAccessEvent({
+    required String subscriberId,
+    required String eventType,
+    String? storyId,
+    String? accessToken,
+    Map<String, dynamic>? metadata,
+  }) async {
+    final userId = SupabaseAuth.currentUser?.id;
+    if (userId == null) throw Exception('Usuario no autenticado');
+
+    final payload = <String, dynamic>{
+      'user_id': userId,
+      'subscriber_id': subscriberId,
+      'event_type': eventType,
+      'metadata': metadata ?? <String, dynamic>{},
+    };
+
+    if (storyId != null) {
+      payload['story_id'] = storyId;
+    }
+
+    if (accessToken != null) {
+      payload['access_token'] = accessToken;
+    }
+
+    await SupabaseConfig.client
+        .from('subscriber_access_events')
+        .insert(payload);
+  }
+
   static Future<List<SubscriberCommentRecord>> getCommentsForSubscriber(
     String subscriberId, {
     int limit = 50,
@@ -468,7 +520,7 @@ class SubscriberService {
         .order('created_at', ascending: false)
         .limit(limit);
 
-    return _castMapList(data)
+    return _castDynamicMapList(data)
         .map(SubscriberCommentRecord.fromMap)
         .toList(growable: false);
   }
@@ -497,7 +549,7 @@ class SubscriberService {
         .order('created_at', ascending: false)
         .limit(limit);
 
-    return _castMapList(data)
+    return _castDynamicMapList(data)
         .map(SubscriberReactionRecord.fromMap)
         .toList(growable: false);
   }
@@ -570,4 +622,19 @@ class SubscriberService {
       'metadata': metadata,
     });
   }
+}
+
+List<Map<String, dynamic>> _castDynamicMapList(dynamic data) {
+  if (data is List) {
+    final result = <Map<String, dynamic>>[];
+    for (final item in data) {
+      if (item is Map<String, dynamic>) {
+        result.add(Map<String, dynamic>.from(item));
+      } else if (item is Map) {
+        result.add(Map<String, dynamic>.from(item.cast<dynamic, dynamic>()));
+      }
+    }
+    return result;
+  }
+  return const [];
 }

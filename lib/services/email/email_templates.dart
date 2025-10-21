@@ -108,6 +108,79 @@ class EmailTemplates {
     return buffer.toString();
   }
 
+  static String subscriberInviteHtml({
+    required Subscriber subscriber,
+    required Uri inviteLink,
+    required String authorDisplayName,
+  }) {
+    final greeting = subscriber.name.trim().isEmpty
+        ? 'Hola'
+        : 'Hola ${_escape(subscriber.name.split(' ').first)}';
+    final escapedLink = _escape(inviteLink.toString());
+    final escapedAuthor = _escape(
+        authorDisplayName.isEmpty ? 'tu autor/a en Narra' : authorDisplayName);
+    final escapedSubscriber =
+        subscriber.name.isEmpty ? 'tú' : _escape(subscriber.name);
+
+    return '''
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <title>Tu acceso a las historias privadas de $escapedAuthor</title>
+  </head>
+  <body style="margin:0;padding:0;background-color:#f4f3f0;font-family:'Helvetica Neue',Arial,sans-serif;color:#2d2a26;">
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:640px;margin:0 auto;padding:24px 16px;">
+      <tr>
+        <td style="background:#ffffff;border-radius:20px;padding:36px;box-shadow:0 18px 40px rgba(15,23,42,0.08);">
+          <p style="margin:0;font-size:15px;letter-spacing:0.08em;text-transform:uppercase;color:#8c8176;">Invitación privada</p>
+          <h1 style="margin:12px 0 16px;font-size:28px;line-height:1.2;color:#1f1b16;">$escapedAuthor te abrió su círculo</h1>
+          <p style="margin:0;font-size:17px;line-height:1.65;color:#443f39;">$greeting, usamos este enlace único para reconocer que eres <strong>$escapedSubscriber</strong> al leer historias en Narra.</p>
+
+          <div style="margin:32px 0 28px;text-align:center;">
+            <a href="$escapedLink" style="display:inline-block;background-color:#7f5af0;color:#ffffff;text-decoration:none;font-weight:600;font-size:17px;padding:18px 34px;border-radius:999px;">Guardar mi acceso privado</a>
+          </div>
+
+          <p style="margin:0;font-size:15px;line-height:1.65;color:#6b5b50;">El enlace funciona una sola vez por dispositivo. Después de abrirlo podrás leer cualquier historia privada de $escapedAuthor sin volver a pedir acceso.</p>
+          <p style="margin:18px 0 0;font-size:14px;line-height:1.6;color:#8c8176;">Si el botón no funciona, copia y pega este enlace en tu navegador:<br /><a href="$escapedLink" style="color:#7f5af0;">$escapedLink</a></p>
+          <hr style="border:none;border-top:1px solid #ece7e1;margin:32px 0;" />
+          <p style="margin:0;font-size:12px;color:#a59b92;line-height:1.5;">Recibiste este correo porque $escapedAuthor te agregó como suscriptor privado en Narra. Si necesitas un nuevo enlace o deseas dejar de recibir recuerdos, responde directamente a este correo.</p>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>
+''';
+  }
+
+  static String subscriberInvitePlainText({
+    required Subscriber subscriber,
+    required Uri inviteLink,
+    required String authorDisplayName,
+  }) {
+    final buffer = StringBuffer();
+    final greeting = subscriber.name.trim().isEmpty
+        ? 'Hola'
+        : 'Hola ${subscriber.name.split(' ').first}';
+    final author =
+        authorDisplayName.isEmpty ? 'tu autor/a en Narra' : authorDisplayName;
+
+    buffer
+      ..writeln('$greeting,')
+      ..writeln('')
+      ..writeln(
+          '$author te compartió un acceso privado para leer sus historias en Narra.')
+      ..writeln(
+          'Guarda este enlace único, reconocerá que eres ${subscriber.name.isEmpty ? 'tú' : subscriber.name} cada vez que abras una historia:')
+      ..writeln('')
+      ..writeln(inviteLink.toString())
+      ..writeln('')
+      ..writeln(
+          'Funciona una vez por dispositivo. Si necesitas otro, responde este correo para que puedan enviártelo de nuevo.');
+
+    return buffer.toString();
+  }
+
   static String? _firstParagraph(Story story) {
     final content = story.content;
     if (content == null || content.trim().isEmpty) {

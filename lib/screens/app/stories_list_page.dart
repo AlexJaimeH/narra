@@ -815,10 +815,6 @@ class StoryListCard extends StatelessWidget {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (coverUrl != null) ...[
-                      _StoryCoverThumbnail(url: coverUrl, size: coverSize),
-                      const SizedBox(width: 18),
-                    ],
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -835,6 +831,16 @@ class StoryListCard extends StatelessWidget {
                                   ),
                                 ),
                                 const SizedBox(width: 10),
+                                if (coverUrl != null) ...[
+                                  Align(
+                                    alignment: Alignment.topLeft,
+                                    child: _StoryCoverThumbnail(
+                                      url: coverUrl,
+                                      size: coverSize,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                ],
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment:

@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:narra/repositories/story_repository.dart';
 import 'package:narra/services/public_access/story_access_manager.dart';
 import 'package:narra/services/public_access/story_access_record.dart';
+import 'package:narra/services/public_access/story_feedback_service.dart';
+import 'package:narra/services/public_access/story_public_access_service.dart';
 import 'package:narra/services/public_story_service.dart';
 import 'package:narra/services/story_share_link_builder.dart';
 import 'package:narra/supabase/supabase_config.dart';
@@ -42,12 +44,15 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
   StoryAccessRecord? _accessRecord;
   StorySharePayload? _sharePayload;
   List<Story> _recommendedStories = const [];
-  final List<_LocalComment> _comments = [];
+  final List<_StoryComment> _comments = [];
 
   bool _isLoading = true;
   bool _isHearted = false;
   bool _isSubmittingComment = false;
+  bool _isFeedbackLoading = false;
+  bool _isUpdatingReaction = false;
   String? _errorMessage;
+  String? _shareValidationMessage;
 
   @override
   void initState() {
@@ -71,6 +76,7 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
       id: record.subscriberId,
       name: record.subscriberName,
       token: record.accessToken,
+      source: record.source,
     );
   }
 
@@ -87,10 +93,17 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
     return _sharePayload;
   }
 
+  bool get _canInteract {
+    final record = _accessRecord;
+    if (record == null) return false;
+    return record.subscriberId != 'author';
+  }
+
   Future<void> _loadStory() async {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
+      _shareValidationMessage = null;
     });
 
     try {
@@ -107,19 +120,60 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
       }
 
       StoryAccessRecord? accessRecord;
+      String? shareValidationMessage;
+
       if (SupabaseAuth.currentUser?.id == story.userId) {
         accessRecord = StoryAccessManager.ensureAuthorAccess(story.userId);
       } else {
         accessRecord = StoryAccessManager.getAccess(story.userId);
         if (accessRecord == null && _sharePayload != null) {
-          accessRecord = StoryAccessManager.grantAccess(
-            authorId: story.userId,
-            subscriberId: _sharePayload!.subscriberId,
-            subscriberName: _sharePayload!.subscriberName,
-            accessToken: _sharePayload!.token,
-            source: _sharePayload!.source,
-          );
+          final payload = _sharePayload!;
+          final token = payload.token;
+
+          if (token != null && token.isNotEmpty) {
+            try {
+              final validated = await StoryPublicAccessService.registerAccess(
+                authorId: story.userId,
+                storyId: story.id,
+                subscriberId: payload.subscriberId,
+                token: token,
+                source: payload.source,
+              );
+
+              if (validated != null) {
+                accessRecord = StoryAccessManager.grantAccess(
+                  authorId: story.userId,
+                  subscriberId: validated.subscriberId,
+                  subscriberName: validated.subscriberName,
+                  accessToken: validated.accessToken,
+                  source: validated.source,
+                  grantedAt: validated.grantedAt,
+                );
+              } else {
+                shareValidationMessage =
+                    'Este enlace ya no es válido. Solicita uno nuevo al autor.';
+              }
+            } on StoryPublicAccessException catch (error) {
+              shareValidationMessage = error.message;
+            } catch (_) {
+              shareValidationMessage =
+                  'No pudimos validar tu enlace en este momento. Inténtalo de nuevo en unos minutos.';
+            }
+          } else {
+            shareValidationMessage =
+                'El enlace que usaste está incompleto. Pide uno nuevo al autor.';
+          }
         }
+      }
+
+      StorySharePayload? updatedSharePayload = _sharePayload;
+      if (accessRecord != null && accessRecord.subscriberId != 'author') {
+        updatedSharePayload = StorySharePayload(
+          subscriberId: accessRecord.subscriberId,
+          subscriberName: accessRecord.subscriberName,
+          token: accessRecord.accessToken,
+          source: accessRecord.source,
+        );
       }
 
       List<Story> recommendations = const [];
@@ -134,13 +188,93 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
       setState(() {
         _story = story;
         _accessRecord = accessRecord;
+        _sharePayload = updatedSharePayload;
+        _shareValidationMessage = shareValidationMessage;
         _recommendedStories = recommendations;
         _isLoading = false;
       });
+
+      if (accessRecord != null) {
+        await _loadFeedbackState(
+          story: story,
+          accessRecord: accessRecord,
+          sharePayload: updatedSharePayload,
+        );
+      } else {
+        setState(() {
+          _comments.clear();
+          _isHearted = false;
+          _isFeedbackLoading = false;
+        });
+      }
     } catch (error) {
       setState(() {
         _errorMessage = 'Ocurrió un problema al cargar la historia.';
         _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _loadFeedbackState({
+    required Story story,
+    StoryAccessRecord? accessRecord,
+    StorySharePayload? sharePayload,
+  }) async {
+    final record = accessRecord ?? _accessRecord;
+    final share = sharePayload ?? _resolvedSharePayload;
+
+    if (record == null || record.subscriberId == 'author') {
+      setState(() {
+        _comments.clear();
+        _isHearted = false;
+        _isFeedbackLoading = false;
+      });
+      return;
+    }
+
+    final token = share?.token;
+    if (token == null || token.isEmpty) {
+      return;
+    }
+
+    setState(() {
+      _isFeedbackLoading = true;
+    });
+
+    try {
+      final feedback = await StoryFeedbackService.fetchState(
+        authorId: story.userId,
+        storyId: story.id,
+        subscriberId: record.subscriberId,
+        token: token,
+        source: share?.source,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _comments
+          ..clear()
+          ..addAll(feedback.comments.map((comment) => _StoryComment(
+                id: comment.id,
+                authorName: comment.authorName,
+                content: comment.content,
+                createdAt: comment.createdAt,
+              )));
+        _isHearted = feedback.hasReacted;
+        _isFeedbackLoading = false;
+      });
+    } on StoryFeedbackException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isFeedbackLoading = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.message)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isFeedbackLoading = false;
       });
     }
   }
@@ -229,6 +363,23 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
                     'Necesitas un enlace personalizado para leer las historias de ${story.authorDisplayName ?? story.authorName ?? 'este autor/a'}. Si ya recibiste uno, vuelve a abrirlo desde el correo o mensaje que te enviaron.',
                     style: theme.textTheme.bodyMedium,
                   ),
+                  if (_shareValidationMessage != null) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: colorScheme.errorContainer,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        _shareValidationMessage!,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onErrorContainer,
+                        ),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   if (_sharePayload != null)
                     _ShareDebugInfo(share: _sharePayload!),
@@ -380,14 +531,12 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
   }
 
   Widget _buildReactionsRow(ThemeData theme, ColorScheme colorScheme) {
+    final canReact = _canInteract;
     return Row(
       children: [
         FilledButton.icon(
-          onPressed: () {
-            setState(() {
-              _isHearted = !_isHearted;
-            });
-          },
+          onPressed:
+              (!canReact || _isUpdatingReaction) ? null : _toggleReaction,
           style: FilledButton.styleFrom(
             backgroundColor:
                 _isHearted ? colorScheme.primary : colorScheme.primaryContainer,
@@ -395,12 +544,20 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
                 _isHearted ? colorScheme.onPrimary : colorScheme.primary,
           ),
           icon: Icon(_isHearted ? Icons.favorite : Icons.favorite_border),
-          label: Text(_isHearted ? 'Te encantó' : 'Enviar cariño'),
+          label: Text(
+            _isUpdatingReaction
+                ? 'Enviando…'
+                : _isHearted
+                    ? 'Te encantó'
+                    : 'Enviar cariño',
+          ),
         ),
         const SizedBox(width: 16),
         Expanded(
           child: Text(
-            'Comparte este recuerdo solo con personas de confianza.',
+            canReact
+                ? 'Comparte este recuerdo solo con personas de confianza.'
+                : 'Este botón se activará cuando accedas con tu enlace personal.',
             style: theme.textTheme.bodySmall?.copyWith(
               color: colorScheme.onSurfaceVariant,
             ),
@@ -412,6 +569,7 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
 
   Widget _buildCommentsSection(ThemeData theme, ColorScheme colorScheme) {
     final viewerName = _accessRecord?.subscriberName ?? 'Suscriptor';
+    final canComment = _canInteract;
 
     return Card(
       elevation: 0,
@@ -432,8 +590,13 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
                 ),
               ],
             ),
+            if (_isFeedbackLoading)
+              const Padding(
+                padding: EdgeInsets.only(top: 12),
+                child: LinearProgressIndicator(minHeight: 3),
+              ),
             const SizedBox(height: 12),
-            if (_comments.isEmpty)
+            if (_comments.isEmpty && !_isFeedbackLoading)
               Text(
                 'Sé la primera persona en dejar unas palabras para ${_story?.authorDisplayName ?? _story?.authorName ?? 'el autor'}.',
                 style: theme.textTheme.bodyMedium,
@@ -441,26 +604,43 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
             else
               ..._comments.map((comment) => _CommentTile(comment: comment)),
             const SizedBox(height: 16),
-            TextField(
-              controller: _commentController,
-              maxLines: 5,
-              minLines: 3,
-              decoration: InputDecoration(
-                hintText: 'Escribe tu mensaje como $viewerName...',
-                border: OutlineInputBorder(
+            if (canComment)
+              TextField(
+                controller: _commentController,
+                maxLines: 5,
+                minLines: 3,
+                enabled: !_isSubmittingComment,
+                decoration: InputDecoration(
+                  hintText: 'Escribe tu mensaje como $viewerName...',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              )
+            else
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: colorScheme.surfaceVariant,
                   borderRadius: BorderRadius.circular(12),
                 ),
+                child: Text(
+                  'Necesitas abrir la historia desde tu enlace mágico para comentar.',
+                  style: theme.textTheme.bodyMedium,
+                ),
               ),
-            ),
             const SizedBox(height: 12),
             Align(
               alignment: Alignment.centerRight,
               child: FilledButton(
-                onPressed: _isSubmittingComment ? null : _submitComment,
+                onPressed: (!canComment || _isSubmittingComment)
+                    ? null
+                    : _submitComment,
                 child: _isSubmittingComment
                     ? const SizedBox(
-                        height: 18,
                         width: 18,
+                        height: 18,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Text('Publicar comentario'),
@@ -610,6 +790,7 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
     final link = StoryShareLinkBuilder.buildStoryLink(
       story: story,
       subscriber: shareTarget,
+      source: shareTarget?.source ?? _resolvedSharePayload?.source,
     ).toString();
 
     return Wrap(
@@ -636,26 +817,124 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
     if (text.isEmpty) return;
 
     final messenger = ScaffoldMessenger.of(context);
+    final story = _story;
+    final record = _accessRecord;
+    final payload = _resolvedSharePayload;
+
+    if (story == null || record == null || record.subscriberId == 'author') {
+      messenger.showSnackBar(
+        const SnackBar(
+            content: Text('Este comentario es solo para suscriptores.')),
+      );
+      return;
+    }
+
+    final token = payload?.token;
+    if (token == null || token.isEmpty) {
+      messenger.showSnackBar(
+        const SnackBar(
+            content: Text('Necesitas un enlace válido para comentar.')),
+      );
+      return;
+    }
+
     setState(() => _isSubmittingComment = true);
-    await Future<void>.delayed(const Duration(milliseconds: 600));
+
+    try {
+      final saved = await StoryFeedbackService.submitComment(
+        authorId: story.userId,
+        storyId: story.id,
+        subscriberId: record.subscriberId,
+        token: token,
+        content: text,
+        source: payload?.source,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _comments.insert(
+          0,
+          _StoryComment(
+            id: saved.id,
+            authorName: saved.authorName,
+            content: saved.content,
+            createdAt: saved.createdAt,
+          ),
+        );
+        _commentController.clear();
+        _isSubmittingComment = false;
+      });
+
+      messenger.showSnackBar(
+        const SnackBar(content: Text('¡Tu comentario está en camino!')),
+      );
+    } on StoryFeedbackException catch (error) {
+      if (!mounted) return;
+      setState(() => _isSubmittingComment = false);
+      messenger.showSnackBar(
+        SnackBar(content: Text(error.message)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isSubmittingComment = false);
+      messenger.showSnackBar(
+        const SnackBar(
+          content:
+              Text('No pudimos registrar tu comentario. Inténtalo de nuevo.'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _toggleReaction() async {
+    final story = _story;
+    final record = _accessRecord;
+    final payload = _resolvedSharePayload;
+
+    if (story == null || record == null || record.subscriberId == 'author') {
+      return;
+    }
+
+    final token = payload?.token;
+    if (token == null || token.isEmpty) {
+      return;
+    }
+
+    final messenger = ScaffoldMessenger.of(context);
+    final nextState = !_isHearted;
 
     setState(() {
-      _comments.add(_LocalComment(
-        authorName: _accessRecord?.subscriberName ?? 'Suscriptor',
-        content: text,
-        createdAt: DateTime.now(),
-      ));
-      _commentController.clear();
-      _isSubmittingComment = false;
+      _isUpdatingReaction = true;
     });
 
-    if (!mounted) return;
-    messenger.showSnackBar(
-      const SnackBar(
-        content: Text(
-            '¡Gracias! Tu comentario se registrará cuando esté disponible.'),
-      ),
-    );
+    try {
+      final confirmed = await StoryFeedbackService.setReaction(
+        authorId: story.userId,
+        storyId: story.id,
+        subscriberId: record.subscriberId,
+        token: token,
+        isActive: nextState,
+        source: payload?.source,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _isHearted = confirmed;
+        _isUpdatingReaction = false;
+      });
+    } on StoryFeedbackException catch (error) {
+      if (!mounted) return;
+      setState(() => _isUpdatingReaction = false);
+      messenger.showSnackBar(
+        SnackBar(content: Text(error.message)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isUpdatingReaction = false);
+      messenger.showSnackBar(
+        const SnackBar(content: Text('No pudimos registrar tu reacción.')),
+      );
+    }
   }
 
   String _toRouteName(Uri link) {
@@ -671,6 +950,7 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
     final link = StoryShareLinkBuilder.buildStoryLink(
       story: story,
       subscriber: shareTarget,
+      source: shareTarget?.source ?? _resolvedSharePayload?.source,
     );
     Navigator.of(context).pushReplacementNamed(
       _toRouteName(link),
@@ -967,7 +1247,7 @@ class _ShareDebugInfo extends StatelessWidget {
 class _CommentTile extends StatelessWidget {
   const _CommentTile({required this.comment});
 
-  final _LocalComment comment;
+  final _StoryComment comment;
 
   @override
   Widget build(BuildContext context) {
@@ -1012,13 +1292,15 @@ class _CommentTile extends StatelessWidget {
   }
 }
 
-class _LocalComment {
-  _LocalComment({
+class _StoryComment {
+  const _StoryComment({
+    required this.id,
     required this.authorName,
     required this.content,
     required this.createdAt,
   });
 
+  final String id;
   final String authorName;
   final String content;
   final DateTime createdAt;

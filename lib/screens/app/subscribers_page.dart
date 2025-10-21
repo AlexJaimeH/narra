@@ -1742,14 +1742,6 @@ class _SubscriberDetailSheetState extends State<_SubscriberDetailSheet> {
                                         ? 'Enviando enlace…'
                                         : 'Reenviar enlace mágico',
                                   ),
-                                  // ---- FIX: usar style en lugar de color ----
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor:
-                                        theme.colorScheme.outline,
-                                    side: BorderSide(
-                                      color: theme.colorScheme.outline,
-                                    ),
-                                  ),
                                 ),
                                 _MetricChip(
                                   icon: Icons.schedule,

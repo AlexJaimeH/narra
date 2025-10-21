@@ -8,8 +8,16 @@ class Subscriber {
   final String? phone;
   final String? relationship;
   final bool isActive;
+  final String status;
+  final String magicKey;
+  final DateTime? magicKeyCreatedAt;
+  final DateTime? magicLinkLastSentAt;
+  final DateTime? lastAccessAt;
+  final String? lastAccessIp;
+  final String? lastAccessUserAgent;
+  final String? lastAccessSource;
   final DateTime createdAt;
-  
+
   Subscriber({
     required this.id,
     required this.name,
@@ -17,21 +25,46 @@ class Subscriber {
     this.phone,
     this.relationship,
     this.isActive = true,
+    required this.status,
+    required this.magicKey,
+    this.magicKeyCreatedAt,
+    this.magicLinkLastSentAt,
+    this.lastAccessAt,
+    this.lastAccessIp,
+    this.lastAccessUserAgent,
+    this.lastAccessSource,
     required this.createdAt,
   });
-  
+
   factory Subscriber.fromMap(Map<String, dynamic> map) {
+    DateTime? parseDate(dynamic value) {
+      if (value == null) return null;
+      if (value is DateTime) return value;
+      if (value is String && value.isNotEmpty) {
+        return DateTime.tryParse(value);
+      }
+      return null;
+    }
+
     return Subscriber(
       id: map['id'] ?? '',
       name: map['name'] ?? '',
       email: map['email'] ?? '',
       phone: map['phone'],
       relationship: map['relationship'],
-      isActive: map.containsKey('is_active') ? map['is_active'] ?? true : true,
-      createdAt: DateTime.parse(map['created_at'] ?? DateTime.now().toIso8601String()),
+      status: (map['status'] as String? ?? 'pending').toLowerCase(),
+      isActive: (map['status'] as String? ?? 'pending') != 'unsubscribed',
+      magicKey: (map['access_token'] as String? ?? '').trim(),
+      magicKeyCreatedAt: parseDate(map['access_token_created_at']),
+      magicLinkLastSentAt: parseDate(map['access_token_last_sent_at']),
+      lastAccessAt: parseDate(map['last_access_at']),
+      lastAccessIp: map['last_access_ip'] as String?,
+      lastAccessUserAgent: map['last_access_user_agent'] as String?,
+      lastAccessSource: map['last_access_source'] as String?,
+      createdAt: parseDate(map['created_at']) ?? DateTime.now(),
     );
   }
-  
+
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -59,8 +92,15 @@ class SubscriberService {
       eqValue: userId,
       orderBy: 'name',
     );
-    
+
     return data.map((item) => Subscriber.fromMap(item)).toList();
+  }
+
+  static Future<List<Subscriber>> getConfirmedSubscribers() async {
+    final subscribers = await getSubscribers();
+    return subscribers
+        .where((subscriber) => subscriber.status == 'confirmed')
+        .toList();
   }
 
   // Obtener todos los suscriptores del usuario (legacy)
@@ -120,13 +160,21 @@ class SubscriberService {
     });
   }
 
+  static Future<void> markMagicLinkSent(String subscriberId) async {
+    await SupabaseService.update('subscribers', subscriberId, {
+      'access_token_last_sent_at': DateTime.now().toIso8601String(),
+    });
+  }
+
   // Obtener estadísticas de suscriptores
   static Future<Map<String, int>> getSubscriberStats() async {
     final subscribers = await getUserSubscribers();
-    
-    final confirmed = subscribers.where((s) => s['status'] == 'confirmed').length;
+
+    final confirmed =
+        subscribers.where((s) => s['status'] == 'confirmed').length;
     final pending = subscribers.where((s) => s['status'] == 'pending').length;
-    final unsubscribed = subscribers.where((s) => s['status'] == 'unsubscribed').length;
+    final unsubscribed =
+        subscribers.where((s) => s['status'] == 'unsubscribed').length;
 
     return {
       'total': subscribers.length,
@@ -143,13 +191,13 @@ class SubscriberService {
   ) async {
     // En una implementación real, aquí se enviarían emails o notificaciones
     // Por ahora solo actualizamos la fecha de último envío
-    
+
     for (final subscriberId in subscriberIds) {
       await SupabaseService.update('subscribers', subscriberId, {
         'last_sent_at': DateTime.now().toIso8601String(),
       });
     }
-    
+
     // Registrar actividad
     await _logActivity('story_shared', storyId, metadata: {
       'subscriber_count': subscriberIds.length,
@@ -165,9 +213,8 @@ class SubscriberService {
       'subscribers',
       eq: 'user_id',
       eqValue: userId,
-    ).then((subscribers) => 
-      subscribers.where((s) => s['status'] == 'confirmed').toList()
-    );
+    ).then((subscribers) =>
+        subscribers.where((s) => s['status'] == 'confirmed').toList());
   }
 
   // Registrar actividad privada

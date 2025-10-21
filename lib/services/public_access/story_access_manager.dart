@@ -10,7 +10,8 @@ class StoryAccessManager {
 
   static final StoryAccessStorage _storage = createStoryAccessStorage();
 
-  static StoryAccessRecord? getAccess(String authorId) => _storage.read(authorId);
+  static StoryAccessRecord? getAccess(String authorId) =>
+      _storage.read(authorId);
 
   static bool hasAccess(String authorId) => getAccess(authorId) != null;
 
@@ -20,13 +21,18 @@ class StoryAccessManager {
     String? subscriberName,
     String? accessToken,
     String? source,
+    DateTime? grantedAt,
   }) {
     final existing = _storage.read(authorId);
+    final effectiveGrantedAt =
+        grantedAt ?? existing?.grantedAt ?? DateTime.now();
+
     if (existing != null && existing.subscriberId == subscriberId) {
       final updated = existing.copyWith(
         subscriberName: subscriberName ?? existing.subscriberName,
         accessToken: accessToken ?? existing.accessToken,
         source: source ?? existing.source,
+        grantedAt: effectiveGrantedAt,
       );
       _storage.write(updated);
       return updated;
@@ -37,7 +43,7 @@ class StoryAccessManager {
       subscriberId: subscriberId,
       subscriberName: subscriberName,
       accessToken: accessToken,
-      grantedAt: DateTime.now(),
+      grantedAt: effectiveGrantedAt,
       source: source,
     );
     _storage.write(record);

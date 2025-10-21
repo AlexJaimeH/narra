@@ -2,6 +2,136 @@ import 'dart:convert';
 
 import 'package:narra/supabase/narra_client.dart';
 
+DateTime? _parseFlexibleTimestamp(dynamic value) {
+  if (value == null) return null;
+
+  if (value is DateTime) {
+    return value.isUtc ? value.toLocal() : value;
+  }
+
+  if (value is String) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return null;
+
+    String normalizeTimestamp(String input) {
+      var normalized = input.trim();
+
+      if (normalized.isEmpty) {
+        return normalized;
+      }
+
+      if (!normalized.contains('T') &&
+          RegExp(r'^\d{4}-\d{2}-\d{2} ').hasMatch(normalized)) {
+        normalized = normalized.replaceFirst(' ', 'T');
+      }
+
+      if (normalized.endsWith(' UTC')) {
+        normalized = '${normalized.substring(0, normalized.length - 4)}Z';
+      }
+
+      final offsetWithoutColon =
+          RegExp(r'([+\-]\d{2})(\d{2})(?!:)').firstMatch(normalized);
+      if (offsetWithoutColon != null) {
+        normalized = normalized.replaceRange(
+          offsetWithoutColon.start,
+          offsetWithoutColon.end,
+          '${offsetWithoutColon.group(1)}:${offsetWithoutColon.group(2)}',
+        );
+      }
+
+      final shortOffset =
+          RegExp(r'([+\-]\d{2})(?!:)(?!\d)').firstMatch(normalized);
+      if (shortOffset != null) {
+        normalized = normalized.replaceRange(
+          shortOffset.start,
+          shortOffset.end,
+          '${shortOffset.group(1)}:00',
+        );
+      }
+
+      if (normalized.endsWith('+00:00') ||
+          normalized.endsWith('-00:00') ||
+          normalized.endsWith('+00')) {
+        final plusIndex = normalized.lastIndexOf('+');
+        final minusIndex = normalized.lastIndexOf('-');
+        final tzIndex = plusIndex > minusIndex ? plusIndex : minusIndex;
+        if (tzIndex != -1) {
+          normalized = '${normalized.substring(0, tzIndex)}Z';
+        }
+      }
+
+      return normalized;
+    }
+
+    final normalizedInitial = normalizeTimestamp(trimmed);
+
+    final candidates = <String>{
+      trimmed,
+      normalizedInitial,
+    };
+
+    candidates.removeWhere((candidate) => candidate.isEmpty);
+
+    for (final candidate in candidates.toList()) {
+      if (!candidate.endsWith('Z') &&
+          !RegExp(r'[+\-]\d{2}:\d{2}$').hasMatch(candidate)) {
+        candidates.add('${candidate}Z');
+      }
+    }
+
+    for (final candidate in candidates) {
+      final parsed = DateTime.tryParse(candidate);
+      if (parsed != null) {
+        return parsed.isUtc ? parsed.toLocal() : parsed;
+      }
+    }
+
+    return null;
+  }
+
+  if (value is int) {
+    if (value > 1000000000000) {
+      return DateTime.fromMillisecondsSinceEpoch(value, isUtc: true).toLocal();
+    }
+    if (value > 1000000000) {
+      return DateTime.fromMillisecondsSinceEpoch(value * 1000, isUtc: true)
+          .toLocal();
+    }
+  }
+
+  if (value is double) {
+    final intValue = value.round();
+    if (intValue > 1000000000000) {
+      return DateTime.fromMillisecondsSinceEpoch(intValue, isUtc: true)
+          .toLocal();
+    }
+    if (intValue > 1000000000) {
+      return DateTime.fromMillisecondsSinceEpoch((value * 1000).round(),
+              isUtc: true)
+          .toLocal();
+    }
+  }
+
+  if (value is Map && value.isNotEmpty) {
+    for (final entry in value.entries) {
+      final parsed = _parseFlexibleTimestamp(entry.value);
+      if (parsed != null) return parsed;
+    }
+  }
+
+  return null;
+}
+
+Map<String, dynamic>? _asStringMap(dynamic value) {
+  if (value is Map<String, dynamic>) {
+    return value;
+  }
+  if (value is Map) {
+    return Map<String, dynamic>.from(value);
+  }
+  return null;
+}
+
 /// Repository for story-related operations
 /// Provides a clean interface for story data management
 class StoryRepository {
@@ -235,132 +365,9 @@ class Story {
 
   factory Story.fromMap(Map<String, dynamic> map) {
     try {
-      DateTime? parseTimestamp(dynamic value) {
-        if (value == null) return null;
-
-        if (value is DateTime) {
-          return value;
-        }
-
-        if (value is String) {
-          final trimmed = value.trim();
-          if (trimmed.isEmpty) return null;
-
-          String normalizeTimestamp(String input) {
-            var normalized = input.trim();
-
-            if (normalized.isEmpty) {
-              return normalized;
-            }
-
-            if (!normalized.contains('T') &&
-                RegExp(r'^\d{4}-\d{2}-\d{2} ').hasMatch(normalized)) {
-              normalized = normalized.replaceFirst(' ', 'T');
-            }
-
-            if (normalized.endsWith(' UTC')) {
-              normalized =
-                  '${normalized.substring(0, normalized.length - 4)}Z';
-            }
-
-            final offsetWithoutColon =
-                RegExp(r'([+\-]\d{2})(\d{2})(?!:)').firstMatch(normalized);
-            if (offsetWithoutColon != null) {
-              normalized = normalized.replaceRange(
-                offsetWithoutColon.start,
-                offsetWithoutColon.end,
-                '${offsetWithoutColon.group(1)}:${offsetWithoutColon.group(2)}',
-              );
-            }
-
-            final shortOffset =
-                RegExp(r'([+\-]\d{2})(?!:)(?!\d)').firstMatch(normalized);
-            if (shortOffset != null) {
-              normalized = normalized.replaceRange(
-                shortOffset.start,
-                shortOffset.end,
-                '${shortOffset.group(1)}:00',
-              );
-            }
-
-            if (normalized.endsWith('+00:00') ||
-                normalized.endsWith('-00:00') ||
-                normalized.endsWith('+00')) {
-              final plusIndex = normalized.lastIndexOf('+');
-              final minusIndex = normalized.lastIndexOf('-');
-              final tzIndex = plusIndex > minusIndex ? plusIndex : minusIndex;
-              if (tzIndex != -1) {
-                normalized = '${normalized.substring(0, tzIndex)}Z';
-              }
-            }
-
-            return normalized;
-          }
-
-          final normalizedInitial = normalizeTimestamp(trimmed);
-
-          final candidates = <String>{
-            trimmed,
-            normalizedInitial,
-          };
-
-          candidates.removeWhere((candidate) => candidate.isEmpty);
-
-          for (final candidate in candidates.toList()) {
-            if (!candidate.endsWith('Z') &&
-                !RegExp(r'[+\-]\d{2}:\d{2}$').hasMatch(candidate)) {
-              candidates.add('${candidate}Z');
-            }
-          }
-
-          for (final candidate in candidates) {
-            final parsed = DateTime.tryParse(candidate);
-            if (parsed != null) {
-              return parsed.isUtc ? parsed.toLocal() : parsed;
-            }
-          }
-
-          return null;
-        }
-
-        if (value is int) {
-          if (value > 1000000000000) {
-            return DateTime.fromMillisecondsSinceEpoch(value, isUtc: true)
-                .toLocal();
-          }
-          if (value > 1000000000) {
-            return DateTime.fromMillisecondsSinceEpoch(value * 1000,
-                    isUtc: true)
-                .toLocal();
-          }
-        }
-
-        if (value is double) {
-          final intValue = value.round();
-          if (intValue > 1000000000000) {
-            return DateTime.fromMillisecondsSinceEpoch(intValue, isUtc: true)
-                .toLocal();
-          }
-          if (intValue > 1000000000) {
-            return DateTime.fromMillisecondsSinceEpoch((value * 1000).round(),
-                    isUtc: true)
-                .toLocal();
-          }
-        }
-
-        if (value is Map && value.isNotEmpty) {
-          for (final entry in value.entries) {
-            final parsed = parseTimestamp(entry.value);
-            if (parsed != null) return parsed;
-          }
-        }
-
-        return null;
-      }
-
       final rawPublishedAt =
           map['published_at'] ?? map['publishedAt'] ?? map['publish_date'];
-      final publishedAt = parseTimestamp(rawPublishedAt);
+      final publishedAt = _parseFlexibleTimestamp(rawPublishedAt);
 
       StoryStatus resolveStatus(String rawStatus, DateTime? publishedAt) {
         final normalized = rawStatus.trim().toLowerCase();
@@ -409,7 +416,7 @@ class Story {
           authorProfile?['user_settings'] as Map<String, dynamic>? ??
               map['author_settings'] as Map<String, dynamic>?;
 
-      DateTime? parseDate(dynamic value) => parseTimestamp(value);
+      DateTime? parseDate(dynamic value) => _parseFlexibleTimestamp(value);
 
       String? normalizePrecision(String? value) {
         final raw = value?.trim().toLowerCase();
@@ -503,6 +510,40 @@ class Story {
           normalizePrecision(map['dates_precision'] as String?) ??
               (storyDate != null ? 'day' : null);
 
+      final photos = <StoryPhoto>[];
+      final rawPhotos = map['story_photos'];
+      if (rawPhotos is List) {
+        for (final entry in rawPhotos) {
+          final photoMap = _asStringMap(entry);
+          if (photoMap == null) continue;
+          try {
+            photos.add(
+              StoryPhoto.fromMap(
+                photoMap,
+                parentStoryId: map['id']?.toString(),
+              ),
+            );
+          } catch (_) {
+            // Skip malformed photo entries without aborting the whole story.
+          }
+        }
+      }
+
+      final people = <StoryPerson>[];
+      final rawPeople = map['story_people'];
+      if (rawPeople is List) {
+        for (final entry in rawPeople) {
+          final entryMap = _asStringMap(entry);
+          final personMap = _asStringMap(entryMap?['people']);
+          if (personMap == null) continue;
+          try {
+            people.add(StoryPerson.fromMap(personMap));
+          } catch (_) {
+            // Ignore malformed person entries while parsing the rest.
+          }
+        }
+      }
+
       return Story(
         id: map['id'] as String? ?? '',
         userId: map['user_id'] as String? ?? '',
@@ -525,21 +566,13 @@ class Story {
         completenessScore: map['completeness_score'] as int? ?? 0,
         wordCount: map['word_count'] as int? ?? 0,
         readingTime: map['reading_time'] as int? ?? 0,
-        createdAt: parseTimestamp(map['created_at']) ?? DateTime.now(),
-        updatedAt: parseTimestamp(map['updated_at']) ?? DateTime.now(),
+        createdAt: _parseFlexibleTimestamp(map['created_at']) ?? DateTime.now(),
+        updatedAt: _parseFlexibleTimestamp(map['updated_at']) ?? DateTime.now(),
         publishedAt: publishedAt,
         tags: tagNames.isEmpty ? null : tagNames,
         storyTags: storyTagObjects,
-        photos: map['story_photos'] != null
-            ? (map['story_photos'] as List)
-                .map((photo) => StoryPhoto.fromMap(photo))
-                .toList()
-            : [],
-        people: map['story_people'] != null
-            ? (map['story_people'] as List)
-                .map((person) => StoryPerson.fromMap(person['people']))
-                .toList()
-            : [],
+        photos: photos,
+        people: people,
         authorName:
             authorProfile?['name'] as String? ?? map['author_name'] as String?,
         authorDisplayName: authorSettings?['public_author_name'] as String? ??
@@ -774,14 +807,39 @@ class StoryPhoto {
     required this.createdAt,
   });
 
-  factory StoryPhoto.fromMap(Map<String, dynamic> map) {
+  factory StoryPhoto.fromMap(
+    Map<String, dynamic> map, {
+    String? parentStoryId,
+  }) {
+    final rawId = map['id'] ?? map['photo_id'];
+    final rawStoryId =
+        map['story_id'] ?? map['storyId'] ?? map['story'] ?? parentStoryId;
+    final rawPhotoUrl = map['photo_url'] ?? map['photoUrl'];
+
+    if (rawId == null || rawStoryId == null || rawPhotoUrl == null) {
+      throw const FormatException('Missing required photo fields');
+    }
+
+    int resolvePosition(dynamic value) {
+      if (value is int) return value;
+      if (value is double) return value.round();
+      if (value is num) return value.toInt();
+      if (value is String) {
+        final parsed = int.tryParse(value);
+        if (parsed != null) return parsed;
+      }
+      return 0;
+    }
+
     return StoryPhoto(
-      id: map['id'] as String,
-      storyId: map['story_id'] as String,
-      photoUrl: map['photo_url'] as String,
+      id: rawId.toString(),
+      storyId: rawStoryId.toString(),
+      photoUrl: rawPhotoUrl.toString(),
       caption: map['caption'] as String?,
-      position: map['position'] as int,
-      createdAt: DateTime.parse(map['created_at']),
+      position: resolvePosition(map['position']),
+      createdAt:
+          _parseFlexibleTimestamp(map['created_at'] ?? map['createdAt']) ??
+              DateTime.now(),
     );
   }
 

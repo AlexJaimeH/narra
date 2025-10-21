@@ -206,9 +206,11 @@ class NarraSupabaseClient {
           ),
           story_photos (
             id,
+            story_id,
             photo_url,
             caption,
-            position
+            position,
+            created_at
           ),
           story_people (
             person_id,
@@ -262,9 +264,11 @@ class NarraSupabaseClient {
           ),
           story_photos (
             id,
+            story_id,
             photo_url,
             caption,
-            position
+            position,
+            created_at
           ),
           story_people (
             person_id,
@@ -294,9 +298,11 @@ class NarraSupabaseClient {
           ),
           story_photos (
             id,
+            story_id,
             photo_url,
             caption,
-            position
+            position,
+            created_at
           ),
           story_people (
             person_id,
@@ -341,9 +347,11 @@ class NarraSupabaseClient {
           ),
           story_photos (
             id,
+            story_id,
             photo_url,
             caption,
-            position
+            position,
+            created_at
           )
         ''')
         .eq('user_id', authorId)

@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:narra/repositories/story_repository.dart';
 import 'package:narra/services/public_access/story_access_manager.dart';
 import 'package:narra/services/public_access/story_access_record.dart';
+import 'package:narra/services/public_access/story_public_access_service.dart';
 import 'package:narra/services/public_story_service.dart';
 import 'package:narra/services/story_share_link_builder.dart';
 import 'package:narra/supabase/supabase_config.dart';
@@ -48,6 +49,7 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
   bool _isHearted = false;
   bool _isSubmittingComment = false;
   String? _errorMessage;
+  String? _shareValidationMessage;
 
   @override
   void initState() {
@@ -71,6 +73,7 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
       id: record.subscriberId,
       name: record.subscriberName,
       token: record.accessToken,
+      source: record.source,
     );
   }
 
@@ -91,6 +94,7 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
+      _shareValidationMessage = null;
     });
 
     try {
@@ -107,19 +111,60 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
       }
 
       StoryAccessRecord? accessRecord;
+      String? shareValidationMessage;
+
       if (SupabaseAuth.currentUser?.id == story.userId) {
         accessRecord = StoryAccessManager.ensureAuthorAccess(story.userId);
       } else {
         accessRecord = StoryAccessManager.getAccess(story.userId);
         if (accessRecord == null && _sharePayload != null) {
-          accessRecord = StoryAccessManager.grantAccess(
-            authorId: story.userId,
-            subscriberId: _sharePayload!.subscriberId,
-            subscriberName: _sharePayload!.subscriberName,
-            accessToken: _sharePayload!.token,
-            source: _sharePayload!.source,
-          );
+          final payload = _sharePayload!;
+          final token = payload.token;
+
+          if (token != null && token.isNotEmpty) {
+            try {
+              final validated = await StoryPublicAccessService.registerAccess(
+                authorId: story.userId,
+                storyId: story.id,
+                subscriberId: payload.subscriberId,
+                token: token,
+                source: payload.source,
+              );
+
+              if (validated != null) {
+                accessRecord = StoryAccessManager.grantAccess(
+                  authorId: story.userId,
+                  subscriberId: validated.subscriberId,
+                  subscriberName: validated.subscriberName,
+                  accessToken: validated.accessToken,
+                  source: validated.source,
+                  grantedAt: validated.grantedAt,
+                );
+              } else {
+                shareValidationMessage =
+                    'Este enlace ya no es válido. Solicita uno nuevo al autor.';
+              }
+            } on StoryPublicAccessException catch (error) {
+              shareValidationMessage = error.message;
+            } catch (_) {
+              shareValidationMessage =
+                  'No pudimos validar tu enlace en este momento. Inténtalo de nuevo en unos minutos.';
+            }
+          } else {
+            shareValidationMessage =
+                'El enlace que usaste está incompleto. Pide uno nuevo al autor.';
+          }
         }
+      }
+
+      StorySharePayload? updatedSharePayload = _sharePayload;
+      if (accessRecord != null && accessRecord.subscriberId != 'author') {
+        updatedSharePayload = StorySharePayload(
+          subscriberId: accessRecord.subscriberId,
+          subscriberName: accessRecord.subscriberName,
+          token: accessRecord.accessToken,
+          source: accessRecord.source,
+        );
       }
 
       List<Story> recommendations = const [];
@@ -134,6 +179,8 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
       setState(() {
         _story = story;
         _accessRecord = accessRecord;
+        _sharePayload = updatedSharePayload;
+        _shareValidationMessage = shareValidationMessage;
         _recommendedStories = recommendations;
         _isLoading = false;
       });
@@ -229,6 +276,23 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
                     'Necesitas un enlace personalizado para leer las historias de ${story.authorDisplayName ?? story.authorName ?? 'este autor/a'}. Si ya recibiste uno, vuelve a abrirlo desde el correo o mensaje que te enviaron.',
                     style: theme.textTheme.bodyMedium,
                   ),
+                  if (_shareValidationMessage != null) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: colorScheme.errorContainer,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        _shareValidationMessage!,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onErrorContainer,
+                        ),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   if (_sharePayload != null)
                     _ShareDebugInfo(share: _sharePayload!),
@@ -610,6 +674,7 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
     final link = StoryShareLinkBuilder.buildStoryLink(
       story: story,
       subscriber: shareTarget,
+      source: shareTarget?.source ?? _resolvedSharePayload?.source,
     ).toString();
 
     return Wrap(
@@ -671,6 +736,7 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
     final link = StoryShareLinkBuilder.buildStoryLink(
       story: story,
       subscriber: shareTarget,
+      source: shareTarget?.source ?? _resolvedSharePayload?.source,
     );
     Navigator.of(context).pushReplacementNamed(
       _toRouteName(link),

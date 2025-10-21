@@ -91,6 +91,157 @@ $$;
 
 commit;
 
+-- Public access policies for published stories and related data
+begin;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'stories'
+      and policyname = 'Published stories are viewable publicly'
+  ) then
+    create policy "Published stories are viewable publicly"
+      on public.stories
+      for select using (
+        status = 'published'
+        or published_at is not null
+      );
+  end if;
+end
+$$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'tags'
+      and policyname = 'Published tags are viewable publicly'
+  ) then
+    create policy "Published tags are viewable publicly"
+      on public.tags
+      for select using (
+        exists (
+          select 1 from public.story_tags st
+          join public.stories s on s.id = st.story_id
+          where st.tag_id = tags.id
+            and (s.status = 'published' or s.published_at is not null)
+        )
+      );
+  end if;
+end
+$$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'story_tags'
+      and policyname = 'Published story tags are viewable publicly'
+  ) then
+    create policy "Published story tags are viewable publicly"
+      on public.story_tags
+      for select using (
+        exists (
+          select 1 from public.stories s
+          where s.id = story_tags.story_id
+            and (s.status = 'published' or s.published_at is not null)
+        )
+      );
+  end if;
+end
+$$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'story_photos'
+      and policyname = 'Published story photos are viewable publicly'
+  ) then
+    create policy "Published story photos are viewable publicly"
+      on public.story_photos
+      for select using (
+        exists (
+          select 1 from public.stories s
+          where s.id = story_photos.story_id
+            and (s.status = 'published' or s.published_at is not null)
+        )
+      );
+  end if;
+end
+$$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'people'
+      and policyname = 'Published people are viewable publicly'
+  ) then
+    create policy "Published people are viewable publicly"
+      on public.people
+      for select using (
+        exists (
+          select 1 from public.story_people sp
+          join public.stories s on s.id = sp.story_id
+          where sp.person_id = people.id
+            and (s.status = 'published' or s.published_at is not null)
+        )
+      );
+  end if;
+end
+$$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'story_people'
+      and policyname = 'Published story people are viewable publicly'
+  ) then
+    create policy "Published story people are viewable publicly"
+      on public.story_people
+      for select using (
+        exists (
+          select 1 from public.stories s
+          where s.id = story_people.story_id
+            and (s.status = 'published' or s.published_at is not null)
+        )
+      );
+  end if;
+end
+$$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'user_settings'
+      and policyname = 'Published author settings are viewable publicly'
+  ) then
+    create policy "Published author settings are viewable publicly"
+      on public.user_settings
+      for select using (
+        exists (
+          select 1 from public.stories s
+          where s.user_id = user_settings.user_id
+            and (s.status = 'published' or s.published_at is not null)
+        )
+      );
+  end if;
+end
+$$;
+
+commit;
+
 -- Ensure metadata columns exist for story versions
 begin;
 

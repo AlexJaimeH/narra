@@ -1,6 +1,6 @@
--- Create table to store story version history
 create extension if not exists "pgcrypto";
 
+-- Story version history (idempotent)
 begin;
 
 create table if not exists public.story_versions (
@@ -91,7 +91,7 @@ $$;
 
 commit;
 
--- Ensure metadata columns exist for story version history
+-- Ensure metadata columns exist for story versions
 begin;
 
 alter table public.story_versions
@@ -120,5 +120,67 @@ alter table public.stories
 update public.stories
 set published_at = coalesce(published_at, updated_at)
 where status = 'published' and published_at is null;
+
+commit;
+
+-- Subscriber magic links & tracking
+begin;
+
+alter table public.subscribers
+  add column if not exists access_token text default encode(gen_random_bytes(24), 'hex'),
+  add column if not exists access_token_created_at timestamptz default timezone('utc', now()),
+  add column if not exists access_token_last_sent_at timestamptz,
+  add column if not exists last_access_at timestamptz,
+  add column if not exists last_access_ip inet,
+  add column if not exists last_access_user_agent text,
+  add column if not exists last_access_source text;
+
+update public.subscribers
+set
+  access_token = coalesce(access_token, encode(gen_random_bytes(24), 'hex')),
+  access_token_created_at = coalesce(access_token_created_at, timezone('utc', now()))
+where access_token is null or access_token = '';
+
+create unique index if not exists subscribers_access_token_key
+  on public.subscribers (access_token)
+  where access_token is not null and access_token <> '';
+
+commit;
+
+-- Subscriber access audit
+begin;
+
+create table if not exists public.subscriber_access_events (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.users(id) on delete cascade,
+  subscriber_id uuid not null references public.subscribers(id) on delete cascade,
+  story_id uuid references public.stories(id) on delete cascade,
+  access_token text,
+  event_type text not null check (event_type in ('link_sent', 'link_opened', 'access_granted')),
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create index if not exists subscriber_access_events_subscriber_idx
+  on public.subscriber_access_events (subscriber_id, created_at desc);
+
+alter table public.subscriber_access_events enable row level security;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'subscriber_access_events'
+      and policyname = 'Owners manage subscriber access events'
+  ) then
+    create policy "Owners manage subscriber access events"
+      on public.subscriber_access_events
+      for all
+      using (auth.uid() = user_id)
+      with check (auth.uid() = user_id);
+  end if;
+end
+$$;
 
 commit;

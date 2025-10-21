@@ -47,7 +47,7 @@ class NarraApp extends StatelessWidget {
             theme: themeController.light,
             darkTheme: themeController.dark,
             themeMode: ThemeMode.system,
-            initialRoute: '/',
+            initialRoute: _resolveInitialRoute(),
             onGenerateRoute: (settings) {
               final routeName = settings.name ?? '/';
               Uri? uri = Uri.tryParse(routeName);
@@ -105,9 +105,8 @@ class NarraApp extends StatelessWidget {
                     settings: settings,
                   );
                 case '/app':
-                  final initialIndex = settings.arguments is int
-                      ? settings.arguments as int
-                      : 0;
+                  final initialIndex =
+                      settings.arguments is int ? settings.arguments as int : 0;
                   return MaterialPageRoute(
                     builder: (_) => AppNavigation(initialIndex: initialIndex),
                     settings: settings,
@@ -124,4 +123,54 @@ class NarraApp extends StatelessWidget {
       },
     );
   }
+}
+
+String _resolveInitialRoute() {
+  final baseUri = Uri.base;
+  final fromPath = _extractStoryRoute(baseUri);
+  if (fromPath != null) {
+    return fromPath;
+  }
+
+  final fragment = baseUri.hasFragment ? baseUri.fragment : '';
+  if (fragment.isNotEmpty) {
+    final normalizedFragment =
+        fragment.startsWith('/') ? fragment : '/$fragment';
+    final fragmentUri = Uri.tryParse(normalizedFragment);
+    final fromFragment =
+        fragmentUri != null ? _extractStoryRoute(fragmentUri) : null;
+    if (fromFragment != null) {
+      return fromFragment;
+    }
+  }
+
+  final defaultRouteName =
+      WidgetsBinding.instance.platformDispatcher.defaultRouteName;
+  if (defaultRouteName.isNotEmpty && defaultRouteName != '/') {
+    final normalized = defaultRouteName.startsWith('/')
+        ? defaultRouteName
+        : '/$defaultRouteName';
+    final defaultUri = Uri.tryParse(normalized);
+    final fromDefault =
+        defaultUri != null ? _extractStoryRoute(defaultUri) : null;
+    if (fromDefault != null) {
+      return fromDefault;
+    }
+
+    if (normalized == '/app' || normalized == '/landing') {
+      return normalized;
+    }
+  }
+
+  return '/';
+}
+
+String? _extractStoryRoute(Uri uri) {
+  if (uri.pathSegments.isNotEmpty && uri.pathSegments.first == 'story') {
+    final storyId = uri.pathSegments.length >= 2 ? uri.pathSegments[1] : '';
+    if (storyId.isNotEmpty) {
+      return '/story/$storyId';
+    }
+  }
+  return null;
 }

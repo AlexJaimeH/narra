@@ -335,3 +335,125 @@ end
 $$;
 
 commit;
+
+-- Subscriber feedback: story comments
+begin;
+
+create table if not exists public.story_comments (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.users(id) on delete cascade,
+  story_id uuid not null references public.stories(id) on delete cascade,
+  subscriber_id uuid references public.subscribers(id) on delete set null,
+  author_name text not null default '',
+  author_email text,
+  content text not null,
+  source text,
+  metadata jsonb not null default '{}'::jsonb,
+  status text not null default 'visible' check (status in ('visible', 'hidden', 'flagged')),
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz
+);
+
+create index if not exists story_comments_story_idx
+  on public.story_comments (story_id, created_at desc);
+
+create index if not exists story_comments_subscriber_idx
+  on public.story_comments (subscriber_id, created_at desc);
+
+alter table public.story_comments enable row level security;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'story_comments'
+      and policyname = 'Authors manage own story comments'
+  ) then
+    create policy "Authors manage own story comments"
+      on public.story_comments
+      for all
+      using (auth.uid() = user_id)
+      with check (auth.uid() = user_id);
+  end if;
+end
+$$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_trigger
+    where tgname = 'update_story_comments_updated_at'
+      and tgrelid = 'public.story_comments'::regclass
+  ) then
+    create trigger update_story_comments_updated_at
+      before update on public.story_comments
+      for each row execute procedure update_updated_at_column();
+  end if;
+end
+$$;
+
+commit;
+
+-- Subscriber feedback: story reactions
+begin;
+
+create table if not exists public.story_reactions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.users(id) on delete cascade,
+  story_id uuid not null references public.stories(id) on delete cascade,
+  subscriber_id uuid references public.subscribers(id) on delete set null,
+  reaction_type text not null default 'heart' check (reaction_type in ('heart')),
+  source text,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create unique index if not exists story_reactions_unique_idx
+  on public.story_reactions (story_id, subscriber_id, reaction_type)
+  where subscriber_id is not null;
+
+create index if not exists story_reactions_story_idx
+  on public.story_reactions (story_id, created_at desc);
+
+create index if not exists story_reactions_subscriber_idx
+  on public.story_reactions (subscriber_id, created_at desc);
+
+alter table public.story_reactions enable row level security;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'story_reactions'
+      and policyname = 'Authors manage own story reactions'
+  ) then
+    create policy "Authors manage own story reactions"
+      on public.story_reactions
+      for all
+      using (auth.uid() = user_id)
+      with check (auth.uid() = user_id);
+  end if;
+end
+$$;
+
+commit;
+
+-- Subscriber engagement summary view
+begin;
+
+create or replace view public.subscriber_engagement_summary as
+select
+  s.id as subscriber_id,
+  s.user_id,
+  coalesce(count(distinct sr.id), 0) as total_reactions,
+  coalesce(count(distinct sc.id), 0) as total_comments,
+  max(sr.created_at) as last_reaction_at,
+  max(sc.created_at) as last_comment_at
+from public.subscribers s
+left join public.story_reactions sr on sr.subscriber_id = s.id
+left join public.story_comments sc on sc.subscriber_id = s.id
+group by s.id, s.user_id;
+
+commit;

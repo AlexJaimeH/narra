@@ -29,6 +29,34 @@ BEGIN
     END IF;
 END $$;
 
+-- Políticas para la tabla story_comments
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies
+        WHERE policyname = 'Authors manage own story comments'
+          AND tablename = 'story_comments'
+    ) THEN
+        CREATE POLICY "Authors manage own story comments" ON story_comments
+          FOR ALL USING (auth.uid() = user_id)
+          WITH CHECK (auth.uid() = user_id);
+    END IF;
+END $$;
+
+-- Políticas para la tabla story_reactions
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies
+        WHERE policyname = 'Authors manage own story reactions'
+          AND tablename = 'story_reactions'
+    ) THEN
+        CREATE POLICY "Authors manage own story reactions" ON story_reactions
+          FOR ALL USING (auth.uid() = user_id)
+          WITH CHECK (auth.uid() = user_id);
+    END IF;
+END $$;
+
 -- Políticas para la tabla stories
 DO $$
 BEGIN

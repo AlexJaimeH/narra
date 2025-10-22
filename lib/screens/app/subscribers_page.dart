@@ -211,7 +211,6 @@ class _SubscribersPageState extends State<SubscribersPage> {
         authorId: authorId,
         subscriber: preparedSubscriber,
         authorDisplayName: displayName,
-        baseUri: Uri.base,
       );
 
       if (!mounted) return;

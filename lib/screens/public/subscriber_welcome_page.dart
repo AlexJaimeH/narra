@@ -172,7 +172,7 @@ class _SubscriberWelcomePageState extends State<SubscriberWelcomePage> {
       });
 
       if (highlightStory != null && !_isUnsubscribed) {
-        await _loadHighlightFeedback(highlightStory);
+        await _refreshHighlightFeedback(highlightStory);
       }
     } on StoryPublicAccessException catch (error) {
       if (!mounted) return;
@@ -190,7 +190,7 @@ class _SubscriberWelcomePageState extends State<SubscriberWelcomePage> {
     }
   }
 
-  Future<void> _loadHighlightFeedback(Story story) async {
+  Future<void> _refreshHighlightFeedback(Story story) async {
     final record = _accessRecord;
     final token = record?.accessToken;
     if (record == null || token == null || token.isEmpty) {

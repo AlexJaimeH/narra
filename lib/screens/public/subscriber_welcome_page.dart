@@ -996,8 +996,7 @@ class _StoryGridCard extends StatelessWidget {
         elevation: 0,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         child: InkWell(
-          borderRadius:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          borderRadius: BorderRadius.circular(24),
           onTap: onOpen,
           child: Padding(
             padding: const EdgeInsets.all(16),

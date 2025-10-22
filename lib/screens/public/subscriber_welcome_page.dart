@@ -1003,37 +1003,7 @@ class _StoryGridCard extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: SizedBox(
-                    width: 180,
-                    height: 180,
-                    child: cover != null
-                        ? Image.network(
-                            cover,
-                            fit: BoxFit.cover,
-                            alignment: Alignment.center,
-                            errorBuilder: (_, __, ___) => Container(
-                              color: colorScheme.surfaceVariant,
-                              alignment: Alignment.center,
-                              child: Icon(
-                                Icons.photo_outlined,
-                                color: colorScheme.onSurfaceVariant,
-                                size: 40,
-                              ),
-                            ),
-                          )
-                        : Container(
-                            color: colorScheme.surfaceVariant,
-                            alignment: Alignment.center,
-                            child: Icon(
-                              Icons.photo_outlined,
-                              color: colorScheme.onSurfaceVariant,
-                              size: 40,
-                            ),
-                          ),
-                  ),
-                ),
+                _StoryThumbnail(coverUrl: cover),
                 const SizedBox(width: 16),
                 Expanded(
                   child: Column(
@@ -1093,10 +1063,48 @@ class _StoryGridCard extends StatelessWidget {
                     ],
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _StoryThumbnail extends StatelessWidget {
+  const _StoryThumbnail({required this.coverUrl});
+
+  final String? coverUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: SizedBox(
+        width: 180,
+        height: 180,
+        child: coverUrl != null && coverUrl!.isNotEmpty
+            ? Image.network(
+                coverUrl!,
+                fit: BoxFit.cover,
+                alignment: Alignment.center,
+                errorBuilder: (_, __, ___) => _placeholder(colorScheme),
+              )
+            : _placeholder(colorScheme),
+      ),
+    );
+  }
+
+  Widget _placeholder(ColorScheme colorScheme) {
+    return Container(
+      color: colorScheme.surfaceVariant,
+      alignment: Alignment.center,
+      child: Icon(
+        Icons.photo_outlined,
+        color: colorScheme.onSurfaceVariant,
+        size: 40,
       ),
     );
   }

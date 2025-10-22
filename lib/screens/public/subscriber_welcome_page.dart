@@ -108,6 +108,8 @@ class _SubscriberWelcomePageState extends State<SubscriberWelcomePage> {
         source: record.source,
         grantedAt: record.grantedAt,
         status: record.status,
+        supabaseUrl: record.supabaseUrl,
+        supabaseAnonKey: record.supabaseAnonKey,
       );
 
       final latestStories = await PublicStoryService.getLatestStories(
@@ -204,6 +206,8 @@ class _SubscriberWelcomePageState extends State<SubscriberWelcomePage> {
         subscriberId: record.subscriberId,
         token: token,
         source: 'subscriber-library',
+        supabaseUrl: record.supabaseUrl,
+        supabaseAnonKey: record.supabaseAnonKey,
       );
       if (!mounted) return;
       setState(() {

@@ -281,6 +281,11 @@ class StoryPublicAccessService {
         (subscriber['status'] as String?)?.trim().isNotEmpty == true
             ? (subscriber['status'] as String).trim()
             : 'confirmed';
+    final supabasePayload = payload['supabase'] as Map<String, dynamic>?;
+    final supabaseUrl =
+        supabasePayload != null ? supabasePayload['url'] as String? : null;
+    final supabaseAnonKey =
+        supabasePayload != null ? supabasePayload['anonKey'] as String? : null;
 
     return StoryAccessRecord(
       authorId: authorId,
@@ -292,6 +297,11 @@ class StoryPublicAccessService {
       source: resolvedSource,
       grantedAt: grantedAt ?? DateTime.now(),
       status: resolvedStatus,
+      supabaseUrl:
+          supabaseUrl?.trim().isNotEmpty == true ? supabaseUrl!.trim() : null,
+      supabaseAnonKey: supabaseAnonKey?.trim().isNotEmpty == true
+          ? supabaseAnonKey!.trim()
+          : null,
     );
   }
 }

@@ -150,6 +150,8 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
                   source: validated.source,
                   grantedAt: validated.grantedAt,
                   status: validated.status,
+                  supabaseUrl: validated.supabaseUrl,
+                  supabaseAnonKey: validated.supabaseAnonKey,
                 );
               } else {
                 shareValidationMessage =
@@ -254,6 +256,8 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
         subscriberId: record.subscriberId,
         token: token,
         source: share?.source,
+        supabaseUrl: record.supabaseUrl,
+        supabaseAnonKey: record.supabaseAnonKey,
       );
 
       if (!mounted) return;
@@ -1059,6 +1063,8 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
         token: token,
         content: text,
         source: payload?.source,
+        supabaseUrl: record.supabaseUrl,
+        supabaseAnonKey: record.supabaseAnonKey,
       );
 
       if (!mounted) return;
@@ -1126,6 +1132,8 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
         token: token,
         isActive: nextState,
         source: payload?.source,
+        supabaseUrl: record.supabaseUrl,
+        supabaseAnonKey: record.supabaseAnonKey,
       );
 
       if (!mounted) return;

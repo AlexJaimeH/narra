@@ -29,6 +29,7 @@ class StoryPublicAccessService {
   const StoryPublicAccessService._();
 
   static const String _endpoint = '/api/story-access';
+  static bool _supabaseRpcSupported = true;
 
   static Future<StoryAccessRecord?> registerAccess({
     required String authorId,
@@ -41,17 +42,25 @@ class StoryPublicAccessService {
     final supabaseUrl = SupabaseConfig.supabaseUrl.trim();
     final supabaseAnonKey = SupabaseConfig.supabaseAnonKey.trim();
 
-    if (supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty) {
-      return _registerAccessViaSupabase(
-        supabaseUrl: supabaseUrl,
-        supabaseAnonKey: supabaseAnonKey,
-        authorId: authorId,
-        storyId: storyId,
-        subscriberId: subscriberId,
-        token: token,
-        source: source,
-        eventType: eventType,
-      );
+    if (_supabaseRpcSupported &&
+        supabaseUrl.isNotEmpty &&
+        supabaseAnonKey.isNotEmpty) {
+      try {
+        return await _registerAccessViaSupabase(
+          supabaseUrl: supabaseUrl,
+          supabaseAnonKey: supabaseAnonKey,
+          authorId: authorId,
+          storyId: storyId,
+          subscriberId: subscriberId,
+          token: token,
+          source: source,
+          eventType: eventType,
+        );
+      } on StoryPublicAccessException {
+        rethrow;
+      } catch (_) {
+        _supabaseRpcSupported = false;
+      }
     }
 
     return _registerAccessViaLegacyFunction(
@@ -100,6 +109,18 @@ class StoryPublicAccessService {
       },
       body: jsonEncode(payload),
     );
+
+    if (response.statusCode == 404) {
+      _supabaseRpcSupported = false;
+      return _registerAccessViaLegacyFunction(
+        authorId: authorId,
+        subscriberId: subscriberId,
+        token: token,
+        storyId: storyId,
+        source: source,
+        eventType: eventType,
+      );
+    }
 
     final decoded = _tryDecodeJson(utf8.decode(response.bodyBytes));
 

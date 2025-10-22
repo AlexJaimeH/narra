@@ -347,14 +347,14 @@ commit;
 begin;
 
 create or replace function public.register_subscriber_access(
-  p_author_id uuid,
-  p_subscriber_id uuid,
-  p_token text,
-  p_story_id uuid default null,
-  p_source text default null,
-  p_event_type text default 'access_granted',
-  p_request_ip inet default null,
-  p_user_agent text default null
+  author_id uuid,
+  subscriber_id uuid,
+  token text,
+  story_id uuid default null,
+  source text default null,
+  event_type text default 'access_granted',
+  request_ip inet default null,
+  user_agent text default null
 )
 returns jsonb
 language plpgsql
@@ -364,15 +364,15 @@ as $$
 declare
   v_subscriber public.subscribers%rowtype;
   v_now timestamptz := timezone('utc', now());
-  v_event_type text := lower(coalesce(nullif(p_event_type, ''), 'access_granted'));
-  v_source text := nullif(trim(coalesce(p_source, '')), '');
-  v_user_agent text := nullif(trim(coalesce(p_user_agent, '')), '');
+  v_event_type text := lower(coalesce(nullif(event_type, ''), 'access_granted'));
+  v_source text := nullif(trim(coalesce(source, '')), '');
+  v_user_agent text := nullif(trim(coalesce(user_agent, '')), '');
 begin
   select *
     into v_subscriber
     from public.subscribers
-   where id = p_subscriber_id
-     and user_id = p_author_id;
+   where id = subscriber_id
+     and user_id = author_id;
 
   if not found then
     return jsonb_build_object(
@@ -390,7 +390,7 @@ begin
 
   if v_subscriber.access_token is null
      or trim(v_subscriber.access_token) = ''
-     or trim(v_subscriber.access_token) <> trim(coalesce(p_token, '')) then
+     or trim(v_subscriber.access_token) <> trim(coalesce(token, '')) then
     return jsonb_build_object(
       'status', 'forbidden',
       'message', 'El enlace ya caducó o no es válido.'
@@ -400,7 +400,7 @@ begin
   update public.subscribers
      set status = case when status <> 'confirmed' then 'confirmed' else status end,
          last_access_at = v_now,
-         last_access_ip = coalesce(p_request_ip, last_access_ip),
+         last_access_ip = coalesce(request_ip, last_access_ip),
          last_access_user_agent = coalesce(substring(v_user_agent from 1 for 512), last_access_user_agent),
          last_access_source = coalesce(v_source, last_access_source)
    where id = v_subscriber.id;
@@ -413,9 +413,9 @@ begin
     event_type,
     metadata
   ) values (
-    p_author_id,
+    author_id,
     v_subscriber.id,
-    p_story_id,
+    story_id,
     v_subscriber.access_token,
     case
       when v_event_type = 'link_sent' then 'link_sent'
@@ -425,7 +425,7 @@ begin
     end,
     jsonb_build_object(
       'source', coalesce(v_source, null),
-      'ip', case when p_request_ip is null then null else p_request_ip::text end,
+      'ip', case when request_ip is null then null else request_ip::text end,
       'userAgent', v_user_agent
     )
   );

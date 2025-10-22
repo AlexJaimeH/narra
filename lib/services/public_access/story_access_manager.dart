@@ -23,6 +23,8 @@ class StoryAccessManager {
     String? source,
     DateTime? grantedAt,
     String status = 'confirmed',
+    String? supabaseUrl,
+    String? supabaseAnonKey,
   }) {
     final existing = _storage.read(authorId);
     final effectiveGrantedAt =
@@ -35,6 +37,8 @@ class StoryAccessManager {
         source: source ?? existing.source,
         grantedAt: effectiveGrantedAt,
         status: status,
+        supabaseUrl: supabaseUrl ?? existing.supabaseUrl,
+        supabaseAnonKey: supabaseAnonKey ?? existing.supabaseAnonKey,
       );
       _storage.write(updated);
       return updated;
@@ -48,6 +52,8 @@ class StoryAccessManager {
       grantedAt: effectiveGrantedAt,
       source: source,
       status: status,
+      supabaseUrl: supabaseUrl,
+      supabaseAnonKey: supabaseAnonKey,
     );
     _storage.write(record);
     return record;

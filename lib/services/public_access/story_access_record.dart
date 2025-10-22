@@ -7,6 +7,8 @@ class StoryAccessRecord {
     this.accessToken,
     this.source,
     this.status = 'confirmed',
+    this.supabaseUrl,
+    this.supabaseAnonKey,
   });
 
   final String authorId;
@@ -16,6 +18,8 @@ class StoryAccessRecord {
   final String? accessToken;
   final String? source;
   final String status;
+  final String? supabaseUrl;
+  final String? supabaseAnonKey;
 
   StoryAccessRecord copyWith({
     String? subscriberName,
@@ -23,6 +27,8 @@ class StoryAccessRecord {
     String? source,
     DateTime? grantedAt,
     String? status,
+    String? supabaseUrl,
+    String? supabaseAnonKey,
   }) {
     return StoryAccessRecord(
       authorId: authorId,
@@ -32,6 +38,8 @@ class StoryAccessRecord {
       accessToken: accessToken ?? this.accessToken,
       source: source ?? this.source,
       status: status ?? this.status,
+      supabaseUrl: supabaseUrl ?? this.supabaseUrl,
+      supabaseAnonKey: supabaseAnonKey ?? this.supabaseAnonKey,
     );
   }
 
@@ -44,6 +52,8 @@ class StoryAccessRecord {
       'grantedAt': grantedAt.toIso8601String(),
       'source': source,
       'status': status,
+      'supabaseUrl': supabaseUrl,
+      'supabaseAnonKey': supabaseAnonKey,
     };
   }
 
@@ -58,6 +68,13 @@ class StoryAccessRecord {
       status: (json['status'] as String?)?.trim().isNotEmpty == true
           ? (json['status'] as String).trim()
           : 'confirmed',
+      supabaseUrl: (json['supabaseUrl'] as String?)?.trim().isNotEmpty == true
+          ? (json['supabaseUrl'] as String).trim()
+          : null,
+      supabaseAnonKey:
+          (json['supabaseAnonKey'] as String?)?.trim().isNotEmpty == true
+              ? (json['supabaseAnonKey'] as String).trim()
+              : null,
     );
   }
 }

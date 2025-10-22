@@ -118,6 +118,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       status: (updates.status as string | undefined) ?? status,
     });
 
+    const supabaseInfo = resolvePublicSupabase(env, supabase);
+
     return json({
       grantedAt: nowIso,
       token: storedToken,
@@ -129,6 +131,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         status: isUnsubscribe ? 'unsubscribed' : 'confirmed',
       },
       unsubscribed: isUnsubscribe || status === 'unsubscribed',
+      ...(supabaseInfo ? { supabase: supabaseInfo } : {}),
     });
   } catch (error) {
     console.error('[story-access] Access validation failed', error);
@@ -218,4 +221,23 @@ function json(body: unknown, status = 200): Response {
     status,
     headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
   });
+}
+
+function resolvePublicSupabase(env: SupabaseEnv, creds: SupabaseCredentials) {
+  const anonCandidates = [
+    'PUBLIC_SUPABASE_ANON_KEY',
+    'SUPABASE_ANON_KEY',
+    'NEXT_PUBLIC_SUPABASE_ANON_KEY',
+    'REACT_APP_SUPABASE_ANON_KEY',
+  ];
+  for (const key of anonCandidates) {
+    const value = (env as any)[key];
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (trimmed.length > 0) {
+        return { url: creds.url, anonKey: trimmed };
+      }
+    }
+  }
+  return undefined;
 }

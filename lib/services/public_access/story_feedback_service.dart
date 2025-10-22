@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:narra/supabase/supabase_config.dart';
 
 class StoryFeedbackException implements Exception {
   StoryFeedbackException({
@@ -93,6 +94,25 @@ class StoryFeedbackService {
     required String token,
     String? source,
   }) async {
+    final rpcResponse = await _callSupabaseRpc({
+      'p_action': 'fetch',
+      'p_author_id': authorId,
+      'p_story_id': storyId,
+      'p_subscriber_id': subscriberId,
+      'p_token': token,
+      if (source != null && source.isNotEmpty) 'p_source': source,
+    });
+    if (rpcResponse != null) {
+      if (rpcResponse['error'] != null) {
+        throw StoryFeedbackException(
+          statusCode: 403,
+          message: rpcResponse['error'].toString(),
+          body: rpcResponse,
+        );
+      }
+      return StoryFeedbackState.fromJson(rpcResponse);
+    }
+
     final response = await http.post(
       Uri.parse(_endpoint),
       headers: const {'Content-Type': 'application/json'},
@@ -127,6 +147,29 @@ class StoryFeedbackService {
     required String content,
     String? source,
   }) async {
+    final rpcResponse = await _callSupabaseRpc({
+      'p_action': 'comment',
+      'p_author_id': authorId,
+      'p_story_id': storyId,
+      'p_subscriber_id': subscriberId,
+      'p_token': token,
+      'p_content': content,
+      if (source != null && source.isNotEmpty) 'p_source': source,
+    });
+    if (rpcResponse != null) {
+      if (rpcResponse['error'] != null) {
+        throw StoryFeedbackException(
+          statusCode: 400,
+          message: rpcResponse['error'].toString(),
+          body: rpcResponse,
+        );
+      }
+      final comment = rpcResponse['comment'];
+      if (comment is Map<String, dynamic>) {
+        return StoryFeedbackComment.fromJson(comment);
+      }
+    }
+
     final response = await http.post(
       Uri.parse(_endpoint),
       headers: const {'Content-Type': 'application/json'},
@@ -169,6 +212,31 @@ class StoryFeedbackService {
     required bool isActive,
     String? source,
   }) async {
+    final rpcResponse = await _callSupabaseRpc({
+      'p_action': 'reaction',
+      'p_author_id': authorId,
+      'p_story_id': storyId,
+      'p_subscriber_id': subscriberId,
+      'p_token': token,
+      'p_reaction_type': 'heart',
+      'p_active': isActive,
+      if (source != null && source.isNotEmpty) 'p_source': source,
+    });
+    if (rpcResponse != null) {
+      if (rpcResponse['error'] != null) {
+        throw StoryFeedbackException(
+          statusCode: 400,
+          message: rpcResponse['error'].toString(),
+          body: rpcResponse,
+        );
+      }
+      final reaction = rpcResponse['reaction'];
+      if (reaction is Map<String, dynamic>) {
+        return reaction['active'] == true;
+      }
+      return isActive;
+    }
+
     final response = await http.post(
       Uri.parse(_endpoint),
       headers: const {'Content-Type': 'application/json'},
@@ -201,17 +269,61 @@ class StoryFeedbackService {
     );
   }
 
-  static Map<String, dynamic>? _decodeBody(http.Response response) {
-    final bodyText = utf8.decode(response.bodyBytes);
-    if (bodyText.isEmpty) return null;
-    try {
-      final decoded = jsonDecode(bodyText);
-      if (decoded is Map<String, dynamic>) {
-        return decoded;
-      }
-      return {'data': decoded};
-    } catch (_) {
-      return {'raw': bodyText};
+  static Future<Map<String, dynamic>?> _callSupabaseRpc(
+    Map<String, dynamic> payload,
+  ) async {
+    final url = SupabaseConfig.supabaseUrl.trim();
+    final anonKey = SupabaseConfig.supabaseAnonKey.trim();
+    if (url.isEmpty || anonKey.isEmpty) {
+      return null;
     }
+
+    try {
+      final response = await http.post(
+        Uri.parse('$url/rest/v1/rpc/process_story_feedback'),
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': anonKey,
+          'Authorization': 'Bearer $anonKey',
+          'Prefer': 'return=representation',
+        },
+        body: jsonEncode(payload),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        if (response.body.isEmpty) {
+          return const {};
+        }
+        final decoded = jsonDecode(response.body);
+        if (decoded == null) {
+          return const {};
+        }
+        if (decoded is Map<String, dynamic>) {
+          return decoded;
+        }
+        return {'result': decoded};
+      }
+
+      if (response.statusCode == 404) {
+        return null;
+      }
+    } catch (_) {
+      return null;
+    }
+
+    return null;
+  }
+
+  static Map<String, dynamic>? _decodeBody(http.Response response) {
+    if (response.body.isEmpty) return null;
+    try {
+      final dynamic parsed = jsonDecode(response.body);
+      if (parsed is Map<String, dynamic>) {
+        return parsed;
+      }
+    } catch (_) {
+      return {'raw': response.body};
+    }
+    return null;
   }
 }

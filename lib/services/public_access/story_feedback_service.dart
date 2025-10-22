@@ -103,9 +103,7 @@ class StoryFeedbackService {
       'p_subscriber_id': subscriberId,
       'p_token': token,
       if (source != null && source.isNotEmpty) 'p_source': source,
-    },
-        overrideUrl: supabaseUrl,
-        overrideAnonKey: supabaseAnonKey);
+    }, overrideUrl: supabaseUrl, overrideAnonKey: supabaseAnonKey);
     if (rpcResponse != null) {
       if (rpcResponse['error'] != null) {
         throw StoryFeedbackException(
@@ -150,6 +148,8 @@ class StoryFeedbackService {
     required String token,
     required String content,
     String? source,
+    String? supabaseUrl,
+    String? supabaseAnonKey,
   }) async {
     final rpcResponse = await _callSupabaseRpc({
       'p_action': 'comment',
@@ -159,9 +159,7 @@ class StoryFeedbackService {
       'p_token': token,
       'p_content': content,
       if (source != null && source.isNotEmpty) 'p_source': source,
-    },
-        overrideUrl: supabaseUrl,
-        overrideAnonKey: supabaseAnonKey);
+    }, overrideUrl: supabaseUrl, overrideAnonKey: supabaseAnonKey);
     if (rpcResponse != null) {
       if (rpcResponse['error'] != null) {
         throw StoryFeedbackException(
@@ -229,9 +227,7 @@ class StoryFeedbackService {
       'p_reaction_type': 'heart',
       'p_active': isActive,
       if (source != null && source.isNotEmpty) 'p_source': source,
-    },
-        overrideUrl: supabaseUrl,
-        overrideAnonKey: supabaseAnonKey);
+    }, overrideUrl: supabaseUrl, overrideAnonKey: supabaseAnonKey);
     if (rpcResponse != null) {
       if (rpcResponse['error'] != null) {
         throw StoryFeedbackException(

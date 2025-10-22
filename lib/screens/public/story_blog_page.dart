@@ -1149,11 +1149,12 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
   }
 
   String _toRouteName(Uri link) {
-    final path = link.path.isEmpty ? '/' : link.path;
+    final rawPath =
+        link.path.isEmpty ? '/' : '/${link.path}'.replaceAll('//', '/');
     if (link.hasQuery) {
-      return '$path?${link.query}';
+      return '$rawPath?${link.query}';
     }
-    return path;
+    return rawPath;
   }
 
   void _goToAuthorLibrary(Story story) {

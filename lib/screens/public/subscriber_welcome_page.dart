@@ -5,8 +5,8 @@ import 'package:narra/repositories/story_repository.dart';
 import 'package:narra/services/public_access/public_author_profile.dart';
 import 'package:narra/services/public_access/story_access_manager.dart';
 import 'package:narra/services/public_access/story_access_record.dart';
-import 'package:narra/services/public_access/story_public_access_service.dart';
 import 'package:narra/services/public_access/story_feedback_service.dart';
+import 'package:narra/services/public_access/story_public_access_service.dart';
 import 'package:narra/services/public_story_service.dart';
 import 'package:narra/services/story_share_link_builder.dart';
 
@@ -30,42 +30,15 @@ class _SubscriberWelcomePageState extends State<SubscriberWelcomePage> {
   String? _subscriberName;
   List<Story> _stories = const [];
   Story? _highlightStory;
+  bool _highlightHearted = false;
   bool _showWelcomeBanner = false;
   bool _isUnsubscribed = false;
   bool _isUnsubscribing = false;
-  bool _highlightHearted = false;
 
   @override
   void initState() {
     super.initState();
     scheduleMicrotask(_initialize);
-  }
-
-  Future<void> _loadHighlightFeedback(Story story) async {
-    final record = _accessRecord;
-    final token = record?.accessToken;
-    if (record == null || token == null || token.isEmpty) {
-      return;
-    }
-
-    try {
-      final feedback = await StoryFeedbackService.fetchState(
-        authorId: story.userId,
-        storyId: story.id,
-        subscriberId: record.subscriberId,
-        token: token,
-        source: 'subscriber-library',
-      );
-      if (!mounted) return;
-      setState(() {
-        _highlightHearted = feedback.hasReacted;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _highlightHearted = false;
-      });
-    }
   }
 
   Future<void> _initialize() async {
@@ -113,7 +86,6 @@ class _SubscriberWelcomePageState extends State<SubscriberWelcomePage> {
         authorId: payload.authorId,
         limit: 8,
       );
-
       final sortedStories = List<Story>.from(latestStories)
         ..sort((a, b) {
           DateTime resolveDate(Story story) =>
@@ -168,8 +140,10 @@ class _SubscriberWelcomePageState extends State<SubscriberWelcomePage> {
         _highlightStory = highlightStory;
         _showWelcomeBanner =
             payload.showWelcomeBanner || (payload.source ?? '') == 'invite';
+        _isUnsubscribed = record.status == 'unsubscribed';
       });
-      if (highlightStory != null) {
+
+      if (highlightStory != null && !_isUnsubscribed) {
         await _loadHighlightFeedback(highlightStory);
       }
     } on StoryPublicAccessException catch (error) {
@@ -188,6 +162,31 @@ class _SubscriberWelcomePageState extends State<SubscriberWelcomePage> {
     }
   }
 
+  Future<void> _loadHighlightFeedback(Story story) async {
+    final record = _accessRecord;
+    final token = record?.accessToken;
+    if (record == null || token == null || token.isEmpty) {
+      return;
+    }
+
+    try {
+      final feedback = await StoryFeedbackService.fetchState(
+        authorId: story.userId,
+        storyId: story.id,
+        subscriberId: record.subscriberId,
+        token: token,
+        source: 'subscriber-library',
+      );
+      if (!mounted) return;
+      setState(() {
+        _highlightHearted = feedback.hasReacted;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _highlightHearted = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -195,50 +194,45 @@ class _SubscriberWelcomePageState extends State<SubscriberWelcomePage> {
 
     if (_isLoading) {
       return Scaffold(
-        body: Container(
-          alignment: Alignment.center,
-          padding: const EdgeInsets.all(24),
-          child: const CircularProgressIndicator(),
-        ),
+        backgroundColor: colorScheme.surface,
+        body: const Center(child: CircularProgressIndicator()),
       );
     }
 
     if (_errorMessage != null) {
       return Scaffold(
-        body: SafeArea(
-          child: Center(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 520),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.error_outline,
-                        size: 64, color: colorScheme.error),
-                    const SizedBox(height: 20),
-                    Text(
-                      'No pudimos validar tu acceso',
-                      style: theme.textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                      textAlign: TextAlign.center,
+        backgroundColor: colorScheme.surface,
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 520),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.error_outline, size: 64, color: colorScheme.error),
+                  const SizedBox(height: 20),
+                  Text(
+                    'No pudimos validar tu acceso',
+                    style: theme.textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
                     ),
-                    const SizedBox(height: 12),
-                    Text(
-                      _errorMessage!,
-                      style: theme.textTheme.bodyLarge,
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 24),
-                    FilledButton.icon(
-                      onPressed: () =>
-                          Navigator.of(context).pushReplacementNamed('/'),
-                      icon: const Icon(Icons.home_outlined),
-                      label: const Text('Ir al inicio de Narra'),
-                    ),
-                  ],
-                ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    _errorMessage!,
+                    style: theme.textTheme.bodyLarge,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 24),
+                  FilledButton.icon(
+                    onPressed: () =>
+                        Navigator.of(context).pushReplacementNamed('/'),
+                    icon: const Icon(Icons.home_outlined),
+                    label: const Text('Ir al inicio de Narra'),
+                  ),
+                ],
               ),
             ),
           ),
@@ -249,180 +243,83 @@ class _SubscriberWelcomePageState extends State<SubscriberWelcomePage> {
     final profile = _authorProfile;
     final subscriberName = _subscriberName ?? 'Suscriptor';
     final displayName = profile?.resolvedDisplayName ?? 'Tu autor/a en Narra';
-    final highlightStory = _highlightStory;
+    final highlightStory = !_isUnsubscribed ? _highlightStory : null;
     final otherStories =
         highlightStory != null ? _stories.skip(1).toList() : _stories;
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 1080),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _buildHeroSection(
-                    context: context,
-                    profile: profile,
-                    subscriberName: subscriberName,
-                    onReadLatest: highlightStory != null && !_isUnsubscribed
-                        ? () => _openStory(highlightStory)
-                        : null,
-                    totalStories: _stories.length,
-                    isUnsubscribed: _isUnsubscribed,
-                    highlightHearted: _highlightHearted,
-                    highlightStory: highlightStory,
-                  ),
-                  if (_showWelcomeBanner && !_isUnsubscribed) ...[
-                    const SizedBox(height: 24),
-                    _buildAccessInfoCard(
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                colorScheme.surface,
+                colorScheme.surfaceVariant.withOpacity(0.35),
+              ],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+            ),
+          ),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1080),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildHeroSection(
                       context: context,
+                      profile: profile,
                       subscriberName: subscriberName,
-                      authorName: displayName,
-                    ),
-                  ],
-                  if (highlightStory != null && !_isUnsubscribed) ...[
-                    const SizedBox(height: 32),
-                    _FeaturedStoryCard(
-                      story: highlightStory,
-                      onOpen: () => _openStory(highlightStory),
+                      onReadLatest: highlightStory != null && !_isUnsubscribed
+                          ? () => _openStory(highlightStory)
+                          : null,
+                      totalStories: _stories.length,
+                      isUnsubscribed: _isUnsubscribed,
                       highlightHearted: _highlightHearted,
+                      highlightStory: highlightStory,
                     ),
+                    if (_showWelcomeBanner && !_isUnsubscribed) ...[
+                      const SizedBox(height: 24),
+                      _buildAccessInfoCard(
+                        context: context,
+                        subscriberName: subscriberName,
+                        authorName: displayName,
+                      ),
+                    ],
+                    if (highlightStory != null && !_isUnsubscribed) ...[
+                      const SizedBox(height: 32),
+                      _FeaturedStoryCard(
+                        story: highlightStory,
+                        onOpen: () => _openStory(highlightStory),
+                        highlightHearted: _highlightHearted,
+                      ),
+                    ],
+                    const SizedBox(height: 32),
+                    if (_isUnsubscribed)
+                      _buildUnsubscribedBanner(context, displayName)
+                    else if (_stories.isEmpty)
+                      _buildEmptyStoriesState(
+                        context: context,
+                        authorName: displayName,
+                      )
+                    else if (otherStories.isNotEmpty)
+                      _buildStoriesSection(
+                        context: context,
+                        stories: otherStories,
+                      ),
+                    const SizedBox(height: 32),
+                    _buildUnsubscribeSection(context, displayName),
                   ],
-                  const SizedBox(height: 32),
-                  if (_isUnsubscribed)
-                    _buildUnsubscribedBanner(context, displayName)
-                  else if (_stories.isEmpty)
-                    _buildEmptyStoriesState(
-                      context: context,
-                      authorName: displayName,
-                    )
-                  else if (otherStories.isNotEmpty)
-                    _buildStoriesSection(
-                      context: context,
-                      stories: otherStories,
-                    ),
-                  const SizedBox(height: 32),
-                  _buildUnsubscribeSection(context, displayName),
-                ],
+                ),
               ),
             ),
           ),
         ),
       ),
     );
-  }
-
-  void _openStory(Story story) {
-    final record = _accessRecord;
-    if (record == null) return;
-
-    final link = StoryShareLinkBuilder.buildStoryLink(
-      story: story,
-      subscriber: StoryShareTarget(
-        id: record.subscriberId,
-        name: record.subscriberName,
-        token: record.accessToken,
-        source: record.source,
-      ),
-      source: record.source,
-    );
-
-    final path = link.path.isEmpty ? '/' : link.path;
-    final routeName = link.hasQuery ? '$path?${link.query}' : path;
-
-    Navigator.of(context).pushReplacementNamed(routeName);
-  }
-
-  Future<void> _handleUnsubscribe() async {
-    if (_isUnsubscribing) return;
-    final record = _accessRecord;
-    final token = record?.accessToken;
-    if (record == null || token == null || token.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No encontramos tu enlace mágico para darte de baja.'),
-        ),
-      );
-      return;
-    }
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Darse de baja'),
-          content: const Text(
-            'Dejarás de recibir historias y ya no podrás abrir los recuerdos sin pedir un nuevo enlace. ¿Seguro que quieres continuar?',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancelar'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Sí, darme de baja'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (confirmed != true) return;
-
-    setState(() => _isUnsubscribing = true);
-
-    try {
-      final success = await StoryPublicAccessService.unsubscribe(
-        authorId: record.authorId,
-        subscriberId: record.subscriberId,
-        token: token,
-        source: 'subscriber-library',
-      );
-
-      if (!success) {
-        throw StoryPublicAccessException(
-          statusCode: 500,
-          message: 'No pudimos confirmar la baja.',
-        );
-      }
-
-      StoryAccessManager.revokeAccess(record.authorId);
-
-      if (!mounted) return;
-      setState(() {
-        _isUnsubscribing = false;
-        _isUnsubscribed = true;
-        _stories = const [];
-        _highlightStory = null;
-        _highlightHearted = false;
-        _showWelcomeBanner = false;
-        _accessRecord = record.copyWith(status: 'unsubscribed');
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Baja confirmada. Gracias por acompañar al autor.')),
-      );
-    } on StoryPublicAccessException catch (error) {
-      if (!mounted) return;
-      setState(() => _isUnsubscribing = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.message)),
-      );
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _isUnsubscribing = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No pudimos darte de baja. Inténtalo de nuevo.'),
-        ),
-      );
-    }
   }
 
   Widget _buildHeroSection({
@@ -442,7 +339,8 @@ class _SubscriberWelcomePageState extends State<SubscriberWelcomePage> {
     final tagline = profile?.tagline?.trim();
     final summary = profile?.summary?.trim();
     final fallbackSummary =
-        'Este es tu espacio privado para leer los recuerdos y cartas que $displayName comparte contigo.';
+        'Este es tu espacio privado para leer las historias que $displayName comparte contigo.';
+
     final statsChips = _buildAuthorStats(
       theme: theme,
       colorScheme: colorScheme,
@@ -451,120 +349,132 @@ class _SubscriberWelcomePageState extends State<SubscriberWelcomePage> {
       highlightHearted: highlightHearted,
     );
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(32),
-      child: Stack(
-        children: [
-          if (hasCover)
-            Positioned.fill(
-              child: Image.network(
-                profile!.coverImageUrl!,
-                fit: BoxFit.cover,
-                alignment: Alignment.topCenter,
-                errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-              ),
-            ),
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: hasCover
-                      ? [
-                          colorScheme.surface.withValues(alpha: 0.90),
-                          colorScheme.surface.withValues(alpha: 0.78),
-                        ]
-                      : [
-                          colorScheme.primaryContainer.withValues(alpha: 0.55),
-                          colorScheme.surface,
-                        ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(32),
+        boxShadow: [
+          BoxShadow(
+            color: colorScheme.shadow.withOpacity(0.12),
+            blurRadius: 40,
+            offset: const Offset(0, 24),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(32),
+        child: Stack(
+          children: [
+            if (hasCover)
+              Positioned.fill(
+                child: Image.network(
+                  profile!.coverImageUrl!,
+                  fit: BoxFit.cover,
+                  alignment: Alignment.topCenter,
+                  errorBuilder: (_, __, ___) => const SizedBox.shrink(),
                 ),
               ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 36),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Hola, $subscriberName',
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                    letterSpacing: 0.2,
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: hasCover
+                        ? [
+                            colorScheme.surface.withOpacity(0.92),
+                            colorScheme.surface.withOpacity(0.82),
+                          ]
+                        : [
+                            colorScheme.primaryContainer.withOpacity(0.5),
+                            colorScheme.surface,
+                          ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
                 ),
-                const SizedBox(height: 18),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    _AuthorPortrait(avatarUrl: profile?.avatarUrl),
-                    const SizedBox(width: 20),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            displayName,
-                            style: theme.textTheme.headlineMedium?.copyWith(
-                              fontWeight: FontWeight.w800,
-                              height: 1.05,
-                            ),
-                          ),
-                          if (tagline?.isNotEmpty == true) ...[
-                            const SizedBox(height: 8),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 36, vertical: 40),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Hola, $subscriberName',
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      letterSpacing: 0.2,
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      _AuthorPortrait(avatarUrl: profile?.avatarUrl),
+                      const SizedBox(width: 20),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
                             Text(
-                              tagline!,
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                color: colorScheme.onSurfaceVariant,
+                              displayName,
+                              style: theme.textTheme.headlineMedium?.copyWith(
+                                fontWeight: FontWeight.w800,
+                                height: 1.05,
                               ),
                             ),
+                            if (tagline?.isNotEmpty == true) ...[
+                              const SizedBox(height: 6),
+                              Text(
+                                tagline!,
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
                           ],
-                        ],
+                        ),
                       ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 680),
+                    child: Text(
+                      summary?.isNotEmpty == true ? summary! : fallbackSummary,
+                      style: theme.textTheme.bodyLarge?.copyWith(height: 1.55),
+                    ),
+                  ),
+                  if (statsChips.isNotEmpty) ...[
+                    const SizedBox(height: 20),
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: statsChips,
                     ),
                   ],
-                ),
-                const SizedBox(height: 20),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 680),
-                  child: Text(
-                    summary?.isNotEmpty == true ? summary! : fallbackSummary,
-                    style: theme.textTheme.bodyLarge?.copyWith(height: 1.55),
-                  ),
-                ),
-                if (statsChips.isNotEmpty) ...[
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 24),
                   Wrap(
                     spacing: 12,
                     runSpacing: 12,
-                    children: statsChips,
+                    children: [
+                      if (onReadLatest != null && !isUnsubscribed)
+                        FilledButton.icon(
+                          onPressed: onReadLatest,
+                          icon: const Icon(Icons.auto_stories_outlined),
+                          label: const Text('Leer la historia más reciente'),
+                        ),
+                      OutlinedButton.icon(
+                        onPressed: () =>
+                            Navigator.of(context).pushReplacementNamed('/'),
+                        icon: const Icon(Icons.home_outlined),
+                        label: const Text('Explorar Narra'),
+                      ),
+                    ],
                   ),
                 ],
-                const SizedBox(height: 24),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  children: [
-                    if (onReadLatest != null && !isUnsubscribed)
-                      FilledButton.icon(
-                        onPressed: onReadLatest,
-                        icon: const Icon(Icons.auto_stories_outlined),
-                        label: const Text('Leer la historia más reciente'),
-                      ),
-                    OutlinedButton.icon(
-                      onPressed: () =>
-                          Navigator.of(context).pushReplacementNamed('/'),
-                      icon: const Icon(Icons.home_outlined),
-                      label: const Text('Explorar Narra'),
-                    ),
-                  ],
-                ),
-              ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -578,7 +488,7 @@ class _SubscriberWelcomePageState extends State<SubscriberWelcomePage> {
     final colorScheme = theme.colorScheme;
 
     return Card(
-      color: colorScheme.surfaceVariant.withValues(alpha: 0.35),
+      color: colorScheme.surfaceVariant.withOpacity(0.4),
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       child: Padding(
@@ -663,24 +573,26 @@ class _SubscriberWelcomePageState extends State<SubscriberWelcomePage> {
   }) {
     final chips = <Widget>[];
 
-    final totalLabel = totalStories == 1
-        ? '1 historia publicada'
-        : '$totalStories historias publicadas';
-    chips.add(_StoryChip(
-      icon: Icons.auto_stories_outlined,
-      label: totalLabel,
-    ));
+    if (totalStories > 0) {
+      final label = totalStories == 1
+          ? '1 historia publicada'
+          : '$totalStories historias publicadas';
+      chips.add(_StatChip(
+        icon: Icons.auto_stories_outlined,
+        label: label,
+      ));
+    }
 
     final lastDate = highlightStory?.publishedAt ?? highlightStory?.updatedAt;
     if (lastDate != null) {
-      chips.add(_StoryChip(
-        icon: Icons.calendar_today_outlined,
-        label: 'Última: ${_formatRelativeDate(lastDate)}',
+      chips.add(_StatChip(
+        icon: Icons.calendar_month_outlined,
+        label: 'Última historia ${_formatRelativeDate(lastDate)}',
       ));
     }
 
     if (highlightHearted) {
-      chips.add(_StoryChip(
+      chips.add(_StatChip(
         icon: Icons.favorite,
         label: 'Marcaste con un corazón',
       ));
@@ -740,8 +652,7 @@ class _SubscriberWelcomePageState extends State<SubscriberWelcomePage> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(Icons.mark_email_unread_outlined,
-                color: colorScheme.primary, size: 32),
+            Icon(Icons.mail_outline, color: colorScheme.primary, size: 32),
             const SizedBox(width: 16),
             Expanded(
               child: Column(
@@ -755,7 +666,7 @@ class _SubscriberWelcomePageState extends State<SubscriberWelcomePage> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Si cambias de opinión, pídele a $authorName que te envíe un nuevo enlace mágico.',
+                    'Si cambias de opinión, pídele a $authorName que te envíe un nuevo enlace mágico cuando publique algo especial para ti.',
                     style: theme.textTheme.bodyMedium?.copyWith(
                       height: 1.6,
                       color: colorScheme.onSurfaceVariant,
@@ -813,14 +724,129 @@ class _SubscriberWelcomePageState extends State<SubscriberWelcomePage> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.logout),
-                label: Text(
-                  _isUnsubscribing ? 'Dando de baja…' : 'Darse de baja',
-                ),
+                label:
+                    Text(_isUnsubscribing ? 'Dando de baja…' : 'Darse de baja'),
               ),
           ],
         ),
       ),
     );
+  }
+
+  void _openStory(Story story) {
+    final record = _accessRecord;
+    if (record == null) return;
+
+    final link = StoryShareLinkBuilder.buildStoryLink(
+      story: story,
+      subscriber: StoryShareTarget(
+        id: record.subscriberId,
+        name: record.subscriberName,
+        token: record.accessToken,
+        source: record.source,
+      ),
+      source: record.source,
+    );
+
+    final routeName = _routeNameFromUri(link);
+    Navigator.of(context).pushReplacementNamed(routeName);
+  }
+
+  Future<void> _handleUnsubscribe() async {
+    if (_isUnsubscribing) return;
+    final record = _accessRecord;
+    final token = record?.accessToken;
+    if (record == null || token == null || token.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No encontramos tu enlace mágico para darte de baja.'),
+        ),
+      );
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Darse de baja'),
+          content: const Text(
+            'Dejarás de recibir historias y necesitarás un nuevo enlace si deseas volver. ¿Seguro que quieres continuar?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Sí, darme de baja'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) return;
+
+    setState(() => _isUnsubscribing = true);
+
+    try {
+      final success = await StoryPublicAccessService.unsubscribe(
+        authorId: record.authorId,
+        subscriberId: record.subscriberId,
+        token: token,
+        source: 'subscriber-library',
+      );
+
+      if (!success) {
+        throw StoryPublicAccessException(
+          statusCode: 500,
+          message: 'No pudimos confirmar la baja.',
+        );
+      }
+
+      StoryAccessManager.revokeAccess(record.authorId);
+
+      if (!mounted) return;
+      setState(() {
+        _isUnsubscribing = false;
+        _isUnsubscribed = true;
+        _showWelcomeBanner = false;
+        _stories = const [];
+        _highlightStory = null;
+        _highlightHearted = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Baja confirmada. Gracias por acompañar al autor.'),
+        ),
+      );
+    } on StoryPublicAccessException catch (error) {
+      if (!mounted) return;
+      setState(() => _isUnsubscribing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.message)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isUnsubscribing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No pudimos darte de baja. Inténtalo de nuevo.'),
+        ),
+      );
+    }
+  }
+
+  String _routeNameFromUri(Uri link) {
+    final rawPath =
+        link.path.isEmpty ? '/' : '/${link.path}'.replaceAll('//', '/');
+    if (link.hasQuery) {
+      return '$rawPath?${link.query}';
+    }
+    return rawPath;
   }
 }
 
@@ -866,7 +892,7 @@ class _FeaturedStoryCard extends StatelessWidget {
     final readingTime = _formatReadingTime(story);
 
     return Card(
-      elevation: 2,
+      elevation: 3,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -892,14 +918,11 @@ class _FeaturedStoryCard extends StatelessWidget {
               )
             else
               Container(
-                height: 180,
-                decoration: BoxDecoration(
-                  color: colorScheme.primaryContainer.withValues(alpha: 0.5),
-                ),
-                child: Center(
-                  child: Icon(Icons.auto_stories_outlined,
-                      color: colorScheme.primary, size: 56),
-                ),
+                height: 200,
+                color: colorScheme.primaryContainer.withOpacity(0.5),
+                alignment: Alignment.center,
+                child: Icon(Icons.auto_stories_outlined,
+                    color: colorScheme.primary, size: 56),
               ),
             Padding(
               padding: const EdgeInsets.all(28),
@@ -933,36 +956,35 @@ class _FeaturedStoryCard extends StatelessWidget {
                   Text(
                     _buildExcerptText(
                       story.excerpt ?? story.content ?? '',
-                      maxLength: 220,
+                      maxLength: 240,
                     ),
                     style: theme.textTheme.bodyLarge?.copyWith(
                       height: 1.6,
                       color: colorScheme.onSurfaceVariant,
                     ),
                   ),
-                  const SizedBox(height: 20),
-                  if (highlightHearted)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.favorite, color: colorScheme.primary),
-                          const SizedBox(width: 6),
-                          Text(
-                            'Ya reaccionaste con un corazón',
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: colorScheme.primary,
-                              fontWeight: FontWeight.w600,
-                            ),
+                  if (highlightHearted) ...[
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.favorite, color: colorScheme.primary),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Gracias por enviar un corazón a esta historia',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: colorScheme.primary,
+                            fontWeight: FontWeight.w600,
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
+                  ],
+                  const SizedBox(height: 20),
                   FilledButton.icon(
                     onPressed: onOpen,
                     icon: const Icon(Icons.menu_book_rounded),
-                    label: const Text('Abrir esta historia'),
+                    label: const Text('Leer historia completa'),
                   ),
                 ],
               ),
@@ -1003,8 +1025,6 @@ class _StoryGridCard extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _StoryThumbnail(coverUrl: cover),
-                const SizedBox(width: 16),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1038,7 +1058,7 @@ class _StoryGridCard extends StatelessWidget {
                       Text(
                         _buildExcerptText(
                           story.excerpt ?? story.content ?? '',
-                          maxLength: 140,
+                          maxLength: 150,
                         ),
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: colorScheme.onSurfaceVariant,
@@ -1063,6 +1083,8 @@ class _StoryGridCard extends StatelessWidget {
                     ],
                   ),
                 ),
+                const SizedBox(width: 14),
+                _StoryThumbnail(coverUrl: cover),
               ],
             ),
           ),
@@ -1083,9 +1105,9 @@ class _StoryThumbnail extends StatelessWidget {
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
       child: SizedBox(
-        width: 180,
-        height: 180,
-        child: coverUrl != null && coverUrl!.isNotEmpty
+        width: 120,
+        height: 120,
+        child: coverUrl != null && coverUrl!.trim().isNotEmpty
             ? Image.network(
                 coverUrl!,
                 fit: BoxFit.cover,
@@ -1104,7 +1126,7 @@ class _StoryThumbnail extends StatelessWidget {
       child: Icon(
         Icons.photo_outlined,
         color: colorScheme.onSurfaceVariant,
-        size: 40,
+        size: 28,
       ),
     );
   }
@@ -1143,11 +1165,61 @@ class _StoryChip extends StatelessWidget {
   }
 }
 
-String? _storyCoverUrl(Story story) {
-  if (story.photos.isEmpty) return null;
-  final photo = story.photos.first;
-  if (photo.photoUrl.trim().isEmpty) return null;
-  return photo.photoUrl;
+class _StatChip extends StatelessWidget {
+  const _StatChip({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: colorScheme.primaryContainer.withOpacity(0.4),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18, color: colorScheme.primary),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: colorScheme.primary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _formatRelativeDate(DateTime date) {
+  final now = DateTime.now();
+  final diff = now.difference(date);
+  if (diff.inMinutes < 1) return 'Hace instantes';
+  if (diff.inMinutes < 60) return 'Hace ${diff.inMinutes} min';
+  if (diff.inHours < 24) return 'Hace ${diff.inHours} h';
+  if (diff.inDays < 7) return 'Hace ${diff.inDays} días';
+  const months = [
+    'ene',
+    'feb',
+    'mar',
+    'abr',
+    'may',
+    'jun',
+    'jul',
+    'ago',
+    'sep',
+    'oct',
+    'nov',
+    'dic',
+  ];
+  return '${date.day.toString().padLeft(2, '0')} ${months[date.month - 1]} ${date.year}';
 }
 
 String _formatReadingTime(Story story) {
@@ -1161,6 +1233,13 @@ String _buildExcerptText(String raw, {int maxLength = 160}) {
   final clean = raw.replaceAll(RegExp(r'\s+'), ' ').trim();
   if (clean.length <= maxLength) return clean;
   return '${clean.substring(0, maxLength - 1).trimRight()}…';
+}
+
+String? _storyCoverUrl(Story story) {
+  if (story.photos.isEmpty) return null;
+  final photo = story.photos.first;
+  if (photo.photoUrl.trim().isEmpty) return null;
+  return photo.photoUrl;
 }
 
 class _InvitePayload {
@@ -1210,7 +1289,6 @@ class _InvitePayload {
     if (subscriberParam != null &&
         subscriberParam.isNotEmpty &&
         subscriberParam != subscriberId) {
-      // Prevent mismatched links from granting access to another subscriber.
       return null;
     }
 
@@ -1229,28 +1307,4 @@ bool _parseBool(String? raw) {
   if (raw == null) return false;
   final normalized = raw.trim().toLowerCase();
   return normalized == '1' || normalized == 'true' || normalized == 'yes';
-}
-
-String _formatRelativeDate(DateTime date) {
-  final now = DateTime.now();
-  final diff = now.difference(date);
-  if (diff.inMinutes < 1) return 'Hace instantes';
-  if (diff.inMinutes < 60) return 'Hace ${diff.inMinutes} min';
-  if (diff.inHours < 24) return 'Hace ${diff.inHours} h';
-  if (diff.inDays < 7) return 'Hace ${diff.inDays} días';
-  const months = [
-    'ene',
-    'feb',
-    'mar',
-    'abr',
-    'may',
-    'jun',
-    'jul',
-    'ago',
-    'sep',
-    'oct',
-    'nov',
-    'dic',
-  ];
-  return '${date.day.toString().padLeft(2, '0')} ${months[date.month - 1]} ${date.year}';
 }

@@ -94,7 +94,6 @@ class _StoriesListPageState extends State<StoriesListPage>
         subscribers: subscribers,
         authorDisplayName:
             story.authorDisplayName ?? story.authorName ?? 'Autor/a de Narra',
-        baseUri: Uri.base,
       );
 
       if (!mounted) return;

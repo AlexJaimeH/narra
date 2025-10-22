@@ -5,6 +5,21 @@ import 'package:narra/repositories/story_repository.dart';
 class StoryShareLinkBuilder {
   const StoryShareLinkBuilder._();
 
+  static final Uri _defaultBaseUri = _resolveDefaultBaseUri();
+
+  static Uri _resolveDefaultBaseUri() {
+    const rawDefault =
+        String.fromEnvironment('PUBLIC_SHARE_BASE_URL', defaultValue: '');
+    final trimmed = rawDefault.trim();
+    if (trimmed.isNotEmpty) {
+      final parsed = Uri.tryParse(trimmed);
+      if (parsed != null && parsed.hasScheme && parsed.host.isNotEmpty) {
+        return _sanitizeBaseUri(parsed);
+      }
+    }
+    return Uri.parse('https://narra.app');
+  }
+
   /// Generate a deep link to the public blog page for [story].
   static Uri buildStoryLink({
     required Story story,
@@ -12,8 +27,8 @@ class StoryShareLinkBuilder {
     Uri? baseUri,
     String? source,
   }) {
-    final detectedBase = baseUri ?? _detectBaseUri();
-    final origin = _sanitizeBaseUri(detectedBase);
+    final resolvedBase = _resolveBaseUri(baseUri);
+    final origin = _sanitizeBaseUri(resolvedBase);
     final pathSegments = <String>['story', story.id];
 
     final queryParameters = <String, String>{
@@ -37,7 +52,7 @@ class StoryShareLinkBuilder {
       queryParameters['source'] = source;
     }
 
-    if (_usesHashRouting(detectedBase)) {
+    if (_usesHashRouting(resolvedBase)) {
       final fragmentUri = Uri(
         pathSegments: pathSegments,
         queryParameters: queryParameters.isEmpty ? null : queryParameters,
@@ -68,8 +83,8 @@ class StoryShareLinkBuilder {
     String? source,
     String? authorDisplayName,
   }) {
-    final detectedBase = baseUri ?? _detectBaseUri();
-    final origin = _sanitizeBaseUri(detectedBase);
+    final resolvedBase = _resolveBaseUri(baseUri);
+    final origin = _sanitizeBaseUri(resolvedBase);
 
     final queryParameters = <String, String>{
       'author': authorId,
@@ -94,7 +109,7 @@ class StoryShareLinkBuilder {
 
     final pathSegments = <String>['subscriber', subscriber.id];
 
-    if (_usesHashRouting(detectedBase)) {
+    if (_usesHashRouting(resolvedBase)) {
       final fragmentUri = Uri(
         pathSegments: pathSegments,
         queryParameters: queryParameters,
@@ -116,13 +131,19 @@ class StoryShareLinkBuilder {
     );
   }
 
-  static Uri _detectBaseUri() {
-    if (kIsWeb) {
-      return Uri.base;
+  static Uri _resolveBaseUri(Uri? candidate) {
+    if (candidate != null && !_shouldFallbackToDefault(candidate)) {
+      return candidate;
     }
 
-    // For non-web builds we default to production origin to keep links stable.
-    return Uri.parse('https://narra.app');
+    if (kIsWeb) {
+      final base = Uri.base;
+      if (!_shouldFallbackToDefault(base)) {
+        return base;
+      }
+    }
+
+    return _defaultBaseUri;
   }
 
   static Uri _sanitizeBaseUri(Uri origin) {
@@ -139,6 +160,18 @@ class StoryShareLinkBuilder {
       host: base.host,
       port: base.hasPort ? base.port : null,
     );
+  }
+
+  static bool _shouldFallbackToDefault(Uri origin) {
+    final host = origin.host.toLowerCase();
+    if (host.isEmpty) return true;
+    if (host == 'localhost' || host == '127.0.0.1' || host == '0.0.0.0') {
+      return true;
+    }
+    if (host.endsWith('.pages.dev')) {
+      return true;
+    }
+    return false;
   }
 
   static bool _usesHashRouting(Uri origin) {

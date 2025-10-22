@@ -318,7 +318,7 @@ create table if not exists public.subscriber_access_events (
   subscriber_id uuid not null references public.subscribers(id) on delete cascade,
   story_id uuid references public.stories(id) on delete cascade,
   access_token text,
-  event_type text not null check (event_type in ('link_sent', 'link_opened', 'invite_opened', 'access_granted')),
+  event_type text not null check (event_type in ('link_sent', 'link_opened', 'invite_opened', 'access_granted', 'unsubscribe')),
   metadata jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default timezone('utc', now())
 );
@@ -333,7 +333,7 @@ alter table public.subscriber_access_events
 
 alter table public.subscriber_access_events
   add constraint subscriber_access_events_event_type_check
-    check (event_type in ('link_sent', 'link_opened', 'invite_opened', 'access_granted'));
+    check (event_type in ('link_sent', 'link_opened', 'invite_opened', 'access_granted', 'unsubscribe'));
 
 do $$
 begin
@@ -404,10 +404,12 @@ begin
   end if;
 
   if v_subscriber.status = 'unsubscribed' then
-    return jsonb_build_object(
-      'status', 'forbidden',
-      'message', 'Este suscriptor canceló su acceso.'
-    );
+    if v_event_type <> 'unsubscribe' then
+      return jsonb_build_object(
+        'status', 'forbidden',
+        'message', 'Este suscriptor canceló su acceso.'
+      );
+    end if;
   end if;
 
   if v_subscriber.access_token is null
@@ -419,13 +421,23 @@ begin
     );
   end if;
 
-  update public.subscribers
-     set status = case when status <> 'confirmed' then 'confirmed' else status end,
-         last_access_at = v_now,
-         last_access_ip = coalesce(request_ip, last_access_ip),
-         last_access_user_agent = coalesce(substring(v_user_agent from 1 for 512), last_access_user_agent),
-         last_access_source = coalesce(v_source, last_access_source)
-   where id = v_subscriber.id;
+  if v_event_type = 'unsubscribe' then
+    update public.subscribers
+       set status = 'unsubscribed',
+           last_access_at = v_now,
+           last_access_ip = coalesce(request_ip, last_access_ip),
+           last_access_user_agent = coalesce(substring(v_user_agent from 1 for 512), last_access_user_agent),
+           last_access_source = coalesce(v_source, last_access_source)
+     where id = v_subscriber.id;
+  else
+    update public.subscribers
+       set status = case when status <> 'confirmed' then 'confirmed' else status end,
+           last_access_at = v_now,
+           last_access_ip = coalesce(request_ip, last_access_ip),
+           last_access_user_agent = coalesce(substring(v_user_agent from 1 for 512), last_access_user_agent),
+           last_access_source = coalesce(v_source, last_access_source)
+     where id = v_subscriber.id;
+  end if;
 
   insert into public.subscriber_access_events (
     user_id,
@@ -462,7 +474,10 @@ begin
         'id', v_subscriber.id,
         'name', v_subscriber.name,
         'email', v_subscriber.email,
-        'status', 'confirmed'
+        'status', case
+          when v_event_type = 'unsubscribe' then 'unsubscribed'
+          else 'confirmed'
+        end
       )
     )
   );

@@ -6,6 +6,7 @@ class StoryAccessRecord {
     this.subscriberName,
     this.accessToken,
     this.source,
+    this.status = 'confirmed',
   });
 
   final String authorId;
@@ -14,12 +15,14 @@ class StoryAccessRecord {
   final String? subscriberName;
   final String? accessToken;
   final String? source;
+  final String status;
 
   StoryAccessRecord copyWith({
     String? subscriberName,
     String? accessToken,
     String? source,
     DateTime? grantedAt,
+    String? status,
   }) {
     return StoryAccessRecord(
       authorId: authorId,
@@ -28,6 +31,7 @@ class StoryAccessRecord {
       subscriberName: subscriberName ?? this.subscriberName,
       accessToken: accessToken ?? this.accessToken,
       source: source ?? this.source,
+      status: status ?? this.status,
     );
   }
 
@@ -39,6 +43,7 @@ class StoryAccessRecord {
       'accessToken': accessToken,
       'grantedAt': grantedAt.toIso8601String(),
       'source': source,
+      'status': status,
     };
   }
 
@@ -50,6 +55,9 @@ class StoryAccessRecord {
       accessToken: json['accessToken'] as String?,
       source: json['source'] as String?,
       grantedAt: DateTime.parse(json['grantedAt'] as String),
+      status: (json['status'] as String?)?.trim().isNotEmpty == true
+          ? (json['status'] as String).trim()
+          : 'confirmed',
     );
   }
 }

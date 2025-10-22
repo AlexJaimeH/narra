@@ -165,6 +165,7 @@ class SubscriberEmailService {
       baseUri: baseUri,
       source: 'email-invite',
       authorDisplayName: authorDisplayName,
+      showWelcomeBanner: true,
     );
 
     final html = EmailTemplates.subscriberInviteHtml(

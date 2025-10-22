@@ -1,7 +1,6 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:narra/repositories/story_repository.dart';
 import 'package:narra/services/public_access/story_access_manager.dart';
 import 'package:narra/services/public_access/story_access_record.dart';
@@ -150,6 +149,7 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
                   accessToken: validated.accessToken,
                   source: validated.source,
                   grantedAt: validated.grantedAt,
+                  status: validated.status,
                 );
               } else {
                 shareValidationMessage =
@@ -426,7 +426,14 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
     final canViewLibrary =
         _accessRecord != null && _accessRecord!.subscriberId != 'author';
     final metadataChips = _buildMetadataChips(context, story);
-    final paragraphs = _splitIntoParagraphs(story.content ?? '');
+    final content = story.content ?? '';
+    final hasInlineImages = _contentHasInlineImages(content);
+    final bodyWidgets = _buildStoryBodyWidgets(
+      story: story,
+      theme: theme,
+      colorScheme: colorScheme,
+      hasInlineImages: hasInlineImages,
+    );
 
     return Scrollbar(
       child: SingleChildScrollView(
@@ -546,7 +553,7 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
                 ),
               ),
             ),
-            if (story.photos.isNotEmpty)
+            if (!hasInlineImages && story.photos.isNotEmpty)
               _StoryHeroImage(photoUrl: story.photos.first.photoUrl),
             const SizedBox(height: 32),
             Center(
@@ -557,21 +564,12 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      ...paragraphs.map(
-                        (paragraph) => Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          child: Text(
-                            paragraph,
-                            style: theme.textTheme.bodyLarge?.copyWith(
-                              height: 1.6,
-                            ),
-                          ),
+                      SelectionArea(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: bodyWidgets,
                         ),
                       ),
-                      if (story.photos.length > 1) ...[
-                        const SizedBox(height: 32),
-                        _AdditionalPhotosGallery(photos: story.photos.skip(1)),
-                      ],
                       const SizedBox(height: 40),
                       _buildReactionsRow(theme, colorScheme),
                       const SizedBox(height: 48),
@@ -616,7 +614,7 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
         Expanded(
           child: Text(
             canReact
-                ? 'Comparte este recuerdo solo con personas de confianza.'
+                ? 'Tus corazones quedan guardados de forma privada para el autor.'
                 : 'Este botón se activará cuando accedas con tu enlace personal.',
             style: theme.textTheme.bodySmall?.copyWith(
               color: colorScheme.onSurfaceVariant,
@@ -834,6 +832,167 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
     return paragraphs.isEmpty ? [content] : paragraphs;
   }
 
+  bool _contentHasInlineImages(String content) {
+    return RegExp(r'\[img_(\d+)\]').hasMatch(content);
+  }
+
+  List<Widget> _buildStoryBodyWidgets({
+    required Story story,
+    required ThemeData theme,
+    required ColorScheme colorScheme,
+    required bool hasInlineImages,
+  }) {
+    final paragraphs = _splitIntoParagraphs(story.content ?? '');
+    final orderedPhotos = List<StoryPhoto>.from(story.photos)
+      ..sort((a, b) => a.position.compareTo(b.position));
+    final usedPhotoIds = <String>{};
+
+    if (!hasInlineImages && orderedPhotos.isNotEmpty) {
+      usedPhotoIds.add(orderedPhotos.first.id);
+    }
+
+    final photosByIndex = <int, StoryPhoto>{};
+    final photosByPosition = <int, StoryPhoto>{};
+    for (var i = 0; i < orderedPhotos.length; i++) {
+      final photo = orderedPhotos[i];
+      photosByIndex[i + 1] = photo;
+      if (photo.position >= 0) {
+        photosByPosition[photo.position] ??= photo;
+        photosByPosition[photo.position + 1] ??= photo;
+      }
+    }
+
+    StoryPhoto? takePhotoForIndex(int? index) {
+      StoryPhoto? candidate;
+      if (index != null && index > 0) {
+        candidate = photosByPosition[index] ?? photosByIndex[index];
+        if (candidate != null && usedPhotoIds.contains(candidate.id)) {
+          candidate = null;
+        }
+      }
+
+      candidate ??= () {
+        for (final photo in orderedPhotos) {
+          if (!usedPhotoIds.contains(photo.id)) {
+            return photo;
+          }
+        }
+        return null;
+      }();
+
+      if (candidate == null) return null;
+
+      usedPhotoIds.add(candidate.id);
+      return candidate;
+    }
+
+    final widgets = <Widget>[];
+    final imagePattern = RegExp(r'\[img_(\d+)\]');
+
+    void addTextBlock(String raw) {
+      final trimmed = raw.trim();
+      if (trimmed.isEmpty) return;
+      widgets.add(
+        SelectableText(
+          trimmed,
+          style: theme.textTheme.bodyLarge?.copyWith(height: 1.65),
+        ),
+      );
+      widgets.add(const SizedBox(height: 20));
+    }
+
+    for (final paragraph in paragraphs) {
+      final matches = imagePattern.allMatches(paragraph);
+      if (matches.isEmpty) {
+        addTextBlock(paragraph);
+        continue;
+      }
+
+      var cursor = 0;
+      for (final match in matches) {
+        final preceding = paragraph.substring(cursor, match.start);
+        addTextBlock(preceding);
+
+        final index = int.tryParse(match.group(1) ?? '');
+        final photo = takePhotoForIndex(index);
+        if (photo != null) {
+          widgets.add(_buildImageFigure(photo, theme, colorScheme));
+          widgets.add(const SizedBox(height: 24));
+        }
+        cursor = match.end;
+      }
+
+      final trailing = paragraph.substring(cursor);
+      addTextBlock(trailing);
+    }
+
+    for (final photo in orderedPhotos) {
+      if (usedPhotoIds.contains(photo.id)) continue;
+      widgets.add(_buildImageFigure(photo, theme, colorScheme));
+      widgets.add(const SizedBox(height: 24));
+      usedPhotoIds.add(photo.id);
+    }
+
+    if (widgets.isNotEmpty && widgets.last is SizedBox) {
+      widgets.removeLast();
+    }
+
+    if (widgets.isEmpty) {
+      widgets.add(
+        SelectableText(
+          'El autor todavía no ha añadido contenido a esta historia.',
+          style: theme.textTheme.bodyLarge?.copyWith(height: 1.6),
+        ),
+      );
+    }
+
+    return widgets;
+  }
+
+  Widget _buildImageFigure(
+    StoryPhoto photo,
+    ThemeData theme,
+    ColorScheme colorScheme,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: AspectRatio(
+            aspectRatio: 16 / 9,
+            child: Image.network(
+              photo.photoUrl,
+              fit: BoxFit.cover,
+              alignment: Alignment.center,
+              errorBuilder: (_, __, ___) => Container(
+                color: colorScheme.surfaceVariant,
+                alignment: Alignment.center,
+                child: Icon(
+                  Icons.image_outlined,
+                  color: colorScheme.onSurfaceVariant,
+                  size: 48,
+                ),
+              ),
+            ),
+          ),
+        ),
+        if (photo.caption?.trim().isNotEmpty == true)
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: Text(
+              photo.caption!,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
   String _formatPublishedDate(DateTime date) {
     final now = DateTime.now();
     final difference = now.difference(date).inDays;
@@ -846,27 +1005,19 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
   }
 
   Widget _buildHeaderActions(BuildContext context, Story story) {
-    final shareTarget = _currentShareTarget;
-    final link = StoryShareLinkBuilder.buildStoryLink(
-      story: story,
-      subscriber: shareTarget,
-      source: shareTarget?.source ?? _resolvedSharePayload?.source,
-    ).toString();
-
     return Wrap(
       spacing: 8,
       children: [
-        FilledButton.tonalIcon(
-          onPressed: () async {
-            final messenger = ScaffoldMessenger.of(context);
-            await Clipboard.setData(ClipboardData(text: link));
-            if (!mounted) return;
-            messenger.showSnackBar(
-              const SnackBar(content: Text('Enlace copiado al portapapeles')),
-            );
+        OutlinedButton.icon(
+          onPressed: () {
+            if (Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            } else {
+              _goToAuthorLibrary(story);
+            }
           },
-          icon: const Icon(Icons.link),
-          label: const Text('Copiar enlace'),
+          icon: const Icon(Icons.arrow_back_ios_new),
+          label: const Text('Volver al blog'),
         ),
       ],
     );
@@ -1031,6 +1182,7 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
       authorDisplayName: _authorProfile?.resolvedDisplayName ??
           story.authorDisplayName ??
           story.authorName,
+      showWelcomeBanner: false,
     );
 
     Navigator.of(context).pushReplacementNamed(_toRouteName(link));
@@ -1148,49 +1300,6 @@ class _StoryHeroImage extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _AdditionalPhotosGallery extends StatelessWidget {
-  const _AdditionalPhotosGallery({required this.photos});
-
-  final Iterable<StoryPhoto> photos;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Momentos capturados', style: theme.textTheme.titleMedium),
-        const SizedBox(height: 12),
-        SizedBox(
-          height: 200,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemBuilder: (context, index) {
-              final photo = photos.elementAt(index);
-              return ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: Image.network(
-                  photo.photoUrl,
-                  width: 280,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) => Container(
-                    width: 280,
-                    color: theme.colorScheme.surfaceContainerHighest,
-                    alignment: Alignment.center,
-                    child: const Icon(Icons.broken_image_outlined, size: 48),
-                  ),
-                ),
-              );
-            },
-            separatorBuilder: (_, __) => const SizedBox(width: 16),
-            itemCount: photos.length,
-          ),
-        ),
-      ],
     );
   }
 }

@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:narra/supabase/supabase_config.dart';
 
 import 'story_access_record.dart';
 
@@ -37,6 +38,125 @@ class StoryPublicAccessService {
     String? source,
     String? eventType,
   }) async {
+    final supabaseUrl = SupabaseConfig.supabaseUrl.trim();
+    final supabaseAnonKey = SupabaseConfig.supabaseAnonKey.trim();
+
+    if (supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty) {
+      return _registerAccessViaSupabase(
+        supabaseUrl: supabaseUrl,
+        supabaseAnonKey: supabaseAnonKey,
+        authorId: authorId,
+        storyId: storyId,
+        subscriberId: subscriberId,
+        token: token,
+        source: source,
+        eventType: eventType,
+      );
+    }
+
+    return _registerAccessViaLegacyFunction(
+      authorId: authorId,
+      subscriberId: subscriberId,
+      token: token,
+      storyId: storyId,
+      source: source,
+      eventType: eventType,
+    );
+  }
+
+  static Future<StoryAccessRecord?> _registerAccessViaSupabase({
+    required String supabaseUrl,
+    required String supabaseAnonKey,
+    required String authorId,
+    String? storyId,
+    required String subscriberId,
+    required String token,
+    String? source,
+    String? eventType,
+  }) async {
+    final payload = <String, dynamic>{
+      'author_id': authorId,
+      'subscriber_id': subscriberId,
+      'token': token,
+    };
+
+    if (storyId != null && storyId.isNotEmpty) {
+      payload['story_id'] = storyId;
+    }
+    if (source != null && source.isNotEmpty) {
+      payload['source'] = source;
+    }
+    if (eventType != null && eventType.isNotEmpty) {
+      payload['event_type'] = eventType;
+    }
+
+    final response = await http.post(
+      Uri.parse('$supabaseUrl/rest/v1/rpc/register_subscriber_access'),
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': supabaseAnonKey,
+        'Authorization': 'Bearer $supabaseAnonKey',
+        'Prefer': 'return=representation',
+      },
+      body: jsonEncode(payload),
+    );
+
+    final decoded = _tryDecodeJson(utf8.decode(response.bodyBytes));
+
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      if (decoded == null) {
+        throw StoryPublicAccessException(
+          statusCode: response.statusCode,
+          message: 'La respuesta del servidor no tiene el formato esperado.',
+        );
+      }
+
+      final status = decoded['status']?.toString();
+      switch (status) {
+        case 'ok':
+          final data = decoded['data'] as Map<String, dynamic>? ?? const {};
+          return _buildAccessRecord(
+            authorId: authorId,
+            subscriberIdFallback: subscriberId,
+            tokenFallback: token,
+            sourceFallback: source,
+            payload: data,
+          );
+        case 'not_found':
+          return null;
+        case 'forbidden':
+          throw StoryPublicAccessException(
+            statusCode: 403,
+            message: decoded['message']?.toString() ??
+                'No pudimos validar tu enlace en este momento.',
+            body: decoded,
+          );
+        default:
+          throw StoryPublicAccessException(
+            statusCode: response.statusCode,
+            message: decoded['message']?.toString() ??
+                'No se pudo validar el enlace de acceso.',
+            body: decoded,
+          );
+      }
+    }
+
+    throw StoryPublicAccessException(
+      statusCode: response.statusCode,
+      message: decoded?['message']?.toString() ??
+          'No se pudo validar el enlace de acceso.',
+      body: decoded,
+    );
+  }
+
+  static Future<StoryAccessRecord?> _registerAccessViaLegacyFunction({
+    required String authorId,
+    required String subscriberId,
+    required String token,
+    String? storyId,
+    String? source,
+    String? eventType,
+  }) async {
     final payload = <String, dynamic>{
       'authorId': authorId,
       'subscriberId': subscriberId,
@@ -46,11 +166,9 @@ class StoryPublicAccessService {
     if (storyId != null && storyId.isNotEmpty) {
       payload['storyId'] = storyId;
     }
-
     if (source != null && source.isNotEmpty) {
       payload['source'] = source;
     }
-
     if (eventType != null && eventType.isNotEmpty) {
       payload['eventType'] = eventType;
     }
@@ -61,43 +179,15 @@ class StoryPublicAccessService {
       body: jsonEncode(payload),
     );
 
-    final bodyText = utf8.decode(response.bodyBytes);
-    Map<String, dynamic>? decoded;
-    if (bodyText.isNotEmpty) {
-      try {
-        final dynamic parsed = jsonDecode(bodyText);
-        if (parsed is Map<String, dynamic>) {
-          decoded = parsed;
-        }
-      } catch (_) {
-        // Ignore invalid JSON responses, handled below.
-      }
-    }
+    final decoded = _tryDecodeJson(utf8.decode(response.bodyBytes));
 
     if (response.statusCode == 200) {
-      final subscriber =
-          decoded?['subscriber'] as Map<String, dynamic>? ?? const {};
-      final resolvedToken =
-          (decoded?['token'] as String?)?.trim().isNotEmpty == true
-              ? decoded!['token'] as String
-              : token;
-      final resolvedSource =
-          (decoded?['source'] as String?)?.trim().isNotEmpty == true
-              ? decoded!['source'] as String
-              : source;
-      final grantedAtRaw = decoded?['grantedAt'] as String?;
-      final grantedAt =
-          grantedAtRaw != null ? DateTime.tryParse(grantedAtRaw) : null;
-
-      return StoryAccessRecord(
+      return _buildAccessRecord(
         authorId: authorId,
-        subscriberId: (subscriber['id'] as String?)?.isNotEmpty == true
-            ? subscriber['id'] as String
-            : subscriberId,
-        subscriberName: subscriber['name'] as String?,
-        accessToken: resolvedToken,
-        source: resolvedSource,
-        grantedAt: grantedAt ?? DateTime.now(),
+        subscriberIdFallback: subscriberId,
+        tokenFallback: token,
+        sourceFallback: source,
+        payload: decoded ?? const {},
       );
     }
 
@@ -110,6 +200,49 @@ class StoryPublicAccessService {
       message: decoded?['error']?.toString() ??
           'No se pudo validar el enlace de acceso.',
       body: decoded,
+    );
+  }
+
+  static Map<String, dynamic>? _tryDecodeJson(String body) {
+    if (body.isEmpty) return null;
+    try {
+      final dynamic parsed = jsonDecode(body);
+      return parsed is Map<String, dynamic> ? parsed : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static StoryAccessRecord _buildAccessRecord({
+    required String authorId,
+    required String subscriberIdFallback,
+    required String tokenFallback,
+    required String? sourceFallback,
+    required Map<String, dynamic> payload,
+  }) {
+    final subscriber =
+        payload['subscriber'] as Map<String, dynamic>? ?? const {};
+    final resolvedToken =
+        (payload['token'] as String?)?.trim().isNotEmpty == true
+            ? payload['token'] as String
+            : tokenFallback;
+    final resolvedSource =
+        (payload['source'] as String?)?.trim().isNotEmpty == true
+            ? payload['source'] as String
+            : sourceFallback;
+    final grantedAtRaw = payload['grantedAt'] as String?;
+    final grantedAt =
+        grantedAtRaw != null ? DateTime.tryParse(grantedAtRaw) : null;
+
+    return StoryAccessRecord(
+      authorId: authorId,
+      subscriberId: (subscriber['id'] as String?)?.isNotEmpty == true
+          ? subscriber['id'] as String
+          : subscriberIdFallback,
+      subscriberName: subscriber['name'] as String?,
+      accessToken: resolvedToken,
+      source: resolvedSource,
+      grantedAt: grantedAt ?? DateTime.now(),
     );
   }
 }

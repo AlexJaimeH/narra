@@ -5,19 +5,31 @@ import 'package:narra/repositories/story_repository.dart';
 class StoryShareLinkBuilder {
   const StoryShareLinkBuilder._();
 
-  static final Uri _defaultBaseUri = _resolveDefaultBaseUri();
+  static final _ShareBaseConfig _shareBaseConfig = _resolveShareBaseConfig();
+  static final Uri _defaultBaseUri = _shareBaseConfig.uri;
 
-  static Uri _resolveDefaultBaseUri() {
-    const rawDefault =
+  static _ShareBaseConfig _resolveShareBaseConfig() {
+    const rawFromEnv =
         String.fromEnvironment('PUBLIC_SHARE_BASE_URL', defaultValue: '');
-    final trimmed = rawDefault.trim();
+    const forceDefault =
+        bool.fromEnvironment('PUBLIC_FORCE_SHARE_BASE', defaultValue: true);
+
+    final trimmed = rawFromEnv.trim();
     if (trimmed.isNotEmpty) {
       final parsed = Uri.tryParse(trimmed);
       if (parsed != null && parsed.hasScheme && parsed.host.isNotEmpty) {
-        return _sanitizeBaseUri(parsed);
+        return _ShareBaseConfig(
+          uri: _sanitizeBaseUri(parsed),
+          force: forceDefault,
+        );
       }
     }
-    return Uri.parse('https://narra.app');
+
+    final fallback = Uri.parse('https://narra-8m1.pages.dev');
+    return _ShareBaseConfig(
+      uri: _sanitizeBaseUri(fallback),
+      force: forceDefault,
+    );
   }
 
   /// Generate a deep link to the public blog page for [story].
@@ -132,6 +144,10 @@ class StoryShareLinkBuilder {
   }
 
   static Uri _resolveBaseUri(Uri? candidate) {
+    if (_shareBaseConfig.force) {
+      return _defaultBaseUri;
+    }
+
     if (candidate != null && !_shouldFallbackToDefault(candidate)) {
       return candidate;
     }
@@ -197,4 +213,14 @@ class StoryShareTarget {
   final String? name;
   final String? token;
   final String? source;
+}
+
+class _ShareBaseConfig {
+  const _ShareBaseConfig({
+    required this.uri,
+    required this.force,
+  });
+
+  final Uri uri;
+  final bool force;
 }

@@ -94,6 +94,7 @@ class StoryShareLinkBuilder {
     Uri? baseUri,
     String? source,
     String? authorDisplayName,
+    bool showWelcomeBanner = false,
   }) {
     final resolvedBase = _resolveBaseUri(baseUri);
     final origin = _sanitizeBaseUri(resolvedBase);
@@ -117,6 +118,10 @@ class StoryShareLinkBuilder {
 
     if (authorDisplayName?.isNotEmpty == true) {
       queryParameters['authorName'] = authorDisplayName!;
+    }
+
+    if (showWelcomeBanner) {
+      queryParameters['welcome'] = '1';
     }
 
     final pathSegments = <String>['subscriber', subscriber.id];

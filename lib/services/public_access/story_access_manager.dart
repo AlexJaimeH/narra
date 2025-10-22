@@ -22,6 +22,7 @@ class StoryAccessManager {
     String? accessToken,
     String? source,
     DateTime? grantedAt,
+    String status = 'confirmed',
   }) {
     final existing = _storage.read(authorId);
     final effectiveGrantedAt =
@@ -33,6 +34,7 @@ class StoryAccessManager {
         accessToken: accessToken ?? existing.accessToken,
         source: source ?? existing.source,
         grantedAt: effectiveGrantedAt,
+        status: status,
       );
       _storage.write(updated);
       return updated;
@@ -45,6 +47,7 @@ class StoryAccessManager {
       accessToken: accessToken,
       grantedAt: effectiveGrantedAt,
       source: source,
+      status: status,
     );
     _storage.write(record);
     return record;
@@ -62,6 +65,7 @@ class StoryAccessManager {
       subscriberName: 'Autor/a',
       grantedAt: DateTime.now(),
       source: 'author',
+      status: 'author',
     );
     _storage.write(record);
     return record;

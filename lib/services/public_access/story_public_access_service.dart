@@ -234,6 +234,29 @@ class StoryPublicAccessService {
     }
   }
 
+  static Future<bool> unsubscribe({
+    required String authorId,
+    required String subscriberId,
+    required String token,
+    String? source,
+  }) async {
+    try {
+      final result = await registerAccess(
+        authorId: authorId,
+        subscriberId: subscriberId,
+        token: token,
+        source: source,
+        eventType: 'unsubscribe',
+      );
+      return result?.status == 'unsubscribed';
+    } on StoryPublicAccessException catch (error) {
+      if (error.statusCode == 403) {
+        return true;
+      }
+      rethrow;
+    }
+  }
+
   static StoryAccessRecord _buildAccessRecord({
     required String authorId,
     required String subscriberIdFallback,
@@ -254,6 +277,10 @@ class StoryPublicAccessService {
     final grantedAtRaw = payload['grantedAt'] as String?;
     final grantedAt =
         grantedAtRaw != null ? DateTime.tryParse(grantedAtRaw) : null;
+    final resolvedStatus =
+        (subscriber['status'] as String?)?.trim().isNotEmpty == true
+            ? (subscriber['status'] as String).trim()
+            : 'confirmed';
 
     return StoryAccessRecord(
       authorId: authorId,
@@ -264,6 +291,7 @@ class StoryPublicAccessService {
       accessToken: resolvedToken,
       source: resolvedSource,
       grantedAt: grantedAt ?? DateTime.now(),
+      status: resolvedStatus,
     );
   }
 }

@@ -44,9 +44,11 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     const source = typeof (body as any).source === 'string'
       ? (body as any).source.trim()
       : undefined;
-    const eventType = typeof (body as any).eventType === 'string'
+    const eventTypeRaw = typeof (body as any).eventType === 'string'
       ? (body as any).eventType.trim()
       : 'access_granted';
+    const eventType = eventTypeRaw.length > 0 ? eventTypeRaw : 'access_granted';
+    const isUnsubscribe = eventType === 'unsubscribe';
 
     if (!authorId || !subscriberId || !token) {
       return json({ error: 'authorId, subscriberId and token are required' }, 400);
@@ -67,7 +69,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     const status = typeof subscriber.status === 'string'
       ? (subscriber.status as string).toLowerCase()
       : 'pending';
-    if (status === 'unsubscribed') {
+    if (!isUnsubscribe && status === 'unsubscribed') {
       return json({ error: 'Subscriber is not active' }, 403);
     }
 
@@ -86,7 +88,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       last_access_source: source ?? subscriber.last_access_source ?? 'link',
     };
 
-    if (status !== 'confirmed') {
+    if (isUnsubscribe) {
+      updates.status = 'unsubscribed';
+    } else if (status !== 'confirmed') {
       updates.status = 'confirmed';
     }
 
@@ -122,8 +126,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         id: subscriber.id,
         name: subscriber.name,
         email: subscriber.email,
-        status: 'confirmed',
+        status: isUnsubscribe ? 'unsubscribed' : 'confirmed',
       },
+      unsubscribed: isUnsubscribe || status === 'unsubscribed',
     });
   } catch (error) {
     console.error('[story-access] Access validation failed', error);

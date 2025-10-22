@@ -7,6 +7,7 @@ import 'package:narra/services/public_access/story_access_manager.dart';
 import 'package:narra/services/public_access/story_access_record.dart';
 import 'package:narra/services/public_access/story_feedback_service.dart';
 import 'package:narra/services/public_access/story_public_access_service.dart';
+import 'package:narra/services/public_access/story_feedback_service.dart';
 import 'package:narra/services/public_story_service.dart';
 import 'package:narra/services/story_share_link_builder.dart';
 
@@ -39,6 +40,33 @@ class _SubscriberWelcomePageState extends State<SubscriberWelcomePage> {
   void initState() {
     super.initState();
     scheduleMicrotask(_initialize);
+  }
+
+  Future<void> _loadHighlightFeedback(Story story) async {
+    final record = _accessRecord;
+    final token = record?.accessToken;
+    if (record == null || token == null || token.isEmpty) {
+      return;
+    }
+
+    try {
+      final feedback = await StoryFeedbackService.fetchState(
+        authorId: story.userId,
+        storyId: story.id,
+        subscriberId: record.subscriberId,
+        token: token,
+        source: 'subscriber-library',
+      );
+      if (!mounted) return;
+      setState(() {
+        _highlightHearted = feedback.hasReacted;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _highlightHearted = false;
+      });
+    }
   }
 
   Future<void> _initialize() async {
@@ -981,6 +1009,24 @@ class _FeaturedStoryCard extends StatelessWidget {
                     ),
                   ],
                   const SizedBox(height: 20),
+                  if (highlightHearted)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.favorite, color: colorScheme.primary),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Ya reaccionaste con un corazón',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: colorScheme.primary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   FilledButton.icon(
                     onPressed: onOpen,
                     icon: const Icon(Icons.menu_book_rounded),

@@ -1,4 +1,5 @@
 import 'package:narra/repositories/story_repository.dart';
+import 'package:narra/services/public_access/public_author_profile.dart';
 import 'package:narra/supabase/narra_client.dart';
 
 /// Service dedicated to loading stories for the public blog experience.
@@ -47,7 +48,7 @@ class PublicStoryService {
   /// Load the latest published stories for an author without excluding any.
   static Future<List<Story>> getLatestStories({
     required String authorId,
-    int limit = 3,
+    int limit = 6,
   }) async {
     try {
       final stories = await StoryRepository.getPublishedStoriesByAuthor(
@@ -63,29 +64,20 @@ class PublicStoryService {
   }
 
   /// Resolve the display name that should be shown to subscribers.
-  static Future<String?> getAuthorDisplayName(String authorId) async {
+  static Future<PublicAuthorProfile?> getAuthorProfile(String authorId) async {
     try {
-      final profile =
-          await NarraSupabaseClient.getAuthorPublicProfile(authorId);
-      if (profile == null) return null;
-
-      final settings = profile['user_settings'] as Map<String, dynamic>?;
-      final displayName = settings?['public_author_name'] as String?;
-      final fallbackName = profile['name'] as String?;
-
-      if (displayName != null && displayName.trim().isNotEmpty) {
-        return displayName.trim();
-      }
-
-      if (fallbackName != null && fallbackName.trim().isNotEmpty) {
-        return fallbackName.trim();
-      }
-
-      return null;
+      final data = await NarraSupabaseClient.getAuthorPublicProfile(authorId);
+      if (data == null) return null;
+      return PublicAuthorProfile.fromSupabase(data);
     } catch (error) {
       // ignore: avoid_print
-      print('Error fetching author display name: $error');
+      print('Error fetching author profile: $error');
       return null;
     }
+  }
+
+  static Future<String?> getAuthorDisplayName(String authorId) async {
+    final profile = await getAuthorProfile(authorId);
+    return profile?.resolvedDisplayName;
   }
 }

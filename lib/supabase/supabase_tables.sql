@@ -199,6 +199,10 @@ CREATE TABLE IF NOT EXISTS user_settings (
   high_contrast BOOLEAN DEFAULT FALSE,
   reduce_motion BOOLEAN DEFAULT FALSE,
   ai_extra_instructions TEXT,
+  public_author_name TEXT,
+  public_author_tagline TEXT,
+  public_author_summary TEXT,
+  public_blog_cover_url TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(user_id)

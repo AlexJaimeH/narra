@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:narra/repositories/story_repository.dart';
 import 'package:narra/services/public_access/story_access_manager.dart';
 import 'package:narra/services/public_access/story_access_record.dart';
+import 'package:narra/services/public_access/public_author_profile.dart';
 import 'package:narra/services/public_access/story_feedback_service.dart';
 import 'package:narra/services/public_access/story_public_access_service.dart';
 import 'package:narra/services/public_story_service.dart';
@@ -43,6 +44,7 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
   Story? _story;
   StoryAccessRecord? _accessRecord;
   StorySharePayload? _sharePayload;
+  PublicAuthorProfile? _authorProfile;
   List<Story> _recommendedStories = const [];
   final List<_StoryComment> _comments = [];
 
@@ -185,12 +187,16 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
         );
       }
 
+      final authorProfile =
+          await PublicStoryService.getAuthorProfile(story.userId);
+
       setState(() {
         _story = story;
         _accessRecord = accessRecord;
         _sharePayload = updatedSharePayload;
         _shareValidationMessage = shareValidationMessage;
         _recommendedStories = recommendations;
+        _authorProfile = authorProfile;
         _isLoading = false;
       });
 
@@ -408,8 +414,17 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
   Widget _buildStoryContent(BuildContext context, Story story) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final displayName =
-        story.authorDisplayName ?? story.authorName ?? 'Autor/a de Narra';
+    final profile = _authorProfile;
+    final displayName = profile?.resolvedDisplayName ??
+        story.authorDisplayName ??
+        story.authorName ??
+        'Autor/a de Narra';
+    final tagline = profile?.tagline?.trim();
+    final summary = profile?.summary?.trim();
+    final coverUrl = profile?.coverImageUrl;
+    final hasCover = coverUrl != null && coverUrl.trim().isNotEmpty;
+    final canViewLibrary =
+        _accessRecord != null && _accessRecord!.subscriberId != 'author';
     final metadataChips = _buildMetadataChips(context, story);
     final paragraphs = _splitIntoParagraphs(story.content ?? '');
 
@@ -421,11 +436,27 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
               decoration: BoxDecoration(
+                image: hasCover
+                    ? DecorationImage(
+                        image: NetworkImage(coverUrl!),
+                        fit: BoxFit.cover,
+                        alignment: Alignment.topCenter,
+                        colorFilter: ColorFilter.mode(
+                          colorScheme.surface.withValues(alpha: 0.88),
+                          BlendMode.srcOver,
+                        ),
+                      )
+                    : null,
                 gradient: LinearGradient(
-                  colors: [
-                    colorScheme.primary.withValues(alpha: 0.12),
-                    colorScheme.surface,
-                  ],
+                  colors: hasCover
+                      ? [
+                          colorScheme.surface.withValues(alpha: 0.95),
+                          colorScheme.surface.withValues(alpha: 0.85),
+                        ]
+                      : [
+                          colorScheme.primary.withValues(alpha: 0.12),
+                          colorScheme.surface,
+                        ],
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                 ),
@@ -460,7 +491,16 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
-                                const SizedBox(height: 4),
+                                if (tagline?.isNotEmpty == true) ...[
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    tagline!,
+                                    style: theme.textTheme.bodyMedium?.copyWith(
+                                      color: theme.colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                ],
+                                const SizedBox(height: 6),
                                 Text(
                                   _formatPublishedDate(story.createdAt),
                                   style: theme.textTheme.bodySmall?.copyWith(
@@ -473,6 +513,26 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
                           _buildHeaderActions(context, story),
                         ],
                       ),
+                      if (summary?.isNotEmpty == true) ...[
+                        const SizedBox(height: 18),
+                        Text(
+                          summary!,
+                          style: theme.textTheme.bodyLarge?.copyWith(
+                            height: 1.6,
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                      if (canViewLibrary) ...[
+                        const SizedBox(height: 16),
+                        OutlinedButton.icon(
+                          onPressed: () => _goToAuthorLibrary(story),
+                          icon: const Icon(Icons.collections_bookmark_outlined),
+                          label: Text(
+                            'Ver todas las historias de $displayName',
+                          ),
+                        ),
+                      ],
                       if (metadataChips.isNotEmpty) ...[
                         const SizedBox(height: 16),
                         Wrap(
@@ -943,6 +1003,37 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
       return '$path?${link.query}';
     }
     return path;
+  }
+
+  void _goToAuthorLibrary(Story story) {
+    final record = _accessRecord;
+    if (record == null || record.subscriberId == 'author') {
+      return;
+    }
+
+    final share = _resolvedSharePayload;
+    final token = share?.token ?? record.accessToken;
+    if (token == null || token.isEmpty) {
+      return;
+    }
+
+    final subscriber = StoryShareTarget(
+      id: record.subscriberId,
+      name: record.subscriberName,
+      token: token,
+      source: share?.source ?? 'story-blog',
+    );
+
+    final link = StoryShareLinkBuilder.buildSubscriberLink(
+      authorId: story.userId,
+      subscriber: subscriber,
+      source: 'story-blog',
+      authorDisplayName: _authorProfile?.resolvedDisplayName ??
+          story.authorDisplayName ??
+          story.authorName,
+    );
+
+    Navigator.of(context).pushReplacementNamed(_toRouteName(link));
   }
 
   void _openRecommendedStory(Story story) {

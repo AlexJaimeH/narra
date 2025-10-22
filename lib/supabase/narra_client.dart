@@ -356,7 +356,7 @@ class NarraSupabaseClient {
         ''')
         .eq('user_id', authorId)
         .eq('status', 'published')
-        .order('updated_at', ascending: false)
+        .order('published_at', ascending: false)
         .limit(limit);
 
     final profile = await getAuthorPublicProfile(authorId);
@@ -384,7 +384,10 @@ class NarraSupabaseClient {
           name,
           avatar_url,
           user_settings (
-            public_author_name
+            public_author_name,
+            public_author_tagline,
+            public_author_summary,
+            public_blog_cover_url
           )
         ''').eq('id', authorId).maybeSingle();
 

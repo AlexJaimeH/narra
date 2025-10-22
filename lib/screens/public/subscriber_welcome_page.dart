@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:narra/repositories/story_repository.dart';
+import 'package:narra/services/public_access/public_author_profile.dart';
 import 'package:narra/services/public_access/story_access_manager.dart';
 import 'package:narra/services/public_access/story_access_record.dart';
 import 'package:narra/services/public_access/story_public_access_service.dart';
@@ -24,9 +25,10 @@ class _SubscriberWelcomePageState extends State<SubscriberWelcomePage> {
   bool _isLoading = true;
   String? _errorMessage;
   StoryAccessRecord? _accessRecord;
-  String? _authorName;
+  PublicAuthorProfile? _authorProfile;
   String? _subscriberName;
   List<Story> _stories = const [];
+  Story? _highlightStory;
 
   @override
   void initState() {
@@ -74,29 +76,63 @@ class _SubscriberWelcomePageState extends State<SubscriberWelcomePage> {
         grantedAt: record.grantedAt,
       );
 
-      final stories = await PublicStoryService.getLatestStories(
+      final latestStories = await PublicStoryService.getLatestStories(
         authorId: payload.authorId,
-        limit: 3,
+        limit: 8,
       );
 
-      var authorName = payload.authorDisplayName;
-      if (authorName == null || authorName.isEmpty) {
-        authorName = stories.isNotEmpty
-            ? (stories.first.authorDisplayName ?? stories.first.authorName)
-            : null;
+      final sortedStories = List<Story>.from(latestStories)
+        ..sort((a, b) {
+          DateTime resolveDate(Story story) =>
+              story.publishedAt ?? story.updatedAt;
+          return resolveDate(b).compareTo(resolveDate(a));
+        });
+
+      final profile =
+          await PublicStoryService.getAuthorProfile(payload.authorId);
+
+      String? authorName = payload.authorDisplayName;
+      if (authorName == null || authorName.trim().isEmpty) {
+        if (profile != null) {
+          authorName = profile.resolvedDisplayName;
+        } else if (sortedStories.isNotEmpty) {
+          authorName = sortedStories.first.authorDisplayName ??
+              sortedStories.first.authorName;
+        }
       }
+
       authorName ??=
           await PublicStoryService.getAuthorDisplayName(payload.authorId) ??
               'Tu autor/a en Narra';
+
+      final highlightStory =
+          sortedStories.isNotEmpty ? sortedStories.first : null;
+
+      final effectiveProfile = (profile != null)
+          ? profile.copyWith(
+              displayName: profile.displayName ?? authorName,
+              name: profile.name ?? authorName,
+              avatarUrl: profile.avatarUrl ?? highlightStory?.authorAvatarUrl,
+            )
+          : PublicAuthorProfile(
+              id: payload.authorId,
+              name: authorName,
+              displayName: authorName,
+              avatarUrl: highlightStory?.authorAvatarUrl,
+              tagline: null,
+              summary: null,
+              coverImageUrl: null,
+            );
 
       if (!mounted) return;
       setState(() {
         _isLoading = false;
         _accessRecord = record;
-        _authorName = authorName;
+        _authorProfile = effectiveProfile;
         _subscriberName =
             payload.subscriberName ?? record.subscriberName ?? 'Suscriptor';
-        _stories = stories;
+        _stories = sortedStories;
+        _highlightStory = highlightStory;
       });
     } on StoryPublicAccessException catch (error) {
       if (!mounted) return;
@@ -172,127 +208,56 @@ class _SubscriberWelcomePageState extends State<SubscriberWelcomePage> {
       );
     }
 
+    final profile = _authorProfile;
     final subscriberName = _subscriberName ?? 'Suscriptor';
-    final authorName = _authorName ?? 'Tu autor/a en Narra';
+    final displayName = profile?.resolvedDisplayName ?? 'Tu autor/a en Narra';
+    final highlightStory = _highlightStory;
+    final otherStories =
+        highlightStory != null ? _stories.skip(1).toList() : _stories;
 
     return Scaffold(
+      backgroundColor: colorScheme.surface,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
           child: Center(
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 880),
+              constraints: const BoxConstraints(maxWidth: 1080),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(32),
-                    decoration: BoxDecoration(
-                      color: colorScheme.surface,
-                      borderRadius: BorderRadius.circular(28),
-                      boxShadow: [
-                        BoxShadow(
-                          color: colorScheme.shadow.withValues(alpha: 0.08),
-                          blurRadius: 32,
-                          offset: const Offset(0, 18),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '¡Hola, $subscriberName!',
-                          style: theme.textTheme.headlineMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          'Guardamos tu acceso privado para leer las historias de $authorName en este dispositivo.',
-                          style: theme.textTheme.bodyLarge?.copyWith(
-                            height: 1.5,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          'También te enviaremos por correo cada nueva historia que publique $authorName para que no te pierdas ninguna.',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            height: 1.5,
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        Container(
-                          padding: const EdgeInsets.all(20),
-                          decoration: BoxDecoration(
-                            color: colorScheme.primaryContainer,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Icon(Icons.lock_open_rounded,
-                                  size: 28,
-                                  color: colorScheme.onPrimaryContainer),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: Text(
-                                  'Cada vez que abras un enlace nuevo desde aquí, te reconoceremos como $subscriberName para que puedas dejar comentarios y corazones.',
-                                  style: theme.textTheme.bodyMedium?.copyWith(
-                                    color: colorScheme.onPrimaryContainer,
-                                    height: 1.5,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                        Wrap(
-                          spacing: 12,
-                          runSpacing: 12,
-                          children: [
-                            FilledButton.icon(
-                              onPressed: _stories.isEmpty
-                                  ? null
-                                  : () => _openStory(_stories.first),
-                              icon: const Icon(Icons.bookmark_added_outlined),
-                              label: Text(_stories.isEmpty
-                                  ? 'Aún no hay historias'
-                                  : 'Leer la historia más reciente'),
-                            ),
-                            OutlinedButton.icon(
-                              onPressed: () => Navigator.of(context)
-                                  .pushReplacementNamed('/'),
-                              icon: const Icon(Icons.home_outlined),
-                              label: const Text('Explorar Narra'),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
+                  _buildHeroSection(
+                    context: context,
+                    profile: profile,
+                    subscriberName: subscriberName,
+                    onReadLatest: highlightStory != null
+                        ? () => _openStory(highlightStory)
+                        : null,
                   ),
-                  if (_stories.isNotEmpty) ...[
+                  const SizedBox(height: 24),
+                  _buildAccessInfoCard(
+                    context: context,
+                    subscriberName: subscriberName,
+                    authorName: displayName,
+                  ),
+                  if (highlightStory != null) ...[
                     const SizedBox(height: 32),
-                    Text(
-                      'Historias recomendadas',
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Wrap(
-                      spacing: 20,
-                      runSpacing: 20,
-                      children: _stories
-                          .map((story) => _StoryPreviewCard(
-                                story: story,
-                                onOpen: () => _openStory(story),
-                              ))
-                          .toList(),
+                    _FeaturedStoryCard(
+                      story: highlightStory,
+                      onOpen: () => _openStory(highlightStory),
                     ),
                   ],
+                  const SizedBox(height: 32),
+                  if (otherStories.isNotEmpty)
+                    _buildStoriesSection(
+                      context: context,
+                      stories: otherStories,
+                    )
+                  else
+                    _buildEmptyStoriesState(
+                      context: context,
+                      authorName: displayName,
+                    ),
                 ],
               ),
             ),
@@ -322,10 +287,282 @@ class _SubscriberWelcomePageState extends State<SubscriberWelcomePage> {
 
     Navigator.of(context).pushReplacementNamed(routeName);
   }
+
+  Widget _buildHeroSection({
+    required BuildContext context,
+    required PublicAuthorProfile? profile,
+    required String subscriberName,
+    VoidCallback? onReadLatest,
+  }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final hasCover = profile?.coverImageUrl?.trim().isNotEmpty == true;
+    final displayName = profile?.resolvedDisplayName ?? 'Tu autor/a en Narra';
+    final tagline = profile?.tagline?.trim();
+    final summary = profile?.summary?.trim();
+    final fallbackSummary =
+        'Este es tu espacio privado para leer los recuerdos y cartas que $displayName comparte contigo.';
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(32),
+      child: Stack(
+        children: [
+          if (hasCover)
+            Positioned.fill(
+              child: Image.network(
+                profile!.coverImageUrl!,
+                fit: BoxFit.cover,
+                alignment: Alignment.topCenter,
+                errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+              ),
+            ),
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: hasCover
+                      ? [
+                          colorScheme.surface.withValues(alpha: 0.90),
+                          colorScheme.surface.withValues(alpha: 0.78),
+                        ]
+                      : [
+                          colorScheme.primaryContainer.withValues(alpha: 0.55),
+                          colorScheme.surface,
+                        ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 36),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Hola, $subscriberName',
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    _AuthorPortrait(avatarUrl: profile?.avatarUrl),
+                    const SizedBox(width: 20),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            displayName,
+                            style: theme.textTheme.headlineMedium?.copyWith(
+                              fontWeight: FontWeight.w800,
+                              height: 1.05,
+                            ),
+                          ),
+                          if (tagline?.isNotEmpty == true) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              tagline!,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 680),
+                  child: Text(
+                    summary?.isNotEmpty == true ? summary! : fallbackSummary,
+                    style: theme.textTheme.bodyLarge?.copyWith(height: 1.55),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: [
+                    if (onReadLatest != null)
+                      FilledButton.icon(
+                        onPressed: onReadLatest,
+                        icon: const Icon(Icons.auto_stories_outlined),
+                        label: const Text('Leer la historia más reciente'),
+                      ),
+                    OutlinedButton.icon(
+                      onPressed: () =>
+                          Navigator.of(context).pushReplacementNamed('/'),
+                      icon: const Icon(Icons.home_outlined),
+                      label: const Text('Explorar Narra'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAccessInfoCard({
+    required BuildContext context,
+    required String subscriberName,
+    required String authorName,
+  }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Card(
+      color: colorScheme.surfaceVariant.withValues(alpha: 0.35),
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.verified_user_outlined,
+                color: colorScheme.primary, size: 30),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Acceso confirmado',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Guardamos que eres $subscriberName. Cada vez que $authorName publique un nuevo recuerdo podrás abrirlo desde aquí, reaccionar con corazones y dejar comentarios privados.',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      height: 1.55,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'También recibirás un correo cuando haya una nueva historia dedicada a ti.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStoriesSection({
+    required BuildContext context,
+    required List<Story> stories,
+  }) {
+    final theme = Theme.of(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Más historias publicadas',
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 16),
+        Wrap(
+          spacing: 20,
+          runSpacing: 20,
+          children: stories
+              .map(
+                (story) => _StoryGridCard(
+                  story: story,
+                  onOpen: () => _openStory(story),
+                ),
+              )
+              .toList(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEmptyStoriesState({
+    required BuildContext context,
+    required String authorName,
+  }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.hourglass_empty,
+                    color: colorScheme.primary, size: 32),
+                const SizedBox(width: 16),
+                Text(
+                  'Todavía no hay historias publicadas',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              '$authorName está preparando sus primeros recuerdos. Te avisaremos en cuanto llegue el primero.',
+              style: theme.textTheme.bodyMedium?.copyWith(height: 1.55),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
-class _StoryPreviewCard extends StatelessWidget {
-  const _StoryPreviewCard({
+class _AuthorPortrait extends StatelessWidget {
+  const _AuthorPortrait({required this.avatarUrl, this.size = 72});
+
+  final String? avatarUrl;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return CircleAvatar(
+      radius: size / 2,
+      backgroundImage: avatarUrl != null && avatarUrl!.trim().isNotEmpty
+          ? NetworkImage(avatarUrl!)
+          : null,
+      backgroundColor: theme.colorScheme.primaryContainer,
+      child: avatarUrl == null || avatarUrl!.trim().isEmpty
+          ? Icon(Icons.person_outline,
+              color: theme.colorScheme.primary, size: size / 1.4)
+          : null,
+    );
+  }
+}
+
+class _FeaturedStoryCard extends StatelessWidget {
+  const _FeaturedStoryCard({
     required this.story,
     required this.onOpen,
   });
@@ -337,80 +574,259 @@ class _StoryPreviewCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final cover = _storyCoverUrl(story);
+    final readingTime = _formatReadingTime(story);
+
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onOpen,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (cover != null)
+              AspectRatio(
+                aspectRatio: 16 / 9,
+                child: Image.network(
+                  cover,
+                  fit: BoxFit.cover,
+                  alignment: Alignment.topCenter,
+                  errorBuilder: (_, __, ___) => Container(
+                    color: colorScheme.surfaceVariant,
+                    child: Center(
+                      child: Icon(Icons.photo_outlined,
+                          color: colorScheme.onSurfaceVariant, size: 48),
+                    ),
+                  ),
+                ),
+              )
+            else
+              Container(
+                height: 180,
+                decoration: BoxDecoration(
+                  color: colorScheme.primaryContainer.withValues(alpha: 0.5),
+                ),
+                child: Center(
+                  child: Icon(Icons.auto_stories_outlined,
+                      color: colorScheme.primary, size: 56),
+                ),
+              ),
+            Padding(
+              padding: const EdgeInsets.all(28),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 8,
+                    children: [
+                      if (story.publishedAt != null)
+                        _StoryChip(
+                          icon: Icons.calendar_today_outlined,
+                          label: _formatRelativeDate(story.publishedAt!),
+                        ),
+                      if (readingTime.isNotEmpty)
+                        _StoryChip(
+                          icon: Icons.watch_later_outlined,
+                          label: readingTime,
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    story.title.isEmpty ? 'Historia sin título' : story.title,
+                    style: theme.textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    _buildExcerptText(
+                      story.excerpt ?? story.content ?? '',
+                      maxLength: 220,
+                    ),
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      height: 1.6,
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  FilledButton.icon(
+                    onPressed: onOpen,
+                    icon: const Icon(Icons.menu_book_rounded),
+                    label: const Text('Abrir esta historia'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StoryGridCard extends StatelessWidget {
+  const _StoryGridCard({
+    required this.story,
+    required this.onOpen,
+  });
+
+  final Story story;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final cover = _storyCoverUrl(story);
+    final readingTime = _formatReadingTime(story);
 
     return SizedBox(
-      width: 260,
+      width: 300,
       child: Card(
         elevation: 0,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onOpen,
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: colorScheme.secondaryContainer,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    story.publishedAt != null
-                        ? _formatRelativeDate(story.publishedAt!)
-                        : 'Nueva',
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      color: colorScheme.onSecondaryContainer,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                Text(
-                  story.title.isEmpty ? 'Historia sin título' : story.title,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  _buildExcerpt(story.excerpt ?? story.content ?? ''),
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                    height: 1.5,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Leer historia',
-                      style: theme.textTheme.labelLarge?.copyWith(
-                        color: colorScheme.primary,
-                        fontWeight: FontWeight.w600,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (cover != null)
+                AspectRatio(
+                  aspectRatio: 4 / 3,
+                  child: Image.network(
+                    cover,
+                    fit: BoxFit.cover,
+                    alignment: Alignment.topCenter,
+                    errorBuilder: (_, __, ___) => Container(
+                      color: colorScheme.surfaceVariant,
+                      child: Center(
+                        child: Icon(Icons.photo_outlined,
+                            color: colorScheme.onSurfaceVariant, size: 40),
                       ),
                     ),
-                    Icon(Icons.arrow_forward_rounded,
-                        color: colorScheme.primary),
+                  ),
+                ),
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 6,
+                      children: [
+                        if (story.publishedAt != null)
+                          _StoryChip(
+                            icon: Icons.calendar_today_outlined,
+                            label: _formatRelativeDate(story.publishedAt!),
+                          ),
+                        if (readingTime.isNotEmpty)
+                          _StoryChip(
+                            icon: Icons.watch_later_outlined,
+                            label: readingTime,
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      story.title.isEmpty ? 'Historia sin título' : story.title,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      _buildExcerptText(
+                        story.excerpt ?? story.content ?? '',
+                        maxLength: 150,
+                      ),
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        height: 1.5,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Leer historia',
+                          style: theme.textTheme.labelLarge?.copyWith(
+                            color: colorScheme.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Icon(Icons.arrow_forward_rounded,
+                            color: colorScheme.primary),
+                      ],
+                    ),
                   ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
+}
 
-  String _buildExcerpt(String content) {
-    final clean = content.replaceAll(RegExp(r'\s+'), ' ').trim();
-    if (clean.length <= 120) return clean;
-    return '${clean.substring(0, 117).trimRight()}…';
+class _StoryChip extends StatelessWidget {
+  const _StoryChip({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: colorScheme.secondaryContainer,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: colorScheme.onSecondaryContainer),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: colorScheme.onSecondaryContainer,
+            ),
+          ),
+        ],
+      ),
+    );
   }
+}
+
+String? _storyCoverUrl(Story story) {
+  if (story.photos.isEmpty) return null;
+  final photo = story.photos.first;
+  if (photo.photoUrl.trim().isEmpty) return null;
+  return photo.photoUrl;
+}
+
+String _formatReadingTime(Story story) {
+  final minutes = story.readingTime;
+  if (minutes <= 0) return '';
+  if (minutes == 1) return '1 min de lectura';
+  return '$minutes min de lectura';
+}
+
+String _buildExcerptText(String raw, {int maxLength = 160}) {
+  final clean = raw.replaceAll(RegExp(r'\s+'), ' ').trim();
+  if (clean.length <= maxLength) return clean;
+  return '${clean.substring(0, maxLength - 1).trimRight()}…';
 }
 
 class _InvitePayload {

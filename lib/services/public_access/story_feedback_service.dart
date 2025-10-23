@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
-import 'package:narra/supabase/supabase_config.dart';
 
 class StoryFeedbackException implements Exception {
   StoryFeedbackException({
@@ -158,26 +157,6 @@ class StoryFeedbackService {
     String? supabaseUrl,
     String? supabaseAnonKey,
   }) async {
-    final rpcResponse = await _callSupabaseRpc({
-      'p_action': 'fetch',
-      'p_author_id': authorId,
-      'p_story_id': storyId,
-      'p_subscriber_id': subscriberId,
-      'p_token': token,
-      if (source != null && source.isNotEmpty) 'p_source': source,
-    }, overrideUrl: supabaseUrl, overrideAnonKey: supabaseAnonKey);
-    if (rpcResponse != null) {
-      if (rpcResponse['error'] != null) {
-        final code = rpcResponse['error'].toString();
-        throw StoryFeedbackException(
-          statusCode: _statusCodeForError(code),
-          message: _messageForError(code),
-          body: rpcResponse,
-        );
-      }
-      return StoryFeedbackState.fromJson(rpcResponse);
-    }
-
     final response = await http.post(
       Uri.parse(_endpoint),
       headers: const {'Content-Type': 'application/json'},
@@ -196,10 +175,18 @@ class StoryFeedbackService {
       return StoryFeedbackState.fromJson(decoded ?? const {});
     }
 
+    final code = decoded?['error']?.toString();
+    if (code != null) {
+      throw StoryFeedbackException(
+        statusCode: _statusCodeForError(code),
+        message: _messageForError(code),
+        body: decoded,
+      );
+    }
+
     throw StoryFeedbackException(
       statusCode: response.statusCode,
-      message: decoded?['error']?.toString() ??
-          'No se pudo recuperar la actividad de los suscriptores.',
+      message: 'No se pudo recuperar la actividad de los suscriptores.',
       body: decoded,
     );
   }
@@ -215,32 +202,6 @@ class StoryFeedbackService {
     String? supabaseUrl,
     String? supabaseAnonKey,
   }) async {
-    final rpcResponse = await _callSupabaseRpc({
-      'p_action': 'comment',
-      'p_author_id': authorId,
-      'p_story_id': storyId,
-      'p_subscriber_id': subscriberId,
-      'p_token': token,
-      'p_content': content,
-      if (source != null && source.isNotEmpty) 'p_source': source,
-      if (parentCommentId != null && parentCommentId.isNotEmpty)
-        'p_parent_comment_id': parentCommentId,
-    }, overrideUrl: supabaseUrl, overrideAnonKey: supabaseAnonKey);
-    if (rpcResponse != null) {
-      if (rpcResponse['error'] != null) {
-        final code = rpcResponse['error'].toString();
-        throw StoryFeedbackException(
-          statusCode: _statusCodeForError(code),
-          message: _messageForError(code),
-          body: rpcResponse,
-        );
-      }
-      final comment = rpcResponse['comment'];
-      if (comment is Map<String, dynamic>) {
-        return StoryFeedbackComment.fromJson(comment);
-      }
-    }
-
     final response = await http.post(
       Uri.parse(_endpoint),
       headers: const {'Content-Type': 'application/json'},
@@ -274,6 +235,15 @@ class StoryFeedbackService {
       );
     }
 
+    final code = decoded?['error']?.toString();
+    if (code != null) {
+      throw StoryFeedbackException(
+        statusCode: _statusCodeForError(code),
+        message: _messageForError(code),
+        body: decoded,
+      );
+    }
+
     throw StoryFeedbackException(
       statusCode: response.statusCode,
       message: decoded?['error']?.toString() ??
@@ -292,32 +262,6 @@ class StoryFeedbackService {
     String? supabaseUrl,
     String? supabaseAnonKey,
   }) async {
-    final rpcResponse = await _callSupabaseRpc({
-      'p_action': 'reaction',
-      'p_author_id': authorId,
-      'p_story_id': storyId,
-      'p_subscriber_id': subscriberId,
-      'p_token': token,
-      'p_reaction_type': 'heart',
-      'p_active': isActive,
-      if (source != null && source.isNotEmpty) 'p_source': source,
-    }, overrideUrl: supabaseUrl, overrideAnonKey: supabaseAnonKey);
-    if (rpcResponse != null) {
-      if (rpcResponse['error'] != null) {
-        final code = rpcResponse['error'].toString();
-        throw StoryFeedbackException(
-          statusCode: _statusCodeForError(code),
-          message: _messageForError(code),
-          body: rpcResponse,
-        );
-      }
-      final reaction = rpcResponse['reaction'];
-      if (reaction is Map<String, dynamic>) {
-        return reaction['active'] == true;
-      }
-      return isActive;
-    }
-
     final response = await http.post(
       Uri.parse(_endpoint),
       headers: const {'Content-Type': 'application/json'},
@@ -342,59 +286,21 @@ class StoryFeedbackService {
       return isActive;
     }
 
+    final code = decoded?['error']?.toString();
+    if (code != null) {
+      throw StoryFeedbackException(
+        statusCode: _statusCodeForError(code),
+        message: _messageForError(code),
+        body: decoded,
+      );
+    }
+
     throw StoryFeedbackException(
       statusCode: response.statusCode,
       message:
           decoded?['error']?.toString() ?? 'No se pudo actualizar la reacción.',
       body: decoded,
     );
-  }
-
-  static Future<Map<String, dynamic>?> _callSupabaseRpc(
-    Map<String, dynamic> payload, {
-    String? overrideUrl,
-    String? overrideAnonKey,
-  }) async {
-    final url = (overrideUrl ?? SupabaseConfig.supabaseUrl).trim();
-    final anonKey = (overrideAnonKey ?? SupabaseConfig.supabaseAnonKey).trim();
-    if (url.isEmpty || anonKey.isEmpty) {
-      return null;
-    }
-
-    try {
-      final response = await http.post(
-        Uri.parse('$url/rest/v1/rpc/process_story_feedback'),
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': anonKey,
-          'Authorization': 'Bearer $anonKey',
-          'Prefer': 'return=representation',
-        },
-        body: jsonEncode(payload),
-      );
-
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        if (response.body.isEmpty) {
-          return const {};
-        }
-        final decoded = jsonDecode(response.body);
-        if (decoded == null) {
-          return const {};
-        }
-        if (decoded is Map<String, dynamic>) {
-          return decoded;
-        }
-        return {'result': decoded};
-      }
-
-      if (response.statusCode == 404) {
-        return null;
-      }
-    } catch (_) {
-      return null;
-    }
-
-    return null;
   }
 
   static int _statusCodeForError(String code) {
@@ -410,6 +316,8 @@ class StoryFeedbackService {
         return 400;
       case 'supabase_rpc_failed':
       case 'invalid_rpc_payload':
+      case 'insert_failed':
+      case 'reaction_failed':
         return 502;
       default:
         return 400;
@@ -434,6 +342,10 @@ class StoryFeedbackService {
         return 'No pudimos contactar al servidor. Intenta nuevamente en unos segundos.';
       case 'invalid_rpc_payload':
         return 'El servidor respondió en un formato inesperado.';
+      case 'insert_failed':
+        return 'No pudimos guardar tu comentario. Inténtalo de nuevo en un momento.';
+      case 'reaction_failed':
+        return 'No pudimos actualizar tu reacción. Inténtalo nuevamente.';
       default:
         return 'No se pudo procesar esta solicitud.';
     }

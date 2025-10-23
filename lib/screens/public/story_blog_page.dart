@@ -1531,6 +1531,12 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
         _isHearted = confirmed;
         _isUpdatingReaction = false;
       });
+
+      await _loadFeedbackState(
+        story: story,
+        accessRecord: record,
+        sharePayload: payload,
+      );
     } on StoryFeedbackException catch (error) {
       if (!mounted) return;
       setState(() => _isUpdatingReaction = false);

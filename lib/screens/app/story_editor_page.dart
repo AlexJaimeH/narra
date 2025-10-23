@@ -3947,9 +3947,16 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     });
 
     final sheetUpdater = _sheetStateUpdater['dictation'];
-    sheetUpdater?.call(() {
-      _scrollTranscriptToBottom();
-    });
+    if (sheetUpdater != null) {
+      try {
+        sheetUpdater(() {
+          if (!mounted) return;
+          _scrollTranscriptToBottom();
+        });
+      } catch (_) {
+        _sheetStateUpdater.remove('dictation');
+      }
+    }
 
     _scrollTranscriptToBottom();
 
@@ -4202,9 +4209,13 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         return StatefulBuilder(
           builder: (builderContext, setSheetState) {
             // Actualizar el estado del bottom sheet cuando cambie la transcripción
-            if (!_sheetStateUpdater.containsKey('dictation')) {
-              _sheetStateUpdater['dictation'] = setSheetState;
-            }
+            _sheetStateUpdater['dictation'] = (VoidCallback callback) {
+              if (!sheetContext.mounted) {
+                _sheetStateUpdater.remove('dictation');
+                return;
+              }
+              setSheetState(callback);
+            };
 
             final maxSheetHeight =
                 MediaQuery.of(builderContext).size.height * 0.7;

@@ -150,6 +150,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       }, 403);
     }
 
+    const supabaseInfo = resolvePublicSupabase(env, supabase);
+
     return json({
       error: 'Access validation failed',
       detail: payload,

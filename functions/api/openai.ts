@@ -1,23 +1,28 @@
+import { buildOpenAIHeaders } from '../utils/openai-headers';
+
 export interface Env {
-  OPENAI_API_KEY: string;
+  OPENAI_API_KEY?: string;
   OPENAI_PROJECT_ID?: string;
   OPENAI_ORGANIZATION?: string;
+  OPENAI_CHAT_API_KEY?: string;
+  OPENAI_CHAT_PROJECT_ID?: string;
+  OPENAI_CHAT_ORGANIZATION?: string;
 }
 
-const buildOpenAIHeaders = (env: Env): Record<string, string> => {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${env.OPENAI_API_KEY}`,
-  };
-
-  if (env.OPENAI_PROJECT_ID) {
-    headers['OpenAI-Project'] = env.OPENAI_PROJECT_ID;
+const resolveChatHeaders = (env: Env): Record<string, string> => {
+  const apiKey = env.OPENAI_CHAT_API_KEY ?? env.OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new Error('OPENAI_API_KEY not configured');
   }
 
-  if (env.OPENAI_ORGANIZATION) {
-    headers['OpenAI-Organization'] = env.OPENAI_ORGANIZATION;
-  }
+  const headers = buildOpenAIHeaders({
+    apiKey,
+    projectId: env.OPENAI_CHAT_PROJECT_ID ?? env.OPENAI_PROJECT_ID,
+    organizationId:
+      env.OPENAI_CHAT_ORGANIZATION ?? env.OPENAI_ORGANIZATION,
+  });
 
+  headers['Content-Type'] = 'application/json';
   return headers;
 };
 
@@ -33,8 +38,14 @@ export const onRequestOptions: PagesFunction<Env> = async () => {
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   try {
-    if (!env.OPENAI_API_KEY) {
-      return json({ error: 'OPENAI_API_KEY not configured' }, 500);
+    let headers: Record<string, string>;
+    try {
+      headers = resolveChatHeaders(env);
+    } catch (error) {
+      return json(
+        { error: error instanceof Error ? error.message : String(error) },
+        500,
+      );
     }
 
     const req = await request.json().catch(() => null);
@@ -59,7 +70,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
-      headers: buildOpenAIHeaders(env),
+      headers,
       body: JSON.stringify(payload),
     });
 
@@ -85,4 +96,3 @@ function json(body: unknown, status = 200): Response {
     headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
   });
 }
-

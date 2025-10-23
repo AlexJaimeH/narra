@@ -894,6 +894,12 @@ class VoiceRecorder {
 
     final response = await http.Response.fromStream(streamedResponse);
     if (response.statusCode < 200 || response.statusCode >= 300) {
+      if (response.statusCode == 401) {
+        _log(
+          'OpenAI rechazó la solicitud (401). Verifica la API key y variables OPENAI_TRANSCRIBE_* en Cloudflare.',
+          level: 'error',
+        );
+      }
       _log(
         'Transcripción falló (${response.statusCode}): ${response.body}',
         level: 'error',

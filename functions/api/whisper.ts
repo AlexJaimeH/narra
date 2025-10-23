@@ -1,23 +1,27 @@
+import { buildOpenAIHeaders } from '../utils/openai-headers';
+
 export interface Env {
-  OPENAI_API_KEY: string;
+  OPENAI_API_KEY?: string;
   OPENAI_PROJECT_ID?: string;
   OPENAI_ORGANIZATION?: string;
+  OPENAI_TRANSCRIBE_API_KEY?: string;
+  OPENAI_TRANSCRIBE_PROJECT_ID?: string;
+  OPENAI_TRANSCRIBE_ORGANIZATION?: string;
 }
 
-const buildOpenAIHeaders = (env: Env): Record<string, string> => {
-  const headers: Record<string, string> = {
-    Authorization: `Bearer ${env.OPENAI_API_KEY}`,
-  };
-
-  if (env.OPENAI_PROJECT_ID) {
-    headers['OpenAI-Project'] = env.OPENAI_PROJECT_ID;
+const resolveTranscriptionHeaders = (env: Env): Record<string, string> => {
+  const apiKey = env.OPENAI_TRANSCRIBE_API_KEY ?? env.OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new Error('OpenAI transcription API key not configured.');
   }
 
-  if (env.OPENAI_ORGANIZATION) {
-    headers['OpenAI-Organization'] = env.OPENAI_ORGANIZATION;
-  }
-
-  return headers;
+  return buildOpenAIHeaders({
+    apiKey,
+    projectId:
+      env.OPENAI_TRANSCRIBE_PROJECT_ID ?? env.OPENAI_PROJECT_ID,
+    organizationId:
+      env.OPENAI_TRANSCRIBE_ORGANIZATION ?? env.OPENAI_ORGANIZATION,
+  });
 };
 
 const CORS_HEADERS: Record<string, string> = {
@@ -36,9 +40,13 @@ export const onRequestOptions: PagesFunction<Env> = async () => {
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   try {
-    const openaiApiKey = env.OPENAI_API_KEY;
-    if (!openaiApiKey) {
-      return new Response('OpenAI API key not configured.', { status: 500 });
+    let headers: Record<string, string>;
+    try {
+      headers = resolveTranscriptionHeaders(env);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Missing OpenAI API key';
+      return new Response(message, { status: 500 });
     }
 
     const url = new URL(request.url);
@@ -140,7 +148,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       }
       const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
         method: 'POST',
-        headers: buildOpenAIHeaders(env),
+        headers,
         body: fd,
       });
       return res;

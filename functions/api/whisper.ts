@@ -1,6 +1,24 @@
 export interface Env {
   OPENAI_API_KEY: string;
+  OPENAI_PROJECT_ID?: string;
+  OPENAI_ORGANIZATION?: string;
 }
+
+const buildOpenAIHeaders = (env: Env): Record<string, string> => {
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${env.OPENAI_API_KEY}`,
+  };
+
+  if (env.OPENAI_PROJECT_ID) {
+    headers['OpenAI-Project'] = env.OPENAI_PROJECT_ID;
+  }
+
+  if (env.OPENAI_ORGANIZATION) {
+    headers['OpenAI-Organization'] = env.OPENAI_ORGANIZATION;
+  }
+
+  return headers;
+};
 
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -122,7 +140,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       }
       const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${openaiApiKey}` },
+        headers: buildOpenAIHeaders(env),
         body: fd,
       });
       return res;

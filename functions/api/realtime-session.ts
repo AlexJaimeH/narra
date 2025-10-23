@@ -7,7 +7,27 @@ const CORS_HEADERS: Record<string, string> = {
 
 interface Env {
   OPENAI_API_KEY: string;
+  OPENAI_PROJECT_ID?: string;
+  OPENAI_ORGANIZATION?: string;
 }
+
+const buildRealtimeHeaders = (env: Env): Record<string, string> => {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'OpenAI-Beta': 'realtime=v1',
+    Authorization: `Bearer ${env.OPENAI_API_KEY}`,
+  };
+
+  if (env.OPENAI_PROJECT_ID) {
+    headers['OpenAI-Project'] = env.OPENAI_PROJECT_ID;
+  }
+
+  if (env.OPENAI_ORGANIZATION) {
+    headers['OpenAI-Organization'] = env.OPENAI_ORGANIZATION;
+  }
+
+  return headers;
+};
 
 const DEFAULT_MODEL = 'gpt-4o-mini-transcribe';
 const ALLOWED_TRANSCRIPTION_MODELS = new Set([
@@ -107,11 +127,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
     const sessionResponse = await fetch('https://api.openai.com/v1/realtime/sessions', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'OpenAI-Beta': 'realtime=v1',
-        Authorization: `Bearer ${apiKey}`,
-      },
+      headers: buildRealtimeHeaders(env),
       body: JSON.stringify(sessionRequest),
     });
 

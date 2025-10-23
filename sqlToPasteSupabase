@@ -582,6 +582,9 @@ begin
 end
 $$;
 
+create index if not exists story_comments_parent_idx
+  on public.story_comments (parent_id, created_at desc);
+
 do $$
 begin
   if not exists (

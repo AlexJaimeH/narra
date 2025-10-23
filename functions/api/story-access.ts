@@ -51,11 +51,20 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     const apiKey = credentials?.serviceKey ?? publicSupabase?.anonKey;
 
     if (!rpcUrl || !apiKey) {
-      console.error('[story-access] Missing Supabase credentials', {
+      const context = {
         diagnostics,
         hasPublicSupabase: Boolean(publicSupabase),
-      });
-      return json({ error: 'Supabase credentials not configured' }, 500);
+        rpcUrlResolved: Boolean(rpcUrl),
+        hasServiceKey: Boolean(credentials?.serviceKey),
+      };
+      console.error('[story-access] Missing Supabase credentials', context);
+      return json({
+        error: 'Supabase credentials not configured',
+        detail: context,
+        hint:
+          'Define SUPABASE_URL (o PUBLIC_SUPABASE_URL) y SUPABASE_SERVICE_ROLE_KEY '
+          + 'en la configuración de Cloudflare Pages.',
+      }, 500);
     }
 
     const ip = request.headers.get('cf-connecting-ip')

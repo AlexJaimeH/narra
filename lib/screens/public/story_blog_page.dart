@@ -39,13 +39,15 @@ class StoryBlogPage extends StatefulWidget {
 
 class _StoryBlogPageState extends State<StoryBlogPage> {
   final TextEditingController _commentController = TextEditingController();
+  final Map<String, TextEditingController> _replyControllers = {};
+  final Set<String> _replySubmitting = <String>{};
 
   Story? _story;
   StoryAccessRecord? _accessRecord;
   StorySharePayload? _sharePayload;
   PublicAuthorProfile? _authorProfile;
   List<Story> _recommendedStories = const [];
-  final List<_StoryComment> _comments = [];
+  final List<StoryFeedbackComment> _comments = [];
 
   bool _isLoading = true;
   bool _isHearted = false;
@@ -54,6 +56,8 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
   bool _isUpdatingReaction = false;
   String? _errorMessage;
   String? _shareValidationMessage;
+  String? _replyingToCommentId;
+  int _totalComments = 0;
 
   @override
   void initState() {
@@ -65,6 +69,10 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
   @override
   void dispose() {
     _commentController.dispose();
+    for (final controller in _replyControllers.values) {
+      controller.dispose();
+    }
+    _replyControllers.clear();
     super.dispose();
   }
 
@@ -98,6 +106,39 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
     final record = _accessRecord;
     if (record == null) return false;
     return record.subscriberId != 'author';
+  }
+
+  TextEditingController _replyControllerFor(String commentId) {
+    return _replyControllers.putIfAbsent(
+      commentId,
+      () => TextEditingController(),
+    );
+  }
+
+  void _pruneReplyControllers(List<StoryFeedbackComment> comments) {
+    final validIds = <String>{};
+
+    void collect(StoryFeedbackComment comment) {
+      validIds.add(comment.id);
+      for (final child in comment.replies) {
+        collect(child);
+      }
+    }
+
+    for (final comment in comments) {
+      collect(comment);
+    }
+
+    final staleControllers =
+        _replyControllers.keys.where((id) => !validIds.contains(id)).toList();
+    for (final id in staleControllers) {
+      _replyControllers.remove(id)?.dispose();
+    }
+
+    if (_replyingToCommentId != null &&
+        !validIds.contains(_replyingToCommentId!)) {
+      _replyingToCommentId = null;
+    }
   }
 
   Future<void> _loadStory() async {
@@ -236,6 +277,8 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
         _comments.clear();
         _isHearted = false;
         _isFeedbackLoading = false;
+        _replyingToCommentId = null;
+        _totalComments = 0;
       });
       return;
     }
@@ -264,14 +307,11 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
       setState(() {
         _comments
           ..clear()
-          ..addAll(feedback.comments.map((comment) => _StoryComment(
-                id: comment.id,
-                authorName: comment.authorName,
-                content: comment.content,
-                createdAt: comment.createdAt,
-              )));
+          ..addAll(feedback.comments);
         _isHearted = feedback.hasReacted;
         _isFeedbackLoading = false;
+        _totalComments = feedback.commentCount;
+        _pruneReplyControllers(_comments);
       });
     } on StoryFeedbackException catch (error) {
       if (!mounted) return;
@@ -647,78 +687,403 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
                 Icon(Icons.chat_bubble_outline, color: colorScheme.primary),
                 const SizedBox(width: 8),
                 Text(
-                  'Comparte un comentario',
+                  'Comentarios',
                   style: theme.textTheme.titleMedium,
                 ),
+                const SizedBox(width: 12),
+                Chip(
+                  label: Text('$_totalComments'),
+                  backgroundColor: colorScheme.primaryContainer,
+                  labelStyle: theme.textTheme.labelMedium?.copyWith(
+                    color: colorScheme.onPrimaryContainer,
+                  ),
+                ),
               ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _totalComments > 0
+                  ? 'Únete a la conversación y comparte cómo te hizo sentir esta historia.'
+                  : 'Sé la primera persona en dejar unas palabras para ${_story?.authorDisplayName ?? _story?.authorName ?? 'el autor'}.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
             ),
             if (_isFeedbackLoading)
               const Padding(
                 padding: EdgeInsets.only(top: 12),
                 child: LinearProgressIndicator(minHeight: 3),
               ),
-            const SizedBox(height: 12),
-            if (_comments.isEmpty && !_isFeedbackLoading)
-              Text(
-                'Sé la primera persona en dejar unas palabras para ${_story?.authorDisplayName ?? _story?.authorName ?? 'el autor'}.',
-                style: theme.textTheme.bodyMedium,
-              )
-            else
-              ..._comments.map((comment) => _CommentTile(comment: comment)),
             const SizedBox(height: 16),
-            if (canComment)
-              TextField(
-                controller: _commentController,
-                maxLines: 5,
-                minLines: 3,
-                enabled: !_isSubmittingComment,
-                decoration: InputDecoration(
-                  hintText: 'Escribe tu mensaje como $viewerName...',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              )
-            else
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: colorScheme.surfaceVariant,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  'Necesitas abrir la historia desde tu enlace mágico para comentar.',
-                  style: theme.textTheme.bodyMedium,
-                ),
-              ),
-            const SizedBox(height: 12),
-            Align(
-              alignment: Alignment.centerRight,
-              child: FilledButton(
-                onPressed: (!canComment || _isSubmittingComment)
-                    ? null
-                    : _submitComment,
-                child: _isSubmittingComment
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Publicar comentario'),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Tu nombre se mostrará como "$viewerName".',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-              ),
+            if (_comments.isNotEmpty)
+              _buildCommentThreads(theme, colorScheme, viewerName)
+            else if (!_isFeedbackLoading)
+              _buildEmptyCommentsState(theme, colorScheme),
+            const SizedBox(height: 24),
+            _buildCommentComposer(
+              theme: theme,
+              colorScheme: colorScheme,
+              canComment: canComment,
+              viewerName: viewerName,
             ),
           ],
         ),
       ),
     );
+  }
+
+  Widget _buildCommentThreads(
+    ThemeData theme,
+    ColorScheme colorScheme,
+    String viewerName,
+  ) {
+    final children = <Widget>[];
+    for (var i = 0; i < _comments.length; i++) {
+      final comment = _comments[i];
+      children.add(_buildCommentThread(
+        comment,
+        theme,
+        colorScheme,
+        viewerName: viewerName,
+      ));
+      if (i != _comments.length - 1) {
+        children.add(const SizedBox(height: 16));
+      }
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: children,
+    );
+  }
+
+  Widget _buildEmptyCommentsState(ThemeData theme, ColorScheme colorScheme) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: colorScheme.surfaceContainerHighest),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.forum_outlined, color: colorScheme.onSurfaceVariant),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Cuando dejes tu comentario aparecerá aquí. Puedes contar cómo te hizo sentir la historia o mandar un saludo al autor.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCommentComposer({
+    required ThemeData theme,
+    required ColorScheme colorScheme,
+    required bool canComment,
+    required String viewerName,
+  }) {
+    if (!canComment) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: colorScheme.surfaceVariant,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+          'Necesitas abrir la historia desde tu enlace mágico para participar en los comentarios.',
+          style: theme.textTheme.bodyMedium,
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextField(
+          controller: _commentController,
+          maxLines: 5,
+          minLines: 3,
+          enabled: !_isSubmittingComment,
+          decoration: InputDecoration(
+            labelText: 'Comparte un comentario',
+            hintText: 'Escribe tu mensaje como $viewerName...',
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(
+              child: Text(
+                'Tu nombre se mostrará como "$viewerName".',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            FilledButton.icon(
+              onPressed: _isSubmittingComment ? null : () => _submitComment(),
+              icon: _isSubmittingComment
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.send_rounded),
+              label: Text(
+                _isSubmittingComment ? 'Publicando…' : 'Publicar',
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCommentThread(
+    StoryFeedbackComment comment,
+    ThemeData theme,
+    ColorScheme colorScheme, {
+    int depth = 0,
+    required String viewerName,
+  }) {
+    final indent = depth * 28.0;
+    final isReplying = _replyingToCommentId == comment.id;
+    final controller = _replyControllerFor(comment.id);
+    final isSubmittingReply = _replySubmitting.contains(comment.id);
+
+    return Padding(
+      padding: EdgeInsets.only(left: indent),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              color: colorScheme.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: colorScheme.surfaceContainerHighest),
+            ),
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                CircleAvatar(
+                  radius: 18,
+                  backgroundColor: colorScheme.primaryContainer,
+                  foregroundColor: colorScheme.onPrimaryContainer,
+                  child: Text(
+                    _initialsFor(comment.authorName),
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: colorScheme.onPrimaryContainer,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              comment.authorName,
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          Text(
+                            _formatRelativeTime(comment.createdAt),
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        comment.content,
+                        style: theme.textTheme.bodyMedium,
+                      ),
+                      if (_canInteract)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: TextButton.icon(
+                            onPressed: () {
+                              setState(() {
+                                _replyingToCommentId =
+                                    _replyingToCommentId == comment.id
+                                        ? null
+                                        : comment.id;
+                              });
+                            },
+                            icon: const Icon(Icons.reply_outlined, size: 18),
+                            label: Text(
+                              _replyingToCommentId == comment.id
+                                  ? 'Cancelar respuesta'
+                                  : 'Responder',
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (isReplying)
+            Padding(
+              padding: const EdgeInsets.only(top: 12, left: 40),
+              child: _buildReplyComposer(
+                controller: controller,
+                commentId: comment.id,
+                theme: theme,
+                colorScheme: colorScheme,
+                isSubmitting: isSubmittingReply,
+                viewerName: viewerName,
+              ),
+            ),
+          if (comment.replies.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (var i = 0; i < comment.replies.length; i++) ...[
+                    _buildCommentThread(
+                      comment.replies[i],
+                      theme,
+                      colorScheme,
+                      depth: depth + 1,
+                      viewerName: viewerName,
+                    ),
+                    if (i != comment.replies.length - 1)
+                      const SizedBox(height: 12),
+                  ],
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReplyComposer({
+    required TextEditingController controller,
+    required String commentId,
+    required ThemeData theme,
+    required ColorScheme colorScheme,
+    required bool isSubmitting,
+    required String viewerName,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceVariant.withOpacity(0.4),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextField(
+            controller: controller,
+            minLines: 2,
+            maxLines: 4,
+            enabled: !isSubmitting,
+            decoration: InputDecoration(
+              hintText: 'Responder como $viewerName…',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(
+                onPressed: isSubmitting
+                    ? null
+                    : () {
+                        setState(() {
+                          controller.clear();
+                          if (_replyingToCommentId == commentId) {
+                            _replyingToCommentId = null;
+                          }
+                        });
+                      },
+                child: const Text('Cancelar'),
+              ),
+              const SizedBox(width: 8),
+              FilledButton.icon(
+                onPressed: isSubmitting
+                    ? null
+                    : () => _submitComment(parentCommentId: commentId),
+                icon: isSubmitting
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.reply_rounded),
+                label: Text(isSubmitting ? 'Enviando…' : 'Responder'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatRelativeTime(DateTime date) {
+    final now = DateTime.now();
+    final diff = now.difference(date);
+    if (diff.inSeconds < 60) return 'Hace unos segundos';
+    if (diff.inMinutes < 60) {
+      final minutes = diff.inMinutes;
+      return 'Hace ${minutes == 1 ? '1 minuto' : '$minutes minutos'}';
+    }
+    if (diff.inHours < 24) {
+      final hours = diff.inHours;
+      return 'Hace ${hours == 1 ? '1 hora' : '$hours horas'}';
+    }
+    if (diff.inDays < 7) {
+      final days = diff.inDays;
+      return 'Hace ${days == 1 ? '1 día' : '$days días'}';
+    }
+    final weeks = (diff.inDays / 7).floor();
+    if (weeks < 5) {
+      return 'Hace ${weeks == 1 ? '1 semana' : '$weeks semanas'}';
+    }
+    return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+  }
+
+  String _initialsFor(String name) {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return '•';
+    final parts =
+        trimmed.split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    if (parts.isEmpty) return '•';
+    if (parts.length == 1) {
+      return parts.first.substring(0, 1).toUpperCase();
+    }
+    final first = parts.first.substring(0, 1);
+    final last = parts.last.substring(0, 1);
+    return (first + last).toUpperCase();
   }
 
   Widget _buildRecommendations(
@@ -1027,8 +1392,11 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
     );
   }
 
-  Future<void> _submitComment() async {
-    final text = _commentController.text.trim();
+  Future<void> _submitComment({String? parentCommentId}) async {
+    final controller = parentCommentId == null
+        ? _commentController
+        : _replyControllerFor(parentCommentId);
+    final text = controller.text.trim();
     if (text.isEmpty) return;
 
     final messenger = ScaffoldMessenger.of(context);
@@ -1053,53 +1421,75 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
       return;
     }
 
-    setState(() => _isSubmittingComment = true);
+    setState(() {
+      if (parentCommentId == null) {
+        _isSubmittingComment = true;
+      } else {
+        _replySubmitting.add(parentCommentId);
+      }
+    });
 
     try {
-      final saved = await StoryFeedbackService.submitComment(
+      await StoryFeedbackService.submitComment(
         authorId: story.userId,
         storyId: story.id,
         subscriberId: record.subscriberId,
         token: token,
         content: text,
         source: payload?.source,
+        parentCommentId: parentCommentId,
         supabaseUrl: record.supabaseUrl,
         supabaseAnonKey: record.supabaseAnonKey,
       );
 
       if (!mounted) return;
-      setState(() {
-        _comments.insert(
-          0,
-          _StoryComment(
-            id: saved.id,
-            authorName: saved.authorName,
-            content: saved.content,
-            createdAt: saved.createdAt,
-          ),
-        );
-        _commentController.clear();
-        _isSubmittingComment = false;
-      });
+      await _loadFeedbackState(
+        story: story,
+        accessRecord: record,
+        sharePayload: payload,
+      );
+
+      if (!mounted) return;
+      controller.clear();
+      if (parentCommentId != null) {
+        setState(() {
+          if (_replyingToCommentId == parentCommentId) {
+            _replyingToCommentId = null;
+          }
+        });
+      }
 
       messenger.showSnackBar(
-        const SnackBar(content: Text('¡Tu comentario está en camino!')),
+        SnackBar(
+          content: Text(
+            parentCommentId == null
+                ? '¡Comentario publicado!'
+                : '¡Respuesta publicada!',
+          ),
+        ),
       );
     } on StoryFeedbackException catch (error) {
       if (!mounted) return;
-      setState(() => _isSubmittingComment = false);
       messenger.showSnackBar(
         SnackBar(content: Text(error.message)),
       );
     } catch (_) {
       if (!mounted) return;
-      setState(() => _isSubmittingComment = false);
       messenger.showSnackBar(
         const SnackBar(
           content:
               Text('No pudimos registrar tu comentario. Inténtalo de nuevo.'),
         ),
       );
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        if (parentCommentId == null) {
+          _isSubmittingComment = false;
+        } else {
+          _replySubmitting.remove(parentCommentId);
+        }
+      });
     }
   }
 
@@ -1451,66 +1841,4 @@ class _ShareDebugInfo extends StatelessWidget {
       ),
     );
   }
-}
-
-class _CommentTile extends StatelessWidget {
-  const _CommentTile({required this.comment});
-
-  final _StoryComment comment;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: colorScheme.surfaceContainerHighest),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            comment.authorName,
-            style: theme.textTheme.titleSmall,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            _formatCommentDate(comment.createdAt),
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(comment.content, style: theme.textTheme.bodyMedium),
-        ],
-      ),
-    );
-  }
-
-  String _formatCommentDate(DateTime date) {
-    final now = DateTime.now();
-    final diff = now.difference(date);
-    if (diff.inMinutes < 1) return 'Hace unos segundos';
-    if (diff.inMinutes < 60) return 'Hace ${diff.inMinutes} min';
-    if (diff.inHours < 24) return 'Hace ${diff.inHours} h';
-    return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
-  }
-}
-
-class _StoryComment {
-  const _StoryComment({
-    required this.id,
-    required this.authorName,
-    required this.content,
-    required this.createdAt,
-  });
-
-  final String id;
-  final String authorName;
-  final String content;
-  final DateTime createdAt;
 }

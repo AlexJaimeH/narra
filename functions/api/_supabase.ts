@@ -18,11 +18,24 @@ interface SupabaseEnv {
   SUPABASE_CONFIG?: string | Record<string, unknown>;
   SUPABASE_CREDENTIALS?: string | Record<string, unknown>;
   PUBLIC_SUPABASE?: string | Record<string, unknown>;
+  PUBLIC_SUPABASE_ANON_KEY?: string;
+  SUPABASE_ANON_KEY?: string;
+  NEXT_PUBLIC_SUPABASE_ANON_KEY?: string;
+  REACT_APP_SUPABASE_ANON_KEY?: string;
+  SUPABASE_PUBLIC_ANON_KEY?: string;
+  SUPABASE_CLIENT_ANON_KEY?: string;
 }
 
 interface SupabaseCredentials {
   url: string;
   serviceKey: string;
+}
+
+interface PublicSupabaseCredentials {
+  url: string;
+  anonKey: string;
+  urlSource?: string;
+  anonKeySource?: string;
 }
 
 interface SupabaseDiagnostics {
@@ -55,6 +68,15 @@ const SUPABASE_SERVICE_KEY_CANDIDATES = [
   "PUBLIC_SUPABASE_SERVICE_ROLE",
 ];
 
+const SUPABASE_ANON_KEY_CANDIDATES = [
+  "PUBLIC_SUPABASE_ANON_KEY",
+  "SUPABASE_ANON_KEY",
+  "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+  "REACT_APP_SUPABASE_ANON_KEY",
+  "SUPABASE_PUBLIC_ANON_KEY",
+  "SUPABASE_CLIENT_ANON_KEY",
+];
+
 const SUPABASE_COMPOSITE_CANDIDATES = [
   "SUPABASE",
   "SUPABASE_CONFIG",
@@ -82,26 +104,74 @@ const COMPOSITE_SERVICE_KEY_KEYS = [
   "service_token",
 ];
 
+const COMPOSITE_ANON_KEY_KEYS = [
+  "anonKey",
+  "anon_key",
+  "publicAnonKey",
+  "public_anon_key",
+  "anon",
+  "publicAnon",
+];
+
+function readEnvString(
+  recordEnv: Record<string, unknown>,
+  key: string,
+): string | undefined {
+  const value = recordEnv[key];
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed.length > 0) {
+      return trimmed;
+    }
+  }
+  return undefined;
+}
+
+function parseComposite(raw: unknown): Record<string, unknown> | undefined {
+  if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    if (trimmed.length === 0) return undefined;
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (parsed && typeof parsed === "object") {
+        return parsed as Record<string, unknown>;
+      }
+    } catch (_) {
+      return undefined;
+    }
+    return undefined;
+  }
+  if (raw && typeof raw === "object") {
+    return raw as Record<string, unknown>;
+  }
+  return undefined;
+}
+
+function extractCompositeString(
+  source: Record<string, unknown>,
+  keys: string[],
+): { value?: string; keyName?: string } {
+  for (const key of keys) {
+    const candidate = source[key];
+    if (typeof candidate === "string") {
+      const trimmed = candidate.trim();
+      if (trimmed.length > 0) {
+        return { value: trimmed, keyName: key };
+      }
+    }
+  }
+  return {};
+}
+
 export function resolveSupabaseConfig(
   env: SupabaseEnv,
 ): { credentials?: SupabaseCredentials; diagnostics: SupabaseDiagnostics } {
   const recordEnv = (env ?? {}) as Record<string, unknown>;
 
-  const readString = (key: string): string | undefined => {
-    const value = recordEnv[key];
-    if (typeof value === "string") {
-      const trimmed = value.trim();
-      if (trimmed.length > 0) {
-        return trimmed;
-      }
-    }
-    return undefined;
-  };
-
   let resolvedUrl: string | undefined;
   let urlSource: string | undefined;
   for (const key of SUPABASE_URL_CANDIDATES) {
-    const value = readString(key);
+    const value = readEnvString(recordEnv, key);
     if (value) {
       resolvedUrl = value;
       urlSource = key;
@@ -112,7 +182,7 @@ export function resolveSupabaseConfig(
   let serviceKey: string | undefined;
   let serviceKeySource: string | undefined;
   for (const key of SUPABASE_SERVICE_KEY_CANDIDATES) {
-    const value = readString(key);
+    const value = readEnvString(recordEnv, key);
     if (value) {
       serviceKey = value;
       serviceKeySource = key;
@@ -121,44 +191,6 @@ export function resolveSupabaseConfig(
   }
 
   const parsedCompositeSources: string[] = [];
-
-  const parseComposite = (
-    raw: unknown,
-  ): Record<string, unknown> | undefined => {
-    if (typeof raw === "string") {
-      const trimmed = raw.trim();
-      if (trimmed.length === 0) return undefined;
-      try {
-        const parsed = JSON.parse(trimmed);
-        if (parsed && typeof parsed === "object") {
-          return parsed as Record<string, unknown>;
-        }
-      } catch (_) {
-        return undefined;
-      }
-      return undefined;
-    }
-    if (raw && typeof raw === "object") {
-      return raw as Record<string, unknown>;
-    }
-    return undefined;
-  };
-
-  const extractCompositeString = (
-    source: Record<string, unknown>,
-    keys: string[],
-  ): { value?: string; keyName?: string } => {
-    for (const key of keys) {
-      const candidate = source[key];
-      if (typeof candidate === "string") {
-        const trimmed = candidate.trim();
-        if (trimmed.length > 0) {
-          return { value: trimmed, keyName: key };
-        }
-      }
-    }
-    return {};
-  };
 
   if (!resolvedUrl || !serviceKey) {
     for (const candidate of SUPABASE_COMPOSITE_CANDIDATES) {
@@ -230,12 +262,79 @@ export function resolveSupabaseConfig(
   return { diagnostics };
 }
 
-export function supabaseHeaders(serviceKey: string): Record<string, string> {
-  return {
-    "Content-Type": "application/json",
-    apikey: serviceKey,
-    Authorization: `Bearer ${serviceKey}`,
-  };
+export function resolvePublicSupabase(
+  env: SupabaseEnv,
+  fallbackUrl?: string,
+): PublicSupabaseCredentials | undefined {
+  const recordEnv = (env ?? {}) as Record<string, unknown>;
+
+  let resolvedUrl = fallbackUrl;
+  let urlSource: string | undefined;
+  if (!resolvedUrl) {
+    for (const key of SUPABASE_URL_CANDIDATES) {
+      const value = readEnvString(recordEnv, key);
+      if (value) {
+        resolvedUrl = value;
+        urlSource = key;
+        break;
+      }
+    }
+  }
+
+  let anonKey: string | undefined;
+  let anonKeySource: string | undefined;
+  for (const key of SUPABASE_ANON_KEY_CANDIDATES) {
+    const value = readEnvString(recordEnv, key);
+    if (value) {
+      anonKey = value;
+      anonKeySource = key;
+      break;
+    }
+  }
+
+  if (!resolvedUrl || !anonKey) {
+    for (const candidate of SUPABASE_COMPOSITE_CANDIDATES) {
+      const composite = parseComposite(recordEnv[candidate]);
+      if (!composite) continue;
+
+      if (!resolvedUrl) {
+        const { value, keyName } = extractCompositeString(
+          composite,
+          COMPOSITE_URL_KEYS,
+        );
+        if (value) {
+          resolvedUrl = value;
+          urlSource = `${candidate}.${keyName ?? "url"}`;
+        }
+      }
+
+      if (!anonKey) {
+        const { value, keyName } = extractCompositeString(
+          composite,
+          COMPOSITE_ANON_KEY_KEYS,
+        );
+        if (value) {
+          anonKey = value;
+          anonKeySource = `${candidate}.${keyName ?? "anonKey"}`;
+        }
+      }
+
+      if (resolvedUrl && anonKey) {
+        break;
+      }
+    }
+  }
+
+  if (resolvedUrl && anonKey) {
+    return { url: resolvedUrl, anonKey, urlSource, anonKeySource };
+  }
+
+  return undefined;
 }
 
-export type { SupabaseEnv, SupabaseCredentials, SupabaseDiagnostics };
+export type {
+  SupabaseEnv,
+  SupabaseCredentials,
+  PublicSupabaseCredentials,
+  SupabaseDiagnostics,
+};

@@ -545,6 +545,28 @@ $$;
 
 do $$
 begin
+  if exists (
+    select 1 from information_schema.table_constraints
+    where constraint_schema = 'public'
+      and table_name = 'story_comments'
+      and constraint_name = 'story_comments_user_id_fkey'
+  ) then
+    begin
+      alter table public.story_comments
+        drop constraint story_comments_user_id_fkey;
+    exception when undefined_object then
+      null;
+    end;
+  end if;
+
+  alter table public.story_comments
+    add constraint story_comments_user_id_fkey
+      foreign key (user_id) references public.users(id) on delete cascade;
+end
+$$;
+
+do $$
+begin
   if not exists (
     select 1 from pg_policies
     where schemaname = 'public'
@@ -571,8 +593,14 @@ begin
     create policy "Service role manages story comments"
       on public.story_comments
       for all
-      using ((auth.jwt() ->> 'role') = 'service_role')
-      with check ((auth.jwt() ->> 'role') = 'service_role');
+      using (
+        coalesce(auth.role(), '') = 'service_role'
+        or coalesce(auth.jwt() ->> 'role', '') = 'service_role'
+      )
+      with check (
+        coalesce(auth.role(), '') = 'service_role'
+        or coalesce(auth.jwt() ->> 'role', '') = 'service_role'
+      );
   end if;
 end
 $$;
@@ -641,6 +669,28 @@ $$;
 
 do $$
 begin
+  if exists (
+    select 1 from information_schema.table_constraints
+    where constraint_schema = 'public'
+      and table_name = 'story_reactions'
+      and constraint_name = 'story_reactions_user_id_fkey'
+  ) then
+    begin
+      alter table public.story_reactions
+        drop constraint story_reactions_user_id_fkey;
+    exception when undefined_object then
+      null;
+    end;
+  end if;
+
+  alter table public.story_reactions
+    add constraint story_reactions_user_id_fkey
+      foreign key (user_id) references public.users(id) on delete cascade;
+end
+$$;
+
+do $$
+begin
   if not exists (
     select 1 from pg_policies
     where schemaname = 'public'
@@ -650,8 +700,14 @@ begin
     create policy "Service role manages story reactions"
       on public.story_reactions
       for all
-      using ((auth.jwt() ->> 'role') = 'service_role')
-      with check ((auth.jwt() ->> 'role') = 'service_role');
+      using (
+        coalesce(auth.role(), '') = 'service_role'
+        or coalesce(auth.jwt() ->> 'role', '') = 'service_role'
+      )
+      with check (
+        coalesce(auth.role(), '') = 'service_role'
+        or coalesce(auth.jwt() ->> 'role', '') = 'service_role'
+      );
   end if;
 end
 $$;
@@ -782,31 +838,39 @@ begin
       end if;
     end if;
 
-    insert into public.story_comments (
-      user_id,
-      story_id,
-      subscriber_id,
-      parent_id,
-      author_name,
-      author_email,
-      content,
-      source,
-      metadata
-    ) values (
-      p_author_id,
-      p_story_id,
-      p_subscriber_id,
-      p_parent_comment_id,
-      trim(coalesce(v_subscriber.name, 'Suscriptor')),
-      nullif(trim(v_subscriber.email), ''),
-      left(trim(p_content), 4000),
-      nullif(trim(p_source), ''),
-      jsonb_build_object(
-        'ip', case when p_request_ip is null then null else p_request_ip::text end,
-        'userAgent', p_user_agent,
-        'tokenHash', encode(digest(v_token, 'sha256'), 'hex')
-      )
-    ) returning * into v_comment;
+    begin
+      insert into public.story_comments (
+        user_id,
+        story_id,
+        subscriber_id,
+        parent_id,
+        author_name,
+        author_email,
+        content,
+        source,
+        metadata
+      ) values (
+        p_author_id,
+        p_story_id,
+        p_subscriber_id,
+        p_parent_comment_id,
+        trim(coalesce(v_subscriber.name, 'Suscriptor')),
+        nullif(trim(v_subscriber.email), ''),
+        left(trim(p_content), 4000),
+        nullif(trim(p_source), ''),
+        jsonb_build_object(
+          'ip', case when p_request_ip is null then null else p_request_ip::text end,
+          'userAgent', p_user_agent,
+          'tokenHash', encode(digest(v_token, 'sha256'), 'hex')
+        )
+      ) returning * into v_comment;
+    exception
+      when others then
+        return jsonb_build_object(
+          'error', 'insert_failed',
+          'detail', SQLERRM
+        );
+    end;
 
     return jsonb_build_object(
       'comment', jsonb_build_object(
@@ -825,30 +889,38 @@ begin
     end if;
 
     if coalesce(p_active, true) then
-      insert into public.story_reactions (
-        user_id,
-        story_id,
-        subscriber_id,
-        reaction_type,
-        source,
-        metadata
-      ) values (
-        p_author_id,
-        p_story_id,
-        p_subscriber_id,
-        v_reaction_type,
-        nullif(trim(p_source), ''),
-        jsonb_build_object(
-          'ip', case when p_request_ip is null then null else p_request_ip::text end,
-          'userAgent', p_user_agent,
-          'tokenHash', encode(digest(v_token, 'sha256'), 'hex')
+      begin
+        insert into public.story_reactions (
+          user_id,
+          story_id,
+          subscriber_id,
+          reaction_type,
+          source,
+          metadata
+        ) values (
+          p_author_id,
+          p_story_id,
+          p_subscriber_id,
+          v_reaction_type,
+          nullif(trim(p_source), ''),
+          jsonb_build_object(
+            'ip', case when p_request_ip is null then null else p_request_ip::text end,
+            'userAgent', p_user_agent,
+            'tokenHash', encode(digest(v_token, 'sha256'), 'hex')
+          )
         )
-      )
-      on conflict (story_id, subscriber_id, reaction_type)
-      do update set
-        source = excluded.source,
-        metadata = excluded.metadata,
-        created_at = timezone('utc', now());
+        on conflict (story_id, subscriber_id, reaction_type)
+        do update set
+          source = excluded.source,
+          metadata = excluded.metadata,
+          created_at = timezone('utc', now());
+      exception
+        when others then
+          return jsonb_build_object(
+            'error', 'reaction_failed',
+            'detail', SQLERRM
+          );
+      end;
       v_has_reaction := true;
     else
       delete from public.story_reactions

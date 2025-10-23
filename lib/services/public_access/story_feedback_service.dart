@@ -263,9 +263,14 @@ class StoryFeedbackService {
       if (comment is Map<String, dynamic>) {
         return StoryFeedbackComment.fromJson(comment);
       }
-      throw StoryFeedbackException(
-        statusCode: 500,
-        message: 'Comentario guardado en formato inesperado.',
+      return StoryFeedbackComment(
+        id: '',
+        authorName: 'Suscriptor',
+        content: content,
+        createdAt: DateTime.now(),
+        subscriberId: subscriberId,
+        source: source,
+        parentId: parentCommentId,
       );
     }
 

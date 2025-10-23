@@ -862,13 +862,9 @@ class VoiceRecorder {
 
     final request = http.MultipartRequest('POST', uri)
       ..fields['response_format'] = 'verbose_json'
-      ..fields['temperature'] = '0'
-      ..fields['language'] = 'es';
+      ..fields['temperature'] = '0';
 
     final languageHint = _languageHint ?? _detectPreferredLanguage();
-    if (languageHint != null) {
-      request.fields['language'] = languageHint;
-    }
 
     final languages = _resolveLanguageHints(
       fallbackHint: languageHint,

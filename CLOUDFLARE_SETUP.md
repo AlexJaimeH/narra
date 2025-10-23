@@ -39,6 +39,8 @@ Service Role Key de Supabase (⚠️ **trátala como secreto**). Se usa únicame
    | Variable | Valor |
    | --- | --- |
    | `OPENAI_API_KEY` | Tu key de OpenAI |
+   | `OPENAI_PROJECT_ID` *(opcional)* | ID del proyecto si tu key es del nuevo panel de Projects |
+   | `OPENAI_ORGANIZATION` *(opcional)* | ID de tu organización si OpenAI lo requiere |
    | `RESEND_API_KEY` | Tu key privada de Resend |
    | `RESEND_FROM_EMAIL` | Dirección verificada en Resend |
    | `RESEND_REPLY_TO` *(opcional)* | Dirección para respuestas |
@@ -94,4 +96,3 @@ La API Realtime de OpenAI tiene costos asociados. Verifica los precios actuales 
 https://openai.com/api/pricing/
 
 La app usa el modelo `gpt-4o-mini-transcribe` (con fallback automático a `whisper-1`) para transcribir audio del usuario.
-

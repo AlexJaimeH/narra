@@ -106,9 +106,10 @@ class StoryFeedbackService {
     }, overrideUrl: supabaseUrl, overrideAnonKey: supabaseAnonKey);
     if (rpcResponse != null) {
       if (rpcResponse['error'] != null) {
+        final code = rpcResponse['error'].toString();
         throw StoryFeedbackException(
-          statusCode: 403,
-          message: rpcResponse['error'].toString(),
+          statusCode: _statusCodeForError(code),
+          message: _messageForError(code),
           body: rpcResponse,
         );
       }
@@ -162,9 +163,10 @@ class StoryFeedbackService {
     }, overrideUrl: supabaseUrl, overrideAnonKey: supabaseAnonKey);
     if (rpcResponse != null) {
       if (rpcResponse['error'] != null) {
+        final code = rpcResponse['error'].toString();
         throw StoryFeedbackException(
-          statusCode: 400,
-          message: rpcResponse['error'].toString(),
+          statusCode: _statusCodeForError(code),
+          message: _messageForError(code),
           body: rpcResponse,
         );
       }
@@ -230,9 +232,10 @@ class StoryFeedbackService {
     }, overrideUrl: supabaseUrl, overrideAnonKey: supabaseAnonKey);
     if (rpcResponse != null) {
       if (rpcResponse['error'] != null) {
+        final code = rpcResponse['error'].toString();
         throw StoryFeedbackException(
-          statusCode: 400,
-          message: rpcResponse['error'].toString(),
+          statusCode: _statusCodeForError(code),
+          message: _messageForError(code),
           body: rpcResponse,
         );
       }
@@ -320,6 +323,38 @@ class StoryFeedbackService {
     }
 
     return null;
+  }
+
+  static int _statusCodeForError(String code) {
+    switch (code) {
+      case 'subscriber_not_found':
+        return 404;
+      case 'invalid_token':
+      case 'subscriber_inactive':
+        return 403;
+      case 'content_required':
+      case 'unsupported_action':
+        return 400;
+      default:
+        return 400;
+    }
+  }
+
+  static String _messageForError(String code) {
+    switch (code) {
+      case 'subscriber_not_found':
+        return 'No encontramos este suscriptor.';
+      case 'invalid_token':
+        return 'El enlace ya no es válido.';
+      case 'subscriber_inactive':
+        return 'Este suscriptor canceló su acceso.';
+      case 'content_required':
+        return 'El comentario necesita contenido.';
+      case 'unsupported_action':
+        return 'No podemos procesar esta acción.';
+      default:
+        return 'No se pudo procesar esta solicitud.';
+    }
   }
 
   static Map<String, dynamic>? _decodeBody(http.Response response) {

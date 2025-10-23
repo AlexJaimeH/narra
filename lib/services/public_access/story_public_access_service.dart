@@ -136,12 +136,16 @@ class StoryPublicAccessService {
       switch (status) {
         case 'ok':
           final data = decoded['data'] as Map<String, dynamic>? ?? const {};
-          return _buildAccessRecord(
+          final record = _buildAccessRecord(
             authorId: authorId,
             subscriberIdFallback: subscriberId,
             tokenFallback: token,
             sourceFallback: source,
             payload: data,
+          );
+          return record.copyWith(
+            supabaseUrl: supabaseUrl,
+            supabaseAnonKey: supabaseAnonKey,
           );
         case 'not_found':
           return null;

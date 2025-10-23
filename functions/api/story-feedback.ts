@@ -1,7 +1,7 @@
 import {
-  resolvePublicSupabase,
   resolveSupabaseConfig,
   type SupabaseEnv,
+  type SupabaseCredentials,
 } from "./_supabase";
 
 interface Env extends SupabaseEnv {}
@@ -21,12 +21,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   try {
     const body = await request.json().catch(() => null);
     if (!body || typeof body !== "object") {
-      return json({ error: "Invalid request body" }, 400);
+      return json({ error: "invalid_body" }, 400);
     }
 
     const action = normalizeAction((body as any).action);
     if (!action) {
-      return json({ error: "action is required" }, 400);
+      return json({ error: "action_required" }, 400);
     }
 
     const authorId = normalizeId(
@@ -40,72 +40,56 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     );
     const token =
       typeof (body as any).token === "string" ? (body as any).token.trim() : "";
-    const sourceRaw =
-      typeof (body as any).source === "string"
-        ? (body as any).source.trim()
-        : undefined;
-    const source = sourceRaw ? sourceRaw.substring(0, 120) : undefined;
+    const source = normalizeOptional((body as any).source, 120);
     const parentCommentId = normalizeId(
       (body as any).parentCommentId ?? (body as any).parent_comment_id,
     );
 
     if (!authorId || !subscriberId || !storyId || !token) {
       return json(
-        { error: "authorId, subscriberId, storyId and token are required" },
+        {
+          error: "missing_parameters",
+          detail: "authorId, subscriberId, storyId y token son requeridos",
+        },
         400,
       );
     }
 
-    let content: string | undefined;
-    if (action === "comment") {
-      const rawContent =
-        typeof (body as any).content === "string"
-          ? (body as any).content.trim()
-          : "";
-      if (!rawContent) {
-        return json({ error: "content is required" }, 400);
-      }
-      content = rawContent.substring(0, 4000);
-    }
-
-    let reactionType: string | undefined;
-    let reactionActive: boolean | undefined;
-    if (action === "reaction") {
-      reactionType =
-        normalizeReactionType(
-          (body as any).reactionType ?? (body as any).reaction_type,
-        ) ?? "heart";
-      reactionActive = toBoolean(
-        (body as any).active ??
-          (body as any).enabled ??
-          (body as any).state ??
-          true,
-      );
-    }
-
     const { credentials, diagnostics } = resolveSupabaseConfig(env);
-    const publicSupabase = resolvePublicSupabase(env, credentials?.url);
-    const rpcUrl = credentials?.url ?? publicSupabase?.url;
-    const apiKey = credentials?.serviceKey ?? publicSupabase?.anonKey;
-
-    if (!rpcUrl || !apiKey) {
-      const context = {
+    if (!credentials) {
+      console.error(
+        "[story-feedback] Missing Supabase credentials",
         diagnostics,
-        hasPublicSupabase: Boolean(publicSupabase),
-        rpcUrlResolved: Boolean(rpcUrl),
-        hasServiceKey: Boolean(credentials?.serviceKey),
-      };
-      console.error("[story-feedback] Missing Supabase credentials", context);
+      );
       return json(
-        {
-          error: "Supabase credentials not configured",
-          detail: context,
-          hint:
-            "Define SUPABASE_URL (o PUBLIC_SUPABASE_URL) y SUPABASE_SERVICE_ROLE_KEY " +
-            "en la configuración de Cloudflare Pages.",
-        },
+        { error: "supabase_not_configured", detail: diagnostics },
         500,
       );
+    }
+
+    const subscriber = await fetchSubscriber(
+      credentials,
+      authorId,
+      subscriberId,
+    );
+    if (!subscriber) {
+      return json({ error: "subscriber_not_found" }, 404);
+    }
+
+    const storedToken =
+      typeof subscriber.access_token === "string"
+        ? subscriber.access_token.trim()
+        : "";
+    if (!storedToken || storedToken !== token) {
+      return json({ error: "invalid_token" }, 403);
+    }
+
+    const status =
+      typeof subscriber.status === "string"
+        ? subscriber.status.toLowerCase()
+        : "pending";
+    if (status === "unsubscribed") {
+      return json({ error: "subscriber_inactive" }, 403);
     }
 
     const ip =
@@ -113,109 +97,101 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       request.headers.get("x-forwarded-for") ??
       null;
     const userAgent = request.headers.get("user-agent");
-    const normalizedUserAgent = userAgent ? userAgent.substring(0, 512) : null;
 
-    const payload: Record<string, unknown> = {
-      p_action: action,
-      p_author_id: authorId,
-      p_story_id: storyId,
-      p_subscriber_id: subscriberId,
-      p_token: token,
-      p_source: source ?? null,
-      p_request_ip: ip,
-      p_user_agent: normalizedUserAgent,
-    };
+    switch (action) {
+      case "fetch": {
+        const comments = await fetchComments(credentials, authorId, storyId);
+        const reaction = await fetchReaction(
+          credentials,
+          authorId,
+          storyId,
+          subscriberId,
+        );
+        const tree = buildCommentTree(comments);
+        return json({
+          comments: tree.roots,
+          reaction,
+          commentCount: tree.count,
+        });
+      }
+      case "comment": {
+        const content = normalizeContent((body as any).content);
+        if (!content) {
+          return json({ error: "content_required" }, 400);
+        }
 
-    if (content != null) {
-      payload.p_content = content;
+        if (parentCommentId) {
+          const parentExists = await ensureCommentBelongsToStory(
+            credentials,
+            authorId,
+            storyId,
+            parentCommentId,
+          );
+          if (!parentExists) {
+            return json({ error: "parent_not_found" }, 400);
+          }
+        }
+
+        const inserted = await insertComment(credentials, {
+          authorId,
+          storyId,
+          subscriberId,
+          parentCommentId,
+          source,
+          ip,
+          userAgent,
+          content,
+          subscriber,
+          token,
+        });
+
+        if (!inserted) {
+          return json({ error: "insert_failed" }, 502);
+        }
+
+        return json({ comment: inserted });
+      }
+      case "reaction": {
+        const active = toBoolean(
+          (body as any).active ??
+            (body as any).enabled ??
+            (body as any).state ??
+            true,
+        );
+        const reactionType =
+          normalizeReactionType(
+            (body as any).reactionType ?? (body as any).reaction_type,
+          ) ?? "heart";
+
+        const updated = await toggleReaction(credentials, {
+          authorId,
+          storyId,
+          subscriberId,
+          reactionType,
+          isActive: active,
+          source,
+          ip,
+          userAgent,
+          token,
+        });
+
+        if (!updated) {
+          return json({ error: "reaction_failed" }, 502);
+        }
+
+        return json({
+          reaction: {
+            reactionType,
+            active: updated,
+          },
+        });
+      }
+      default:
+        return json({ error: "unsupported_action" }, 400);
     }
-    if (reactionType != null) {
-      payload.p_reaction_type = reactionType;
-      payload.p_active = reactionActive ?? true;
-    }
-    if (parentCommentId != null) {
-      payload.p_parent_comment_id = parentCommentId;
-    }
-
-    const rpcResponse = await fetch(
-      `${rpcUrl}/rest/v1/rpc/process_story_feedback`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: apiKey,
-          Authorization: `Bearer ${apiKey}`,
-          Prefer: "return=representation",
-        },
-        body: JSON.stringify(payload),
-      },
-    );
-
-    const rawBody = await rpcResponse.text();
-
-    if (!rpcResponse.ok) {
-      console.error("[story-feedback] Supabase RPC error", {
-        status: rpcResponse.status,
-        body: rawBody,
-        payload,
-      });
-      return json(
-        {
-          error: "supabase_rpc_failed",
-          status: rpcResponse.status,
-          detail: rawBody,
-        },
-        502,
-      );
-    }
-
-    const rpcPayload = rawBody ? JSON.parse(rawBody) : null;
-    if (!rpcPayload || typeof rpcPayload !== "object") {
-      console.error("[story-feedback] Unexpected RPC payload", {
-        status: rpcResponse.status,
-        rawBody,
-      });
-      return json(
-        {
-          error: "invalid_rpc_payload",
-          status: rpcResponse.status,
-        },
-        502,
-      );
-    }
-
-    const errorCodeRaw = (rpcPayload as any).error;
-    if (errorCodeRaw) {
-      const errorCode = String(errorCodeRaw);
-      const status = mapErrorStatus(errorCode);
-      return json(
-        {
-          error: mapErrorMessage(errorCode),
-          code: errorCode,
-        },
-        status,
-      );
-    }
-
-    console.log(`[story-feedback] ${action} processed via RPC`, {
-      authorId,
-      subscriberId,
-      storyId,
-      source,
-      parentCommentId,
-      usedServiceKey: Boolean(credentials?.serviceKey),
-    });
-
-    return json(rpcPayload);
   } catch (error) {
-    console.error("[story-feedback] Feedback processing failed", error);
-    return json(
-      {
-        error: "Feedback processing failed",
-        detail: String(error),
-      },
-      500,
-    );
+    console.error("[story-feedback] Unexpected failure", error);
+    return json({ error: "unexpected_error", detail: String(error) }, 500);
   }
 };
 
@@ -223,6 +199,23 @@ function normalizeId(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function normalizeOptional(
+  value: unknown,
+  maxLength: number,
+): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  return trimmed.substring(0, maxLength);
+}
+
+function normalizeContent(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  return trimmed.length > 4000 ? trimmed.substring(0, 4000) : trimmed;
 }
 
 function normalizeAction(
@@ -269,41 +262,362 @@ function toBoolean(value: unknown): boolean {
   return Boolean(value);
 }
 
-function mapErrorStatus(code: string): number {
-  switch (code) {
-    case "subscriber_not_found":
-      return 404;
-    case "invalid_token":
-    case "subscriber_inactive":
-      return 403;
-    case "content_required":
-    case "unsupported_action":
-      return 400;
-    default:
-      return 400;
+async function fetchSubscriber(
+  config: SupabaseCredentials,
+  authorId: string,
+  subscriberId: string,
+) {
+  const url = new URL("/rest/v1/subscribers", config.url);
+  url.searchParams.set("id", `eq.${subscriberId}`);
+  url.searchParams.set("user_id", `eq.${authorId}`);
+  url.searchParams.set(
+    "select",
+    "id,name,email,status,access_token,last_access_source",
+  );
+  url.searchParams.set("limit", "1");
+
+  const response = await supabaseFetch(config, url.toString());
+  if (!response.ok) {
+    console.error("[story-feedback] Failed to fetch subscriber", {
+      status: response.status,
+      body: await response.text(),
+      authorId,
+      subscriberId,
+    });
+    throw new Error("failed_to_fetch_subscriber");
+  }
+
+  const data = await response.json();
+  return Array.isArray(data) && data.length > 0 ? data[0] : null;
+}
+
+async function fetchComments(
+  config: SupabaseCredentials,
+  authorId: string,
+  storyId: string,
+) {
+  const url = new URL("/rest/v1/story_comments", config.url);
+  url.searchParams.set("user_id", `eq.${authorId}`);
+  url.searchParams.set("story_id", `eq.${storyId}`);
+  url.searchParams.set("status", "eq.visible");
+  url.searchParams.set(
+    "select",
+    "id,author_name,author_email,content,source,parent_id,subscriber_id,created_at",
+  );
+  url.searchParams.set("order", "created_at.asc");
+
+  const response = await supabaseFetch(config, url.toString());
+  if (!response.ok) {
+    console.error("[story-feedback] Failed to fetch comments", {
+      status: response.status,
+      body: await response.text(),
+      authorId,
+      storyId,
+    });
+    throw new Error("failed_to_fetch_comments");
+  }
+
+  const data = await response.json();
+  return Array.isArray(data) ? data : [];
+}
+
+async function fetchReaction(
+  config: SupabaseCredentials,
+  authorId: string,
+  storyId: string,
+  subscriberId: string,
+) {
+  const url = new URL("/rest/v1/story_reactions", config.url);
+  url.searchParams.set("user_id", `eq.${authorId}`);
+  url.searchParams.set("story_id", `eq.${storyId}`);
+  url.searchParams.set("subscriber_id", `eq.${subscriberId}`);
+  url.searchParams.set("reaction_type", "eq.heart");
+  url.searchParams.set("select", "id,reaction_type,created_at");
+  url.searchParams.set("limit", "1");
+
+  const response = await supabaseFetch(config, url.toString());
+  if (!response.ok) {
+    console.error("[story-feedback] Failed to fetch reaction", {
+      status: response.status,
+      body: await response.text(),
+    });
+    throw new Error("failed_to_fetch_reaction");
+  }
+
+  const data = await response.json();
+  if (Array.isArray(data) && data.length > 0) {
+    return { reactionType: data[0].reaction_type ?? "heart", active: true };
+  }
+  return { reactionType: "heart", active: false };
+}
+
+async function ensureCommentBelongsToStory(
+  config: SupabaseCredentials,
+  authorId: string,
+  storyId: string,
+  commentId: string,
+) {
+  const url = new URL("/rest/v1/story_comments", config.url);
+  url.searchParams.set("id", `eq.${commentId}`);
+  url.searchParams.set("user_id", `eq.${authorId}`);
+  url.searchParams.set("story_id", `eq.${storyId}`);
+  url.searchParams.set("limit", "1");
+
+  const response = await supabaseFetch(config, url.toString());
+  if (!response.ok) {
+    console.error("[story-feedback] Failed to validate parent comment", {
+      status: response.status,
+      body: await response.text(),
+    });
+    throw new Error("failed_to_validate_parent");
+  }
+
+  const data = await response.json();
+  return Array.isArray(data) && data.length > 0;
+}
+
+async function insertComment(
+  config: SupabaseCredentials,
+  options: {
+    authorId: string;
+    storyId: string;
+    subscriberId: string;
+    parentCommentId?: string;
+    source?: string;
+    ip: string | null;
+    userAgent: string | null;
+    content: string;
+    subscriber: any;
+    token: string;
+  },
+) {
+  const payload = {
+    user_id: options.authorId,
+    story_id: options.storyId,
+    subscriber_id: options.subscriberId,
+    parent_id: options.parentCommentId ?? null,
+    author_name: normalizeDisplayName(options.subscriber?.name),
+    author_email: normalizeOptional(options.subscriber?.email, 320) ?? null,
+    content: options.content,
+    source: options.source ?? null,
+    metadata: {
+      source: options.source ?? null,
+      ip: options.ip,
+      userAgent: options.userAgent?.substring(0, 512) ?? null,
+      tokenHash: hashToken(options.token),
+    },
+  };
+
+  const response = await supabaseFetch(
+    config,
+    new URL("/rest/v1/story_comments", config.url).toString(),
+    {
+      method: "POST",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify(payload),
+    },
+  );
+
+  const raw = await response.text();
+  if (!response.ok) {
+    console.error("[story-feedback] Failed to insert comment", {
+      status: response.status,
+      body: raw,
+      payload,
+    });
+    return null;
+  }
+
+  let data: any = null;
+  try {
+    data = raw ? JSON.parse(raw) : null;
+  } catch (error) {
+    console.error("[story-feedback] Cannot parse comment response", error, raw);
+  }
+
+  const record = Array.isArray(data) && data.length > 0 ? data[0] : data;
+  if (!record || typeof record !== "object") {
+    return null;
+  }
+
+  return {
+    id: record.id,
+    authorName:
+      record.author_name ?? normalizeDisplayName(options.subscriber?.name),
+    content: record.content ?? options.content,
+    createdAt: record.created_at ?? new Date().toISOString(),
+    subscriberId: record.subscriber_id ?? options.subscriberId,
+    source: record.source ?? options.source ?? null,
+    parentId: record.parent_id ?? options.parentCommentId ?? null,
+  };
+}
+
+async function toggleReaction(
+  config: SupabaseCredentials,
+  options: {
+    authorId: string;
+    storyId: string;
+    subscriberId: string;
+    reactionType: string;
+    isActive: boolean;
+    source?: string;
+    ip: string | null;
+    userAgent: string | null;
+    token: string;
+  },
+) {
+  if (options.isActive) {
+    const payload = {
+      user_id: options.authorId,
+      story_id: options.storyId,
+      subscriber_id: options.subscriberId,
+      reaction_type: options.reactionType,
+      source: options.source ?? null,
+      metadata: {
+        source: options.source ?? null,
+        ip: options.ip,
+        userAgent: options.userAgent?.substring(0, 512) ?? null,
+        tokenHash: hashToken(options.token),
+      },
+    };
+
+    const url = new URL("/rest/v1/story_reactions", config.url);
+    url.searchParams.set("on_conflict", "story_id,subscriber_id,reaction_type");
+
+    const response = await supabaseFetch(config, url.toString(), {
+      method: "POST",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      console.error("[story-feedback] Failed to upsert reaction", {
+        status: response.status,
+        body: await response.text(),
+        payload,
+      });
+      return false;
+    }
+    return true;
+  }
+
+  const url = new URL("/rest/v1/story_reactions", config.url);
+  url.searchParams.set("user_id", `eq.${options.authorId}`);
+  url.searchParams.set("story_id", `eq.${options.storyId}`);
+  url.searchParams.set("subscriber_id", `eq.${options.subscriberId}`);
+  url.searchParams.set("reaction_type", `eq.${options.reactionType}`);
+
+  const response = await supabaseFetch(config, url.toString(), {
+    method: "DELETE",
+    headers: { Prefer: "return=minimal" },
+  });
+
+  if (!response.ok) {
+    console.error("[story-feedback] Failed to delete reaction", {
+      status: response.status,
+      body: await response.text(),
+    });
+    return false;
+  }
+
+  return false;
+}
+
+function buildCommentTree(rows: any[]) {
+  const map = new Map<string, any>();
+  const roots: any[] = [];
+
+  for (const row of rows) {
+    const node = {
+      id: row.id,
+      authorName: row.author_name ?? "Suscriptor",
+      content: row.content ?? "",
+      createdAt: row.created_at,
+      subscriberId: row.subscriber_id ?? null,
+      source: row.source ?? null,
+      parentId: row.parent_id ?? null,
+      replies: [] as any[],
+    };
+    map.set(node.id, node);
+  }
+
+  for (const node of map.values()) {
+    if (node.parentId && map.has(node.parentId)) {
+      map.get(node.parentId).replies.push(node);
+    } else {
+      roots.push(node);
+    }
+  }
+
+  const sortAscending = (a: any, b: any) =>
+    new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+  const sortDescending = (a: any, b: any) =>
+    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+
+  const sortTree = (nodes: any[]) => {
+    nodes.sort(sortAscending);
+    for (const child of nodes) {
+      if (child.replies.length > 0) {
+        sortTree(child.replies);
+      }
+    }
+  };
+
+  sortTree(roots);
+  roots.sort(sortDescending);
+
+  return { roots, count: rows.length };
+}
+
+function normalizeDisplayName(name: unknown): string {
+  if (typeof name === "string" && name.trim()) {
+    return name.trim();
+  }
+  return "Suscriptor";
+}
+
+function hashToken(token: string): string {
+  try {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(token);
+    let hash = 0;
+    for (let i = 0; i < data.length; i += 1) {
+      hash = (hash << 5) - hash + data[i];
+      hash |= 0;
+    }
+    return hash.toString(16);
+  } catch (_) {
+    return "";
   }
 }
 
-function mapErrorMessage(code: string): string {
-  switch (code) {
-    case "subscriber_not_found":
-      return "No encontramos este suscriptor.";
-    case "invalid_token":
-      return "El enlace ya no es válido.";
-    case "subscriber_inactive":
-      return "Este suscriptor canceló su acceso.";
-    case "content_required":
-      return "El comentario necesita contenido.";
-    case "unsupported_action":
-      return "No podemos procesar esta acción.";
-    default:
-      return "No se pudo procesar esta solicitud.";
+async function supabaseFetch(
+  config: SupabaseCredentials,
+  input: string,
+  init?: RequestInit,
+) {
+  const headers: Record<string, string> = {
+    apikey: config.serviceKey,
+    Authorization: `Bearer ${config.serviceKey}`,
+    "Content-Type": "application/json",
+  };
+
+  if (init?.headers) {
+    const override = new Headers(init.headers);
+    override.forEach((value, key) => {
+      headers[key] = value;
+    });
   }
+
+  return fetch(input, {
+    ...init,
+    headers,
+  });
 }
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+    headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
   });
 }

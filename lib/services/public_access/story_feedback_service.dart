@@ -408,6 +408,9 @@ class StoryFeedbackService {
       case 'unsupported_action':
       case 'parent_not_found':
         return 400;
+      case 'supabase_rpc_failed':
+      case 'invalid_rpc_payload':
+        return 502;
       default:
         return 400;
     }
@@ -427,6 +430,10 @@ class StoryFeedbackService {
         return 'No podemos procesar esta acción.';
       case 'parent_not_found':
         return 'No pudimos encontrar el comentario original.';
+      case 'supabase_rpc_failed':
+        return 'No pudimos contactar al servidor. Intenta nuevamente en unos segundos.';
+      case 'invalid_rpc_payload':
+        return 'El servidor respondió en un formato inesperado.';
       default:
         return 'No se pudo procesar esta solicitud.';
     }

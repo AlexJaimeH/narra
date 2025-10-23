@@ -38,12 +38,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     const storyId = normalizeId(
       (body as any).storyId ?? (body as any).story_id,
     );
-    const token = typeof (body as any).token === "string"
-      ? (body as any).token.trim()
-      : "";
-    const sourceRaw = typeof (body as any).source === "string"
-      ? (body as any).source.trim()
-      : undefined;
+    const token =
+      typeof (body as any).token === "string" ? (body as any).token.trim() : "";
+    const sourceRaw =
+      typeof (body as any).source === "string"
+        ? (body as any).source.trim()
+        : undefined;
     const source = sourceRaw ? sourceRaw.substring(0, 120) : undefined;
     const parentCommentId = normalizeId(
       (body as any).parentCommentId ?? (body as any).parent_comment_id,
@@ -58,9 +58,10 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
     let content: string | undefined;
     if (action === "comment") {
-      const rawContent = typeof (body as any).content === "string"
-        ? (body as any).content.trim()
-        : "";
+      const rawContent =
+        typeof (body as any).content === "string"
+          ? (body as any).content.trim()
+          : "";
       if (!rawContent) {
         return json({ error: "content is required" }, 400);
       }
@@ -70,14 +71,15 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     let reactionType: string | undefined;
     let reactionActive: boolean | undefined;
     if (action === "reaction") {
-      reactionType = normalizeReactionType(
-        (body as any).reactionType ?? (body as any).reaction_type,
-      ) ?? "heart";
+      reactionType =
+        normalizeReactionType(
+          (body as any).reactionType ?? (body as any).reaction_type,
+        ) ?? "heart";
       reactionActive = toBoolean(
-        (body as any).active
-          ?? (body as any).enabled
-          ?? (body as any).state
-          ?? true,
+        (body as any).active ??
+          (body as any).enabled ??
+          (body as any).state ??
+          true,
       );
     }
 
@@ -94,18 +96,22 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         hasServiceKey: Boolean(credentials?.serviceKey),
       };
       console.error("[story-feedback] Missing Supabase credentials", context);
-      return json({
-        error: "Supabase credentials not configured",
-        detail: context,
-        hint:
-          "Define SUPABASE_URL (o PUBLIC_SUPABASE_URL) y SUPABASE_SERVICE_ROLE_KEY " +
-          "en la configuración de Cloudflare Pages.",
-      }, 500);
+      return json(
+        {
+          error: "Supabase credentials not configured",
+          detail: context,
+          hint:
+            "Define SUPABASE_URL (o PUBLIC_SUPABASE_URL) y SUPABASE_SERVICE_ROLE_KEY " +
+            "en la configuración de Cloudflare Pages.",
+        },
+        500,
+      );
     }
 
-    const ip = request.headers.get("cf-connecting-ip")
-      ?? request.headers.get("x-forwarded-for")
-      ?? null;
+    const ip =
+      request.headers.get("cf-connecting-ip") ??
+      request.headers.get("x-forwarded-for") ??
+      null;
     const userAgent = request.headers.get("user-agent");
     const normalizedUserAgent = userAgent ? userAgent.substring(0, 512) : null;
 
@@ -145,10 +151,36 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       },
     );
 
-    const rpcPayload = await parseJson(rpcResponse);
+    const rawBody = await rpcResponse.text();
+
+    if (!rpcResponse.ok) {
+      console.error("[story-feedback] Supabase RPC error", {
+        status: rpcResponse.status,
+        body: rawBody,
+        payload,
+      });
+      return json(
+        {
+          error: "supabase_rpc_failed",
+          status: rpcResponse.status,
+          detail: rawBody,
+        },
+        502,
+      );
+    }
+
+    const rpcPayload = rawBody ? JSON.parse(rawBody) : null;
     if (!rpcPayload || typeof rpcPayload !== "object") {
-      throw new Error(
-        `Unexpected response from Supabase RPC (${rpcResponse.status})`,
+      console.error("[story-feedback] Unexpected RPC payload", {
+        status: rpcResponse.status,
+        rawBody,
+      });
+      return json(
+        {
+          error: "invalid_rpc_payload",
+          status: rpcResponse.status,
+        },
+        502,
       );
     }
 
@@ -156,10 +188,13 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     if (errorCodeRaw) {
       const errorCode = String(errorCodeRaw);
       const status = mapErrorStatus(errorCode);
-      return json({
-        error: mapErrorMessage(errorCode),
-        code: errorCode,
-      }, status);
+      return json(
+        {
+          error: mapErrorMessage(errorCode),
+          code: errorCode,
+        },
+        status,
+      );
     }
 
     console.log(`[story-feedback] ${action} processed via RPC`, {
@@ -174,10 +209,13 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     return json(rpcPayload);
   } catch (error) {
     console.error("[story-feedback] Feedback processing failed", error);
-    return json({
-      error: "Feedback processing failed",
-      detail: String(error),
-    }, 500);
+    return json(
+      {
+        error: "Feedback processing failed",
+        detail: String(error),
+      },
+      500,
+    );
   }
 };
 
@@ -192,7 +230,11 @@ function normalizeAction(
 ): "fetch" | "comment" | "reaction" | undefined {
   if (typeof value !== "string") return undefined;
   const normalized = value.trim().toLowerCase();
-  if (normalized === "fetch" || normalized === "comment" || normalized === "reaction") {
+  if (
+    normalized === "fetch" ||
+    normalized === "comment" ||
+    normalized === "reaction"
+  ) {
     return normalized;
   }
   return undefined;
@@ -256,18 +298,6 @@ function mapErrorMessage(code: string): string {
       return "No podemos procesar esta acción.";
     default:
       return "No se pudo procesar esta solicitud.";
-  }
-}
-
-async function parseJson(response: Response): Promise<unknown> {
-  const text = await response.text();
-  if (!text) {
-    return null;
-  }
-  try {
-    return JSON.parse(text);
-  } catch (_) {
-    return null;
   }
 }
 

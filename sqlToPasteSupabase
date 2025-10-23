@@ -505,6 +505,7 @@ create table if not exists public.story_comments (
   user_id uuid not null references public.users(id) on delete cascade,
   story_id uuid not null references public.stories(id) on delete cascade,
   subscriber_id uuid references public.subscribers(id) on delete set null,
+  parent_id uuid references public.story_comments(id) on delete cascade,
   author_name text not null default '',
   author_email text,
   content text not null,
@@ -523,6 +524,25 @@ create index if not exists story_comments_subscriber_idx
 
 alter table public.story_comments enable row level security;
 
+alter table public.story_comments
+  add column if not exists parent_id uuid;
+
+do $$
+begin
+  if not exists (
+    select 1 from information_schema.table_constraints
+    where constraint_schema = 'public'
+      and constraint_name = 'story_comments_parent_id_fkey'
+      and table_name = 'story_comments'
+  ) then
+    alter table public.story_comments
+      add constraint story_comments_parent_id_fkey
+        foreign key (parent_id) references public.story_comments(id)
+        on delete cascade;
+  end if;
+end
+$$;
+
 do $$
 begin
   if not exists (
@@ -539,6 +559,9 @@ begin
   end if;
 end
 $$;
+
+create index if not exists story_comments_parent_idx
+  on public.story_comments (parent_id, created_at desc);
 
 do $$
 begin
@@ -632,6 +655,7 @@ create or replace function public.process_story_feedback(
   p_reaction_type text default 'heart',
   p_active boolean default null,
   p_source text default null,
+  p_parent_comment_id uuid default null,
   p_request_ip inet default null,
   p_user_agent text default null
 ) returns jsonb
@@ -649,6 +673,8 @@ declare
   v_comments jsonb := '[]'::jsonb;
   v_reaction jsonb;
   v_has_reaction boolean := false;
+  v_parent public.story_comments%rowtype;
+  v_comment_count integer := 0;
 begin
   if v_action not in ('fetch', 'comment', 'reaction') then
     return jsonb_build_object('error', 'unsupported_action');
@@ -672,15 +698,18 @@ begin
   end if;
 
   if v_action = 'fetch' then
-    select coalesce(json_agg(jsonb_build_object(
+    select
+      coalesce(json_agg(jsonb_build_object(
         'id', c.id,
         'authorName', c.author_name,
         'content', c.content,
         'createdAt', c.created_at,
         'subscriberId', c.subscriber_id,
-        'source', c.source
-      ) order by c.created_at desc), '[]'::jsonb)
-      into v_comments
+        'source', c.source,
+        'parentId', c.parent_id
+      ) order by c.created_at desc), '[]'::jsonb),
+      count(*)
+      into v_comments, v_comment_count
       from public.story_comments c
      where c.user_id = p_author_id and c.story_id = p_story_id;
 
@@ -697,17 +726,33 @@ begin
 
     return jsonb_build_object(
       'comments', v_comments,
-      'reaction', coalesce(v_reaction, jsonb_build_object('active', false))
+      'reaction', coalesce(v_reaction, jsonb_build_object('active', false)),
+      'commentCount', v_comment_count
     );
   elsif v_action = 'comment' then
     if coalesce(trim(p_content), '') = '' then
       return jsonb_build_object('error', 'content_required');
     end if;
 
+    if p_parent_comment_id is not null then
+      select *
+        into v_parent
+        from public.story_comments
+       where id = p_parent_comment_id
+         and user_id = p_author_id
+         and story_id = p_story_id
+       limit 1;
+
+      if not found then
+        return jsonb_build_object('error', 'parent_not_found');
+      end if;
+    end if;
+
     insert into public.story_comments (
       user_id,
       story_id,
       subscriber_id,
+      parent_id,
       author_name,
       author_email,
       content,
@@ -717,6 +762,7 @@ begin
       p_author_id,
       p_story_id,
       p_subscriber_id,
+      p_parent_comment_id,
       trim(coalesce(v_subscriber.name, 'Suscriptor')),
       nullif(trim(v_subscriber.email), ''),
       left(trim(p_content), 4000),
@@ -735,7 +781,8 @@ begin
         'content', v_comment.content,
         'createdAt', v_comment.created_at,
         'subscriberId', v_comment.subscriber_id,
-        'source', v_comment.source
+        'source', v_comment.source,
+        'parentId', v_comment.parent_id
       )
     );
   else
@@ -798,6 +845,7 @@ grant execute on function public.process_story_feedback(
   p_reaction_type text,
   p_active boolean,
   p_source text,
+  p_parent_comment_id uuid,
   p_request_ip inet,
   p_user_agent text
 ) to anon, authenticated;

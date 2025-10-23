@@ -45,6 +45,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       ? (body as any).source.trim()
       : undefined;
     const source = sourceRaw ? sourceRaw.substring(0, 120) : undefined;
+    const parentCommentId = normalizeId(
+      (body as any).parentCommentId ?? (body as any).parent_comment_id,
+    );
 
     if (!authorId || !subscriberId || !storyId || !token) {
       return json(
@@ -124,6 +127,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       payload.p_reaction_type = reactionType;
       payload.p_active = reactionActive ?? true;
     }
+    if (parentCommentId != null) {
+      payload.p_parent_comment_id = parentCommentId;
+    }
 
     const rpcResponse = await fetch(
       `${rpcUrl}/rest/v1/rpc/process_story_feedback`,
@@ -161,6 +167,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       subscriberId,
       storyId,
       source,
+      parentCommentId,
       usedServiceKey: Boolean(credentials?.serviceKey),
     });
 

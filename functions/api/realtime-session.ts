@@ -1,3 +1,5 @@
+import { buildOpenAIHeaders } from '../utils/openai-headers';
+
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
@@ -6,26 +8,29 @@ const CORS_HEADERS: Record<string, string> = {
 };
 
 interface Env {
-  OPENAI_API_KEY: string;
+  OPENAI_API_KEY?: string;
   OPENAI_PROJECT_ID?: string;
   OPENAI_ORGANIZATION?: string;
+  OPENAI_REALTIME_API_KEY?: string;
+  OPENAI_REALTIME_PROJECT_ID?: string;
+  OPENAI_REALTIME_ORGANIZATION?: string;
 }
 
-const buildRealtimeHeaders = (env: Env): Record<string, string> => {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    'OpenAI-Beta': 'realtime=v1',
-    Authorization: `Bearer ${env.OPENAI_API_KEY}`,
-  };
-
-  if (env.OPENAI_PROJECT_ID) {
-    headers['OpenAI-Project'] = env.OPENAI_PROJECT_ID;
+const resolveRealtimeHeaders = (env: Env): Record<string, string> => {
+  const apiKey = env.OPENAI_REALTIME_API_KEY ?? env.OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new Error('OpenAI API key not configured.');
   }
 
-  if (env.OPENAI_ORGANIZATION) {
-    headers['OpenAI-Organization'] = env.OPENAI_ORGANIZATION;
-  }
+  const headers = buildOpenAIHeaders({
+    apiKey,
+    projectId: env.OPENAI_REALTIME_PROJECT_ID ?? env.OPENAI_PROJECT_ID,
+    organizationId:
+      env.OPENAI_REALTIME_ORGANIZATION ?? env.OPENAI_ORGANIZATION,
+  });
 
+  headers['Content-Type'] = 'application/json';
+  headers['OpenAI-Beta'] = 'realtime=v1';
   return headers;
 };
 
@@ -44,9 +49,13 @@ export const onRequestOptions: PagesFunction<Env> = async () => {
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   try {
-    const apiKey = env.OPENAI_API_KEY;
-    if (!apiKey) {
-      return new Response('OpenAI API key not configured.', {
+    let headers: Record<string, string>;
+    try {
+      headers = resolveRealtimeHeaders(env);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'OpenAI API key missing';
+      return new Response(message, {
         status: 500,
         headers: CORS_HEADERS,
       });
@@ -127,7 +136,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
     const sessionResponse = await fetch('https://api.openai.com/v1/realtime/sessions', {
       method: 'POST',
-      headers: buildRealtimeHeaders(env),
+      headers,
       body: JSON.stringify(sessionRequest),
     });
 

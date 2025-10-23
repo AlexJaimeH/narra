@@ -38,9 +38,18 @@ Service Role Key de Supabase (⚠️ **trátala como secreto**). Se usa únicame
 
    | Variable | Valor |
    | --- | --- |
-   | `OPENAI_API_KEY` | Tu key de OpenAI |
+   | `OPENAI_API_KEY` | Tu key principal de OpenAI |
    | `OPENAI_PROJECT_ID` *(opcional)* | ID del proyecto si tu key es del nuevo panel de Projects |
    | `OPENAI_ORGANIZATION` *(opcional)* | ID de tu organización si OpenAI lo requiere |
+   | `OPENAI_TRANSCRIBE_API_KEY` *(opcional)* | Key dedicada solo para transcripción (por defecto usa `OPENAI_API_KEY`) |
+   | `OPENAI_TRANSCRIBE_PROJECT_ID` *(opcional)* | Project ID exclusivo para transcripción |
+   | `OPENAI_TRANSCRIBE_ORGANIZATION` *(opcional)* | Organization ID exclusivo para transcripción |
+   | `OPENAI_CHAT_API_KEY` *(opcional)* | Key para ghostwriter/sugerencias (usa `OPENAI_API_KEY` si no se define) |
+   | `OPENAI_CHAT_PROJECT_ID` *(opcional)* | Project ID para ghostwriter/sugerencias |
+   | `OPENAI_CHAT_ORGANIZATION` *(opcional)* | Organization ID para ghostwriter/sugerencias |
+   | `OPENAI_REALTIME_API_KEY` *(opcional)* | Key para sesiones Realtime (voz) |
+   | `OPENAI_REALTIME_PROJECT_ID` *(opcional)* | Project ID para Realtime |
+   | `OPENAI_REALTIME_ORGANIZATION` *(opcional)* | Organization ID para Realtime |
    | `RESEND_API_KEY` | Tu key privada de Resend |
    | `RESEND_FROM_EMAIL` | Dirección verificada en Resend |
    | `RESEND_REPLY_TO` *(opcional)* | Dirección para respuestas |
@@ -50,6 +59,8 @@ Service Role Key de Supabase (⚠️ **trátala como secreto**). Se usa únicame
    **Preview (opcional pero recomendado)**
 
    Repite la tabla anterior seleccionando el entorno `Preview`.
+
+   > **Nota:** Si tus keys empiezan con `sk-proj-` (keys de Projects), la app intenta detectar el `projectId` automáticamente. Si OpenAI te exige un ID distinto, define explícitamente la variable correspondiente (`*_PROJECT_ID`).
 
 6. Haz clic en **Save**
 7. Re-deploya tu aplicación o espera al siguiente commit para que tome efecto

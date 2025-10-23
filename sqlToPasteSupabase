@@ -560,6 +560,23 @@ begin
 end
 $$;
 
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'story_comments'
+      and policyname = 'Service role manages story comments'
+  ) then
+    create policy "Service role manages story comments"
+      on public.story_comments
+      for all
+      using ((auth.jwt() ->> 'role') = 'service_role')
+      with check ((auth.jwt() ->> 'role') = 'service_role');
+  end if;
+end
+$$;
+
 create index if not exists story_comments_parent_idx
   on public.story_comments (parent_id, created_at desc);
 
@@ -618,6 +635,23 @@ begin
       for all
       using (auth.uid() = user_id)
       with check (auth.uid() = user_id);
+  end if;
+end
+$$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'story_reactions'
+      and policyname = 'Service role manages story reactions'
+  ) then
+    create policy "Service role manages story reactions"
+      on public.story_reactions
+      for all
+      using ((auth.jwt() ->> 'role') = 'service_role')
+      with check ((auth.jwt() ->> 'role') = 'service_role');
   end if;
 end
 $$;

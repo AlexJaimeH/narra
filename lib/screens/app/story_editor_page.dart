@@ -3209,6 +3209,9 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   // Helper Methods
   String get _recorderStatusLabel {
     if (_isRecorderConnecting) return 'Conectando...';
+    if (_isRecording && !_isPaused && _isTranscribing) {
+      return 'Transcribiendo...';
+    }
     if (_isProcessingAudio) return 'Procesando audio...';
     if (_isRecording && !_isPaused && _isTranscribing) {
       return 'Transcribiendo...';
@@ -4478,6 +4481,28 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                                 Text(
                                   'Transcribiendo…',
                                   style: Theme.of(context).textTheme.bodyMedium,
+                                ),
+                              ],
+                            ),
+                          ),
+                        if (_isRecording && !_isPaused && _isTranscribing)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: Row(
+                              children: [
+                                SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2.2,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Transcribiendo…',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyMedium,
                                 ),
                               ],
                             ),

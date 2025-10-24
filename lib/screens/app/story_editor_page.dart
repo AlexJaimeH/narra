@@ -5060,7 +5060,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                                     children: [
                                       Row(
                                         children: [
-                                          const Icon(Icons.mic_round),
+                                          const Icon(Icons.mic_rounded),
                                           const SizedBox(width: 8),
                                           Expanded(
                                             child: Text(
@@ -5188,11 +5188,12 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                                           ),
                                           const Spacer(),
                                           TextButton.icon(
-                                            onPressed: () =>
-                                                _addRecordingToStory(
-                                              recording,
-                                              sheetContext,
-                                            ),
+                                            onPressed: () {
+                                              _addRecordingToStory(
+                                                recording,
+                                                sheetContext,
+                                              );
+                                            },
                                             icon: const Icon(Icons.add),
                                             label: const Text(
                                                 'Agregar a la historia'),

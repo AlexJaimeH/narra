@@ -11,20 +11,22 @@ class VoiceRecordingRepository {
 
   static SupabaseClient get _client => NarraSupabaseClient.client;
 
-  static Future<List<VoiceRecording>> fetchAll({String? storyId}) async {
+  static Future<List<VoiceRecording>> fetchAll({required String storyId}) async {
     final user = NarraSupabaseClient.currentUser;
     if (user == null) {
       throw Exception('Usuario no autenticado');
     }
 
-    var query =
-        _client.from('voice_recordings').select().eq('user_id', user.id);
-
-    if (storyId != null && storyId.trim().isNotEmpty) {
-      query = query.eq('story_id', storyId);
-    } else {
-      query = query.filter('story_id', 'is', null);
+    final normalizedStoryId = storyId.trim();
+    if (normalizedStoryId.isEmpty) {
+      return const <VoiceRecording>[];
     }
+
+    final query = _client
+        .from('voice_recordings')
+        .select()
+        .eq('user_id', user.id)
+        .eq('story_id', normalizedStoryId);
 
     final response = await query.order('created_at', ascending: false);
 
@@ -37,7 +39,7 @@ class VoiceRecordingRepository {
     required Uint8List audioBytes,
     required String transcript,
     double? durationSeconds,
-    String? storyId,
+    required String storyId,
     String? storyTitle,
   }) async {
     final user = NarraSupabaseClient.currentUser;
@@ -48,7 +50,7 @@ class VoiceRecordingRepository {
     final upload = await AudioUploadService.uploadRecording(
       audioBytes: audioBytes,
       fileName: 'voice_recording.webm',
-      folder: storyId != null ? 'stories/$storyId' : null,
+      folder: 'stories/$storyId',
     );
 
     final payload = <String, dynamic>{

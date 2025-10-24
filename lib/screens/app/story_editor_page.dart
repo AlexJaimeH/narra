@@ -166,6 +166,13 @@ class _TagOption {
   }
 }
 
+class _ResolvedStoryIdentity {
+  const _ResolvedStoryIdentity({required this.id, this.title});
+
+  final String id;
+  final String? title;
+}
+
 class _TagPaletteSection {
   const _TagPaletteSection({
     required this.title,
@@ -678,10 +685,21 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
     final rawStoryId = _currentStory?.id ?? widget.storyId;
     final normalizedStoryId = rawStoryId?.trim();
-    final targetStoryId =
-        (normalizedStoryId == null || normalizedStoryId.isEmpty)
-            ? null
-            : normalizedStoryId;
+
+    if (normalizedStoryId == null || normalizedStoryId.isEmpty) {
+      if (mounted) {
+        setState(() {
+          _isLoadingVoiceRecordings = false;
+          _voiceRecordings = const <VoiceRecording>[];
+          _hasVoiceRecordingsShortcut = false;
+        });
+      } else {
+        _isLoadingVoiceRecordings = false;
+        _voiceRecordings = const <VoiceRecording>[];
+        _hasVoiceRecordingsShortcut = false;
+      }
+      return;
+    }
 
     try {
       if (mounted) {
@@ -691,7 +709,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       }
 
       final recordings = await VoiceRecordingRepository.fetchAll(
-        storyId: targetStoryId,
+        storyId: normalizedStoryId,
       );
       if (mounted) {
         setState(() {
@@ -716,19 +734,13 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     }
   }
 
-  Future<void> _persistVoiceRecording({
-    required typed.Uint8List audioBytes,
-    required String transcript,
-    required Duration duration,
-  }) async {
-    try {
-      final rawStoryId = _currentStory?.id ?? widget.storyId;
-      final resolvedStoryId =
-          (rawStoryId == null || rawStoryId.trim().isEmpty)
-              ? null
-              : rawStoryId.trim();
-      final resolvedStoryTitle = () {
-        if (_currentStory?.title != null &&
+  Future<_ResolvedStoryIdentity> _ensureStoryIdentityForRecording() async {
+    final rawStoryId = _currentStory?.id ?? widget.storyId;
+    final normalizedStoryId = rawStoryId?.trim();
+
+    if (normalizedStoryId != null && normalizedStoryId.isNotEmpty) {
+      final resolvedTitle = () {
+        if (_currentStory != null &&
             _currentStory!.title.trim().isNotEmpty) {
           return _currentStory!.title.trim();
         }
@@ -736,12 +748,81 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         return draftTitle.isEmpty ? null : draftTitle;
       }();
 
+      return _ResolvedStoryIdentity(id: normalizedStoryId, title: resolvedTitle);
+    }
+
+    final createdStory = await _createDraftStoryForRecording();
+    final normalizedTitle = createdStory.title.trim();
+    return _ResolvedStoryIdentity(
+      id: createdStory.id,
+      title: normalizedTitle.isEmpty ? null : normalizedTitle,
+    );
+  }
+
+  Future<Story> _createDraftStoryForRecording() async {
+    final existingStory = _currentStory;
+    if (existingStory != null) {
+      return existingStory;
+    }
+
+    final user = NarraSupabaseClient.currentUser;
+    if (user == null) {
+      throw Exception('Usuario no autenticado');
+    }
+
+    final controllerTitle = _titleController.text.trim();
+    final resolvedTitle =
+        controllerTitle.isEmpty ? 'Historia sin título' : controllerTitle;
+    final controllerContent = _contentController.text.trim();
+
+    final now = DateTime.now().toIso8601String();
+    final payload = {
+      'title': resolvedTitle,
+      'content': controllerContent.isEmpty ? null : controllerContent,
+      'user_id': user.id,
+      'status': 'draft',
+      'created_at': now,
+      'updated_at': now,
+    };
+
+    final inserted = await NarraSupabaseClient.client
+        .from('stories')
+        .insert(payload)
+        .select()
+        .single();
+
+    final storyMap = inserted is Map<String, dynamic>
+        ? inserted
+        : Map<String, dynamic>.from(inserted as Map);
+    final story = Story.fromMap(storyMap);
+
+    if (mounted) {
+      setState(() {
+        _currentStory = story;
+        _status = story.status.name;
+      });
+    } else {
+      _currentStory = story;
+      _status = story.status.name;
+    }
+
+    return story;
+  }
+
+  Future<void> _persistVoiceRecording({
+    required typed.Uint8List audioBytes,
+    required String transcript,
+    required Duration duration,
+  }) async {
+    try {
+      final storyIdentity = await _ensureStoryIdentityForRecording();
+
       final recording = await VoiceRecordingRepository.create(
         audioBytes: audioBytes,
         transcript: transcript,
         durationSeconds: duration.inMilliseconds / 1000,
-        storyId: resolvedStoryId,
-        storyTitle: resolvedStoryTitle,
+        storyId: storyIdentity.id,
+        storyTitle: storyIdentity.title,
       );
 
       if (mounted) {

@@ -740,15 +740,21 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
     if (normalizedStoryId != null && normalizedStoryId.isNotEmpty) {
       final resolvedTitle = () {
-        if (_currentStory != null &&
-            _currentStory!.title.trim().isNotEmpty) {
-          return _currentStory!.title.trim();
+        if (_currentStory != null) {
+          final currentTitle = _currentStory!.title.trim();
+          if (currentTitle.isNotEmpty) {
+            return currentTitle;
+          }
         }
         final draftTitle = _titleController.text.trim();
-        return draftTitle.isEmpty ? null : draftTitle;
+        if (draftTitle.isNotEmpty) {
+          return draftTitle;
+        }
+        return 'Historia sin título';
       }();
 
-      return _ResolvedStoryIdentity(id: normalizedStoryId, title: resolvedTitle);
+      return _ResolvedStoryIdentity(
+          id: normalizedStoryId, title: resolvedTitle);
     }
 
     final createdStory = await _createDraftStoryForRecording();
@@ -825,15 +831,24 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         storyTitle: storyIdentity.title,
       );
 
+      final normalizedTitle = (storyIdentity.title ?? '').trim();
+      final recordingForState = recording.copyWith(
+        storyId: storyIdentity.id,
+        storyTitle:
+            normalizedTitle.isEmpty ? 'Historia sin título' : normalizedTitle,
+      );
+
       if (mounted) {
         setState(() {
-          _voiceRecordings = [recording, ..._voiceRecordings];
+          _voiceRecordings = [recordingForState, ..._voiceRecordings];
           _hasVoiceRecordingsShortcut = true;
         });
       } else {
-        _voiceRecordings = [recording, ..._voiceRecordings];
+        _voiceRecordings = [recordingForState, ..._voiceRecordings];
         _hasVoiceRecordingsShortcut = true;
       }
+
+      unawaited(_loadVoiceRecordings(forceRefresh: true));
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -857,8 +872,16 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     final normalizedTitle = storyTitle?.trim() ?? '';
 
     for (final recording in pending) {
-      final resolvedTitle =
-          normalizedTitle.isEmpty ? recording.storyTitle : normalizedTitle;
+      final resolvedTitle = () {
+        if (normalizedTitle.isNotEmpty) {
+          return normalizedTitle;
+        }
+        final existing = recording.storyTitle?.trim() ?? '';
+        if (existing.isNotEmpty) {
+          return existing;
+        }
+        return 'Historia sin título';
+      }();
 
       try {
         await VoiceRecordingRepository.updateStoryAssociation(

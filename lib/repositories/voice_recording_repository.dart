@@ -11,7 +11,8 @@ class VoiceRecordingRepository {
 
   static SupabaseClient get _client => NarraSupabaseClient.client;
 
-  static Future<List<VoiceRecording>> fetchAll({required String storyId}) async {
+  static Future<List<VoiceRecording>> fetchAll(
+      {required String storyId}) async {
     final user = NarraSupabaseClient.currentUser;
     if (user == null) {
       throw Exception('Usuario no autenticado');
@@ -47,16 +48,26 @@ class VoiceRecordingRepository {
       throw Exception('Usuario no autenticado');
     }
 
+    final normalizedStoryId = storyId.trim();
+    if (normalizedStoryId.isEmpty) {
+      throw Exception(
+          'No se pudo asociar la grabación sin una historia válida');
+    }
+
+    final normalizedTitle = (storyTitle ?? '').trim();
+    final resolvedTitle =
+        normalizedTitle.isEmpty ? 'Historia sin título' : normalizedTitle;
+
     final upload = await AudioUploadService.uploadRecording(
       audioBytes: audioBytes,
       fileName: 'voice_recording.webm',
-      folder: 'stories/$storyId',
+      folder: 'stories/$normalizedStoryId',
     );
 
     final payload = <String, dynamic>{
       'user_id': user.id,
-      'story_id': storyId,
-      'story_title': storyTitle,
+      'story_id': normalizedStoryId,
+      'story_title': resolvedTitle,
       'audio_url': upload.publicUrl,
       'audio_path': upload.path,
       'transcript': transcript,

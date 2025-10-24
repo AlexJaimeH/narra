@@ -91,6 +91,68 @@ $$;
 
 commit;
 
+-- Voice recordings library
+begin;
+
+create table if not exists public.voice_recordings (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.users (id) on delete cascade,
+  story_id uuid references public.stories (id) on delete set null,
+  story_title text,
+  audio_url text not null,
+  audio_path text not null,
+  transcript text not null default '',
+  duration_seconds numeric,
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create index if not exists voice_recordings_user_idx
+  on public.voice_recordings (user_id, created_at desc);
+
+alter table public.voice_recordings enable row level security;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'voice_recordings'
+      and policyname = 'Owners manage voice recordings'
+  ) then
+    create policy "Owners manage voice recordings"
+      on public.voice_recordings
+      for all
+      using (auth.uid() = user_id)
+      with check (auth.uid() = user_id);
+  end if;
+end
+$$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'voice_recordings'
+      and policyname = 'Service role manages voice recordings'
+  ) then
+    create policy "Service role manages voice recordings"
+      on public.voice_recordings
+      for all
+      using (
+        coalesce(auth.role(), '') = 'service_role'
+        or coalesce(auth.jwt() ->> 'role', '') = 'service_role'
+      )
+      with check (
+        coalesce(auth.role(), '') = 'service_role'
+        or coalesce(auth.jwt() ->> 'role', '') = 'service_role'
+      );
+  end if;
+end
+$$;
+
+commit;
+
 -- Public access policies for published stories and related data
 begin;
 

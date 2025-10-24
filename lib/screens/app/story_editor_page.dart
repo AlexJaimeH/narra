@@ -3209,10 +3209,10 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   // Helper Methods
   String get _recorderStatusLabel {
     if (_isRecorderConnecting) return 'Conectando...';
+    if (_isProcessingAudio) return 'Procesando audio...';
     if (_isRecording && !_isPaused && _isTranscribing) {
       return 'Transcribiendo...';
     }
-    if (_isProcessingAudio) return 'Procesando audio...';
     if (_isRecording && !_isPaused) return 'Grabando...';
     if (_isPaused) return 'Pausado';
     return _liveTranscript.isNotEmpty ? 'Listo' : 'Listo';
@@ -4155,8 +4155,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       _isTranscribing = false;
     }
     try {
-      await recorder.pause();
       _pauseDurationTicker();
+      await recorder.pause();
       if (mounted) {
         setState(() {
           _isPaused = true;
@@ -4454,14 +4454,15 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                                 const SizedBox(width: 8),
                                 Text(
                                   'Procesando audio…',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodyMedium,
+                                  style: Theme.of(context).textTheme.bodyMedium,
                                 ),
                               ],
                             ),
                           ),
-                        if (_isRecording && !_isPaused && _isTranscribing)
+                        if (_isRecording &&
+                            !_isPaused &&
+                            !_isProcessingAudio &&
+                            _isTranscribing)
                           Padding(
                             padding: const EdgeInsets.only(bottom: 12),
                             child: Row(
@@ -4476,9 +4477,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                                 const SizedBox(width: 8),
                                 Text(
                                   'Transcribiendo…',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodyMedium,
+                                  style: Theme.of(context).textTheme.bodyMedium,
                                 ),
                               ],
                             ),

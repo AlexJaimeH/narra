@@ -203,7 +203,8 @@ class VoiceRecorder {
   double _lastEmittedLevel = 0;
   bool _hasDetectedSpeech = false;
 
-  Future<void> start({OnText? onText,
+  Future<void> start(
+      {OnText? onText,
       OnRecorderLog? onLog,
       OnLevel? onLevel,
       OnTranscriptionState? onTranscriptionState}) async {
@@ -318,10 +319,10 @@ class VoiceRecorder {
         return false;
       }
 
-    _log('Grabación reanudada');
-    _setTranscribing(true);
-    return true;
-  } catch (error) {
+      _log('Grabación reanudada');
+      _setTranscribing(true);
+      return true;
+    } catch (error) {
       _log('No se pudo reanudar la grabación', level: 'error', error: error);
       return false;
     }
@@ -475,10 +476,14 @@ class VoiceRecorder {
   String _buildTranscriptionPrompt([List<String>? languages]) {
     final hints = languages ?? _languageHints;
     final buffer = StringBuffer(
-      'Transcribe exactly what the speaker says, keeping punctuation and the original language of every word. ',
+      'Transcribe exactly what the speaker says, keeping the punctuation and the original language of every single word. '
+      'If the speaker mixes languages or switches mid-sentence, preserve that exact mix. '
+      'Never translate, paraphrase, or expand abbreviations; when there is only silence or noise, return an empty result. '
+      'Transcribe exactly as spoken, even if proper names or borrowed words sound like they belong to another language. ',
     )..write(
-        'Do not translate, summarize, or invent text; when there is only silence or noise, return an empty result.',
-      );
+        'Transcribe exactamente lo que dice la persona, manteniendo la puntuación y el idioma original de cada palabra. '
+        'Si la persona mezcla idiomas, conserva esa mezcla tal cual. '
+        'No traduzcas, no resumas ni inventes texto; si solo hay silencio o ruido, devuelve un resultado vacío. ');
 
     if (hints.isNotEmpty) {
       buffer
@@ -867,9 +872,8 @@ class VoiceRecorder {
     }
 
     final hasTranscript = _transcript.value.isNotEmpty;
-    final minBytes = forceFull
-        ? 0
-        : (_hasDetectedSpeech || hasTranscript ? 3600 : 6000);
+    final minBytes =
+        forceFull ? 0 : (_hasDetectedSpeech || hasTranscript ? 3600 : 6000);
     if (!forceFull && slice.bytes.length < minBytes) {
       _log(
         'Transcripción pospuesta: acumulando más audio (${slice.bytes.length} bytes < $minBytes bytes mínimos)',

@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:narra/models/voice_recording.dart';
@@ -11,17 +12,25 @@ class VoiceRecordingRepository {
 
   static SupabaseClient get _client => NarraSupabaseClient.client;
 
-  static Future<List<VoiceRecording>> fetchAll() async {
+  static Future<List<VoiceRecording>> fetchAll(
+      {required String storyId}) async {
     final user = NarraSupabaseClient.currentUser;
     if (user == null) {
       throw Exception('Usuario no autenticado');
     }
 
-    final response = await _client
+    final normalizedStoryId = storyId.trim();
+    if (normalizedStoryId.isEmpty) {
+      return const <VoiceRecording>[];
+    }
+
+    final query = _client
         .from('voice_recordings')
         .select()
         .eq('user_id', user.id)
-        .order('created_at', ascending: false);
+        .eq('story_id', normalizedStoryId);
+
+    final response = await query.order('created_at', ascending: false);
 
     return (response as List<dynamic>)
         .map((item) => VoiceRecording.fromMap(item as Map<String, dynamic>))
@@ -32,7 +41,7 @@ class VoiceRecordingRepository {
     required Uint8List audioBytes,
     required String transcript,
     double? durationSeconds,
-    String? storyId,
+    required String storyId,
     String? storyTitle,
   }) async {
     final user = NarraSupabaseClient.currentUser;
@@ -40,31 +49,53 @@ class VoiceRecordingRepository {
       throw Exception('Usuario no autenticado');
     }
 
-    final upload = await AudioUploadService.uploadRecording(
-      audioBytes: audioBytes,
-      fileName: 'voice_recording.webm',
-      folder: storyId != null ? 'stories/$storyId' : null,
-    );
+    final normalizedStoryId = storyId.trim();
+    if (normalizedStoryId.isEmpty) {
+      throw Exception(
+          'No se pudo asociar la grabación sin una historia válida');
+    }
 
-    final payload = <String, dynamic>{
-      'user_id': user.id,
-      'story_id': storyId,
-      'story_title': storyTitle,
-      'audio_url': upload.publicUrl,
-      'audio_path': upload.path,
-      'transcript': transcript,
-      'duration_seconds': durationSeconds,
-    };
+    final normalizedTitle = (storyTitle ?? '').trim();
+    final resolvedTitle =
+        normalizedTitle.isEmpty ? 'Historia sin título' : normalizedTitle;
 
-    final inserted = await _client
-        .from('voice_recordings')
-        .insert(payload)
-        .select()
-        .single();
+    await NarraSupabaseClient.ensureUserProfileExists();
 
-    return VoiceRecording.fromMap(
-      Map<String, dynamic>.from(inserted as Map),
-    );
+    try {
+      final upload = await AudioUploadService.uploadRecording(
+        audioBytes: audioBytes,
+        fileName: 'voice_recording.webm',
+        folder: 'stories/$normalizedStoryId',
+      );
+
+      final payload = <String, dynamic>{
+        'user_id': user.id,
+        'story_id': normalizedStoryId,
+        'story_title': resolvedTitle,
+        'audio_url': upload.publicUrl,
+        'audio_path': upload.path,
+        'transcript': transcript,
+        'duration_seconds': durationSeconds,
+      };
+
+      final inserted = await _client
+          .from('voice_recordings')
+          .insert(payload)
+          .select()
+          .single();
+
+      return VoiceRecording.fromMap(
+        Map<String, dynamic>.from(inserted as Map),
+      );
+    } catch (error, stackTrace) {
+      if (kDebugMode) {
+        debugPrint(
+          'VoiceRecordingRepository.create failed for story $normalizedStoryId: $error',
+        );
+        debugPrint(stackTrace.toString());
+      }
+      rethrow;
+    }
   }
 
   static Future<VoiceRecording> updateTranscript({
@@ -85,6 +116,17 @@ class VoiceRecordingRepository {
     return VoiceRecording.fromMap(
       Map<String, dynamic>.from(updated as Map),
     );
+  }
+
+  static Future<void> updateStoryAssociation({
+    required String recordingId,
+    required String storyId,
+    String? storyTitle,
+  }) async {
+    await _client.from('voice_recordings').update({
+      'story_id': storyId,
+      'story_title': storyTitle,
+    }).eq('id', recordingId);
   }
 
   static Future<void> delete({

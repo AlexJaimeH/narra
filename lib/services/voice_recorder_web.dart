@@ -11,6 +11,7 @@ import 'package:http_parser/http_parser.dart';
 typedef OnText = void Function(String text);
 typedef OnRecorderLog = void Function(String level, String message);
 typedef OnLevel = void Function(double level);
+typedef OnTranscriptionState = void Function(bool active);
 
 class _TranscriptSegment {
   const _TranscriptSegment({
@@ -161,6 +162,7 @@ class VoiceRecorder {
   OnText? _onText;
   OnRecorderLog? _onLog;
   OnLevel? _onLevel;
+  OnTranscriptionState? _onTranscriptionState;
 
   html.MediaStream? _inputStream;
   html.MediaRecorder? _mediaRecorder;
@@ -183,9 +185,11 @@ class VoiceRecorder {
   bool _pendingForceFull = false;
   Timer? _transcriptionTimer;
   Future<void>? _ongoingTranscription;
+  bool _shouldShowTranscribing = false;
 
   final _TranscriptAccumulator _transcript = _TranscriptAccumulator();
   int _introPlaceholdersRemaining = 0;
+  bool _lastReportedTranscribing = false;
 
   int _uploadedChunkTail = 0;
 
@@ -199,16 +203,20 @@ class VoiceRecorder {
   double _lastEmittedLevel = 0;
   bool _hasDetectedSpeech = false;
 
-  Future<void> start(
-      {OnText? onText, OnRecorderLog? onLog, OnLevel? onLevel}) async {
+  Future<void> start({OnText? onText,
+      OnRecorderLog? onLog,
+      OnLevel? onLevel,
+      OnTranscriptionState? onTranscriptionState}) async {
     _onText = onText;
     _onLog = onLog;
+    _onTranscriptionState = onTranscriptionState;
 
     _resetState();
     _introPlaceholdersRemaining = _introSuppressionCount;
     _onLevel = onLevel;
     _transcript.emitReset(_onText);
     _onLevel?.call(0);
+    _reportTranscriptionState(false);
     _languageHints = _detectPreferredLanguages();
     if (_languageHints.isNotEmpty) {
       _log(
@@ -277,6 +285,7 @@ class VoiceRecorder {
     _isRecording = false;
     _teardownLevelMonitoring();
     _onLevel?.call(0);
+    _setTranscribing(false);
 
     await _ensureTranscription(forceFull: true);
     return true;
@@ -309,9 +318,10 @@ class VoiceRecorder {
         return false;
       }
 
-      _log('Grabación reanudada');
-      return true;
-    } catch (error) {
+    _log('Grabación reanudada');
+    _setTranscribing(true);
+    return true;
+  } catch (error) {
       _log('No se pudo reanudar la grabación', level: 'error', error: error);
       return false;
     }
@@ -381,6 +391,8 @@ class VoiceRecorder {
     _stopCompleter = null;
     _languageHints = const <String>[];
     _introPlaceholdersRemaining = 0;
+    _shouldShowTranscribing = false;
+    _reportTranscriptionState(false);
   }
 
   String? get _languageHint =>
@@ -536,6 +548,7 @@ class VoiceRecorder {
 
     _isRecording = true;
     _isPaused = false;
+    _setTranscribing(true);
     return null;
   }
 
@@ -749,6 +762,7 @@ class VoiceRecorder {
       return;
     }
     _hasPendingTranscription = true;
+    _setTranscribing(true);
     _transcriptionTimer?.cancel();
 
     if (_transcribing) {
@@ -793,6 +807,9 @@ class VoiceRecorder {
           (_hasPendingTranscription && (!_stopping || _pendingForceFull));
 
       if (!shouldForceRunAgain) {
+        if (_stopping) {
+          _setTranscribing(false);
+        }
         return;
       }
 
@@ -1300,5 +1317,23 @@ class VoiceRecorder {
     if (updated) {
       _transcript.emitIfChanged(_onText);
     }
+  }
+
+  bool get isActivelyTranscribing => _shouldShowTranscribing;
+
+  void _setTranscribing(bool active) {
+    if (_shouldShowTranscribing == active) {
+      return;
+    }
+    _shouldShowTranscribing = active;
+    _reportTranscriptionState(active);
+  }
+
+  void _reportTranscriptionState(bool active) {
+    if (_lastReportedTranscribing == active) {
+      return;
+    }
+    _lastReportedTranscribing = active;
+    _onTranscriptionState?.call(active);
   }
 }

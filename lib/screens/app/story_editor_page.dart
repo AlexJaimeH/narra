@@ -499,6 +499,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   String _liveTranscript = '';
   bool _isPaused = false;
   bool _isProcessingAudio = false;
+  bool _isTranscribing = false;
 
   bool _isRecorderConnecting = false;
   final List<String> _recorderLogs = [];
@@ -3208,6 +3209,9 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   // Helper Methods
   String get _recorderStatusLabel {
     if (_isRecorderConnecting) return 'Conectando...';
+    if (_isRecording && !_isPaused && _isTranscribing) {
+      return 'Transcribiendo...';
+    }
     if (_isProcessingAudio) return 'Procesando audio...';
     if (_isRecording && !_isPaused) return 'Grabando...';
     if (_isPaused) return 'Pausado';
@@ -3994,17 +3998,28 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     }
 
     final recorder = VoiceRecorder();
+    _isTranscribing = false;
     try {
       await recorder.start(
         onText: _handleTranscriptChunk,
         onLog: _appendRecorderLog,
         onLevel: _handleMicLevel,
+        onTranscriptionState: (active) {
+          if (!mounted) {
+            _isTranscribing = active;
+            return;
+          }
+          setState(() {
+            _isTranscribing = active;
+          });
+        },
       );
       if (!mounted) {
         await recorder.dispose();
         _isRecorderConnecting = false;
         _isRecording = false;
         _isPaused = false;
+        _isTranscribing = false;
         return;
       }
       setState(() {
@@ -4013,6 +4028,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         _isPaused = false;
         _isRecorderConnecting = false;
         _isProcessingAudio = false;
+        _isTranscribing = true;
         _recordingStartedAt = DateTime.now();
         _recordingAccumulated = Duration.zero;
         _recordingDuration = Duration.zero;
@@ -4034,6 +4050,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         _isRecorderConnecting = false;
         _isRecording = false;
         _isPaused = false;
+        _isTranscribing = false;
         return;
       }
       setState(() {
@@ -4042,6 +4059,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         _isPaused = false;
         _isRecorderConnecting = false;
         _isProcessingAudio = false;
+        _isTranscribing = false;
       });
       _appendRecorderLog('error', 'No se pudo iniciar: $e');
       ScaffoldMessenger.of(context).showSnackBar(
@@ -4077,6 +4095,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           _isRecorderConnecting = false;
           _isRecording = resumed;
           _isPaused = !resumed;
+          _isTranscribing = false;
           return;
         }
         if (resumed) {
@@ -4085,6 +4104,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
             _isRecording = true;
             _isRecorderConnecting = false;
             _isProcessingAudio = false;
+            _isTranscribing = true;
             _recordingStartedAt = DateTime.now();
           });
           _startDurationTicker();
@@ -4097,6 +4117,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
             _isRecording = false;
             _isRecorderConnecting = false;
             _isProcessingAudio = false;
+            _isTranscribing = false;
           });
           _appendRecorderLog(
               'warning', 'No se pudo reanudar, reiniciando sesión');
@@ -4107,6 +4128,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           setState(() {
             _isRecorderConnecting = false;
             _isProcessingAudio = false;
+            _isTranscribing = false;
           });
           _appendRecorderLog('error', 'No se pudo reanudar: $e');
           ScaffoldMessenger.of(context).showSnackBar(
@@ -4125,10 +4147,12 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       setState(() {
         _isRecorderConnecting = true;
         _isProcessingAudio = true;
+        _isTranscribing = false;
       });
     } else {
       _isRecorderConnecting = true;
       _isProcessingAudio = true;
+      _isTranscribing = false;
     }
     try {
       await recorder.pause();
@@ -4139,6 +4163,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           _isRecording = false;
           _isRecorderConnecting = false;
           _isProcessingAudio = false;
+          _isTranscribing = false;
         });
       }
       _appendRecorderLog('info', 'Grabación pausada');
@@ -4147,6 +4172,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         setState(() {
           _isRecorderConnecting = false;
           _isProcessingAudio = false;
+          _isTranscribing = false;
         });
         _appendRecorderLog('error', 'No se pudo pausar: $e');
         ScaffoldMessenger.of(context).showSnackBar(
@@ -4161,6 +4187,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     if (recorder == null) return;
 
     _isProcessingAudio = false;
+    _isTranscribing = false;
 
     typed.Uint8List? audioBytes;
     try {
@@ -4183,6 +4210,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
         _isRecorderConnecting = false;
         _isProcessingAudio = false;
+        _isTranscribing = false;
       });
     } else {
       _recorder = null;
@@ -4190,6 +4218,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       _isPaused = false;
       _isRecorderConnecting = false;
       _isProcessingAudio = false;
+      _isTranscribing = false;
     }
 
     _stopDurationTicker(reset: discard);
@@ -4432,6 +4461,28 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                               ],
                             ),
                           ),
+                        if (_isRecording && !_isPaused && _isTranscribing)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: Row(
+                              children: [
+                                SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2.2,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Transcribiendo…',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyMedium,
+                                ),
+                              ],
+                            ),
+                          ),
                         Row(
                           children: [
                             Expanded(
@@ -4513,9 +4564,13 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         }),
       );
       if (mounted) {
-        setState(() => _isProcessingAudio = false);
+        setState(() {
+          _isProcessingAudio = false;
+          _isTranscribing = false;
+        });
       } else {
         _isProcessingAudio = false;
+        _isTranscribing = false;
       }
       return true;
     }
@@ -4547,17 +4602,25 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         }),
       );
       if (mounted) {
-        setState(() => _isProcessingAudio = false);
+        setState(() {
+          _isProcessingAudio = false;
+          _isTranscribing = false;
+        });
       } else {
         _isProcessingAudio = false;
+        _isTranscribing = false;
       }
       return true;
     }
 
     if (mounted) {
-      setState(() => _isProcessingAudio = false);
+      setState(() {
+        _isProcessingAudio = false;
+        _isTranscribing = false;
+      });
     } else {
       _isProcessingAudio = false;
+      _isTranscribing = false;
     }
     return false;
   }

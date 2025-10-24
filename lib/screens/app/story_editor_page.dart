@@ -812,6 +812,17 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   }) async {
     try {
       final storyIdentity = await _ensureStoryIdentityForRecording();
+      final byteCount = audioBytes.lengthInBytes;
+
+      _appendRecorderLog(
+        'info',
+        'Guardando ${byteCount.toString()} bytes en historia ${storyIdentity.id}',
+      );
+      if (kDebugMode) {
+        debugPrint(
+          '[StoryEditor] Persisting voice recording of $byteCount bytes for story ${storyIdentity.id}',
+        );
+      }
 
       final recording = await VoiceRecordingRepository.create(
         audioBytes: audioBytes,
@@ -820,6 +831,12 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         storyId: storyIdentity.id,
         storyTitle: storyIdentity.title,
       );
+
+      if (kDebugMode) {
+        debugPrint(
+          '[StoryEditor] Voice recording stored at ${recording.audioPath}',
+        );
+      }
 
       final normalizedTitle = (storyIdentity.title ?? '').trim();
       final recordingForState = recording.copyWith(
@@ -847,6 +864,9 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
       return recordingForState;
     } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[StoryEditor] Error al guardar grabación: $e');
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('No se pudo guardar la grabación: $e')),
@@ -857,72 +877,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   }
 
   Future<void> _assignPendingRecordingsToStory(
-    String storyId,
-    String? storyTitle,
-  ) async {
-    final pending = _voiceRecordings
-        .where((recording) => recording.storyId == null)
-        .toList();
-    if (pending.isEmpty) {
-      return;
-    }
-
-    final normalizedTitle = storyTitle?.trim() ?? '';
-
-    for (final recording in pending) {
-      final resolvedTitle = () {
-        if (normalizedTitle.isNotEmpty) {
-          return normalizedTitle;
-        }
-        final existing = recording.storyTitle?.trim() ?? '';
-        if (existing.isNotEmpty) {
-          return existing;
-        }
-        return 'Historia sin título';
-      }();
-
-      try {
-        await VoiceRecordingRepository.updateStoryAssociation(
-          recordingId: recording.id,
-          storyId: storyId,
-          storyTitle: resolvedTitle,
-        );
-
-        final updatedRecording = recording.copyWith(
-          storyId: storyId,
-          storyTitle: resolvedTitle,
-        );
-
-        if (mounted) {
-          setState(() {
-            _voiceRecordings = _voiceRecordings
-                .map((element) => element.id == updatedRecording.id
-                    ? updatedRecording
-                    : element)
-                .toList();
-          });
-        } else {
-          _voiceRecordings = _voiceRecordings
-              .map((element) => element.id == updatedRecording.id
-                  ? updatedRecording
-                  : element)
-              .toList();
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'No se pudo vincular una grabación con la historia: $e',
-              ),
-            ),
-          );
-        }
-      }
-    }
-  }
-
-  Future<void> _linkUnassignedRecordingsToStory(
     String storyId,
     String? storyTitle,
   ) async {
@@ -4868,6 +4822,14 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       }
     }
 
+    if (audioBytes != null) {
+      final byteCount = audioBytes.lengthInBytes;
+      _appendRecorderLog('debug', 'Grabación capturada con $byteCount bytes');
+      if (kDebugMode) {
+        debugPrint('[StoryEditor] Recorder stop produced $byteCount bytes');
+      }
+    }
+
     if (mounted) {
       setState(() {
         _recorder = null;
@@ -5196,7 +5158,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       try {
         await _finalizeRecording(discard: true);
       } catch (error) {
-        _appendRecorderLog('error', 'Error al finalizar dictado al cerrar: $error');
+        _appendRecorderLog(
+            'error', 'Error al finalizar dictado al cerrar: $error');
       }
     }
 

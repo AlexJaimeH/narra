@@ -62,6 +62,11 @@ class VoiceRecordingRepository {
     await NarraSupabaseClient.ensureUserProfileExists();
 
     try {
+      if (kDebugMode) {
+        debugPrint(
+          '[VoiceRecordingRepository] Uploading ${audioBytes.lengthInBytes} bytes for story $normalizedStoryId',
+        );
+      }
       final upload = await AudioUploadService.uploadRecording(
         audioBytes: audioBytes,
         fileName: 'voice_recording.webm',
@@ -84,9 +89,17 @@ class VoiceRecordingRepository {
           .select()
           .single();
 
-      return VoiceRecording.fromMap(
-        Map<String, dynamic>.from(inserted as Map),
-      );
+      final insertedMap = inserted is Map<String, dynamic>
+          ? inserted
+          : Map<String, dynamic>.from(inserted as Map);
+
+      if (kDebugMode) {
+        debugPrint(
+          '[VoiceRecordingRepository] Stored recording ${insertedMap['id']} at ${upload.path}',
+        );
+      }
+
+      return VoiceRecording.fromMap(insertedMap);
     } catch (error, stackTrace) {
       if (kDebugMode) {
         debugPrint(

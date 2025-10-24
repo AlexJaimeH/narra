@@ -12,6 +12,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
+import 'package:narra/models/voice_recording.dart';
 import 'package:narra/services/story_service_new.dart';
 import 'package:narra/services/tag_service.dart';
 import 'package:narra/services/image_upload_service.dart';
@@ -19,6 +22,7 @@ import 'package:narra/repositories/story_repository.dart';
 import 'package:narra/openai/openai_service.dart';
 import 'package:narra/services/voice_recorder.dart';
 import 'package:narra/services/audio_upload_service.dart';
+import 'package:narra/repositories/voice_recording_repository.dart';
 import 'package:narra/services/user_service.dart';
 import 'package:narra/screens/app/top_navigation_bar.dart';
 import 'package:narra/supabase/narra_client.dart';
@@ -483,6 +487,14 @@ class _VersionHistoryVisuals {
 
 class _StoryEditorPageState extends State<StoryEditorPage>
     with SingleTickerProviderStateMixin {
+  static const Set<String> _supportedRecordingLanguages = {
+    'es',
+    'en',
+    'pt',
+    'fr',
+    'it',
+    'de',
+  };
   late TabController _tabController;
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _contentController = TextEditingController();
@@ -516,6 +528,12 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
   typed.Uint8List? _recordedAudioBytes;
   bool _recordedAudioUploaded = false;
+  List<VoiceRecording> _voiceRecordings = [];
+  bool _isLoadingVoiceRecordings = false;
+  String? _playingRecordingId;
+  final Set<String> _retranscribingRecordingIds = <String>{};
+  final Set<String> _deletingRecordingIds = <String>{};
+  final Set<String> _playbackLoadingRecordingIds = <String>{};
 
   html.AudioElement? _playbackAudio;
   StreamSubscription<html.Event>? _playbackEndedSub;
@@ -610,6 +628,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       });
     }
 
+    unawaited(_loadVoiceRecordings());
+
     // Generate initial AI suggestions when suggestions are shown
   }
 
@@ -648,6 +668,70 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     setState(() {
       _isTopMenuOpen = !_isTopMenuOpen;
     });
+  }
+
+  Future<void> _loadVoiceRecordings({bool forceRefresh = false}) async {
+    if (_isLoadingVoiceRecordings && !forceRefresh) {
+      return;
+    }
+
+    try {
+      if (mounted) {
+        setState(() => _isLoadingVoiceRecordings = true);
+      } else {
+        _isLoadingVoiceRecordings = true;
+      }
+
+      final recordings = await VoiceRecordingRepository.fetchAll();
+      if (mounted) {
+        setState(() {
+          _voiceRecordings = recordings;
+          _isLoadingVoiceRecordings = false;
+        });
+      } else {
+        _voiceRecordings = recordings;
+        _isLoadingVoiceRecordings = false;
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoadingVoiceRecordings = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudieron cargar las grabaciones: $e')),
+        );
+      } else {
+        _isLoadingVoiceRecordings = false;
+      }
+    }
+  }
+
+  Future<void> _persistVoiceRecording({
+    required typed.Uint8List audioBytes,
+    required String transcript,
+    required Duration duration,
+  }) async {
+    try {
+      final recording = await VoiceRecordingRepository.create(
+        audioBytes: audioBytes,
+        transcript: transcript,
+        durationSeconds: duration.inMilliseconds / 1000,
+        storyId: _currentStory?.id,
+        storyTitle: _currentStory?.title,
+      );
+
+      if (mounted) {
+        setState(() {
+          _voiceRecordings = [recording, ..._voiceRecordings];
+        });
+      } else {
+        _voiceRecordings = [recording, ..._voiceRecordings];
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo guardar la grabación: $e')),
+        );
+      }
+    }
   }
 
   Future<bool> _confirmLeaveEditor() async {
@@ -2080,6 +2164,16 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                     ),
                     label: 'Historial',
                   ),
+                  if (_voiceRecordings.isNotEmpty)
+                    buildActionButton(
+                      isCompact: isCompact,
+                      onPressed: _showVoiceRecordings,
+                      icon: Icon(
+                        Icons.library_music_rounded,
+                        color: colorScheme.primary,
+                      ),
+                      label: 'Grabaciones',
+                    ),
                 ],
               ),
               SizedBox(height: verticalSpacing),
@@ -3209,9 +3303,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   // Helper Methods
   String get _recorderStatusLabel {
     if (_isRecorderConnecting) return 'Conectando...';
-    if (_isRecording && !_isPaused && _isTranscribing) {
-      return 'Transcribiendo...';
-    }
     if (_isProcessingAudio) return 'Procesando audio...';
     if (_isRecording && !_isPaused && _isTranscribing) {
       return 'Transcribiendo...';
@@ -3350,6 +3441,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       if (resetPosition) {
         _playbackProgressSeconds = 0;
       }
+      _playingRecordingId = null;
       _isPlaybackPlaying = false;
       return;
     }
@@ -3392,9 +3484,11 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     _playbackAudio = null;
     _playbackDurationSeconds = null;
     _playbackProgressSeconds = 0;
+    _playingRecordingId = null;
   }
 
-  Future<void> _preparePlaybackAudio(typed.Uint8List bytes) async {
+  Future<void> _preparePlaybackAudio(typed.Uint8List bytes,
+      {String? recordingId}) async {
     _disposePlaybackAudio();
 
     final blob = html.Blob([bytes], 'audio/webm');
@@ -3409,16 +3503,23 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     _isPlaybackPlaying = false;
     _playbackProgressSeconds = 0;
     _playbackDurationSeconds = null;
+    _playingRecordingId = recordingId;
 
     _playbackEndedSub = audio.onEnded.listen((_) {
       if (mounted) {
         setState(() {
           _isPlaybackPlaying = false;
           _playbackProgressSeconds = 0;
+          if (_playingRecordingId == recordingId) {
+            _playingRecordingId = null;
+          }
         });
       } else {
         _isPlaybackPlaying = false;
         _playbackProgressSeconds = 0;
+        if (_playingRecordingId == recordingId) {
+          _playingRecordingId = null;
+        }
       }
     });
 
@@ -3491,6 +3592,307 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       return '${hours.toString().padLeft(2, '0')}:$minutes:$seconds';
     }
     return '$minutes:$seconds';
+  }
+
+  String _formatRecordingDate(DateTime date) {
+    final local = date.toLocal();
+    final day = local.day.toString().padLeft(2, '0');
+    final month = local.month.toString().padLeft(2, '0');
+    final year = local.year.toString();
+    final hour = local.hour.toString().padLeft(2, '0');
+    final minute = local.minute.toString().padLeft(2, '0');
+    return '$day/$month/$year · $hour:$minute';
+  }
+
+  String _previewTranscript(String transcript) {
+    final sanitized = transcript.replaceAll('\n', ' ').trim();
+    if (sanitized.isEmpty) {
+      return 'Sin transcripción disponible.';
+    }
+    if (sanitized.length <= 160) {
+      return sanitized;
+    }
+    return '${sanitized.substring(0, 157)}…';
+  }
+
+  String? _normalizeLanguageHint(String? raw) {
+    if (raw == null) {
+      return null;
+    }
+
+    final normalized = raw.trim().toLowerCase();
+    if (normalized.isEmpty) {
+      return null;
+    }
+
+    for (final code in _supportedRecordingLanguages) {
+      if (normalized == code || normalized.startsWith('$code-')) {
+        return code;
+      }
+    }
+
+    return null;
+  }
+
+  List<String> _preferredLanguageHints() {
+    final navigator = html.window.navigator;
+    final unique = <String>{};
+    final resolved = <String>[];
+
+    void add(String? raw) {
+      final normalized = _normalizeLanguageHint(raw);
+      if (normalized != null && unique.add(normalized)) {
+        resolved.add(normalized);
+      }
+    }
+
+    final languages = navigator.languages;
+    if (languages != null) {
+      for (final dynamic entry in languages) {
+        add(entry?.toString());
+      }
+    }
+
+    add(navigator.language);
+    return resolved;
+  }
+
+  String _buildVoiceRecordingPrompt(List<String> hints) {
+    final buffer = StringBuffer(
+      'Transcribe exactly what the speaker says, keeping the punctuation and the original language of every single word. '
+      'If the speaker mixes languages or switches mid-sentence, preserve that exact mix. '
+      'Never translate, paraphrase, or expand abbreviations; when there is only silence or noise, return an empty result. '
+      'Transcribe exactly as spoken, even if proper names or borrowed words sound like they belong to another language. ',
+    )..write(
+        'Transcribe exactamente lo que dice la persona, manteniendo la puntuación y el idioma original de cada palabra. '
+        'Si la persona mezcla idiomas, conserva esa mezcla tal cual. '
+        'No traduzcas, no resumas ni inventes texto; si solo hay silencio o ruido, devuelve un resultado vacío. ');
+
+    if (hints.isNotEmpty) {
+      buffer
+        ..write(' Possible languages in this session include: ')
+        ..write(hints.join(', '))
+        ..write('.');
+    }
+
+    return buffer.toString();
+  }
+
+  Future<String?> _transcribeStoredAudio(typed.Uint8List bytes) async {
+    final uri = Uri.parse('/api/whisper').replace(queryParameters: {
+      'model': 'gpt-4o-mini-transcribe',
+      'fallback': 'gpt-4o-transcribe-latest,whisper-1',
+    });
+
+    final request = http.MultipartRequest('POST', uri)
+      ..fields['response_format'] = 'verbose_json'
+      ..fields['temperature'] = '0';
+
+    final hints = _preferredLanguageHints();
+    request.fields['prompt'] = _buildVoiceRecordingPrompt(hints);
+
+    request.files.add(http.MultipartFile.fromBytes(
+      'file',
+      bytes,
+      filename: 'audio.webm',
+      contentType: MediaType('audio', 'webm', {'codecs': 'opus'}),
+    ));
+
+    final streamedResponse = await request.send();
+    final response = await http.Response.fromStream(streamedResponse);
+
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      try {
+        final payload = jsonDecode(response.body) as Map<String, dynamic>;
+        final text = payload['text'];
+        if (text is String) {
+          return text.replaceAll('\n', ' ').trim();
+        }
+      } catch (e) {
+        throw Exception('Respuesta inválida al retranscribir: $e');
+      }
+    } else {
+      throw Exception(
+          'Error ${response.statusCode} al retranscribir: ${response.body}');
+    }
+    return null;
+  }
+
+  Future<void> _toggleRecordingPlayback(
+    VoiceRecording recording,
+    void Function(void Function()) refreshSheet,
+  ) async {
+    if (_playingRecordingId == recording.id && _isPlaybackPlaying) {
+      _stopPlayback();
+      if (mounted) {
+        setState(() {});
+      }
+      refreshSheet(() {});
+      return;
+    }
+
+    if (_playbackLoadingRecordingIds.contains(recording.id)) {
+      return;
+    }
+
+    _playbackLoadingRecordingIds.add(recording.id);
+    if (mounted) {
+      setState(() {});
+    }
+    refreshSheet(() {});
+
+    try {
+      final response = await http.get(Uri.parse(recording.audioUrl));
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final bytes = typed.Uint8List.fromList(response.bodyBytes);
+        await _preparePlaybackAudio(bytes, recordingId: recording.id);
+        await _togglePlayback();
+      } else {
+        throw Exception('Estado HTTP ${response.statusCode}');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo reproducir la grabación: $e')),
+        );
+      }
+    } finally {
+      _playbackLoadingRecordingIds.remove(recording.id);
+      if (mounted) {
+        setState(() {});
+      }
+      refreshSheet(() {});
+    }
+  }
+
+  Future<void> _deleteVoiceRecording(
+    VoiceRecording recording,
+    void Function(void Function()) refreshSheet,
+  ) async {
+    if (_deletingRecordingIds.contains(recording.id)) {
+      return;
+    }
+
+    _deletingRecordingIds.add(recording.id);
+    if (mounted) {
+      setState(() {});
+    }
+    refreshSheet(() {});
+
+    try {
+      await VoiceRecordingRepository.delete(
+        recordingId: recording.id,
+        audioPath: recording.audioPath,
+      );
+
+      if (_playingRecordingId == recording.id) {
+        _stopPlayback();
+      }
+
+      if (mounted) {
+        setState(() {
+          _voiceRecordings.removeWhere((element) => element.id == recording.id);
+        });
+      } else {
+        _voiceRecordings.removeWhere((element) => element.id == recording.id);
+      }
+      refreshSheet(() {});
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo eliminar la grabación: $e')),
+        );
+      }
+    } finally {
+      _deletingRecordingIds.remove(recording.id);
+      if (mounted) {
+        setState(() {});
+      }
+      refreshSheet(() {});
+    }
+  }
+
+  Future<void> _handleRetranscribeRecording(
+    VoiceRecording recording,
+    BuildContext sheetContext,
+    void Function(void Function()) refreshSheet,
+  ) async {
+    if (_retranscribingRecordingIds.contains(recording.id)) {
+      return;
+    }
+
+    _retranscribingRecordingIds.add(recording.id);
+    if (mounted) {
+      setState(() {});
+    }
+    refreshSheet(() {});
+
+    try {
+      final response = await http.get(Uri.parse(recording.audioUrl));
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw Exception('Estado HTTP ${response.statusCode}');
+      }
+
+      final bytes = typed.Uint8List.fromList(response.bodyBytes);
+      final newTranscript = await _transcribeStoredAudio(bytes);
+      if (newTranscript == null || newTranscript.trim().isEmpty) {
+        throw Exception('No se obtuvo una transcripción válida.');
+      }
+
+      final updated = await VoiceRecordingRepository.updateTranscript(
+        recordingId: recording.id,
+        transcript: newTranscript.trim(),
+      );
+
+      if (mounted) {
+        setState(() {
+          _voiceRecordings = _voiceRecordings
+              .map((element) => element.id == updated.id ? updated : element)
+              .toList();
+        });
+      } else {
+        _voiceRecordings = _voiceRecordings
+            .map((element) => element.id == updated.id ? updated : element)
+            .toList();
+      }
+      refreshSheet(() {});
+
+      await _showTranscriptPlacementDialog(updated.transcript.trim());
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo retranscribir: $e')),
+        );
+      }
+    } finally {
+      _retranscribingRecordingIds.remove(recording.id);
+      if (mounted) {
+        setState(() {});
+      }
+      refreshSheet(() {});
+    }
+  }
+
+  Future<void> _addRecordingToStory(
+    VoiceRecording recording,
+    BuildContext sheetContext,
+  ) async {
+    final transcript = recording.transcript.trim();
+    if (transcript.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Esta grabación no tiene transcripción disponible.'),
+          ),
+        );
+      }
+      return;
+    }
+
+    if (sheetContext.mounted) {
+      Navigator.of(sheetContext).pop();
+    }
+    await _showTranscriptPlacementDialog(transcript);
   }
 
   Widget _buildWaveformBars(BuildContext context) {
@@ -4189,6 +4591,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     final recorder = _recorder;
     if (recorder == null) return;
 
+    final transcriptSnapshot = _liveTranscript.trim();
+    final durationSnapshot = _recordingDuration;
     _isProcessingAudio = false;
     _isTranscribing = false;
 
@@ -4225,11 +4629,23 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     }
 
     _stopDurationTicker(reset: discard);
-    if (discard || audioBytes == null || audioBytes.isEmpty) {
+    if (audioBytes == null || audioBytes.isEmpty) {
       if (discard) {
         _clearRecordedAudio();
         _resetLevelHistory();
       }
+      return;
+    }
+
+    await _persistVoiceRecording(
+      audioBytes: audioBytes,
+      transcript: transcriptSnapshot,
+      duration: durationSnapshot,
+    );
+
+    if (discard) {
+      _clearRecordedAudio();
+      _resetLevelHistory();
       return;
     }
 
@@ -4462,51 +4878,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                               ],
                             ),
                           ),
-                        if (_isRecording &&
-                            !_isPaused &&
-                            !_isProcessingAudio &&
-                            _isTranscribing)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 12),
-                            child: Row(
-                              children: [
-                                SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2.2,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  'Transcribiendo…',
-                                  style: Theme.of(context).textTheme.bodyMedium,
-                                ),
-                              ],
-                            ),
-                          ),
-                        if (_isRecording && !_isPaused && _isTranscribing)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 12),
-                            child: Row(
-                              children: [
-                                SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2.2,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  'Transcribiendo…',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodyMedium,
-                                ),
-                              ],
-                            ),
-                          ),
                         Row(
                           children: [
                             Expanded(
@@ -4515,20 +4886,18 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                                         _isProcessingAudio ||
                                         _liveTranscript.trim().isEmpty
                                     ? null
-                                    : () {
+                                    : () async {
                                         final text = _liveTranscript.trim();
-                                        unawaited(
-                                          _finalizeRecording().catchError(
-                                            (error, stackTrace) {
-                                              _appendRecorderLog(
-                                                'error',
-                                                'Error al finalizar: $error',
-                                              );
-                                            },
-                                          ),
-                                        );
-                                        if (sheetContext.mounted) {
-                                          Navigator.pop(sheetContext, text);
+                                        try {
+                                          await _finalizeRecording();
+                                          if (sheetContext.mounted) {
+                                            Navigator.pop(sheetContext, text);
+                                          }
+                                        } catch (error) {
+                                          _appendRecorderLog(
+                                            'error',
+                                            'Error al finalizar: $error',
+                                          );
                                         }
                                       },
                                 icon: const Icon(Icons.add),
@@ -4580,13 +4949,281 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     });
   }
 
+  Future<void> _showVoiceRecordings() async {
+    await _loadVoiceRecordings(forceRefresh: true);
+    if (!mounted) return;
+
+    if (_voiceRecordings.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Aún no tienes grabaciones guardadas.')),
+      );
+      return;
+    }
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (builderContext, setSheetState) {
+            void refreshSheet() => setSheetState(() {});
+
+            final recordings = _voiceRecordings;
+            return SafeArea(
+              child: Padding(
+                padding: EdgeInsets.only(
+                  left: 20,
+                  right: 20,
+                  top: 16,
+                  bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 20,
+                ),
+                child: SizedBox(
+                  height: MediaQuery.of(context).size.height * 0.65,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'Grabaciones (${recordings.length})',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: 'Cerrar',
+                            onPressed: () {
+                              if (sheetContext.mounted) {
+                                Navigator.of(sheetContext).pop();
+                              }
+                            },
+                            icon: const Icon(Icons.close_rounded),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      if (_isLoadingVoiceRecordings)
+                        const Expanded(
+                          child: Center(
+                            child: CircularProgressIndicator(),
+                          ),
+                        )
+                      else if (recordings.isEmpty)
+                        const Expanded(
+                          child: Center(
+                            child: Text('Aún no tienes grabaciones guardadas.'),
+                          ),
+                        )
+                      else
+                        Expanded(
+                          child: ListView.separated(
+                            itemCount: recordings.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 12),
+                            itemBuilder: (context, index) {
+                              final recording = recordings[index];
+                              final isPlaying =
+                                  _playingRecordingId == recording.id &&
+                                      _isPlaybackPlaying;
+                              final isLoadingPlayback =
+                                  _playbackLoadingRecordingIds
+                                      .contains(recording.id);
+                              final isRetranscribing =
+                                  _retranscribingRecordingIds
+                                      .contains(recording.id);
+                              final isDeleting =
+                                  _deletingRecordingIds.contains(recording.id);
+                              final duration = recording.durationSeconds == null
+                                  ? null
+                                  : Duration(
+                                      milliseconds:
+                                          (recording.durationSeconds! * 1000)
+                                              .round(),
+                                    );
+
+                              return Card(
+                                elevation: 0,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .surfaceContainerHighest,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(18),
+                                ),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          const Icon(Icons.mic_round),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              _formatRecordingDate(
+                                                recording.createdAt,
+                                              ),
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .titleSmall
+                                                  ?.copyWith(
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                            ),
+                                          ),
+                                          if (duration != null)
+                                            Text(
+                                              _formatDuration(duration),
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .bodySmall,
+                                            ),
+                                        ],
+                                      ),
+                                      if (recording.storyTitle != null &&
+                                          recording.storyTitle!
+                                              .trim()
+                                              .isNotEmpty)
+                                        Padding(
+                                          padding:
+                                              const EdgeInsets.only(top: 6),
+                                          child: Text(
+                                            'Historia asociada: ${recording.formattedStoryTitle}',
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodySmall,
+                                          ),
+                                        ),
+                                      const SizedBox(height: 10),
+                                      Text(
+                                        _previewTranscript(
+                                            recording.transcript),
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodyMedium,
+                                      ),
+                                      const SizedBox(height: 12),
+                                      Row(
+                                        children: [
+                                          IconButton(
+                                            tooltip: isPlaying
+                                                ? 'Pausar'
+                                                : 'Reproducir',
+                                            onPressed: isDeleting
+                                                ? null
+                                                : () =>
+                                                    _toggleRecordingPlayback(
+                                                      recording,
+                                                      refreshSheet,
+                                                    ),
+                                            icon: isLoadingPlayback
+                                                ? const SizedBox(
+                                                    width: 20,
+                                                    height: 20,
+                                                    child:
+                                                        CircularProgressIndicator(
+                                                      strokeWidth: 2,
+                                                    ),
+                                                  )
+                                                : Icon(
+                                                    isPlaying
+                                                        ? Icons
+                                                            .pause_circle_filled
+                                                        : Icons
+                                                            .play_circle_fill_rounded,
+                                                    color: Theme.of(context)
+                                                        .colorScheme
+                                                        .primary,
+                                                  ),
+                                          ),
+                                          IconButton(
+                                            tooltip:
+                                                'Retranscribir y agregar a la historia',
+                                            onPressed: isDeleting
+                                                ? null
+                                                : () =>
+                                                    _handleRetranscribeRecording(
+                                                      recording,
+                                                      sheetContext,
+                                                      refreshSheet,
+                                                    ),
+                                            icon: isRetranscribing
+                                                ? const SizedBox(
+                                                    width: 20,
+                                                    height: 20,
+                                                    child:
+                                                        CircularProgressIndicator(
+                                                      strokeWidth: 2,
+                                                    ),
+                                                  )
+                                                : const Icon(
+                                                    Icons.subtitles_outlined,
+                                                  ),
+                                          ),
+                                          IconButton(
+                                            tooltip: 'Eliminar',
+                                            onPressed: (isDeleting ||
+                                                    isRetranscribing)
+                                                ? null
+                                                : () => _deleteVoiceRecording(
+                                                      recording,
+                                                      refreshSheet,
+                                                    ),
+                                            icon: isDeleting
+                                                ? const SizedBox(
+                                                    width: 20,
+                                                    height: 20,
+                                                    child:
+                                                        CircularProgressIndicator(
+                                                      strokeWidth: 2,
+                                                    ),
+                                                  )
+                                                : const Icon(
+                                                    Icons.delete_outline,
+                                                  ),
+                                          ),
+                                          const Spacer(),
+                                          TextButton.icon(
+                                            onPressed: () =>
+                                                _addRecordingToStory(
+                                              recording,
+                                              sheetContext,
+                                            ),
+                                            icon: const Icon(Icons.add),
+                                            label: const Text(
+                                                'Agregar a la historia'),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   Future<bool> _handleDictationDismiss(BuildContext sheetContext) async {
     if (_liveTranscript.trim().isEmpty) {
-      unawaited(
-        _finalizeRecording(discard: true).catchError((error, stackTrace) {
-          _appendRecorderLog('error', 'Error al descartar: $error');
-        }),
-      );
+      try {
+        await _finalizeRecording(discard: true);
+      } catch (error) {
+        _appendRecorderLog('error', 'Error al descartar: $error');
+      }
       if (mounted) {
         setState(() {
           _isProcessingAudio = false;
@@ -4618,13 +5255,12 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         ],
       ),
     );
-
     if (confirm == true) {
-      unawaited(
-        _finalizeRecording(discard: true).catchError((error, stackTrace) {
-          _appendRecorderLog('error', 'Error al descartar: $error');
-        }),
-      );
+      try {
+        await _finalizeRecording(discard: true);
+      } catch (error) {
+        _appendRecorderLog('error', 'Error al descartar: $error');
+      }
       if (mounted) {
         setState(() {
           _isProcessingAudio = false;

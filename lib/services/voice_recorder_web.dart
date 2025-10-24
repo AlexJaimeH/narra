@@ -146,6 +146,9 @@ class VoiceRecorder {
   static const _fallbackModel = 'gpt-4o-transcribe-latest';
   static const _transcriptionDebounce = Duration(milliseconds: 4);
   static const _preferredTimeslices = <int>[24, 40, 60, 90, 140];
+  static const int _introSuppressionCount = 3;
+  static const String _introPlaceholderMessage =
+      'Transcripción en progreso… sigue narrando';
   static const Set<String> _supportedLanguages = {
     'es',
     'en',
@@ -182,6 +185,7 @@ class VoiceRecorder {
   Future<void>? _ongoingTranscription;
 
   final _TranscriptAccumulator _transcript = _TranscriptAccumulator();
+  int _introPlaceholdersRemaining = 0;
 
   int _uploadedChunkTail = 0;
 
@@ -201,6 +205,7 @@ class VoiceRecorder {
     _onLog = onLog;
 
     _resetState();
+    _introPlaceholdersRemaining = _introSuppressionCount;
     _onLevel = onLevel;
     _transcript.emitReset(_onText);
     _onLevel?.call(0);
@@ -375,6 +380,7 @@ class VoiceRecorder {
     _stopping = false;
     _stopCompleter = null;
     _languageHints = const <String>[];
+    _introPlaceholdersRemaining = 0;
   }
 
   String? get _languageHint =>
@@ -844,8 +850,9 @@ class VoiceRecorder {
     }
 
     final hasTranscript = _transcript.value.isNotEmpty;
-    final minBytes =
-        forceFull ? 0 : (_hasDetectedSpeech || hasTranscript ? 7200 : 12000);
+    final minBytes = forceFull
+        ? 0
+        : (_hasDetectedSpeech || hasTranscript ? 3600 : 6000);
     if (!forceFull && slice.bytes.length < minBytes) {
       _log(
         'Transcripción pospuesta: acumulando más audio (${slice.bytes.length} bytes < $minBytes bytes mínimos)',
@@ -925,8 +932,18 @@ class VoiceRecorder {
       level: 'debug',
     );
 
+    if (forceFull) {
+      _introPlaceholdersRemaining = 0;
+    }
+
     final updated = _applyTranscriptionPayload(payload, forceFull: forceFull);
     if (updated) {
+      if (!forceFull && _introPlaceholdersRemaining > 0) {
+        _introPlaceholdersRemaining--;
+        _onText?.call(_introPlaceholderMessage);
+        return;
+      }
+
       _transcript.emitIfChanged(_onText);
     }
 

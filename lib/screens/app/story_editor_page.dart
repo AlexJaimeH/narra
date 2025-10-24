@@ -805,7 +805,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     return story;
   }
 
-  Future<void> _persistVoiceRecording({
+  Future<VoiceRecording> _persistVoiceRecording({
     required typed.Uint8List audioBytes,
     required String transcript,
     required Duration duration,
@@ -844,11 +844,80 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       );
 
       unawaited(_loadVoiceRecordings(forceRefresh: true));
+
+      return recordingForState;
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('No se pudo guardar la grabación: $e')),
         );
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> _assignPendingRecordingsToStory(
+    String storyId,
+    String? storyTitle,
+  ) async {
+    final pending = _voiceRecordings
+        .where((recording) => recording.storyId == null)
+        .toList();
+    if (pending.isEmpty) {
+      return;
+    }
+
+    final normalizedTitle = storyTitle?.trim() ?? '';
+
+    for (final recording in pending) {
+      final resolvedTitle = () {
+        if (normalizedTitle.isNotEmpty) {
+          return normalizedTitle;
+        }
+        final existing = recording.storyTitle?.trim() ?? '';
+        if (existing.isNotEmpty) {
+          return existing;
+        }
+        return 'Historia sin título';
+      }();
+
+      try {
+        await VoiceRecordingRepository.updateStoryAssociation(
+          recordingId: recording.id,
+          storyId: storyId,
+          storyTitle: resolvedTitle,
+        );
+
+        final updatedRecording = recording.copyWith(
+          storyId: storyId,
+          storyTitle: resolvedTitle,
+        );
+
+        if (mounted) {
+          setState(() {
+            _voiceRecordings = _voiceRecordings
+                .map((element) => element.id == updatedRecording.id
+                    ? updatedRecording
+                    : element)
+                .toList();
+          });
+        } else {
+          _voiceRecordings = _voiceRecordings
+              .map((element) => element.id == updatedRecording.id
+                  ? updatedRecording
+                  : element)
+              .toList();
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'No se pudo vincular una grabación con la historia: $e',
+              ),
+            ),
+          );
+        }
       }
     }
   }
@@ -5124,7 +5193,11 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     _sheetStateUpdater.remove('dictation');
 
     if (_recorder != null) {
-      await _finalizeRecording(discard: true);
+      try {
+        await _finalizeRecording(discard: true);
+      } catch (error) {
+        _appendRecorderLog('error', 'Error al finalizar dictado al cerrar: $error');
+      }
     }
 
     if (!mounted) return;
@@ -5439,6 +5512,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         await _finalizeRecording(discard: true);
       } catch (error) {
         _appendRecorderLog('error', 'Error al descartar: $error');
+        return false;
       }
       if (mounted) {
         setState(() {
@@ -5476,6 +5550,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         await _finalizeRecording(discard: true);
       } catch (error) {
         _appendRecorderLog('error', 'Error al descartar: $error');
+        return false;
       }
       if (mounted) {
         setState(() {
@@ -5898,7 +5973,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           return null;
         }();
 
-        await _linkUnassignedRecordingsToStory(storyId, resolvedTitle);
+        await _assignPendingRecordingsToStory(storyId, resolvedTitle);
         await _flushPendingVersionEntries(storyId);
         await _syncStoryTags(storyId);
       }

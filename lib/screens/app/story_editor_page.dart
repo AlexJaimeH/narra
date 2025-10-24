@@ -498,6 +498,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
   String _liveTranscript = '';
   bool _isPaused = false;
+  bool _isProcessingAudio = false;
 
   bool _isRecorderConnecting = false;
   final List<String> _recorderLogs = [];
@@ -3207,6 +3208,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   // Helper Methods
   String get _recorderStatusLabel {
     if (_isRecorderConnecting) return 'Conectando...';
+    if (_isProcessingAudio) return 'Procesando audio...';
     if (_isRecording && !_isPaused) return 'Grabando...';
     if (_isPaused) return 'Pausado';
     return _liveTranscript.isNotEmpty ? 'Listo' : 'Listo';
@@ -3983,6 +3985,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     if (mounted) {
       setState(() {
         _isRecorderConnecting = true;
+        _isProcessingAudio = false;
         _recorderLogs.clear();
       });
     } else {
@@ -4009,6 +4012,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         _isRecording = true;
         _isPaused = false;
         _isRecorderConnecting = false;
+        _isProcessingAudio = false;
         _recordingStartedAt = DateTime.now();
         _recordingAccumulated = Duration.zero;
         _recordingDuration = Duration.zero;
@@ -4037,6 +4041,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         _isRecording = false;
         _isPaused = false;
         _isRecorderConnecting = false;
+        _isProcessingAudio = false;
       });
       _appendRecorderLog('error', 'No se pudo iniciar: $e');
       ScaffoldMessenger.of(context).showSnackBar(
@@ -4058,9 +4063,13 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
     if (_isPaused) {
       if (mounted) {
-        setState(() => _isRecorderConnecting = true);
+        setState(() {
+          _isRecorderConnecting = true;
+          _isProcessingAudio = false;
+        });
       } else {
         _isRecorderConnecting = true;
+        _isProcessingAudio = false;
       }
       try {
         final resumed = await recorder.resume();
@@ -4075,6 +4084,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
             _isPaused = false;
             _isRecording = true;
             _isRecorderConnecting = false;
+            _isProcessingAudio = false;
             _recordingStartedAt = DateTime.now();
           });
           _startDurationTicker();
@@ -4086,6 +4096,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
             _isPaused = false;
             _isRecording = false;
             _isRecorderConnecting = false;
+            _isProcessingAudio = false;
           });
           _appendRecorderLog(
               'warning', 'No se pudo reanudar, reiniciando sesión');
@@ -4093,7 +4104,10 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         }
       } catch (e) {
         if (mounted) {
-          setState(() => _isRecorderConnecting = false);
+          setState(() {
+            _isRecorderConnecting = false;
+            _isProcessingAudio = false;
+          });
           _appendRecorderLog('error', 'No se pudo reanudar: $e');
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('No se pudo reanudar: $e')),
@@ -4107,7 +4121,15 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       return;
     }
 
-    setState(() => _isRecorderConnecting = true);
+    if (mounted) {
+      setState(() {
+        _isRecorderConnecting = true;
+        _isProcessingAudio = true;
+      });
+    } else {
+      _isRecorderConnecting = true;
+      _isProcessingAudio = true;
+    }
     try {
       await recorder.pause();
       _pauseDurationTicker();
@@ -4116,12 +4138,16 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           _isPaused = true;
           _isRecording = false;
           _isRecorderConnecting = false;
+          _isProcessingAudio = false;
         });
       }
       _appendRecorderLog('info', 'Grabación pausada');
     } catch (e) {
       if (mounted) {
-        setState(() => _isRecorderConnecting = false);
+        setState(() {
+          _isRecorderConnecting = false;
+          _isProcessingAudio = false;
+        });
         _appendRecorderLog('error', 'No se pudo pausar: $e');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('No se pudo pausar: $e')),
@@ -4133,6 +4159,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   Future<void> _finalizeRecording({bool discard = false}) async {
     final recorder = _recorder;
     if (recorder == null) return;
+
+    _isProcessingAudio = false;
 
     typed.Uint8List? audioBytes;
     try {
@@ -4154,12 +4182,14 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         _isPaused = false;
 
         _isRecorderConnecting = false;
+        _isProcessingAudio = false;
       });
     } else {
       _recorder = null;
       _isRecording = false;
       _isPaused = false;
       _isRecorderConnecting = false;
+      _isProcessingAudio = false;
     }
 
     _stopDurationTicker(reset: discard);
@@ -4380,11 +4410,34 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                           ),
                         ),
                         const SizedBox(height: 12),
+                        if (_isProcessingAudio)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: Row(
+                              children: [
+                                SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2.2,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Procesando audio…',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyMedium,
+                                ),
+                              ],
+                            ),
+                          ),
                         Row(
                           children: [
                             Expanded(
                               child: ElevatedButton.icon(
                                 onPressed: _isRecorderConnecting ||
+                                        _isProcessingAudio ||
                                         _liveTranscript.trim().isEmpty
                                     ? null
                                     : () {
@@ -4448,6 +4501,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     setState(() {
       _liveTranscript = '';
       _isPaused = false;
+      _isProcessingAudio = false;
     });
   }
 
@@ -4458,6 +4512,11 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           _appendRecorderLog('error', 'Error al descartar: $error');
         }),
       );
+      if (mounted) {
+        setState(() => _isProcessingAudio = false);
+      } else {
+        _isProcessingAudio = false;
+      }
       return true;
     }
 
@@ -4487,9 +4546,19 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           _appendRecorderLog('error', 'Error al descartar: $error');
         }),
       );
+      if (mounted) {
+        setState(() => _isProcessingAudio = false);
+      } else {
+        _isProcessingAudio = false;
+      }
       return true;
     }
 
+    if (mounted) {
+      setState(() => _isProcessingAudio = false);
+    } else {
+      _isProcessingAudio = false;
+    }
     return false;
   }
 

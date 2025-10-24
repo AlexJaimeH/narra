@@ -922,6 +922,72 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     }
   }
 
+  Future<void> _linkUnassignedRecordingsToStory(
+    String storyId,
+    String? storyTitle,
+  ) async {
+    final pending = _voiceRecordings
+        .where((recording) => recording.storyId == null)
+        .toList();
+    if (pending.isEmpty) {
+      return;
+    }
+
+    final normalizedTitle = storyTitle?.trim() ?? '';
+
+    for (final recording in pending) {
+      final resolvedTitle = () {
+        if (normalizedTitle.isNotEmpty) {
+          return normalizedTitle;
+        }
+        final existing = recording.storyTitle?.trim() ?? '';
+        if (existing.isNotEmpty) {
+          return existing;
+        }
+        return 'Historia sin título';
+      }();
+
+      try {
+        await VoiceRecordingRepository.updateStoryAssociation(
+          recordingId: recording.id,
+          storyId: storyId,
+          storyTitle: resolvedTitle,
+        );
+
+        final updatedRecording = recording.copyWith(
+          storyId: storyId,
+          storyTitle: resolvedTitle,
+        );
+
+        if (mounted) {
+          setState(() {
+            _voiceRecordings = _voiceRecordings
+                .map((element) => element.id == updatedRecording.id
+                    ? updatedRecording
+                    : element)
+                .toList();
+          });
+        } else {
+          _voiceRecordings = _voiceRecordings
+              .map((element) => element.id == updatedRecording.id
+                  ? updatedRecording
+                  : element)
+              .toList();
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'No se pudo vincular una grabación con la historia: $e',
+              ),
+            ),
+          );
+        }
+      }
+    }
+  }
+
   Future<bool> _confirmLeaveEditor() async {
     if (!mounted) {
       return false;

@@ -529,6 +529,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   typed.Uint8List? _recordedAudioBytes;
   bool _recordedAudioUploaded = false;
   List<VoiceRecording> _voiceRecordings = [];
+  bool _hasVoiceRecordingsShortcut = false;
   bool _isLoadingVoiceRecordings = false;
   String? _playingRecordingId;
   final Set<String> _retranscribingRecordingIds = <String>{};
@@ -675,16 +676,12 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       return;
     }
 
-    final targetStoryId = _currentStory?.id ?? widget.storyId;
-
-    if (targetStoryId == null || targetStoryId.trim().isEmpty) {
-      if (mounted) {
-        setState(() => _isLoadingVoiceRecordings = false);
-      } else {
-        _isLoadingVoiceRecordings = false;
-      }
-      return;
-    }
+    final rawStoryId = _currentStory?.id ?? widget.storyId;
+    final normalizedStoryId = rawStoryId?.trim();
+    final targetStoryId =
+        (normalizedStoryId == null || normalizedStoryId.isEmpty)
+            ? null
+            : normalizedStoryId;
 
     try {
       if (mounted) {
@@ -699,10 +696,12 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       if (mounted) {
         setState(() {
           _voiceRecordings = recordings;
+          _hasVoiceRecordingsShortcut = _voiceRecordings.isNotEmpty;
           _isLoadingVoiceRecordings = false;
         });
       } else {
         _voiceRecordings = recordings;
+        _hasVoiceRecordingsShortcut = _voiceRecordings.isNotEmpty;
         _isLoadingVoiceRecordings = false;
       }
     } catch (e) {
@@ -723,7 +722,11 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     required Duration duration,
   }) async {
     try {
-      final resolvedStoryId = _currentStory?.id ?? widget.storyId;
+      final rawStoryId = _currentStory?.id ?? widget.storyId;
+      final resolvedStoryId =
+          (rawStoryId == null || rawStoryId.trim().isEmpty)
+              ? null
+              : rawStoryId.trim();
       final resolvedStoryTitle = () {
         if (_currentStory?.title != null &&
             _currentStory!.title.trim().isNotEmpty) {
@@ -744,9 +747,11 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       if (mounted) {
         setState(() {
           _voiceRecordings = [recording, ..._voiceRecordings];
+          _hasVoiceRecordingsShortcut = true;
         });
       } else {
         _voiceRecordings = [recording, ..._voiceRecordings];
+        _hasVoiceRecordingsShortcut = true;
       }
     } catch (e) {
       if (mounted) {
@@ -2245,7 +2250,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                     ),
                     label: 'Historial',
                   ),
-                  if (_voiceRecordings.isNotEmpty)
+                  if (_hasVoiceRecordingsShortcut)
                     buildActionButton(
                       isCompact: isCompact,
                       onPressed: _showVoiceRecordings,
@@ -3873,9 +3878,11 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       if (mounted) {
         setState(() {
           _voiceRecordings.removeWhere((element) => element.id == recording.id);
+          _hasVoiceRecordingsShortcut = _voiceRecordings.isNotEmpty;
         });
       } else {
         _voiceRecordings.removeWhere((element) => element.id == recording.id);
+        _hasVoiceRecordingsShortcut = _voiceRecordings.isNotEmpty;
       }
       refreshSheet(() {});
     } catch (e) {

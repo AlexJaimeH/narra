@@ -675,6 +675,17 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       return;
     }
 
+    final targetStoryId = _currentStory?.id ?? widget.storyId;
+
+    if (targetStoryId == null || targetStoryId.trim().isEmpty) {
+      if (mounted) {
+        setState(() => _isLoadingVoiceRecordings = false);
+      } else {
+        _isLoadingVoiceRecordings = false;
+      }
+      return;
+    }
+
     try {
       if (mounted) {
         setState(() => _isLoadingVoiceRecordings = true);
@@ -682,7 +693,9 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         _isLoadingVoiceRecordings = true;
       }
 
-      final recordings = await VoiceRecordingRepository.fetchAll();
+      final recordings = await VoiceRecordingRepository.fetchAll(
+        storyId: targetStoryId,
+      );
       if (mounted) {
         setState(() {
           _voiceRecordings = recordings;
@@ -710,12 +723,22 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     required Duration duration,
   }) async {
     try {
+      final resolvedStoryId = _currentStory?.id ?? widget.storyId;
+      final resolvedStoryTitle = () {
+        if (_currentStory?.title != null &&
+            _currentStory!.title.trim().isNotEmpty) {
+          return _currentStory!.title.trim();
+        }
+        final draftTitle = _titleController.text.trim();
+        return draftTitle.isEmpty ? null : draftTitle;
+      }();
+
       final recording = await VoiceRecordingRepository.create(
         audioBytes: audioBytes,
         transcript: transcript,
         durationSeconds: duration.inMilliseconds / 1000,
-        storyId: _currentStory?.id,
-        storyTitle: _currentStory?.title,
+        storyId: resolvedStoryId,
+        storyTitle: resolvedStoryTitle,
       );
 
       if (mounted) {
@@ -730,6 +753,64 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('No se pudo guardar la grabación: $e')),
         );
+      }
+    }
+  }
+
+  Future<void> _linkUnassignedRecordingsToStory(
+    String storyId,
+    String? storyTitle,
+  ) async {
+    final pending = _voiceRecordings
+        .where((recording) => recording.storyId == null)
+        .toList();
+    if (pending.isEmpty) {
+      return;
+    }
+
+    final normalizedTitle = storyTitle?.trim() ?? '';
+
+    for (final recording in pending) {
+      final resolvedTitle =
+          normalizedTitle.isEmpty ? recording.storyTitle : normalizedTitle;
+
+      try {
+        await VoiceRecordingRepository.updateStoryAssociation(
+          recordingId: recording.id,
+          storyId: storyId,
+          storyTitle: resolvedTitle,
+        );
+
+        final updatedRecording = recording.copyWith(
+          storyId: storyId,
+          storyTitle: resolvedTitle,
+        );
+
+        if (mounted) {
+          setState(() {
+            _voiceRecordings = _voiceRecordings
+                .map((element) => element.id == updatedRecording.id
+                    ? updatedRecording
+                    : element)
+                .toList();
+          });
+        } else {
+          _voiceRecordings = _voiceRecordings
+              .map((element) => element.id == updatedRecording.id
+                  ? updatedRecording
+                  : element)
+              .toList();
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'No se pudo vincular una grabación con la historia: $e',
+              ),
+            ),
+          );
+        }
       }
     }
   }
@@ -3814,8 +3895,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
   Future<void> _handleRetranscribeRecording(
     VoiceRecording recording,
-    BuildContext sheetContext,
-    void Function(VoidCallback) refreshSheet,
+    void Function(VoidCallback) refreshDialog,
   ) async {
     if (_retranscribingRecordingIds.contains(recording.id)) {
       return;
@@ -3825,7 +3905,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     if (mounted) {
       setState(() {});
     }
-    refreshSheet(() {});
+    refreshDialog(() {});
 
     try {
       final response = await http.get(Uri.parse(recording.audioUrl));
@@ -3855,9 +3935,13 @@ class _StoryEditorPageState extends State<StoryEditorPage>
             .map((element) => element.id == updated.id ? updated : element)
             .toList();
       }
-      refreshSheet(() {});
+      refreshDialog(() {});
 
-      await _showTranscriptPlacementDialog(updated.transcript.trim());
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Transcripción actualizada.')),
+        );
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -3869,7 +3953,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       if (mounted) {
         setState(() {});
       }
-      refreshSheet(() {});
+      refreshDialog(() {});
     }
   }
 
@@ -4884,6 +4968,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                               child: ElevatedButton.icon(
                                 onPressed: _isRecorderConnecting ||
                                         _isProcessingAudio ||
+                                        !_isPaused ||
                                         _liveTranscript.trim().isEmpty
                                     ? null
                                     : () async {
@@ -4960,259 +5045,283 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       return;
     }
 
-    await showModalBottomSheet<void>(
+    await showDialog<void>(
       context: context,
-      isScrollControlled: true,
-      builder: (sheetContext) {
+      builder: (dialogContext) {
         return StatefulBuilder(
-          builder: (builderContext, setSheetState) {
-            void refreshSheet(VoidCallback fn) => setSheetState(fn);
-
+          builder: (context, setDialogState) {
+            void refreshDialog(VoidCallback fn) => setDialogState(fn);
             final recordings = _voiceRecordings;
-            return SafeArea(
-              child: Padding(
-                padding: EdgeInsets.only(
-                  left: 20,
-                  right: 20,
-                  top: 16,
-                  bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 20,
-                ),
-                child: SizedBox(
-                  height: MediaQuery.of(context).size.height * 0.65,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
+            final theme = Theme.of(context);
+            final colorScheme = theme.colorScheme;
+            final media = MediaQuery.of(context);
+            final maxWidth = math.min(media.size.width * 0.9, 760.0);
+            final maxHeight = math.min(media.size.height * 0.8, 520.0);
+
+            Widget buildContent() {
+              if (_isLoadingVoiceRecordings) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (recordings.isEmpty) {
+                return const Center(
+                  child: Text('Aún no tienes grabaciones guardadas.'),
+                );
+              }
+
+              return ListView.separated(
+                itemCount: recordings.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 12),
+                itemBuilder: (context, index) {
+                  final recording = recordings[index];
+                  final isPlaying =
+                      _playingRecordingId == recording.id && _isPlaybackPlaying;
+                  final isLoadingPlayback =
+                      _playbackLoadingRecordingIds.contains(recording.id);
+                  final isRetranscribing =
+                      _retranscribingRecordingIds.contains(recording.id);
+                  final isDeleting =
+                      _deletingRecordingIds.contains(recording.id);
+                  final duration = recording.durationSeconds == null
+                      ? null
+                      : Duration(
+                          milliseconds:
+                              (recording.durationSeconds! * 1000).round(),
+                        );
+                  final transcriptTrimmed = recording.transcript.trim();
+
+                  return Card(
+                    elevation: 0,
+                    color: colorScheme.surfaceContainerHighest,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(
-                            child: Text(
-                              'Grabaciones (${recordings.length})',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleMedium
-                                  ?.copyWith(fontWeight: FontWeight.w700),
-                            ),
+                          Row(
+                            children: [
+                              const Icon(Icons.mic_rounded),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  _formatRecordingDate(recording.createdAt),
+                                  style: theme.textTheme.titleSmall?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                              if (duration != null)
+                                Text(
+                                  _formatDuration(duration),
+                                  style: theme.textTheme.bodySmall,
+                                ),
+                            ],
                           ),
-                          IconButton(
-                            tooltip: 'Cerrar',
-                            onPressed: () {
-                              if (sheetContext.mounted) {
-                                Navigator.of(sheetContext).pop();
-                              }
-                            },
-                            icon: const Icon(Icons.close_rounded),
+                          if (recording.storyTitle != null &&
+                              recording.storyTitle!.trim().isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 6),
+                              child: Text(
+                                'Historia asociada: ${recording.formattedStoryTitle}',
+                                style: theme.textTheme.bodySmall,
+                              ),
+                            ),
+                          const SizedBox(height: 10),
+                          if (isRetranscribing)
+                            Row(
+                              children: [
+                                const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Retranscribiendo…',
+                                  style: theme.textTheme.bodyMedium,
+                                ),
+                              ],
+                            )
+                          else ...[
+                            Text(
+                              _previewTranscript(recording.transcript),
+                              style: theme.textTheme.bodyMedium,
+                            ),
+                            if (transcriptTrimmed.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8),
+                                child: TextButton.icon(
+                                  onPressed: isDeleting
+                                      ? null
+                                      : () {
+                                          _showRecordingTranscriptDialog(
+                                            recording,
+                                          );
+                                        },
+                                  icon: const Icon(Icons.article_outlined),
+                                  label:
+                                      const Text('Ver transcripción completa'),
+                                ),
+                              ),
+                          ],
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              IconButton(
+                                tooltip: isPlaying ? 'Pausar' : 'Reproducir',
+                                onPressed: isDeleting
+                                    ? null
+                                    : () => _toggleRecordingPlayback(
+                                          recording,
+                                          refreshDialog,
+                                        ),
+                                icon: isLoadingPlayback
+                                    ? const SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : Icon(
+                                        isPlaying
+                                            ? Icons.pause_circle_filled
+                                            : Icons.play_circle_fill_rounded,
+                                        color: colorScheme.primary,
+                                      ),
+                              ),
+                              IconButton(
+                                tooltip: 'Retranscribir',
+                                onPressed: (isDeleting || isRetranscribing)
+                                    ? null
+                                    : () => _handleRetranscribeRecording(
+                                          recording,
+                                          refreshDialog,
+                                        ),
+                                icon: isRetranscribing
+                                    ? const SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Icon(Icons.subtitles_outlined),
+                              ),
+                              IconButton(
+                                tooltip: 'Eliminar',
+                                onPressed: (isDeleting || isRetranscribing)
+                                    ? null
+                                    : () => _deleteVoiceRecording(
+                                          recording,
+                                          refreshDialog,
+                                        ),
+                                icon: isDeleting
+                                    ? const SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Icon(Icons.delete_outline),
+                              ),
+                              const Spacer(),
+                              TextButton.icon(
+                                onPressed: isRetranscribing
+                                    ? null
+                                    : () {
+                                        _addRecordingToStory(
+                                          recording,
+                                          dialogContext,
+                                        );
+                                      },
+                                icon: const Icon(Icons.add),
+                                label: const Text('Agregar a la historia'),
+                              ),
+                            ],
                           ),
                         ],
                       ),
-                      const SizedBox(height: 16),
-                      if (_isLoadingVoiceRecordings)
-                        const Expanded(
-                          child: Center(
-                            child: CircularProgressIndicator(),
-                          ),
-                        )
-                      else if (recordings.isEmpty)
-                        const Expanded(
-                          child: Center(
-                            child: Text('Aún no tienes grabaciones guardadas.'),
-                          ),
-                        )
-                      else
-                        Expanded(
-                          child: ListView.separated(
-                            itemCount: recordings.length,
-                            separatorBuilder: (_, __) =>
-                                const SizedBox(height: 12),
-                            itemBuilder: (context, index) {
-                              final recording = recordings[index];
-                              final isPlaying =
-                                  _playingRecordingId == recording.id &&
-                                      _isPlaybackPlaying;
-                              final isLoadingPlayback =
-                                  _playbackLoadingRecordingIds
-                                      .contains(recording.id);
-                              final isRetranscribing =
-                                  _retranscribingRecordingIds
-                                      .contains(recording.id);
-                              final isDeleting =
-                                  _deletingRecordingIds.contains(recording.id);
-                              final duration = recording.durationSeconds == null
-                                  ? null
-                                  : Duration(
-                                      milliseconds:
-                                          (recording.durationSeconds! * 1000)
-                                              .round(),
-                                    );
+                    ),
+                  );
+                },
+              );
+            }
 
-                              return Card(
-                                elevation: 0,
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .surfaceContainerHighest,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(18),
-                                ),
-                                child: Padding(
-                                  padding: const EdgeInsets.all(16),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          const Icon(Icons.mic_rounded),
-                                          const SizedBox(width: 8),
-                                          Expanded(
-                                            child: Text(
-                                              _formatRecordingDate(
-                                                recording.createdAt,
-                                              ),
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .titleSmall
-                                                  ?.copyWith(
-                                                    fontWeight: FontWeight.w600,
-                                                  ),
-                                            ),
-                                          ),
-                                          if (duration != null)
-                                            Text(
-                                              _formatDuration(duration),
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .bodySmall,
-                                            ),
-                                        ],
-                                      ),
-                                      if (recording.storyTitle != null &&
-                                          recording.storyTitle!
-                                              .trim()
-                                              .isNotEmpty)
-                                        Padding(
-                                          padding:
-                                              const EdgeInsets.only(top: 6),
-                                          child: Text(
-                                            'Historia asociada: ${recording.formattedStoryTitle}',
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .bodySmall,
-                                          ),
-                                        ),
-                                      const SizedBox(height: 10),
-                                      Text(
-                                        _previewTranscript(
-                                            recording.transcript),
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodyMedium,
-                                      ),
-                                      const SizedBox(height: 12),
-                                      Row(
-                                        children: [
-                                          IconButton(
-                                            tooltip: isPlaying
-                                                ? 'Pausar'
-                                                : 'Reproducir',
-                                            onPressed: isDeleting
-                                                ? null
-                                                : () =>
-                                                    _toggleRecordingPlayback(
-                                                      recording,
-                                                      refreshSheet,
-                                                    ),
-                                            icon: isLoadingPlayback
-                                                ? const SizedBox(
-                                                    width: 20,
-                                                    height: 20,
-                                                    child:
-                                                        CircularProgressIndicator(
-                                                      strokeWidth: 2,
-                                                    ),
-                                                  )
-                                                : Icon(
-                                                    isPlaying
-                                                        ? Icons
-                                                            .pause_circle_filled
-                                                        : Icons
-                                                            .play_circle_fill_rounded,
-                                                    color: Theme.of(context)
-                                                        .colorScheme
-                                                        .primary,
-                                                  ),
-                                          ),
-                                          IconButton(
-                                            tooltip:
-                                                'Retranscribir y agregar a la historia',
-                                            onPressed: isDeleting
-                                                ? null
-                                                : () =>
-                                                    _handleRetranscribeRecording(
-                                                      recording,
-                                                      sheetContext,
-                                                      refreshSheet,
-                                                    ),
-                                            icon: isRetranscribing
-                                                ? const SizedBox(
-                                                    width: 20,
-                                                    height: 20,
-                                                    child:
-                                                        CircularProgressIndicator(
-                                                      strokeWidth: 2,
-                                                    ),
-                                                  )
-                                                : const Icon(
-                                                    Icons.subtitles_outlined,
-                                                  ),
-                                          ),
-                                          IconButton(
-                                            tooltip: 'Eliminar',
-                                            onPressed: (isDeleting ||
-                                                    isRetranscribing)
-                                                ? null
-                                                : () => _deleteVoiceRecording(
-                                                      recording,
-                                                      refreshSheet,
-                                                    ),
-                                            icon: isDeleting
-                                                ? const SizedBox(
-                                                    width: 20,
-                                                    height: 20,
-                                                    child:
-                                                        CircularProgressIndicator(
-                                                      strokeWidth: 2,
-                                                    ),
-                                                  )
-                                                : const Icon(
-                                                    Icons.delete_outline,
-                                                  ),
-                                          ),
-                                          const Spacer(),
-                                          TextButton.icon(
-                                            onPressed: () {
-                                              _addRecordingToStory(
-                                                recording,
-                                                sheetContext,
-                                              );
-                                            },
-                                            icon: const Icon(Icons.add),
-                                            label: const Text(
-                                                'Agregar a la historia'),
-                                          ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                    ],
+            return AlertDialog(
+              title: Row(
+                children: [
+                  Icon(Icons.library_music_rounded, color: colorScheme.primary),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Grabaciones (${recordings.length})',
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ),
+                  IconButton(
+                    tooltip: 'Cerrar',
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+              content: SizedBox(
+                width: maxWidth,
+                child: SizedBox(
+                  height: maxHeight,
+                  child: buildContent(),
                 ),
               ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Cerrar'),
+                ),
+              ],
             );
           },
+        );
+      },
+    );
+  }
+
+  void _showRecordingTranscriptDialog(VoiceRecording recording) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        final theme = Theme.of(dialogContext);
+        final transcript = recording.transcript.trim();
+        return AlertDialog(
+          title: const Text('Transcripción completa'),
+          content: SizedBox(
+            width:
+                math.min(MediaQuery.of(dialogContext).size.width * 0.85, 640),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 420),
+              child: SingleChildScrollView(
+                child: Text(
+                  transcript.isEmpty
+                      ? 'Sin transcripción disponible.'
+                      : transcript,
+                  style: theme.textTheme.bodyMedium,
+                ),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cerrar'),
+            ),
+          ],
         );
       },
     );
@@ -5298,7 +5407,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     final paragraphs = _parseParagraphs(text);
     if (paragraphs.isEmpty) {
       _applyTranscriptInsertion(() {
-        _insertTextAtPosition('\n\n$transcript\n\n', text.length);
+        _insertTranscriptAtEnd(transcript);
       });
       return;
     }
@@ -5412,8 +5521,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
             onPressed: () {
               Navigator.pop(dialogContext);
               _applyTranscriptInsertion(() {
-                _insertTextAtPosition(
-                    '\n\n$transcript\n\n', _contentController.text.length);
+                _insertTranscriptAtEnd(transcript);
               });
             },
             icon: const Icon(Icons.last_page),
@@ -5562,6 +5670,31 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     );
   }
 
+  void _insertTranscriptAtEnd(String transcript) {
+    final trimmedCurrent = _contentController.text.trimRight();
+    final cleanedTranscript = transcript.trim();
+
+    final buffer = StringBuffer(trimmedCurrent);
+
+    if (trimmedCurrent.isNotEmpty && cleanedTranscript.isNotEmpty) {
+      buffer.write('\n\n');
+    }
+
+    if (cleanedTranscript.isNotEmpty) {
+      buffer
+        ..write(cleanedTranscript)
+        ..write('\n\n');
+    }
+
+    final updated = buffer.toString();
+    _contentController.text = updated;
+    _contentController.selection =
+        TextSelection.collapsed(offset: updated.length);
+    setState(() {
+      _hasChanges = true;
+    });
+  }
+
   void _insertTextAtPosition(String text, int position) {
     final full = _contentController.text;
     final safe = position.clamp(0, full.length);
@@ -5646,8 +5779,22 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       }
 
       if (_currentStory != null) {
-        await _flushPendingVersionEntries(_currentStory!.id);
-        await _syncStoryTags(_currentStory!.id);
+        final storyId = _currentStory!.id;
+        final resolvedTitle = () {
+          final controllerTitle = _titleController.text.trim();
+          if (controllerTitle.isNotEmpty) {
+            return controllerTitle;
+          }
+          final currentTitle = _currentStory!.title;
+          if (currentTitle.trim().isNotEmpty) {
+            return currentTitle.trim();
+          }
+          return null;
+        }();
+
+        await _linkUnassignedRecordingsToStory(storyId, resolvedTitle);
+        await _flushPendingVersionEntries(storyId);
+        await _syncStoryTags(storyId);
       }
 
       // Upload and save photos

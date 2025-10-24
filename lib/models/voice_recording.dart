@@ -28,12 +28,14 @@ class VoiceRecording {
 
   VoiceRecording copyWith({
     String? transcript,
+    String? storyId,
+    String? storyTitle,
   }) {
     return VoiceRecording(
       id: id,
       userId: userId,
-      storyId: storyId,
-      storyTitle: storyTitle,
+      storyId: storyId ?? this.storyId,
+      storyTitle: storyTitle ?? this.storyTitle,
       audioUrl: audioUrl,
       audioPath: audioPath,
       transcript: transcript ?? this.transcript,

@@ -11,17 +11,22 @@ class VoiceRecordingRepository {
 
   static SupabaseClient get _client => NarraSupabaseClient.client;
 
-  static Future<List<VoiceRecording>> fetchAll() async {
+  static Future<List<VoiceRecording>> fetchAll({String? storyId}) async {
     final user = NarraSupabaseClient.currentUser;
     if (user == null) {
       throw Exception('Usuario no autenticado');
     }
 
-    final response = await _client
-        .from('voice_recordings')
-        .select()
-        .eq('user_id', user.id)
-        .order('created_at', ascending: false);
+    var query =
+        _client.from('voice_recordings').select().eq('user_id', user.id);
+
+    if (storyId != null && storyId.trim().isNotEmpty) {
+      query = query.eq('story_id', storyId);
+    } else {
+      query = query.filter('story_id', 'is', null);
+    }
+
+    final response = await query.order('created_at', ascending: false);
 
     return (response as List<dynamic>)
         .map((item) => VoiceRecording.fromMap(item as Map<String, dynamic>))
@@ -85,6 +90,17 @@ class VoiceRecordingRepository {
     return VoiceRecording.fromMap(
       Map<String, dynamic>.from(updated as Map),
     );
+  }
+
+  static Future<void> updateStoryAssociation({
+    required String recordingId,
+    required String storyId,
+    String? storyTitle,
+  }) async {
+    await _client.from('voice_recordings').update({
+      'story_id': storyId,
+      'story_title': storyTitle,
+    }).eq('id', recordingId);
   }
 
   static Future<void> delete({

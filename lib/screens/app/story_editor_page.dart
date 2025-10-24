@@ -3720,7 +3720,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
   Future<void> _toggleRecordingPlayback(
     VoiceRecording recording,
-    void Function(void Function()) refreshSheet,
+    void Function(VoidCallback) refreshSheet,
   ) async {
     if (_playingRecordingId == recording.id && _isPlaybackPlaying) {
       _stopPlayback();
@@ -3767,7 +3767,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
   Future<void> _deleteVoiceRecording(
     VoiceRecording recording,
-    void Function(void Function()) refreshSheet,
+    void Function(VoidCallback) refreshSheet,
   ) async {
     if (_deletingRecordingIds.contains(recording.id)) {
       return;
@@ -3815,7 +3815,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   Future<void> _handleRetranscribeRecording(
     VoiceRecording recording,
     BuildContext sheetContext,
-    void Function(void Function()) refreshSheet,
+    void Function(VoidCallback) refreshSheet,
   ) async {
     if (_retranscribingRecordingIds.contains(recording.id)) {
       return;
@@ -4966,7 +4966,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       builder: (sheetContext) {
         return StatefulBuilder(
           builder: (builderContext, setSheetState) {
-            void refreshSheet() => setSheetState(() {});
+            void refreshSheet(VoidCallback fn) => setSheetState(fn);
 
             final recordings = _voiceRecordings;
             return SafeArea(

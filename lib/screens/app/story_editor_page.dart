@@ -781,21 +781,11 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         controllerTitle.isEmpty ? 'Historia sin título' : controllerTitle;
     final controllerContent = _contentController.text.trim();
 
-    final now = DateTime.now().toIso8601String();
-    final payload = {
-      'title': resolvedTitle,
-      'content': controllerContent.isEmpty ? null : controllerContent,
-      'user_id': user.id,
-      'status': 'draft',
-      'created_at': now,
-      'updated_at': now,
-    };
-
-    final inserted = await NarraSupabaseClient.client
-        .from('stories')
-        .insert(payload)
-        .select()
-        .single();
+    final inserted = await NarraSupabaseClient.createStory(
+      title: resolvedTitle,
+      content: controllerContent.isEmpty ? null : controllerContent,
+      status: 'draft',
+    );
 
     final storyMap = inserted is Map<String, dynamic>
         ? inserted
@@ -847,6 +837,11 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         _voiceRecordings = [recordingForState, ..._voiceRecordings];
         _hasVoiceRecordingsShortcut = true;
       }
+
+      _appendRecorderLog(
+        'info',
+        'Grabación guardada para historia ${storyIdentity.id}',
+      );
 
       unawaited(_loadVoiceRecordings(forceRefresh: true));
     } catch (e) {

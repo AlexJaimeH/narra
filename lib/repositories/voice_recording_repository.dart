@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:narra/models/voice_recording.dart';
@@ -58,31 +59,43 @@ class VoiceRecordingRepository {
     final resolvedTitle =
         normalizedTitle.isEmpty ? 'Historia sin título' : normalizedTitle;
 
-    final upload = await AudioUploadService.uploadRecording(
-      audioBytes: audioBytes,
-      fileName: 'voice_recording.webm',
-      folder: 'stories/$normalizedStoryId',
-    );
+    await NarraSupabaseClient.ensureUserProfileExists();
 
-    final payload = <String, dynamic>{
-      'user_id': user.id,
-      'story_id': normalizedStoryId,
-      'story_title': resolvedTitle,
-      'audio_url': upload.publicUrl,
-      'audio_path': upload.path,
-      'transcript': transcript,
-      'duration_seconds': durationSeconds,
-    };
+    try {
+      final upload = await AudioUploadService.uploadRecording(
+        audioBytes: audioBytes,
+        fileName: 'voice_recording.webm',
+        folder: 'stories/$normalizedStoryId',
+      );
 
-    final inserted = await _client
-        .from('voice_recordings')
-        .insert(payload)
-        .select()
-        .single();
+      final payload = <String, dynamic>{
+        'user_id': user.id,
+        'story_id': normalizedStoryId,
+        'story_title': resolvedTitle,
+        'audio_url': upload.publicUrl,
+        'audio_path': upload.path,
+        'transcript': transcript,
+        'duration_seconds': durationSeconds,
+      };
 
-    return VoiceRecording.fromMap(
-      Map<String, dynamic>.from(inserted as Map),
-    );
+      final inserted = await _client
+          .from('voice_recordings')
+          .insert(payload)
+          .select()
+          .single();
+
+      return VoiceRecording.fromMap(
+        Map<String, dynamic>.from(inserted as Map),
+      );
+    } catch (error, stackTrace) {
+      if (kDebugMode) {
+        debugPrint(
+          'VoiceRecordingRepository.create failed for story $normalizedStoryId: $error',
+        );
+        debugPrint(stackTrace.toString());
+      }
+      rethrow;
+    }
   }
 
   static Future<VoiceRecording> updateTranscript({

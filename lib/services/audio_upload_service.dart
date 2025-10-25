@@ -8,7 +8,7 @@ import 'package:narra/supabase/narra_client.dart';
 
 /// Service to upload raw audio recordings to Supabase Storage
 class AudioUploadService {
-  static const String bucketName = 'narra_stories'; // reuse bucket
+  static const String bucketName = 'voice-recordings';
 
   static const String _defaultRecordingFolder = 'recordings';
   static const String _logTag = '[AudioUploadService]';
@@ -35,11 +35,22 @@ class AudioUploadService {
     if (user == null) throw Exception('User not authenticated');
 
     try {
-      final sanitizedFolder =
-          (folder == null || folder.isEmpty) ? _defaultRecordingFolder : folder;
+      final sanitizedFolder = (folder == null || folder.isEmpty)
+          ? _defaultRecordingFolder
+          : folder
+              .replaceAll('\\', '/')
+              .split('/')
+              .where(
+                (segment) =>
+                    segment.trim().isNotEmpty && segment.trim() != '..',
+              )
+              .join('/');
       final uniqueSuffix = _uuid.v4();
-      final uniqueFileName =
-          '${user.id}/$sanitizedFolder/${uniqueSuffix}_$fileName';
+      final uniqueFileName = [
+        user.id,
+        if (sanitizedFolder.isNotEmpty) sanitizedFolder,
+        '${uniqueSuffix}_$fileName',
+      ].join('/');
 
       final client = NarraSupabaseClient.client;
       if (kDebugMode) {

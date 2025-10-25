@@ -9,6 +9,7 @@ class VoiceRecording {
     this.storyId,
     this.storyTitle,
     this.durationSeconds,
+    this.storageBucket,
   });
 
   final String id;
@@ -20,6 +21,7 @@ class VoiceRecording {
   final String transcript;
   final double? durationSeconds;
   final DateTime createdAt;
+  final String? storageBucket;
 
   String get formattedStoryTitle =>
       (storyTitle != null && storyTitle!.trim().isNotEmpty)
@@ -30,6 +32,7 @@ class VoiceRecording {
     String? transcript,
     String? storyId,
     String? storyTitle,
+    String? storageBucket,
   }) {
     return VoiceRecording(
       id: id,
@@ -41,6 +44,7 @@ class VoiceRecording {
       transcript: transcript ?? this.transcript,
       durationSeconds: durationSeconds,
       createdAt: createdAt,
+      storageBucket: storageBucket ?? this.storageBucket,
     );
   }
 
@@ -57,6 +61,7 @@ class VoiceRecording {
           ? null
           : (map['duration_seconds'] as num).toDouble(),
       createdAt: DateTime.parse(map['created_at'] as String),
+      storageBucket: (map['storage_bucket'] as String?) ?? 'voice-recordings',
     );
   }
 }

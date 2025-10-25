@@ -843,6 +843,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         storyId: storyIdentity.id,
         storyTitle:
             normalizedTitle.isEmpty ? 'Historia sin título' : normalizedTitle,
+        storageBucket: recording.storageBucket ?? AudioUploadService.bucketName,
       );
 
       if (mounted) {

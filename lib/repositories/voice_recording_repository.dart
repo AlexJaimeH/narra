@@ -70,7 +70,7 @@ class VoiceRecordingRepository {
       final upload = await AudioUploadService.uploadRecording(
         audioBytes: audioBytes,
         fileName: 'voice_recording.webm',
-        folder: 'stories/$normalizedStoryId',
+        folder: 'stories/$normalizedStoryId/voice-recordings',
       );
 
       final payload = <String, dynamic>{
@@ -79,6 +79,7 @@ class VoiceRecordingRepository {
         'story_title': resolvedTitle,
         'audio_url': upload.publicUrl,
         'audio_path': upload.path,
+        'storage_bucket': AudioUploadService.bucketName,
         'transcript': transcript,
         'duration_seconds': durationSeconds,
       };

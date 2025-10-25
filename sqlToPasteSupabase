@@ -96,18 +96,102 @@ begin;
 
 create table if not exists public.voice_recordings (
   id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references public.users (id) on delete cascade,
-  story_id uuid references public.stories (id) on delete set null,
-  story_title text,
+  user_id uuid not null references auth.users (id) on delete cascade,
+  story_id uuid not null references public.stories (id) on delete cascade,
+  story_title text not null default '',
   audio_url text not null,
   audio_path text not null,
+  storage_bucket text not null default 'voice-recordings',
   transcript text not null default '',
   duration_seconds numeric,
   created_at timestamptz not null default timezone('utc', now())
 );
 
+alter table public.voice_recordings
+  alter column story_title set not null,
+  alter column story_title set default '',
+  alter column story_id set not null;
+
+alter table public.voice_recordings
+  drop constraint if exists voice_recordings_story_id_fkey,
+  add constraint voice_recordings_story_id_fkey
+    foreign key (story_id)
+    references public.stories (id)
+    on delete cascade;
+
+alter table public.voice_recordings
+  drop constraint if exists voice_recordings_user_id_fkey,
+  add constraint voice_recordings_user_id_fkey
+    foreign key (user_id)
+    references auth.users (id)
+    on delete cascade;
+
+alter table public.voice_recordings
+  add column if not exists storage_bucket text not null default 'voice-recordings';
+
 create index if not exists voice_recordings_user_idx
   on public.voice_recordings (user_id, created_at desc);
+
+create index if not exists voice_recordings_story_idx
+  on public.voice_recordings (story_id, created_at desc);
+
+insert into storage.buckets (id, name, public)
+select 'voice-recordings', 'voice-recordings', false
+where not exists (
+  select 1 from storage.buckets where id = 'voice-recordings'
+);
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'storage'
+      and tablename = 'objects'
+      and policyname = 'Users manage voice recording files'
+  ) then
+    create policy "Users manage voice recording files"
+      on storage.objects
+      for all
+      using (
+        bucket_id = 'voice-recordings'
+        and auth.uid() = owner
+      )
+      with check (
+        bucket_id = 'voice-recordings'
+        and auth.uid() = owner
+      );
+  end if;
+end
+$$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'storage'
+      and tablename = 'objects'
+      and policyname = 'Service role manages voice recordings bucket'
+  ) then
+    create policy "Service role manages voice recordings bucket"
+      on storage.objects
+      for all
+      using (
+        bucket_id = 'voice-recordings'
+        and (
+          coalesce(auth.role(), '') = 'service_role'
+          or coalesce(auth.jwt() ->> 'role', '') = 'service_role'
+        )
+      )
+      with check (
+        bucket_id = 'voice-recordings'
+        and (
+          coalesce(auth.role(), '') = 'service_role'
+          or coalesce(auth.jwt() ->> 'role', '') = 'service_role'
+        )
+      );
+  end if;
+end
+$$;
 
 alter table public.voice_recordings enable row level security;
 

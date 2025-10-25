@@ -2,14 +2,17 @@ import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
 
 import 'package:narra/supabase/narra_client.dart';
 
 /// Service to upload raw audio recordings to Supabase Storage
 class AudioUploadService {
-  static const String bucketName = 'narra_stories'; // reuse bucket
+  static const String bucketName = 'voice-recordings';
 
   static const String _defaultRecordingFolder = 'recordings';
+  static const String _logTag = '[AudioUploadService]';
+  static final Uuid _uuid = const Uuid();
 
   const AudioUploadService._();
 
@@ -32,13 +35,29 @@ class AudioUploadService {
     if (user == null) throw Exception('User not authenticated');
 
     try {
-      final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final sanitizedFolder =
-          (folder == null || folder.isEmpty) ? _defaultRecordingFolder : folder;
-      final uniqueFileName =
-          '${user.id}/$sanitizedFolder/${timestamp}_$fileName';
+      final sanitizedFolder = (folder == null || folder.isEmpty)
+          ? _defaultRecordingFolder
+          : folder
+              .replaceAll('\\', '/')
+              .split('/')
+              .where(
+                (segment) =>
+                    segment.trim().isNotEmpty && segment.trim() != '..',
+              )
+              .join('/');
+      final uniqueSuffix = _uuid.v4();
+      final uniqueFileName = [
+        user.id,
+        if (sanitizedFolder.isNotEmpty) sanitizedFolder,
+        '${uniqueSuffix}_$fileName',
+      ].join('/');
 
       final client = NarraSupabaseClient.client;
+      if (kDebugMode) {
+        debugPrint(
+          '$_logTag Uploading ${audioBytes.lengthInBytes} bytes to $uniqueFileName',
+        );
+      }
       await client.storage.from(bucketName).uploadBinary(
             uniqueFileName,
             audioBytes,
@@ -47,6 +66,9 @@ class AudioUploadService {
 
       return _buildResult(path: uniqueFileName, client: client);
     } catch (e) {
+      if (kDebugMode) {
+        debugPrint('$_logTag Upload failed: $e');
+      }
       throw Exception('Error uploading audio: $e');
     }
   }

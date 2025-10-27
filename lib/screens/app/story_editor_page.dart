@@ -5183,17 +5183,43 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                                         _liveTranscript.trim().isEmpty
                                     ? null
                                     : () async {
+                                        _appendRecorderLog(
+                                          'info',
+                                          '🔵 BOTÓN "AGREGAR A LA HISTORIA" PRESIONADO',
+                                        );
+                                        if (kDebugMode) {
+                                          debugPrint(
+                                            '🔵 [StoryEditor] User clicked "Agregar a la historia" button',
+                                          );
+                                        }
                                         final text = _liveTranscript.trim();
+                                        _appendRecorderLog(
+                                          'info',
+                                          'Transcripción: ${text.length} caracteres',
+                                        );
                                         try {
+                                          _appendRecorderLog(
+                                            'info',
+                                            'Llamando a _finalizeRecording(discard: false)...',
+                                          );
                                           await _finalizeRecording();
+                                          _appendRecorderLog(
+                                            'info',
+                                            '✅ _finalizeRecording completado',
+                                          );
                                           if (sheetContext.mounted) {
                                             Navigator.pop(sheetContext, text);
                                           }
                                         } catch (error) {
                                           _appendRecorderLog(
                                             'error',
-                                            'Error al finalizar: $error',
+                                            '❌ Error al finalizar: $error',
                                           );
+                                          if (kDebugMode) {
+                                            debugPrint(
+                                              '❌ [StoryEditor] Error: $error',
+                                            );
+                                          }
                                         }
                                       },
                                 icon: const Icon(Icons.add),
@@ -5203,8 +5229,21 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                             const SizedBox(width: 12),
                             TextButton(
                               onPressed: () async {
+                                _appendRecorderLog(
+                                  'info',
+                                  '🟡 BOTÓN "CERRAR" PRESIONADO',
+                                );
+                                if (kDebugMode) {
+                                  debugPrint(
+                                    '🟡 [StoryEditor] User clicked "Cerrar" button',
+                                  );
+                                }
                                 final shouldClose =
                                     await _handleDictationDismiss(sheetContext);
+                                _appendRecorderLog(
+                                  'info',
+                                  'shouldClose = $shouldClose',
+                                );
                                 if (!shouldClose) return;
                                 if (sheetContext.mounted) {
                                   Navigator.pop(sheetContext, null);
@@ -5539,11 +5578,40 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   }
 
   Future<bool> _handleDictationDismiss(BuildContext sheetContext) async {
+    _appendRecorderLog(
+      'info',
+      '⚙️ Entrando a _handleDictationDismiss',
+    );
+    if (kDebugMode) {
+      debugPrint('⚙️ [StoryEditor] _handleDictationDismiss called');
+    }
+
+    final transcriptLength = _liveTranscript.trim().length;
+    _appendRecorderLog(
+      'info',
+      'Transcripción actual: $transcriptLength caracteres',
+    );
+
     if (_liveTranscript.trim().isEmpty) {
+      _appendRecorderLog(
+        'info',
+        'Sin transcripción, descartando sin confirmar...',
+      );
       try {
+        _appendRecorderLog(
+          'info',
+          'Llamando a _finalizeRecording(discard: true)...',
+        );
         await _finalizeRecording(discard: true);
+        _appendRecorderLog(
+          'info',
+          '✅ _finalizeRecording(discard: true) completado',
+        );
       } catch (error) {
-        _appendRecorderLog('error', 'Error al descartar: $error');
+        _appendRecorderLog('error', '❌ Error al descartar: $error');
+        if (kDebugMode) {
+          debugPrint('❌ [StoryEditor] Error in discard: $error');
+        }
         return false;
       }
       if (mounted) {
@@ -5558,6 +5626,10 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       return true;
     }
 
+    _appendRecorderLog(
+      'info',
+      'Hay transcripción, mostrando diálogo de confirmación...',
+    );
     final confirm = await showDialog<bool>(
       context: sheetContext,
       builder: (ctx) => AlertDialog(
@@ -5577,11 +5649,32 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         ],
       ),
     );
+
+    _appendRecorderLog(
+      'info',
+      'Usuario confirmó descartar: $confirm',
+    );
+
     if (confirm == true) {
+      _appendRecorderLog(
+        'info',
+        'Usuario confirmó, descartando grabación...',
+      );
       try {
+        _appendRecorderLog(
+          'info',
+          'Llamando a _finalizeRecording(discard: true)...',
+        );
         await _finalizeRecording(discard: true);
+        _appendRecorderLog(
+          'info',
+          '✅ _finalizeRecording(discard: true) completado',
+        );
       } catch (error) {
-        _appendRecorderLog('error', 'Error al descartar: $error');
+        _appendRecorderLog('error', '❌ Error al descartar: $error');
+        if (kDebugMode) {
+          debugPrint('❌ [StoryEditor] Error in discard: $error');
+        }
         return false;
       }
       if (mounted) {
@@ -5596,6 +5689,10 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       return true;
     }
 
+    _appendRecorderLog(
+      'info',
+      'Usuario canceló, no se descarta',
+    );
     if (mounted) {
       setState(() {
         _isProcessingAudio = false;

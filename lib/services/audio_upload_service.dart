@@ -31,8 +31,25 @@ class AudioUploadService {
     String? folder,
     String contentType = 'audio/webm',
   }) async {
+    if (kDebugMode) {
+      debugPrint('🎵 [AudioUploadService.uploadRecording] INICIANDO');
+      debugPrint('   - fileName: $fileName');
+      debugPrint('   - folder: $folder');
+      debugPrint('   - audioBytes: ${audioBytes.lengthInBytes} bytes');
+      debugPrint('   - contentType: $contentType');
+    }
+
     final user = NarraSupabaseClient.currentUser;
-    if (user == null) throw Exception('User not authenticated');
+    if (user == null) {
+      if (kDebugMode) {
+        debugPrint('❌ [AudioUploadService] Usuario no autenticado');
+      }
+      throw Exception('User not authenticated');
+    }
+
+    if (kDebugMode) {
+      debugPrint('   - user.id: ${user.id}');
+    }
 
     try {
       final sanitizedFolder = (folder == null || folder.isEmpty)
@@ -45,6 +62,11 @@ class AudioUploadService {
                     segment.trim().isNotEmpty && segment.trim() != '..',
               )
               .join('/');
+
+      if (kDebugMode) {
+        debugPrint('   - sanitizedFolder: $sanitizedFolder');
+      }
+
       final uniqueSuffix = _uuid.v4();
       final uniqueFileName = [
         user.id,
@@ -52,22 +74,38 @@ class AudioUploadService {
         '${uniqueSuffix}_$fileName',
       ].join('/');
 
-      final client = NarraSupabaseClient.client;
       if (kDebugMode) {
-        debugPrint(
-          '$_logTag Uploading ${audioBytes.lengthInBytes} bytes to $uniqueFileName',
-        );
+        debugPrint('   - uniqueFileName: $uniqueFileName');
+        debugPrint('   - bucketName: $bucketName');
       }
+
+      final client = NarraSupabaseClient.client;
+
+      if (kDebugMode) {
+        debugPrint('📤 [AudioUploadService] Subiendo a Supabase Storage...');
+      }
+
       await client.storage.from(bucketName).uploadBinary(
             uniqueFileName,
             audioBytes,
             fileOptions: FileOptions(contentType: contentType),
           );
 
-      return _buildResult(path: uniqueFileName, client: client);
+      if (kDebugMode) {
+        debugPrint('✅ [AudioUploadService] Audio subido exitosamente');
+      }
+
+      final result = _buildResult(path: uniqueFileName, client: client);
+
+      if (kDebugMode) {
+        debugPrint('   - path: ${result.path}');
+        debugPrint('   - publicUrl: ${result.publicUrl}');
+      }
+
+      return result;
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('$_logTag Upload failed: $e');
+        debugPrint('❌ [AudioUploadService] Upload failed: $e');
       }
       throw Exception('Error uploading audio: $e');
     }

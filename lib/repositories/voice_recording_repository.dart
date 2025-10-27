@@ -44,13 +44,32 @@ class VoiceRecordingRepository {
     required String storyId,
     String? storyTitle,
   }) async {
+    if (kDebugMode) {
+      debugPrint('📦 [VoiceRecordingRepository.create] INICIANDO');
+      debugPrint('   - storyId: $storyId');
+      debugPrint('   - storyTitle: $storyTitle');
+      debugPrint('   - audioBytes: ${audioBytes.lengthInBytes} bytes');
+      debugPrint('   - transcript length: ${transcript.length} chars');
+      debugPrint('   - duration: $durationSeconds seconds');
+    }
+
     final user = NarraSupabaseClient.currentUser;
     if (user == null) {
+      if (kDebugMode) {
+        debugPrint('❌ [VoiceRecordingRepository] Usuario no autenticado');
+      }
       throw Exception('Usuario no autenticado');
+    }
+
+    if (kDebugMode) {
+      debugPrint('   - user.id: ${user.id}');
     }
 
     final normalizedStoryId = storyId.trim();
     if (normalizedStoryId.isEmpty) {
+      if (kDebugMode) {
+        debugPrint('❌ [VoiceRecordingRepository] Story ID está vacío');
+      }
       throw Exception(
           'No se pudo asociar la grabación sin una historia válida');
     }
@@ -59,19 +78,31 @@ class VoiceRecordingRepository {
     final resolvedTitle =
         normalizedTitle.isEmpty ? 'Historia sin título' : normalizedTitle;
 
+    if (kDebugMode) {
+      debugPrint('   - normalizedStoryId: $normalizedStoryId');
+      debugPrint('   - resolvedTitle: $resolvedTitle');
+    }
+
+    if (kDebugMode) {
+      debugPrint('🔐 [VoiceRecordingRepository] Verificando perfil de usuario...');
+    }
     await NarraSupabaseClient.ensureUserProfileExists();
 
     try {
       if (kDebugMode) {
-        debugPrint(
-          '[VoiceRecordingRepository] Uploading ${audioBytes.lengthInBytes} bytes for story $normalizedStoryId',
-        );
+        debugPrint('📤 [VoiceRecordingRepository] Subiendo audio a Supabase Storage...');
       }
       final upload = await AudioUploadService.uploadRecording(
         audioBytes: audioBytes,
         fileName: 'voice_recording.webm',
         folder: 'stories/$normalizedStoryId/voice-recordings',
       );
+
+      if (kDebugMode) {
+        debugPrint('✅ [VoiceRecordingRepository] Audio subido exitosamente');
+        debugPrint('   - path: ${upload.path}');
+        debugPrint('   - publicUrl: ${upload.publicUrl}');
+      }
 
       final payload = <String, dynamic>{
         'user_id': user.id,
@@ -84,6 +115,11 @@ class VoiceRecordingRepository {
         'duration_seconds': durationSeconds,
       };
 
+      if (kDebugMode) {
+        debugPrint('💾 [VoiceRecordingRepository] Insertando en tabla voice_recordings...');
+        debugPrint('   - payload: $payload');
+      }
+
       final inserted = await _client
           .from('voice_recordings')
           .insert(payload)
@@ -95,18 +131,17 @@ class VoiceRecordingRepository {
           : Map<String, dynamic>.from(inserted as Map);
 
       if (kDebugMode) {
-        debugPrint(
-          '[VoiceRecordingRepository] Stored recording ${insertedMap['id']} at ${upload.path}',
-        );
+        debugPrint('✅ [VoiceRecordingRepository] Grabación guardada en DB');
+        debugPrint('   - id: ${insertedMap['id']}');
+        debugPrint('   - created_at: ${insertedMap['created_at']}');
       }
 
       return VoiceRecording.fromMap(insertedMap);
     } catch (error, stackTrace) {
       if (kDebugMode) {
-        debugPrint(
-          'VoiceRecordingRepository.create failed for story $normalizedStoryId: $error',
-        );
-        debugPrint(stackTrace.toString());
+        debugPrint('❌ [VoiceRecordingRepository.create] ERROR FATAL');
+        debugPrint('   - error: $error');
+        debugPrint('   - stackTrace: $stackTrace');
       }
       rethrow;
     }

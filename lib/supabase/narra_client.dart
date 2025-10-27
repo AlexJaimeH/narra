@@ -473,7 +473,7 @@ class NarraSupabaseClient {
 
     final storyData = {
       'title': title,
-      'content': content,
+      'content': content ?? '',
       'user_id': userId,
       'status': status,
       'story_date': startDate?.toIso8601String(),

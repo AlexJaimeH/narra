@@ -329,41 +329,44 @@ class VoiceRecorder {
   }
 
   Future<Uint8List?> stop() async {
-    if (!_isRecording && _mediaRecorder == null && _inputStream == null) {
-      return null;
-    }
-
     _log('Deteniendo grabación...');
     _stopping = true;
     _transcriptionTimer?.cancel();
     _transcriptionTimer = null;
     _hasPendingTranscription = true;
 
-    final completer = Completer<void>();
-    _stopCompleter = completer;
+    // Si el MediaRecorder existe (no pausado), detenerlo
+    if (_mediaRecorder != null) {
+      final completer = Completer<void>();
+      _stopCompleter = completer;
 
-    try {
-      _mediaRecorder?.stop();
-    } catch (error) {
-      _log('MediaRecorder.stop falló', level: 'warning', error: error);
-    }
+      try {
+        _mediaRecorder?.stop();
+      } catch (error) {
+        _log('MediaRecorder.stop falló', level: 'warning', error: error);
+      }
 
-    try {
-      await completer.future.timeout(const Duration(seconds: 5));
-    } catch (_) {
-      // ignore timeout: recorder might already be stopped.
+      try {
+        await completer.future.timeout(const Duration(seconds: 5));
+      } catch (_) {
+        // ignore timeout: recorder might already be stopped.
+      }
     }
 
     await _ensureTranscription(forceFull: true);
 
     _onLevel?.call(0);
 
+    // Obtener bytes de audio capturados (incluso si está pausado)
     final audioBytes = _combinedAudioBytes();
     await _disposeInternal();
 
     if (audioBytes.isEmpty) {
+      _log('No se capturaron bytes de audio', level: 'warning');
       return null;
     }
+
+    _log('Audio capturado exitosamente: ${audioBytes.length} bytes', level: 'debug');
     return audioBytes;
   }
 

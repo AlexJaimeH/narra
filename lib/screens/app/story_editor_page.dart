@@ -4965,12 +4965,35 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   }
 
   Future<void> _openDictationPanel() async {
-    if (_isRecording) return;
+    if (kDebugMode) {
+      debugPrint('🎤 [StoryEditor] _openDictationPanel LLAMADO');
+    }
+
+    if (_isRecording) {
+      if (kDebugMode) {
+        debugPrint('⚠️ [StoryEditor] Ya está grabando, abortando');
+      }
+      return;
+    }
+
+    if (kDebugMode) {
+      debugPrint('🎤 [StoryEditor] Iniciando grabación...');
+    }
 
     try {
       await _startRecording(resetTranscript: true);
-    } catch (_) {
+      if (kDebugMode) {
+        debugPrint('✅ [StoryEditor] Grabación iniciada correctamente');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('❌ [StoryEditor] Error al iniciar grabación: $e');
+      }
       return;
+    }
+
+    if (kDebugMode) {
+      debugPrint('📱 [StoryEditor] Abriendo bottom sheet de dictado...');
     }
 
     final transcript = await showModalBottomSheet<String>(
@@ -5173,6 +5196,24 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                               ],
                             ),
                           ),
+                        // LOG: Estado de variables antes de renderizar botones
+                        Builder(
+                          builder: (ctx) {
+                            final isButtonEnabled = !_isRecorderConnecting &&
+                                !_isProcessingAudio &&
+                                _isPaused &&
+                                _liveTranscript.trim().isNotEmpty;
+                            if (kDebugMode) {
+                              debugPrint('🎨 [StoryEditor] Renderizando botones del bottom sheet');
+                              debugPrint('   - _isRecorderConnecting: $_isRecorderConnecting');
+                              debugPrint('   - _isProcessingAudio: $_isProcessingAudio');
+                              debugPrint('   - _isPaused: $_isPaused');
+                              debugPrint('   - _liveTranscript.length: ${_liveTranscript.trim().length}');
+                              debugPrint('   - Botón "Agregar" habilitado: $isButtonEnabled');
+                            }
+                            return const SizedBox.shrink();
+                          },
+                        ),
                         Row(
                           children: [
                             Expanded(
@@ -5264,6 +5305,12 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       },
     );
 
+    // El modal se cerró, verificar qué retornó
+    if (kDebugMode) {
+      debugPrint('🏁 [StoryEditor] Bottom sheet cerrado');
+      debugPrint('   - transcript retornado: ${transcript == null ? "null" : "${transcript.length} caracteres"}');
+    }
+
     // Limpiar el updater del bottom sheet
     _sheetStateUpdater.remove('dictation');
 
@@ -5274,6 +5321,9 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     if (!mounted) return;
 
     if (transcript != null && transcript.trim().isNotEmpty) {
+      if (kDebugMode) {
+        debugPrint('📝 [StoryEditor] Mostrando diálogo de colocación de transcripción...');
+      }
       await _showTranscriptPlacementDialog(transcript.trim());
     }
 

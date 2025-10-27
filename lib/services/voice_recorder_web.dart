@@ -147,7 +147,7 @@ class VoiceRecorder {
   static const _fallbackModel = 'gpt-4o-transcribe-latest';
   static const _transcriptionDebounce = Duration(milliseconds: 2);
   static const _preferredTimeslices = <int>[24, 40, 60, 90, 140];
-  static const int _introSuppressionCount = 2;
+  static const int _introSuppressionCount = 1;
   static const String _introPlaceholderMessage =
       'Transcripción en progreso… sigue narrando';
   static const Set<String> _supportedLanguages = {
@@ -483,26 +483,9 @@ class VoiceRecorder {
   }
 
   String _buildTranscriptionPrompt([List<String>? languages]) {
-    final hints = languages ?? _languageHints;
-    final buffer = StringBuffer(
-      'You are a transcription tool. Your ONLY task is to transcribe the exact words spoken by the user. '
-      'Rules: '
-      '1. Transcribe exactly what is said, word for word '
-      '2. Keep the original language - do not translate '
-      '3. If multiple languages are mixed, preserve them exactly as spoken '
-      '4. Add proper punctuation '
-      '5. If there is silence or noise only, return empty '
-      '6. NEVER respond to the user, NEVER answer questions, ONLY transcribe the audio',
-    );
-
-    if (hints.isNotEmpty) {
-      buffer
-        ..write(' Languages: ')
-        ..write(hints.join(', '))
-        ..write('.');
-    }
-
-    return buffer.toString();
+    // Prompt minimalista: solo palabras de ejemplo sin instrucciones
+    // Whisper funciona mejor sin instrucciones complejas
+    return '';
   }
 
   html.MediaRecorder? _createMediaRecorder(html.MediaStream stream) {
@@ -735,7 +718,7 @@ class VoiceRecorder {
     final eased = (previous * 0.28) + (level * 0.72);
 
     _lastEmittedLevel = eased;
-    if (!_hasDetectedSpeech && eased > 0.048) {
+    if (!_hasDetectedSpeech && eased > 0.065) {
       _hasDetectedSpeech = true;
     }
     onLevel(eased);
@@ -883,7 +866,7 @@ class VoiceRecorder {
 
     final hasTranscript = _transcript.value.isNotEmpty;
     final minBytes =
-        forceFull ? 0 : (_hasDetectedSpeech || hasTranscript ? 1800 : 2400);
+        forceFull ? 0 : (_hasDetectedSpeech || hasTranscript ? 2400 : 4800);
     if (!forceFull && slice.bytes.length < minBytes) {
       _log(
         'Transcripción pospuesta: acumulando más audio (${slice.bytes.length} bytes < $minBytes bytes mínimos)',
@@ -1005,7 +988,7 @@ class VoiceRecorder {
         }
 
         final noSpeechProb = _asNullableDouble(entry['no_speech_prob']);
-        if (noSpeechProb == null || noSpeechProb < 0.8) {
+        if (noSpeechProb == null || noSpeechProb < 0.65) {
           hasConfidentSegment = true;
           break;
         }
@@ -1054,7 +1037,7 @@ class VoiceRecorder {
       }
     } else if (!hasConfidentSegment && hasSegments) {
       _log(
-        'Todos los segmentos fueron marcados como silencio (no_speech_prob>=0.8). Se descarta la actualización.',
+        'Todos los segmentos fueron marcados como silencio (no_speech_prob>=0.65). Se descarta la actualización.',
         level: 'debug',
       );
       return false;
@@ -1116,7 +1099,7 @@ class VoiceRecorder {
       final rawId = entry['id'];
       final id = rawId == null ? 'segment-$index' : rawId.toString();
       final noSpeechProb = _asNullableDouble(entry['no_speech_prob']);
-      if (noSpeechProb != null && noSpeechProb >= 0.8) {
+      if (noSpeechProb != null && noSpeechProb >= 0.65) {
         _log(
           'Segmento $id descartado por no_speech_prob=$noSpeechProb',
           level: 'debug',
@@ -1125,7 +1108,7 @@ class VoiceRecorder {
       }
 
       final avgLogProb = _asNullableDouble(entry['avg_logprob']);
-      if (avgLogProb != null && avgLogProb < -1.2) {
+      if (avgLogProb != null && avgLogProb < -0.8) {
         _log(
           'Segmento $id descartado por avg_logprob=$avgLogProb',
           level: 'debug',

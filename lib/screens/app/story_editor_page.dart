@@ -805,7 +805,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
     final inserted = await NarraSupabaseClient.createStory(
       title: resolvedTitle,
-      content: controllerContent.isEmpty ? null : controllerContent,
+      content: controllerContent.isEmpty ? '' : controllerContent,
       status: 'draft',
     );
 

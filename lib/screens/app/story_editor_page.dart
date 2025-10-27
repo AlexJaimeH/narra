@@ -5256,6 +5256,11 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                                             'error',
                                             '❌ Error al finalizar: $error',
                                           );
+                                          if (kDebugMode) {
+                                            debugPrint(
+                                              '❌ [StoryEditor] Error: $error',
+                                            );
+                                          }
                                         }
                                       },
                                 icon: const Icon(Icons.add),

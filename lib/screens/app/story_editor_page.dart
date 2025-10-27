@@ -680,13 +680,23 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
   Future<void> _loadVoiceRecordings({bool forceRefresh = false}) async {
     if (_isLoadingVoiceRecordings && !forceRefresh) {
+      if (kDebugMode) {
+        debugPrint('[StoryEditor] _loadVoiceRecordings skipped (already loading)');
+      }
       return;
     }
 
     final rawStoryId = _currentStory?.id ?? widget.storyId;
     final normalizedStoryId = rawStoryId?.trim();
 
+    if (kDebugMode) {
+      debugPrint('[StoryEditor] _loadVoiceRecordings for story: $normalizedStoryId');
+    }
+
     if (normalizedStoryId == null || normalizedStoryId.isEmpty) {
+      if (kDebugMode) {
+        debugPrint('[StoryEditor] No story ID, cannot load voice recordings');
+      }
       if (mounted) {
         setState(() {
           _isLoadingVoiceRecordings = false;
@@ -711,6 +721,11 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       final recordings = await VoiceRecordingRepository.fetchAll(
         storyId: normalizedStoryId,
       );
+
+      if (kDebugMode) {
+        debugPrint('[StoryEditor] Loaded ${recordings.length} voice recordings');
+      }
+
       if (mounted) {
         setState(() {
           _voiceRecordings = recordings;
@@ -722,7 +737,14 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         _hasVoiceRecordingsShortcut = _voiceRecordings.isNotEmpty;
         _isLoadingVoiceRecordings = false;
       }
+
+      if (kDebugMode) {
+        debugPrint('[StoryEditor] _hasVoiceRecordingsShortcut = $_hasVoiceRecordingsShortcut');
+      }
     } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[StoryEditor] Error loading voice recordings: $e');
+      }
       if (mounted) {
         setState(() => _isLoadingVoiceRecordings = false);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -811,6 +833,11 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     required Duration duration,
   }) async {
     try {
+      _appendRecorderLog('info', 'Iniciando guardado de grabación...');
+      if (kDebugMode) {
+        debugPrint('[StoryEditor] Starting to persist voice recording');
+      }
+
       final storyIdentity = await _ensureStoryIdentityForRecording();
       final byteCount = audioBytes.lengthInBytes;
 
@@ -4804,7 +4831,20 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
   Future<void> _finalizeRecording({bool discard = false}) async {
     final recorder = _recorder;
-    if (recorder == null) return;
+    if (recorder == null) {
+      if (kDebugMode) {
+        debugPrint('[StoryEditor] _finalizeRecording called but recorder is null');
+      }
+      return;
+    }
+
+    _appendRecorderLog(
+      'info',
+      'Finalizando grabación (discard: $discard)...',
+    );
+    if (kDebugMode) {
+      debugPrint('[StoryEditor] _finalizeRecording called with discard=$discard');
+    }
 
     final transcriptSnapshot = _liveTranscript.trim();
     final durationSnapshot = _recordingDuration;
@@ -4813,6 +4853,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
     typed.Uint8List? audioBytes;
     try {
+      _appendRecorderLog('info', 'Deteniendo grabadora...');
       audioBytes = await recorder.stop();
     } catch (e) {
       if (mounted) {
@@ -4829,6 +4870,11 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       _appendRecorderLog('debug', 'Grabación capturada con $byteCount bytes');
       if (kDebugMode) {
         debugPrint('[StoryEditor] Recorder stop produced $byteCount bytes');
+      }
+    } else {
+      _appendRecorderLog('warning', 'La grabación no produjo bytes de audio');
+      if (kDebugMode) {
+        debugPrint('[StoryEditor] Recorder stop produced null or empty bytes');
       }
     }
 
@@ -4861,15 +4907,40 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     }
 
     // Guardar TODAS las grabaciones (incluso las descartadas) para que estén disponibles en el historial
-    await _persistVoiceRecording(
-      audioBytes: audioBytes,
-      transcript: transcriptSnapshot,
-      duration: durationSnapshot,
-    );
+    try {
+      await _persistVoiceRecording(
+        audioBytes: audioBytes,
+        transcript: transcriptSnapshot,
+        duration: durationSnapshot,
+      );
+
+      if (mounted) {
+        _appendRecorderLog('success', 'Grabación guardada en Supabase');
+        if (kDebugMode) {
+          debugPrint('[StoryEditor] Voice recording saved successfully');
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        _appendRecorderLog('error', 'Error al guardar grabación: $e');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al guardar grabación: $e')),
+        );
+      }
+      // No retornar aquí - continuar con el flujo aunque falle el guardado
+    }
 
     if (discard) {
       _clearRecordedAudio();
       _resetLevelHistory();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✓ Grabación guardada en el historial'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
       return;
     }
 
@@ -5157,14 +5228,9 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     // Limpiar el updater del bottom sheet
     _sheetStateUpdater.remove('dictation');
 
-    if (_recorder != null) {
-      try {
-        await _finalizeRecording(discard: true);
-      } catch (error) {
-        _appendRecorderLog(
-            'error', 'Error al finalizar dictado al cerrar: $error');
-      }
-    }
+    // Ya no es necesario llamar a _finalizeRecording aquí porque ya se llamó
+    // dentro del modal (ya sea cuando se hace clic en "Agregar a la historia"
+    // o cuando se hace clic en "Cerrar")
 
     if (!mounted) return;
 

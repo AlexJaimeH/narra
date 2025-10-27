@@ -4830,11 +4830,15 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   }
 
   Future<void> _finalizeRecording({bool discard = false}) async {
+    print('');
+    print('▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓');
+    print('▓  🎬 _finalizeRecording LLAMADO');
+    print('▓  discard = $discard');
+    print('▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓');
+
     final recorder = _recorder;
     if (recorder == null) {
-      if (kDebugMode) {
-        debugPrint('[StoryEditor] _finalizeRecording called but recorder is null');
-      }
+      print('❌ Recorder es null, no se puede finalizar');
       return;
     }
 
@@ -4842,20 +4846,24 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       'info',
       'Finalizando grabación (discard: $discard)...',
     );
-    if (kDebugMode) {
-      debugPrint('[StoryEditor] _finalizeRecording called with discard=$discard');
-    }
 
     final transcriptSnapshot = _liveTranscript.trim();
     final durationSnapshot = _recordingDuration;
+    print('📊 Estado actual:');
+    print('   - transcriptSnapshot.length: ${transcriptSnapshot.length}');
+    print('   - durationSnapshot: ${durationSnapshot.inSeconds}s');
+
     _isProcessingAudio = false;
     _isTranscribing = false;
 
     typed.Uint8List? audioBytes;
     try {
+      print('⏹️ Deteniendo grabadora...');
       _appendRecorderLog('info', 'Deteniendo grabadora...');
       audioBytes = await recorder.stop();
+      print('✅ Grabadora detenida');
     } catch (e) {
+      print('❌ Error al detener grabación: $e');
       if (mounted) {
         _appendRecorderLog('error', 'Error al detener grabación: $e');
 
@@ -4867,15 +4875,11 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
     if (audioBytes != null) {
       final byteCount = audioBytes.lengthInBytes;
+      print('✅ Grabación capturada: $byteCount bytes');
       _appendRecorderLog('debug', 'Grabación capturada con $byteCount bytes');
-      if (kDebugMode) {
-        debugPrint('[StoryEditor] Recorder stop produced $byteCount bytes');
-      }
     } else {
+      print('⚠️ La grabación NO produjo bytes de audio');
       _appendRecorderLog('warning', 'La grabación no produjo bytes de audio');
-      if (kDebugMode) {
-        debugPrint('[StoryEditor] Recorder stop produced null or empty bytes');
-      }
     }
 
     if (mounted) {
@@ -4907,20 +4911,22 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     }
 
     // Guardar TODAS las grabaciones (incluso las descartadas) para que estén disponibles en el historial
+    print('');
+    print('💾 [VOICE RECORDING] Intentando guardar en Supabase...');
     try {
+      print('⏳ Llamando a _persistVoiceRecording...');
       await _persistVoiceRecording(
         audioBytes: audioBytes,
         transcript: transcriptSnapshot,
         duration: durationSnapshot,
       );
 
+      print('✅✅✅ Grabación guardada EXITOSAMENTE en Supabase');
       if (mounted) {
         _appendRecorderLog('success', 'Grabación guardada en Supabase');
-        if (kDebugMode) {
-          debugPrint('[StoryEditor] Voice recording saved successfully');
-        }
       }
     } catch (e) {
+      print('❌❌❌ ERROR FATAL al guardar grabación: $e');
       if (mounted) {
         _appendRecorderLog('error', 'Error al guardar grabación: $e');
         ScaffoldMessenger.of(context).showSnackBar(
@@ -4965,36 +4971,26 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   }
 
   Future<void> _openDictationPanel() async {
-    if (kDebugMode) {
-      debugPrint('🎤 [StoryEditor] _openDictationPanel LLAMADO');
-    }
+    print('════════════════════════════════════════════════');
+    print('🎤 [VOICE RECORDING] _openDictationPanel LLAMADO');
+    print('════════════════════════════════════════════════');
 
     if (_isRecording) {
-      if (kDebugMode) {
-        debugPrint('⚠️ [StoryEditor] Ya está grabando, abortando');
-      }
+      print('⚠️ [VOICE RECORDING] Ya está grabando, abortando');
       return;
     }
 
-    if (kDebugMode) {
-      debugPrint('🎤 [StoryEditor] Iniciando grabación...');
-    }
+    print('🎤 [VOICE RECORDING] Iniciando grabación...');
 
     try {
       await _startRecording(resetTranscript: true);
-      if (kDebugMode) {
-        debugPrint('✅ [StoryEditor] Grabación iniciada correctamente');
-      }
+      print('✅ [VOICE RECORDING] Grabación iniciada correctamente');
     } catch (e) {
-      if (kDebugMode) {
-        debugPrint('❌ [StoryEditor] Error al iniciar grabación: $e');
-      }
+      print('❌ [VOICE RECORDING] Error al iniciar grabación: $e');
       return;
     }
 
-    if (kDebugMode) {
-      debugPrint('📱 [StoryEditor] Abriendo bottom sheet de dictado...');
-    }
+    print('📱 [VOICE RECORDING] Abriendo bottom sheet de dictado...');
 
     final transcript = await showModalBottomSheet<String>(
       context: context,
@@ -5203,14 +5199,14 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                                 !_isProcessingAudio &&
                                 _isPaused &&
                                 _liveTranscript.trim().isNotEmpty;
-                            if (kDebugMode) {
-                              debugPrint('🎨 [StoryEditor] Renderizando botones del bottom sheet');
-                              debugPrint('   - _isRecorderConnecting: $_isRecorderConnecting');
-                              debugPrint('   - _isProcessingAudio: $_isProcessingAudio');
-                              debugPrint('   - _isPaused: $_isPaused');
-                              debugPrint('   - _liveTranscript.length: ${_liveTranscript.trim().length}');
-                              debugPrint('   - Botón "Agregar" habilitado: $isButtonEnabled');
-                            }
+                            print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+                            print('🎨 [VOICE RECORDING] RENDERIZANDO BOTTOM SHEET');
+                            print('   - _isRecorderConnecting: $_isRecorderConnecting');
+                            print('   - _isProcessingAudio: $_isProcessingAudio');
+                            print('   - _isPaused: $_isPaused');
+                            print('   - _liveTranscript.length: ${_liveTranscript.trim().length}');
+                            print('   - Botón "Agregar" habilitado: $isButtonEnabled');
+                            print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
                             return const SizedBox.shrink();
                           },
                         ),
@@ -5224,34 +5220,38 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                                         _liveTranscript.trim().isEmpty
                                     ? null
                                     : () async {
+                                        print('');
+                                        print('╔═══════════════════════════════════════════════╗');
+                                        print('║  🔵 BOTÓN "AGREGAR A LA HISTORIA" PRESIONADO  ║');
+                                        print('╚═══════════════════════════════════════════════╝');
                                         _appendRecorderLog(
                                           'info',
                                           '🔵 BOTÓN "AGREGAR A LA HISTORIA" PRESIONADO',
                                         );
-                                        if (kDebugMode) {
-                                          debugPrint(
-                                            '🔵 [StoryEditor] User clicked "Agregar a la historia" button',
-                                          );
-                                        }
                                         final text = _liveTranscript.trim();
+                                        print('📝 Transcripción capturada: ${text.length} caracteres');
                                         _appendRecorderLog(
                                           'info',
                                           'Transcripción: ${text.length} caracteres',
                                         );
                                         try {
+                                          print('⏳ Llamando a _finalizeRecording(discard: false)...');
                                           _appendRecorderLog(
                                             'info',
                                             'Llamando a _finalizeRecording(discard: false)...',
                                           );
                                           await _finalizeRecording();
+                                          print('✅ _finalizeRecording completado exitosamente');
                                           _appendRecorderLog(
                                             'info',
                                             '✅ _finalizeRecording completado',
                                           );
                                           if (sheetContext.mounted) {
+                                            print('🚪 Cerrando bottom sheet con transcripción');
                                             Navigator.pop(sheetContext, text);
                                           }
                                         } catch (error) {
+                                          print('❌ ERROR al finalizar: $error');
                                           _appendRecorderLog(
                                             'error',
                                             '❌ Error al finalizar: $error',
@@ -5270,23 +5270,28 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                             const SizedBox(width: 12),
                             TextButton(
                               onPressed: () async {
+                                print('');
+                                print('╔═══════════════════════════════════╗');
+                                print('║  🟡 BOTÓN "CERRAR" PRESIONADO     ║');
+                                print('╚═══════════════════════════════════╝');
                                 _appendRecorderLog(
                                   'info',
                                   '🟡 BOTÓN "CERRAR" PRESIONADO',
                                 );
-                                if (kDebugMode) {
-                                  debugPrint(
-                                    '🟡 [StoryEditor] User clicked "Cerrar" button',
-                                  );
-                                }
+                                print('⏳ Llamando a _handleDictationDismiss...');
                                 final shouldClose =
                                     await _handleDictationDismiss(sheetContext);
+                                print('📊 shouldClose = $shouldClose');
                                 _appendRecorderLog(
                                   'info',
                                   'shouldClose = $shouldClose',
                                 );
-                                if (!shouldClose) return;
+                                if (!shouldClose) {
+                                  print('🚫 Usuario canceló el cierre');
+                                  return;
+                                }
                                 if (sheetContext.mounted) {
+                                  print('🚪 Cerrando bottom sheet sin transcripción');
                                   Navigator.pop(sheetContext, null);
                                 }
                               },
@@ -5306,10 +5311,9 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     );
 
     // El modal se cerró, verificar qué retornó
-    if (kDebugMode) {
-      debugPrint('🏁 [StoryEditor] Bottom sheet cerrado');
-      debugPrint('   - transcript retornado: ${transcript == null ? "null" : "${transcript.length} caracteres"}');
-    }
+    print('');
+    print('🏁 [VOICE RECORDING] Bottom sheet CERRADO');
+    print('   - transcript retornado: ${transcript == null ? "null" : "${transcript.length} caracteres"}');
 
     // Limpiar el updater del bottom sheet
     _sheetStateUpdater.remove('dictation');
@@ -5318,13 +5322,16 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     // dentro del modal (ya sea cuando se hace clic en "Agregar a la historia"
     // o cuando se hace clic en "Cerrar")
 
-    if (!mounted) return;
+    if (!mounted) {
+      print('⚠️ Widget no montado, saliendo');
+      return;
+    }
 
     if (transcript != null && transcript.trim().isNotEmpty) {
-      if (kDebugMode) {
-        debugPrint('📝 [StoryEditor] Mostrando diálogo de colocación de transcripción...');
-      }
+      print('📝 [VOICE RECORDING] Mostrando diálogo de colocación de transcripción...');
       await _showTranscriptPlacementDialog(transcript.trim());
+    } else {
+      print('ℹ️ No hay transcripción para mostrar');
     }
 
     setState(() {

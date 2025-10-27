@@ -4,21 +4,26 @@
 --
 -- INSTRUCCIONES:
 --
--- PARTE 1: Crear el bucket (interfaz web)
+-- PARTE 1: Crear el bucket (interfaz web) - SOLO SI NO EXISTE
 -- ==========================================
 -- 1. Ve a Supabase Dashboard
 -- 2. Ve a la sección "Storage"
--- 3. Haz clic en "Create a new bucket"
--- 4. Configura así:
---    - Name: voice-recordings
---    - Public bucket: ✅ ACTIVADO (para que los audios sean accesibles públicamente)
--- 5. Haz clic en "Create bucket"
+-- 3. Si el bucket "voice-recordings" NO existe:
+--    a. Haz clic en "Create a new bucket"
+--    b. Configura así:
+--       - Name: voice-recordings
+--       - Public bucket: ✅ ACTIVADO (para que los audios sean accesibles públicamente)
+--    c. Haz clic en "Create bucket"
+-- 4. Si el bucket YA existe, salta al Paso 2
 --
 -- PARTE 2: Ejecutar este SQL (SQL Editor)
 -- ==========================================
--- 6. Ve a la sección "SQL Editor"
--- 7. Copia y pega TODO el SQL de abajo
--- 8. Haz clic en "Run"
+-- 5. Ve a la sección "SQL Editor"
+-- 6. Copia y pega TODO el SQL de abajo (líneas 33 en adelante)
+-- 7. Haz clic en "Run"
+--
+-- NOTA: Este SQL es idempotente, puedes ejecutarlo múltiples veces sin problemas.
+--       Eliminará y recreará todas las políticas automáticamente.
 --
 -- ============================================================
 
@@ -40,6 +45,13 @@ CREATE TABLE IF NOT EXISTS voice_recordings (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Si la tabla ya existía, agregar columnas faltantes
+ALTER TABLE voice_recordings
+ADD COLUMN IF NOT EXISTS storage_bucket TEXT DEFAULT 'voice-recordings';
+
+ALTER TABLE voice_recordings
+ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
+
 -- Crear índices para mejor performance
 CREATE INDEX IF NOT EXISTS idx_voice_recordings_user_id ON voice_recordings(user_id);
 CREATE INDEX IF NOT EXISTS idx_voice_recordings_story_id ON voice_recordings(story_id);
@@ -54,6 +66,12 @@ ALTER TABLE voice_recordings ENABLE ROW LEVEL SECURITY;
 -- ============================================================
 -- 3. POLÍTICAS RLS PARA LA TABLA voice_recordings
 -- ============================================================
+
+-- Eliminar políticas existentes si existen
+DROP POLICY IF EXISTS "Users can view their own voice recordings" ON voice_recordings;
+DROP POLICY IF EXISTS "Users can insert their own voice recordings" ON voice_recordings;
+DROP POLICY IF EXISTS "Users can update their own voice recordings" ON voice_recordings;
+DROP POLICY IF EXISTS "Users can delete their own voice recordings" ON voice_recordings;
 
 -- Política 1: Los usuarios pueden ver sus propias grabaciones
 CREATE POLICY "Users can view their own voice recordings"
@@ -87,6 +105,12 @@ USING (auth.uid() = user_id);
 -- ============================================================
 -- 4. POLÍTICAS DE STORAGE PARA EL BUCKET voice-recordings
 -- ============================================================
+
+-- Eliminar políticas de storage existentes si existen
+DROP POLICY IF EXISTS "Users can upload their own voice recordings" ON storage.objects;
+DROP POLICY IF EXISTS "Users can delete their own voice recording files" ON storage.objects;
+DROP POLICY IF EXISTS "Public access to voice recording files" ON storage.objects;
+DROP POLICY IF EXISTS "Users can update their own voice recording files" ON storage.objects;
 
 -- Política 1: Permitir que usuarios autenticados suban archivos a su propia carpeta
 CREATE POLICY "Users can upload their own voice recordings"

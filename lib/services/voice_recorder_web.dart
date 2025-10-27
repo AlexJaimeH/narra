@@ -147,7 +147,7 @@ class VoiceRecorder {
   static const _fallbackModel = 'gpt-4o-transcribe-latest';
   static const _transcriptionDebounce = Duration(milliseconds: 2);
   static const _preferredTimeslices = <int>[24, 40, 60, 90, 140];
-  static const int _introSuppressionCount = 3;
+  static const int _introSuppressionCount = 2;
   static const String _introPlaceholderMessage =
       'Transcripción en progreso… sigue narrando';
   static const Set<String> _supportedLanguages = {
@@ -288,6 +288,9 @@ class VoiceRecorder {
     _onLevel?.call(0);
     _setTranscribing(false);
 
+    // Limpiar placeholders antes de forzar transcripción final
+    _introPlaceholdersRemaining = 0;
+
     await _ensureTranscription(forceFull: true);
     return true;
   }
@@ -352,6 +355,9 @@ class VoiceRecorder {
         // ignore timeout: recorder might already be stopped.
       }
     }
+
+    // Limpiar placeholders antes de forzar transcripción final
+    _introPlaceholdersRemaining = 0;
 
     await _ensureTranscription(forceFull: true);
 
@@ -729,7 +735,7 @@ class VoiceRecorder {
     final eased = (previous * 0.28) + (level * 0.72);
 
     _lastEmittedLevel = eased;
-    if (!_hasDetectedSpeech && eased > 0.055) {
+    if (!_hasDetectedSpeech && eased > 0.048) {
       _hasDetectedSpeech = true;
     }
     onLevel(eased);
@@ -963,9 +969,15 @@ class VoiceRecorder {
 
     final updated = _applyTranscriptionPayload(payload, forceFull: forceFull);
     if (updated) {
+      // Si es forceFull, siempre emitir la transcripción real, nunca el placeholder
       if (!forceFull && _introPlaceholdersRemaining > 0) {
         _introPlaceholdersRemaining--;
         _onText?.call(_introPlaceholderMessage);
+        return;
+      }
+
+      // Si el transcript es el placeholder, no emitir (esperar transcripción real)
+      if (_transcript.value == _introPlaceholderMessage) {
         return;
       }
 

@@ -861,7 +861,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         'Grabación guardada para historia ${storyIdentity.id}',
       );
 
-      unawaited(_loadVoiceRecordings(forceRefresh: true));
+      // Recargar las grabaciones para asegurar que el historial esté actualizado
+      await _loadVoiceRecordings(forceRefresh: true);
 
       return recordingForState;
     } catch (e) {
@@ -4859,6 +4860,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       return;
     }
 
+    // Guardar TODAS las grabaciones (incluso las descartadas) para que estén disponibles en el historial
     await _persistVoiceRecording(
       audioBytes: audioBytes,
       transcript: transcriptSnapshot,
@@ -4880,10 +4882,10 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       setState(() {
         _hasChanges = true;
       });
-      _appendRecorderLog('info', 'Audio listo para insertar');
+      _appendRecorderLog('info', 'Audio guardado correctamente');
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('✓ Dictado listo. Se guardará al guardar la historia'),
+          content: Text('✓ Grabación guardada y lista para agregar'),
         ),
       );
     } else {

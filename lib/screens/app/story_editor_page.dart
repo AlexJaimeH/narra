@@ -519,6 +519,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   bool _isPaused = false;
   bool _isProcessingAudio = false;
   bool _isTranscribing = false;
+  bool _isFinalizingRecording = false;
 
   bool _isRecorderConnecting = false;
   final List<String> _recorderLogs = [];
@@ -4830,56 +4831,26 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   }
 
   Future<void> _finalizeRecording({bool discard = false}) async {
-    print('');
-    print('▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓');
-    print('▓  🎬 _finalizeRecording LLAMADO');
-    print('▓  discard = $discard');
-    print('▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓');
-
     final recorder = _recorder;
     if (recorder == null) {
-      print('❌ Recorder es null, no se puede finalizar');
       return;
     }
 
-    _appendRecorderLog(
-      'info',
-      'Finalizando grabación (discard: $discard)...',
-    );
-
     final transcriptSnapshot = _liveTranscript.trim();
     final durationSnapshot = _recordingDuration;
-    print('📊 Estado actual:');
-    print('   - transcriptSnapshot.length: ${transcriptSnapshot.length}');
-    print('   - durationSnapshot: ${durationSnapshot.inSeconds}s');
 
     _isProcessingAudio = false;
     _isTranscribing = false;
 
     typed.Uint8List? audioBytes;
     try {
-      print('⏹️ Deteniendo grabadora...');
-      _appendRecorderLog('info', 'Deteniendo grabadora...');
       audioBytes = await recorder.stop();
-      print('✅ Grabadora detenida');
     } catch (e) {
-      print('❌ Error al detener grabación: $e');
       if (mounted) {
-        _appendRecorderLog('error', 'Error al detener grabación: $e');
-
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error al detener la grabación: $e')),
         );
       }
-    }
-
-    if (audioBytes != null) {
-      final byteCount = audioBytes.lengthInBytes;
-      print('✅ Grabación capturada: $byteCount bytes');
-      _appendRecorderLog('debug', 'Grabación capturada con $byteCount bytes');
-    } else {
-      print('⚠️ La grabación NO produjo bytes de audio');
-      _appendRecorderLog('warning', 'La grabación no produjo bytes de audio');
     }
 
     if (mounted) {
@@ -4910,30 +4881,18 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       return;
     }
 
-    // Guardar TODAS las grabaciones (incluso las descartadas) para que estén disponibles en el historial
-    print('');
-    print('💾 [VOICE RECORDING] Intentando guardar en Supabase...');
     try {
-      print('⏳ Llamando a _persistVoiceRecording...');
       await _persistVoiceRecording(
         audioBytes: audioBytes,
         transcript: transcriptSnapshot,
         duration: durationSnapshot,
       );
-
-      print('✅✅✅ Grabación guardada EXITOSAMENTE en Supabase');
-      if (mounted) {
-        _appendRecorderLog('success', 'Grabación guardada en Supabase');
-      }
     } catch (e) {
-      print('❌❌❌ ERROR FATAL al guardar grabación: $e');
       if (mounted) {
-        _appendRecorderLog('error', 'Error al guardar grabación: $e');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error al guardar grabación: $e')),
         );
       }
-      // No retornar aquí - continuar con el flujo aunque falle el guardado
     }
 
     if (discard) {
@@ -4959,7 +4918,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       setState(() {
         _hasChanges = true;
       });
-      _appendRecorderLog('info', 'Audio guardado correctamente');
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('✓ Grabación guardada y lista para agregar'),
@@ -4971,26 +4929,15 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   }
 
   Future<void> _openDictationPanel() async {
-    print('════════════════════════════════════════════════');
-    print('🎤 [VOICE RECORDING] _openDictationPanel LLAMADO');
-    print('════════════════════════════════════════════════');
-
     if (_isRecording) {
-      print('⚠️ [VOICE RECORDING] Ya está grabando, abortando');
       return;
     }
-
-    print('🎤 [VOICE RECORDING] Iniciando grabación...');
 
     try {
       await _startRecording(resetTranscript: true);
-      print('✅ [VOICE RECORDING] Grabación iniciada correctamente');
     } catch (e) {
-      print('❌ [VOICE RECORDING] Error al iniciar grabación: $e');
       return;
     }
-
-    print('📱 [VOICE RECORDING] Abriendo bottom sheet de dictado...');
 
     final transcript = await showModalBottomSheet<String>(
       context: context,
@@ -5000,7 +4947,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       builder: (sheetContext) {
         return StatefulBuilder(
           builder: (builderContext, setSheetState) {
-            // Actualizar el estado del bottom sheet cuando cambie la transcripción
             _sheetStateUpdater['dictation'] = (VoidCallback callback) {
               if (!sheetContext.mounted) {
                 _sheetStateUpdater.remove('dictation');
@@ -5009,12 +4955,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
               setSheetState(callback);
             };
 
-            final maxSheetHeight =
-                MediaQuery.of(builderContext).size.height * 0.7;
-            final transcriptMaxHeight = math.min(
-              math.max(180.0, maxSheetHeight - 160),
-              maxSheetHeight,
-            );
+            final screenHeight = MediaQuery.of(builderContext).size.height;
+            final maxSheetHeight = screenHeight * 0.85;
 
             return PopScope(
               canPop: false,
@@ -5025,20 +4967,26 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                   Navigator.pop(sheetContext, null);
                 }
               },
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  16,
-                  16,
-                  16,
-                  24 + MediaQuery.of(sheetContext).viewInsets.bottom,
+              child: Container(
+                height: maxSheetHeight,
+                decoration: BoxDecoration(
+                  color: Theme.of(builderContext).colorScheme.surface,
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(16),
+                  ),
                 ),
                 child: SafeArea(
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(maxHeight: maxSheetHeight),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
+                  child: Column(
+                    mainAxisSize: MainAxisSize.max,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Header scrollable
+                      Expanded(
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
                         Row(
                           children: [
                             Icon(
@@ -5144,163 +5092,141 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                               ],
                             ),
                           ),
-                        ConstrainedBox(
-                          constraints:
-                              BoxConstraints(maxHeight: transcriptMaxHeight),
-                          child: Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .surfaceContainerHighest,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Scrollbar(
-                              controller: _transcriptScrollController,
-                              thumbVisibility: true,
-                              child: SingleChildScrollView(
-                                controller: _transcriptScrollController,
-                                child: Text(
-                                  _liveTranscript.isEmpty
-                                      ? 'Empieza a hablar…'
-                                      : _liveTranscript,
-                                  style: Theme.of(context).textTheme.bodyLarge,
+                              Container(
+                                width: double.infinity,
+                                constraints: const BoxConstraints(
+                                  minHeight: 120,
+                                  maxHeight: 300,
                                 ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        if (_isProcessingAudio)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 12),
-                            child: Row(
-                              children: [
-                                SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2.2,
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(builderContext)
+                                      .colorScheme
+                                      .surfaceContainerHighest,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Scrollbar(
+                                  controller: _transcriptScrollController,
+                                  thumbVisibility: true,
+                                  child: SingleChildScrollView(
+                                    controller: _transcriptScrollController,
+                                    child: Text(
+                                      _liveTranscript.isEmpty
+                                          ? 'Empieza a hablar…'
+                                          : _liveTranscript,
+                                      style: Theme.of(builderContext).textTheme.bodyLarge,
+                                    ),
                                   ),
                                 ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  'Procesando audio…',
-                                  style: Theme.of(context).textTheme.bodyMedium,
+                              ),
+                              const SizedBox(height: 12),
+                              if (_isProcessingAudio)
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 12),
+                                  child: Row(
+                                    children: [
+                                      SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2.2,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        'Procesando audio…',
+                                        style: Theme.of(builderContext).textTheme.bodyMedium,
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                      // Botones fijos en la parte inferior
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Theme.of(builderContext).colorScheme.surface,
+                          border: Border(
+                            top: BorderSide(
+                              color: Theme.of(builderContext).colorScheme.outlineVariant,
+                              width: 1,
                             ),
                           ),
-                        // LOG: Estado de variables antes de renderizar botones
-                        Builder(
-                          builder: (ctx) {
-                            final isButtonEnabled = !_isRecorderConnecting &&
-                                !_isProcessingAudio &&
-                                _isPaused &&
-                                _liveTranscript.trim().isNotEmpty;
-                            print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-                            print('🎨 [VOICE RECORDING] RENDERIZANDO BOTTOM SHEET');
-                            print('   - _isRecorderConnecting: $_isRecorderConnecting');
-                            print('   - _isProcessingAudio: $_isProcessingAudio');
-                            print('   - _isPaused: $_isPaused');
-                            print('   - _liveTranscript.length: ${_liveTranscript.trim().length}');
-                            print('   - Botón "Agregar" habilitado: $isButtonEnabled');
-                            print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-                            return const SizedBox.shrink();
-                          },
                         ),
-                        Row(
+                        child: Row(
                           children: [
                             Expanded(
                               child: ElevatedButton.icon(
                                 onPressed: _isRecorderConnecting ||
                                         _isProcessingAudio ||
+                                        _isFinalizingRecording ||
                                         !_isPaused ||
                                         _liveTranscript.trim().isEmpty
                                     ? null
                                     : () async {
-                                        print('');
-                                        print('╔═══════════════════════════════════════════════╗');
-                                        print('║  🔵 BOTÓN "AGREGAR A LA HISTORIA" PRESIONADO  ║');
-                                        print('╚═══════════════════════════════════════════════╝');
-                                        _appendRecorderLog(
-                                          'info',
-                                          '🔵 BOTÓN "AGREGAR A LA HISTORIA" PRESIONADO',
-                                        );
                                         final text = _liveTranscript.trim();
-                                        print('📝 Transcripción capturada: ${text.length} caracteres');
-                                        _appendRecorderLog(
-                                          'info',
-                                          'Transcripción: ${text.length} caracteres',
-                                        );
+
+                                        setState(() {
+                                          _isFinalizingRecording = true;
+                                        });
+                                        setSheetState(() {});
+
                                         try {
-                                          print('⏳ Llamando a _finalizeRecording(discard: false)...');
-                                          _appendRecorderLog(
-                                            'info',
-                                            'Llamando a _finalizeRecording(discard: false)...',
-                                          );
                                           await _finalizeRecording();
-                                          print('✅ _finalizeRecording completado exitosamente');
-                                          _appendRecorderLog(
-                                            'info',
-                                            '✅ _finalizeRecording completado',
-                                          );
                                           if (sheetContext.mounted) {
-                                            print('🚪 Cerrando bottom sheet con transcripción');
                                             Navigator.pop(sheetContext, text);
                                           }
                                         } catch (error) {
-                                          print('❌ ERROR al finalizar: $error');
-                                          _appendRecorderLog(
-                                            'error',
-                                            '❌ Error al finalizar: $error',
-                                          );
                                           if (kDebugMode) {
-                                            debugPrint(
-                                              '❌ [StoryEditor] Error: $error',
-                                            );
+                                            debugPrint('Error al finalizar: $error');
+                                          }
+                                        } finally {
+                                          if (mounted) {
+                                            setState(() {
+                                              _isFinalizingRecording = false;
+                                            });
                                           }
                                         }
                                       },
-                                icon: const Icon(Icons.add),
-                                label: const Text('Agregar a la historia'),
+                                icon: _isFinalizingRecording
+                                    ? const SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Icon(Icons.add),
+                                label: Text(
+                                  _isFinalizingRecording
+                                      ? 'Guardando...'
+                                      : 'Agregar a la historia',
+                                ),
                               ),
                             ),
                             const SizedBox(width: 12),
                             TextButton(
-                              onPressed: () async {
-                                print('');
-                                print('╔═══════════════════════════════════╗');
-                                print('║  🟡 BOTÓN "CERRAR" PRESIONADO     ║');
-                                print('╚═══════════════════════════════════╝');
-                                _appendRecorderLog(
-                                  'info',
-                                  '🟡 BOTÓN "CERRAR" PRESIONADO',
-                                );
-                                print('⏳ Llamando a _handleDictationDismiss...');
-                                final shouldClose =
-                                    await _handleDictationDismiss(sheetContext);
-                                print('📊 shouldClose = $shouldClose');
-                                _appendRecorderLog(
-                                  'info',
-                                  'shouldClose = $shouldClose',
-                                );
-                                if (!shouldClose) {
-                                  print('🚫 Usuario canceló el cierre');
-                                  return;
-                                }
-                                if (sheetContext.mounted) {
-                                  print('🚪 Cerrando bottom sheet sin transcripción');
-                                  Navigator.pop(sheetContext, null);
-                                }
-                              },
+                              onPressed: _isFinalizingRecording
+                                  ? null
+                                  : () async {
+                                      final shouldClose =
+                                          await _handleDictationDismiss(sheetContext);
+                                      if (!shouldClose) {
+                                        return;
+                                      }
+                                      if (sheetContext.mounted) {
+                                        Navigator.pop(sheetContext, null);
+                                      }
+                                    },
                               child: const Text('Cerrar'),
                             ),
                           ],
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -5310,34 +5236,21 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       },
     );
 
-    // El modal se cerró, verificar qué retornó
-    print('');
-    print('🏁 [VOICE RECORDING] Bottom sheet CERRADO');
-    print('   - transcript retornado: ${transcript == null ? "null" : "${transcript.length} caracteres"}');
-
-    // Limpiar el updater del bottom sheet
     _sheetStateUpdater.remove('dictation');
 
-    // Ya no es necesario llamar a _finalizeRecording aquí porque ya se llamó
-    // dentro del modal (ya sea cuando se hace clic en "Agregar a la historia"
-    // o cuando se hace clic en "Cerrar")
-
     if (!mounted) {
-      print('⚠️ Widget no montado, saliendo');
       return;
     }
 
     if (transcript != null && transcript.trim().isNotEmpty) {
-      print('📝 [VOICE RECORDING] Mostrando diálogo de colocación de transcripción...');
       await _showTranscriptPlacementDialog(transcript.trim());
-    } else {
-      print('ℹ️ No hay transcripción para mostrar');
     }
 
     setState(() {
       _liveTranscript = '';
       _isPaused = false;
       _isProcessingAudio = false;
+      _isFinalizingRecording = false;
     });
   }
 

@@ -145,7 +145,7 @@ class _TranscriptAccumulator {
 class VoiceRecorder {
   static const _primaryModel = 'gpt-4o-mini-transcribe';
   static const _fallbackModel = 'gpt-4o-transcribe-latest';
-  static const _transcriptionDebounce = Duration(milliseconds: 4);
+  static const _transcriptionDebounce = Duration(milliseconds: 2);
   static const _preferredTimeslices = <int>[24, 40, 60, 90, 140];
   static const int _introSuppressionCount = 3;
   static const String _introPlaceholderMessage =
@@ -479,18 +479,19 @@ class VoiceRecorder {
   String _buildTranscriptionPrompt([List<String>? languages]) {
     final hints = languages ?? _languageHints;
     final buffer = StringBuffer(
-      'Transcribe exactly what the speaker says, keeping the punctuation and the original language of every single word. '
-      'If the speaker mixes languages or switches mid-sentence, preserve that exact mix. '
-      'Never translate, paraphrase, or expand abbreviations; when there is only silence or noise, return an empty result. '
-      'Transcribe exactly as spoken, even if proper names or borrowed words sound like they belong to another language. ',
-    )..write(
-        'Transcribe exactamente lo que dice la persona, manteniendo la puntuación y el idioma original de cada palabra. '
-        'Si la persona mezcla idiomas, conserva esa mezcla tal cual. '
-        'No traduzcas, no resumas ni inventes texto; si solo hay silencio o ruido, devuelve un resultado vacío. ');
+      'You are a transcription tool. Your ONLY task is to transcribe the exact words spoken by the user. '
+      'Rules: '
+      '1. Transcribe exactly what is said, word for word '
+      '2. Keep the original language - do not translate '
+      '3. If multiple languages are mixed, preserve them exactly as spoken '
+      '4. Add proper punctuation '
+      '5. If there is silence or noise only, return empty '
+      '6. NEVER respond to the user, NEVER answer questions, ONLY transcribe the audio',
+    );
 
     if (hints.isNotEmpty) {
       buffer
-        ..write(' Possible languages in this session include: ')
+        ..write(' Languages: ')
         ..write(hints.join(', '))
         ..write('.');
     }
@@ -876,7 +877,7 @@ class VoiceRecorder {
 
     final hasTranscript = _transcript.value.isNotEmpty;
     final minBytes =
-        forceFull ? 0 : (_hasDetectedSpeech || hasTranscript ? 3600 : 6000);
+        forceFull ? 0 : (_hasDetectedSpeech || hasTranscript ? 1800 : 2400);
     if (!forceFull && slice.bytes.length < minBytes) {
       _log(
         'Transcripción pospuesta: acumulando más audio (${slice.bytes.length} bytes < $minBytes bytes mínimos)',

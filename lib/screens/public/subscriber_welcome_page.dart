@@ -365,7 +365,8 @@ class _SubscriberWelcomePageState extends State<SubscriberWelcomePage> {
     Story? highlightStory,
   }) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final mediaQuery = MediaQuery.of(context);
+    final isCompact = mediaQuery.size.width < 720;
     final hasCover = profile?.coverImageUrl?.trim().isNotEmpty == true;
     final displayName = profile?.resolvedDisplayName ?? 'Tu autor/a en Narra';
     final tagline = profile?.tagline?.trim();
@@ -375,27 +376,34 @@ class _SubscriberWelcomePageState extends State<SubscriberWelcomePage> {
 
     final statsChips = _buildAuthorStats(
       theme: theme,
-      colorScheme: colorScheme,
       totalStories: totalStories,
       highlightStory: highlightStory,
       highlightHearted: highlightHearted,
+      isCompact: isCompact,
     );
 
     return Container(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(32),
+        borderRadius: BorderRadius.circular(isCompact ? 24 : 32),
         boxShadow: [
           BoxShadow(
-            color: colorScheme.shadow.withOpacity(0.12),
-            blurRadius: 40,
-            offset: const Offset(0, 24),
+            color: const Color(0xFF7c3aed).withOpacity(0.15),
+            blurRadius: 60,
+            offset: const Offset(0, 20),
+            spreadRadius: -5,
+          ),
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 30,
+            offset: const Offset(0, 10),
           ),
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(32),
+        borderRadius: BorderRadius.circular(isCompact ? 24 : 32),
         child: Stack(
           children: [
+            // Background - Cover image or gradient
             if (hasCover)
               Positioned.fill(
                 child: Image.network(
@@ -405,18 +413,19 @@ class _SubscriberWelcomePageState extends State<SubscriberWelcomePage> {
                   errorBuilder: (_, __, ___) => const SizedBox.shrink(),
                 ),
               ),
+            // Gradient overlay
             Positioned.fill(
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: hasCover
                         ? [
-                            colorScheme.surface.withOpacity(0.92),
-                            colorScheme.surface.withOpacity(0.82),
+                            const Color(0xFFfdfbf7).withOpacity(0.96),
+                            const Color(0xFFf0ebe3).withOpacity(0.92),
                           ]
                         : [
-                            colorScheme.primaryContainer.withOpacity(0.5),
-                            colorScheme.surface,
+                            const Color(0xFFfaf5ff), // Light purple
+                            const Color(0xFFfdfbf7), // Cream
                           ],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
@@ -424,41 +433,74 @@ class _SubscriberWelcomePageState extends State<SubscriberWelcomePage> {
                 ),
               ),
             ),
+            // Content
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 36, vertical: 40),
+              padding: EdgeInsets.all(isCompact ? 24 : 40),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Hola, $subscriberName',
-                    style: theme.textTheme.labelLarge?.copyWith(
-                      letterSpacing: 0.2,
-                      color: colorScheme.onSurfaceVariant,
+                  // Welcome badge
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF8b5cf6), Color(0xFF7c3aed)],
+                      ),
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF7c3aed).withOpacity(0.3),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.waving_hand, size: 16, color: Colors.white),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Hola, $subscriberName',
+                          style: theme.textTheme.labelLarge?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  SizedBox(height: isCompact ? 20 : 24),
+                  // Author info
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      _AuthorPortrait(avatarUrl: profile?.avatarUrl),
-                      const SizedBox(width: 20),
+                      _AuthorPortrait(avatarUrl: profile?.avatarUrl, isCompact: isCompact),
+                      SizedBox(width: isCompact ? 16 : 24),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
                               displayName,
-                              style: theme.textTheme.headlineMedium?.copyWith(
-                                fontWeight: FontWeight.w800,
-                                height: 1.05,
+                              style: (isCompact
+                                ? theme.textTheme.headlineSmall
+                                : theme.textTheme.headlineLarge)?.copyWith(
+                                fontWeight: FontWeight.w900,
+                                height: 1.1,
+                                letterSpacing: -0.5,
+                                color: const Color(0xFF1f1b16),
                               ),
                             ),
                             if (tagline?.isNotEmpty == true) ...[
-                              const SizedBox(height: 6),
+                              const SizedBox(height: 8),
                               Text(
                                 tagline!,
                                 style: theme.textTheme.titleMedium?.copyWith(
-                                  color: colorScheme.onSurfaceVariant,
+                                  color: const Color(0xFF6d28d9),
+                                  fontWeight: FontWeight.w600,
+                                  height: 1.3,
                                 ),
                               ),
                             ],
@@ -467,38 +509,69 @@ class _SubscriberWelcomePageState extends State<SubscriberWelcomePage> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 20),
+                  SizedBox(height: isCompact ? 20 : 24),
+                  // Description
                   ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 680),
+                    constraints: const BoxConstraints(maxWidth: 720),
                     child: Text(
                       summary?.isNotEmpty == true ? summary! : fallbackSummary,
-                      style: theme.textTheme.bodyLarge?.copyWith(height: 1.55),
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        height: 1.65,
+                        fontSize: isCompact ? 16 : 17,
+                        color: const Color(0xFF4b5563),
+                      ),
                     ),
                   ),
+                  // Stats chips
                   if (statsChips.isNotEmpty) ...[
-                    const SizedBox(height: 20),
+                    SizedBox(height: isCompact ? 20 : 24),
                     Wrap(
                       spacing: 12,
                       runSpacing: 12,
                       children: statsChips,
                     ),
                   ],
-                  const SizedBox(height: 24),
+                  // Action buttons
+                  SizedBox(height: isCompact ? 24 : 32),
                   Wrap(
                     spacing: 12,
                     runSpacing: 12,
                     children: [
                       if (onReadLatest != null && !isUnsubscribed)
-                        FilledButton.icon(
+                        ElevatedButton.icon(
                           onPressed: onReadLatest,
-                          icon: const Icon(Icons.auto_stories_outlined),
-                          label: const Text('Leer la historia más reciente'),
+                          icon: const Icon(Icons.auto_stories, size: 20),
+                          label: Text(isCompact ? 'Leer última historia' : 'Leer la historia más reciente'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF8b5cf6),
+                            foregroundColor: Colors.white,
+                            padding: EdgeInsets.symmetric(
+                              horizontal: isCompact ? 20 : 28,
+                              vertical: isCompact ? 14 : 18,
+                            ),
+                            elevation: 0,
+                            shadowColor: const Color(0xFF7c3aed).withOpacity(0.4),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
                         ),
                       OutlinedButton.icon(
                         onPressed: () =>
                             Navigator.of(context).pushReplacementNamed('/'),
-                        icon: const Icon(Icons.home_outlined),
+                        icon: const Icon(Icons.explore_outlined, size: 20),
                         label: const Text('Explorar Narra'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF6d28d9),
+                          side: const BorderSide(color: Color(0xFF8b5cf6), width: 2),
+                          padding: EdgeInsets.symmetric(
+                            horizontal: isCompact ? 20 : 28,
+                            vertical: isCompact ? 14 : 18,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -517,42 +590,98 @@ class _SubscriberWelcomePageState extends State<SubscriberWelcomePage> {
     required String authorName,
   }) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final mediaQuery = MediaQuery.of(context);
+    final isCompact = mediaQuery.size.width < 600;
 
-    return Card(
-      color: colorScheme.surfaceVariant.withOpacity(0.4),
-      elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+    return Container(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFFfaf5ff), Color(0xFFf3e8ff)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: const Color(0xFF8b5cf6).withOpacity(0.2),
+          width: 2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF7c3aed).withOpacity(0.1),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: EdgeInsets.all(isCompact ? 20 : 28),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(Icons.verified_user_outlined,
-                color: colorScheme.primary, size: 30),
-            const SizedBox(width: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF8b5cf6), Color(0xFF7c3aed)],
+                ),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF7c3aed).withOpacity(0.3),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.verified_user,
+                color: Colors.white,
+                size: 28,
+              ),
+            ),
+            SizedBox(width: isCompact ? 16 : 20),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Acceso confirmado',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
+                    '✨ Acceso Confirmado',
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: const Color(0xFF6d28d9),
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 12),
                   Text(
                     'Guardamos que eres $subscriberName. Cada vez que $authorName publique un nuevo recuerdo podrás abrirlo desde aquí, reaccionar con corazones y dejar comentarios privados.',
                     style: theme.textTheme.bodyMedium?.copyWith(
-                      height: 1.55,
+                      height: 1.65,
+                      fontSize: 15,
+                      color: const Color(0xFF4b5563),
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'También recibirás un correo cuando haya una nueva historia dedicada a ti.',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.8),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.email_outlined, size: 16, color: Color(0xFF8b5cf6)),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            'Recibirás un correo con cada nueva historia',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: const Color(0xFF6d28d9),
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -569,20 +698,65 @@ class _SubscriberWelcomePageState extends State<SubscriberWelcomePage> {
     required List<Story> stories,
   }) {
     final theme = Theme.of(context);
+    final mediaQuery = MediaQuery.of(context);
+    final isCompact = mediaQuery.size.width < 720;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Más historias publicadas',
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.w700,
-          ),
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF8b5cf6), Color(0xFF7c3aed)],
+                ),
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF7c3aed).withOpacity(0.25),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.menu_book,
+                color: Colors.white,
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Más Historias',
+                    style: (isCompact
+                      ? theme.textTheme.headlineSmall
+                      : theme.textTheme.headlineMedium)?.copyWith(
+                      fontWeight: FontWeight.w900,
+                      color: const Color(0xFF1f1b16),
+                      letterSpacing: -0.3,
+                    ),
+                  ),
+                  Text(
+                    '${stories.length} ${stories.length == 1 ? 'historia publicada' : 'historias publicadas'}',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: const Color(0xFF6b7280),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 24),
         Wrap(
-          spacing: 20,
-          runSpacing: 20,
+          spacing: 24,
+          runSpacing: 24,
           children: stories
               .map(
                 (story) => _StoryGridCard(
@@ -598,10 +772,10 @@ class _SubscriberWelcomePageState extends State<SubscriberWelcomePage> {
 
   List<Widget> _buildAuthorStats({
     required ThemeData theme,
-    required ColorScheme colorScheme,
     required int totalStories,
     Story? highlightStory,
     bool highlightHearted = false,
+    bool isCompact = false,
   }) {
     final chips = <Widget>[];
 
@@ -883,24 +1057,46 @@ class _SubscriberWelcomePageState extends State<SubscriberWelcomePage> {
 }
 
 class _AuthorPortrait extends StatelessWidget {
-  const _AuthorPortrait({required this.avatarUrl, this.size = 72});
+  const _AuthorPortrait({
+    required this.avatarUrl,
+    this.size,
+    this.isCompact = false,
+  });
 
   final String? avatarUrl;
-  final double size;
+  final double? size;
+  final bool isCompact;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return CircleAvatar(
-      radius: size / 2,
-      backgroundImage: avatarUrl != null && avatarUrl!.trim().isNotEmpty
-          ? NetworkImage(avatarUrl!)
-          : null,
-      backgroundColor: theme.colorScheme.primaryContainer,
-      child: avatarUrl == null || avatarUrl!.trim().isEmpty
-          ? Icon(Icons.person_outline,
-              color: theme.colorScheme.primary, size: size / 1.4)
-          : null,
+    final effectiveSize = size ?? (isCompact ? 64.0 : 80.0);
+    return Container(
+      width: effectiveSize,
+      height: effectiveSize,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF7c3aed).withOpacity(0.25),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: CircleAvatar(
+        radius: effectiveSize / 2,
+        backgroundImage: avatarUrl != null && avatarUrl!.trim().isNotEmpty
+            ? NetworkImage(avatarUrl!)
+            : null,
+        backgroundColor: const Color(0xFFf3e8ff),
+        child: avatarUrl == null || avatarUrl!.trim().isEmpty
+            ? Icon(
+                Icons.person,
+                color: const Color(0xFF8b5cf6),
+                size: effectiveSize / 1.5,
+              )
+            : null,
+      ),
     );
   }
 }
@@ -919,127 +1115,238 @@ class _FeaturedStoryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final mediaQuery = MediaQuery.of(context);
+    final isCompact = mediaQuery.size.width < 720;
     final cover = _storyCoverUrl(story);
     final readingTime = _formatReadingTime(story);
 
-    return Card(
-      elevation: 3,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onOpen,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (cover != null)
-              AspectRatio(
-                aspectRatio: 16 / 9,
-                child: Image.network(
-                  cover,
-                  fit: BoxFit.cover,
-                  alignment: Alignment.topCenter,
-                  errorBuilder: (_, __, ___) => Container(
-                    color: colorScheme.surfaceVariant,
-                    child: Center(
-                      child: Icon(Icons.photo_outlined,
-                          color: colorScheme.onSurfaceVariant, size: 48),
-                    ),
-                  ),
-                ),
-              )
-            else
-              Container(
-                height: 200,
-                color: colorScheme.primaryContainer.withOpacity(0.5),
-                alignment: Alignment.center,
-                child: Icon(Icons.auto_stories_outlined,
-                    color: colorScheme.primary, size: 56),
-              ),
-            Padding(
-              padding: const EdgeInsets.all(28),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 8,
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(isCompact ? 24 : 32),
+        gradient: const LinearGradient(
+          colors: [Colors.white, Color(0xFFfdfbf7)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF7c3aed).withOpacity(0.12),
+            blurRadius: 40,
+            offset: const Offset(0, 16),
+            spreadRadius: -4,
+          ),
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(isCompact ? 24 : 32),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onOpen,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Cover image or placeholder
+                if (cover != null)
+                  Stack(
                     children: [
-                      if (story.publishedAt != null)
-                        _StoryChip(
-                          icon: Icons.calendar_today_outlined,
-                          label: _formatRelativeDate(story.publishedAt!),
+                      AspectRatio(
+                        aspectRatio: 16 / 9,
+                        child: Image.network(
+                          cover,
+                          fit: BoxFit.cover,
+                          alignment: Alignment.topCenter,
+                          errorBuilder: (_, __, ___) => Container(
+                            decoration: const BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [Color(0xFFfaf5ff), Color(0xFFf3e8ff)],
+                              ),
+                            ),
+                            child: const Center(
+                              child: Icon(
+                                Icons.photo_library_outlined,
+                                color: Color(0xFF8b5cf6),
+                                size: 48,
+                              ),
+                            ),
+                          ),
                         ),
-                      if (readingTime.isNotEmpty)
-                        _StoryChip(
-                          icon: Icons.watch_later_outlined,
-                          label: readingTime,
+                      ),
+                      // "DESTACADA" badge
+                      Positioned(
+                        top: 16,
+                        left: 16,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF8b5cf6), Color(0xFF7c3aed)],
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF7c3aed).withOpacity(0.4),
+                                blurRadius: 12,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.star, size: 14, color: Colors.white),
+                              const SizedBox(width: 6),
+                              Text(
+                                'MÁS RECIENTE',
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
+                      ),
                     ],
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    story.title.isEmpty ? 'Historia sin título' : story.title,
-                    style: theme.textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
+                  )
+                else
+                  Container(
+                    height: isCompact ? 160 : 240,
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Color(0xFFfaf5ff), Color(0xFFf3e8ff)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                    ),
+                    alignment: Alignment.center,
+                    child: const Icon(
+                      Icons.auto_stories,
+                      color: Color(0xFF8b5cf6),
+                      size: 64,
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  Text(
-                    _buildExcerptText(
-                      story.excerpt ?? story.content ?? '',
-                      maxLength: 240,
-                    ),
-                    style: theme.textTheme.bodyLarge?.copyWith(
-                      height: 1.6,
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  if (highlightHearted) ...[
-                    const SizedBox(height: 16),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.favorite, color: colorScheme.primary),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Gracias por enviar un corazón a esta historia',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: colorScheme.primary,
-                            fontWeight: FontWeight.w600,
+                // Content
+                Padding(
+                  padding: EdgeInsets.all(isCompact ? 24 : 32),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Meta chips
+                      Wrap(
+                        spacing: 10,
+                        runSpacing: 10,
+                        children: [
+                          if (story.publishedAt != null)
+                            _StoryChip(
+                              icon: Icons.calendar_today,
+                              label: _formatRelativeDate(story.publishedAt!),
+                              isPurple: true,
+                            ),
+                          if (readingTime.isNotEmpty)
+                            _StoryChip(
+                              icon: Icons.schedule,
+                              label: readingTime,
+                              isPurple: true,
+                            ),
+                        ],
+                      ),
+                      SizedBox(height: isCompact ? 16 : 20),
+                      // Title
+                      Text(
+                        story.title.isEmpty ? 'Historia sin título' : story.title,
+                        style: (isCompact
+                          ? theme.textTheme.headlineSmall
+                          : theme.textTheme.headlineMedium)?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          height: 1.2,
+                          letterSpacing: -0.3,
+                          color: const Color(0xFF1f1b16),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      // Excerpt
+                      Text(
+                        _buildExcerptText(
+                          story.excerpt ?? story.content ?? '',
+                          maxLength: 280,
+                        ),
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                          height: 1.7,
+                          fontSize: 16,
+                          color: const Color(0xFF4b5563),
+                        ),
+                        maxLines: 4,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      // Heart reaction badge
+                      if (highlightHearted) ...[
+                        const SizedBox(height: 20),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFfef3c7),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: const Color(0xFFfbbf24).withOpacity(0.3),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.favorite, color: Color(0xFFdc2626), size: 18),
+                              const SizedBox(width: 8),
+                              Flexible(
+                                child: Text(
+                                  'Ya enviaste un corazón a esta historia',
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    color: const Color(0xFF92400e),
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
-                    ),
-                  ],
-                  const SizedBox(height: 20),
-                  if (highlightHearted)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.favorite, color: colorScheme.primary),
-                          const SizedBox(width: 6),
-                          Text(
-                            'Ya reaccionaste con un corazón',
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: colorScheme.primary,
-                              fontWeight: FontWeight.w600,
+                      SizedBox(height: isCompact ? 20 : 24),
+                      // CTA Button
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: onOpen,
+                          icon: const Icon(Icons.auto_stories, size: 20),
+                          label: const Text('Leer Historia Completa'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF8b5cf6),
+                            foregroundColor: Colors.white,
+                            padding: EdgeInsets.symmetric(
+                              horizontal: isCompact ? 24 : 32,
+                              vertical: isCompact ? 16 : 20,
+                            ),
+                            elevation: 0,
+                            shadowColor: const Color(0xFF7c3aed).withOpacity(0.4),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            textStyle: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
-                        ],
+                        ),
                       ),
-                    ),
-                  FilledButton.icon(
-                    onPressed: onOpen,
-                    icon: const Icon(Icons.menu_book_rounded),
-                    label: const Text('Leer historia completa'),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -1058,84 +1365,117 @@ class _StoryGridCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
     final cover = _storyCoverUrl(story);
     final readingTime = _formatReadingTime(story);
 
     return SizedBox(
-      width: 360,
-      child: Card(
-        elevation: 0,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(24),
-          onTap: onOpen,
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+      width: 380,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: const Color(0xFF8b5cf6).withOpacity(0.1),
+            width: 1.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF7c3aed).withOpacity(0.08),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+              spreadRadius: -2,
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(20),
+            onTap: onOpen,
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Cover image
+                  _StoryThumbnail(coverUrl: cover),
+                  const SizedBox(height: 16),
+                  // Meta chips
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
                     children: [
-                      Wrap(
-                        spacing: 10,
-                        runSpacing: 6,
-                        children: [
-                          if (story.publishedAt != null)
-                            _StoryChip(
-                              icon: Icons.calendar_today_outlined,
-                              label: _formatRelativeDate(story.publishedAt!),
-                            ),
-                          if (readingTime.isNotEmpty)
-                            _StoryChip(
-                              icon: Icons.watch_later_outlined,
-                              label: readingTime,
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
+                      if (story.publishedAt != null)
+                        _StoryChip(
+                          icon: Icons.calendar_today,
+                          label: _formatRelativeDate(story.publishedAt!),
+                          isPurple: true,
+                        ),
+                      if (readingTime.isNotEmpty)
+                        _StoryChip(
+                          icon: Icons.schedule,
+                          label: readingTime,
+                          isPurple: true,
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  // Title
+                  Text(
+                    story.title.isEmpty
+                        ? 'Historia sin título'
+                        : story.title,
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      height: 1.25,
+                      color: const Color(0xFF1f1b16),
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 12),
+                  // Excerpt
+                  Text(
+                    _buildExcerptText(
+                      story.excerpt ?? story.content ?? '',
+                      maxLength: 140,
+                    ),
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: const Color(0xFF6b7280),
+                      height: 1.6,
+                    ),
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 16),
+                  // CTA
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
                       Text(
-                        story.title.isEmpty
-                            ? 'Historia sin título'
-                            : story.title,
-                        style: theme.textTheme.titleMedium?.copyWith(
+                        'Leer historia',
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          color: const Color(0xFF8b5cf6),
                           fontWeight: FontWeight.w700,
+                          fontSize: 15,
                         ),
                       ),
-                      const SizedBox(height: 10),
-                      Text(
-                        _buildExcerptText(
-                          story.excerpt ?? story.content ?? '',
-                          maxLength: 150,
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFf3e8ff),
+                          shape: BoxShape.circle,
                         ),
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                          height: 1.5,
+                        child: const Icon(
+                          Icons.arrow_forward,
+                          color: Color(0xFF8b5cf6),
+                          size: 18,
                         ),
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'Leer historia',
-                            style: theme.textTheme.labelLarge?.copyWith(
-                              color: colorScheme.primary,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          Icon(Icons.arrow_forward_rounded,
-                              color: colorScheme.primary),
-                        ],
                       ),
                     ],
                   ),
-                ),
-                const SizedBox(width: 14),
-                _StoryThumbnail(coverUrl: cover),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -1151,62 +1491,86 @@ class _StoryThumbnail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
-      child: SizedBox(
-        width: 120,
-        height: 120,
+      child: AspectRatio(
+        aspectRatio: 16 / 9,
         child: coverUrl != null && coverUrl!.trim().isNotEmpty
             ? Image.network(
                 coverUrl!,
                 fit: BoxFit.cover,
                 alignment: Alignment.center,
-                errorBuilder: (_, __, ___) => _placeholder(colorScheme),
+                errorBuilder: (_, __, ___) => _placeholder(),
               )
-            : _placeholder(colorScheme),
+            : _placeholder(),
       ),
     );
   }
 
-  Widget _placeholder(ColorScheme colorScheme) {
+  Widget _placeholder() {
     return Container(
-      color: colorScheme.surfaceVariant,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFFfaf5ff), Color(0xFFf3e8ff)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
       alignment: Alignment.center,
-      child: Icon(
-        Icons.photo_outlined,
-        color: colorScheme.onSurfaceVariant,
-        size: 28,
+      child: const Icon(
+        Icons.image_outlined,
+        color: Color(0xFF8b5cf6),
+        size: 36,
       ),
     );
   }
 }
 
 class _StoryChip extends StatelessWidget {
-  const _StoryChip({required this.icon, required this.label});
+  const _StoryChip({
+    required this.icon,
+    required this.label,
+    this.isPurple = false,
+  });
 
   final IconData icon;
   final String label;
+  final bool isPurple;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
       decoration: BoxDecoration(
-        color: colorScheme.secondaryContainer,
+        color: isPurple
+            ? const Color(0xFFf3e8ff)
+            : colorScheme.secondaryContainer,
         borderRadius: BorderRadius.circular(999),
+        border: isPurple
+            ? Border.all(color: const Color(0xFF8b5cf6).withOpacity(0.2))
+            : null,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 16, color: colorScheme.onSecondaryContainer),
-          const SizedBox(width: 6),
+          Icon(
+            icon,
+            size: 15,
+            color: isPurple
+                ? const Color(0xFF7c3aed)
+                : colorScheme.onSecondaryContainer,
+          ),
+          const SizedBox(width: 7),
           Text(
             label,
             style: theme.textTheme.labelMedium?.copyWith(
-              color: colorScheme.onSecondaryContainer,
+              color: isPurple
+                  ? const Color(0xFF6d28d9)
+                  : colorScheme.onSecondaryContainer,
+              fontWeight: isPurple ? FontWeight.w600 : null,
             ),
           ),
         ],

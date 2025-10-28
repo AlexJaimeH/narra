@@ -485,7 +485,7 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
               decoration: BoxDecoration(
                 image: hasCover
                     ? DecorationImage(
@@ -493,7 +493,7 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
                         fit: BoxFit.cover,
                         alignment: Alignment.topCenter,
                         colorFilter: ColorFilter.mode(
-                          colorScheme.surface.withValues(alpha: 0.88),
+                          colorScheme.surface.withValues(alpha: 0.92),
                           BlendMode.srcOver,
                         ),
                       )
@@ -501,16 +501,23 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
                 gradient: LinearGradient(
                   colors: hasCover
                       ? [
-                          colorScheme.surface.withValues(alpha: 0.95),
-                          colorScheme.surface.withValues(alpha: 0.85),
+                          colorScheme.surface.withValues(alpha: 0.96),
+                          colorScheme.surface.withValues(alpha: 0.88),
                         ]
                       : [
-                          colorScheme.primary.withValues(alpha: 0.12),
-                          colorScheme.surface,
+                          const Color(0xFFfdfbf7),
+                          const Color(0xFFf0ebe3),
                         ],
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                 ),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF7c3aed).withOpacity(0.08),
+                    blurRadius: 30,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
               ),
               child: Center(
                 child: ConstrainedBox(
@@ -523,8 +530,10 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
                             ? 'Historia sin título'
                             : story.title,
                         style: theme.textTheme.displaySmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          height: 1.1,
+                          fontWeight: FontWeight.w900,
+                          height: 1.15,
+                          color: const Color(0xFF1f1b16),
+                          letterSpacing: -0.5,
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -575,12 +584,53 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
                         ),
                       ],
                       if (canViewLibrary) ...[
-                        const SizedBox(height: 16),
-                        OutlinedButton.icon(
-                          onPressed: () => _goToAuthorLibrary(story),
-                          icon: const Icon(Icons.collections_bookmark_outlined),
-                          label: Text(
-                            'Ver todas las historias de $displayName',
+                        const SizedBox(height: 20),
+                        Container(
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF8b5cf6), Color(0xFF7c3aed)],
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF8b5cf6).withOpacity(0.3),
+                                blurRadius: 12,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              onTap: () => _goToAuthorLibrary(story),
+                              borderRadius: BorderRadius.circular(12),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 24,
+                                  vertical: 14,
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(
+                                      Icons.collections_bookmark_outlined,
+                                      color: Colors.white,
+                                      size: 20,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Flexible(
+                                      child: Text(
+                                        'Ver todas las historias de $displayName',
+                                        style: theme.textTheme.bodyMedium?.copyWith(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
                           ),
                         ),
                       ],
@@ -634,38 +684,98 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
 
   Widget _buildReactionsRow(ThemeData theme, ColorScheme colorScheme) {
     final canReact = _canInteract;
-    return Row(
-      children: [
-        FilledButton.icon(
-          onPressed:
-              (!canReact || _isUpdatingReaction) ? null : _toggleReaction,
-          style: FilledButton.styleFrom(
-            backgroundColor:
-                _isHearted ? colorScheme.primary : colorScheme.primaryContainer,
-            foregroundColor:
-                _isHearted ? colorScheme.onPrimary : colorScheme.primary,
-          ),
-          icon: Icon(_isHearted ? Icons.favorite : Icons.favorite_border),
-          label: Text(
-            _isUpdatingReaction
-                ? 'Enviando…'
-                : _isHearted
-                    ? 'Te encantó'
-                    : 'Enviar cariño',
-          ),
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Colors.white,
+            const Color(0xFFfdfbf7),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Text(
-            canReact
-                ? 'Tus corazones quedan guardados de forma privada para el autor.'
-                : 'Este botón se activará cuando accedas con tu enlace personal.',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: colorScheme.onSurfaceVariant,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: const Color(0xFF8b5cf6).withOpacity(0.1),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF7c3aed).withOpacity(0.08),
+            blurRadius: 20,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              gradient: _isHearted
+                  ? const LinearGradient(
+                      colors: [Color(0xFF8b5cf6), Color(0xFF7c3aed)],
+                    )
+                  : null,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: _isHearted
+                  ? [
+                      BoxShadow(
+                        color: const Color(0xFF8b5cf6).withOpacity(0.4),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Material(
+              color: _isHearted ? Colors.transparent : const Color(0xFFf3e8ff),
+              borderRadius: BorderRadius.circular(12),
+              child: InkWell(
+                onTap: (!canReact || _isUpdatingReaction) ? null : _toggleReaction,
+                borderRadius: BorderRadius.circular(12),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _isHearted ? Icons.favorite : Icons.favorite_border,
+                        color: _isHearted ? Colors.white : const Color(0xFF8b5cf6),
+                        size: 24,
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        _isUpdatingReaction
+                            ? 'Enviando…'
+                            : _isHearted
+                                ? 'Te encantó'
+                                : 'Enviar cariño',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          color: _isHearted ? Colors.white : const Color(0xFF8b5cf6),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
           ),
-        ),
-      ],
+          const SizedBox(width: 20),
+          Expanded(
+            child: Text(
+              canReact
+                  ? 'Tus corazones quedan guardados de forma privada para el autor.'
+                  : 'Este botón se activará cuando accedas con tu enlace personal.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: const Color(0xFF6d6d6d),
+                height: 1.5,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -673,29 +783,68 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
     final viewerName = _accessRecord?.subscriberName ?? 'Suscriptor';
     final canComment = _canInteract;
 
-    return Card(
-      elevation: 0,
-      color: colorScheme.surfaceContainer,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    return Container(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Colors.white, Color(0xFFfdfbf7)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: const Color(0xFF8b5cf6).withOpacity(0.15),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF7c3aed).withOpacity(0.08),
+            blurRadius: 30,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(32),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                Icon(Icons.chat_bubble_outline, color: colorScheme.primary),
-                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF8b5cf6), Color(0xFF7c3aed)],
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.chat_bubble_outline,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 16),
                 Text(
                   'Comentarios',
-                  style: theme.textTheme.titleMedium,
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFF1f1b16),
+                  ),
                 ),
                 const SizedBox(width: 12),
-                Chip(
-                  label: Text('$_totalComments'),
-                  backgroundColor: colorScheme.primaryContainer,
-                  labelStyle: theme.textTheme.labelMedium?.copyWith(
-                    color: colorScheme.onPrimaryContainer,
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFf3e8ff),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '$_totalComments',
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      color: const Color(0xFF8b5cf6),
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ],
@@ -871,23 +1020,45 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
         children: [
           Container(
             decoration: BoxDecoration(
-              color: colorScheme.surface,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: colorScheme.surfaceContainerHighest),
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: const Color(0xFF8b5cf6).withOpacity(0.1),
+                width: 1,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF7c3aed).withOpacity(0.05),
+                  blurRadius: 15,
+                  offset: const Offset(0, 3),
+                ),
+              ],
             ),
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(20),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                CircleAvatar(
-                  radius: 18,
-                  backgroundColor: colorScheme.primaryContainer,
-                  foregroundColor: colorScheme.onPrimaryContainer,
-                  child: Text(
-                    _initialsFor(comment.authorName),
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: colorScheme.onPrimaryContainer,
+                Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF8b5cf6).withOpacity(0.2),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: CircleAvatar(
+                    radius: 20,
+                    backgroundColor: const Color(0xFFf3e8ff),
+                    foregroundColor: const Color(0xFF8b5cf6),
+                    child: Text(
+                      _initialsFor(comment.authorName),
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF8b5cf6),
+                      ),
                     ),
                   ),
                 ),
@@ -1095,15 +1266,37 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Otras historias del autor',
-            style: theme.textTheme.titleLarge,
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF8b5cf6), Color(0xFF7c3aed)],
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.auto_stories,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'Otras historias del autor',
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: const Color(0xFF1f1b16),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 12),
           Text(
             'Cuando haya más recuerdos publicados, aparecerán aquí.',
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: colorScheme.onSurfaceVariant,
+              color: const Color(0xFF6d6d6d),
             ),
           ),
         ],
@@ -1113,9 +1306,31 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Más historias de $displayName',
-          style: theme.textTheme.titleLarge,
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF8b5cf6), Color(0xFF7c3aed)],
+                ),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.auto_stories,
+                color: Colors.white,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              'Más historias de $displayName',
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w800,
+                color: const Color(0xFF1f1b16),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 16),
         LayoutBuilder(
@@ -1264,10 +1479,15 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
       widgets.add(
         SelectableText(
           trimmed,
-          style: theme.textTheme.bodyLarge?.copyWith(height: 1.65),
+          style: theme.textTheme.bodyLarge?.copyWith(
+            height: 1.8,
+            fontSize: 18,
+            color: const Color(0xFF2d2d2d),
+            letterSpacing: 0.2,
+          ),
         ),
       );
-      widgets.add(const SizedBox(height: 20));
+      widgets.add(const SizedBox(height: 24));
     }
 
     for (final paragraph in paragraphs) {
@@ -1374,21 +1594,49 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
   }
 
   Widget _buildHeaderActions(BuildContext context, Story story) {
-    return Wrap(
-      spacing: 8,
-      children: [
-        OutlinedButton.icon(
-          onPressed: () {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFf3e8ff),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: const Color(0xFF8b5cf6).withOpacity(0.2),
+          width: 1,
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
             if (Navigator.of(context).canPop()) {
               Navigator.of(context).pop();
             } else {
               _goToAuthorLibrary(story);
             }
           },
-          icon: const Icon(Icons.arrow_back_ios_new),
-          label: const Text('Volver al blog'),
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.arrow_back_ios_new,
+                  size: 16,
+                  color: Color(0xFF8b5cf6),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Volver al blog',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: const Color(0xFF8b5cf6),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
-      ],
+      ),
     );
   }
 
@@ -1663,19 +1911,28 @@ class _MetadataChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest,
+        color: const Color(0xFFf3e8ff),
         borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: const Color(0xFF8b5cf6).withOpacity(0.2),
+          width: 1,
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 18, color: colorScheme.primary),
+          Icon(icon, size: 18, color: const Color(0xFF8b5cf6)),
           const SizedBox(width: 8),
-          Text(label, style: theme.textTheme.bodyMedium),
+          Text(
+            label,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: const Color(0xFF6d28d9),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ],
       ),
     );
@@ -1717,15 +1974,27 @@ class _AuthorAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    return CircleAvatar(
-      radius: 28,
-      backgroundColor: colorScheme.primary.withValues(alpha: 0.2),
-      backgroundImage: avatarUrl != null && avatarUrl!.isNotEmpty
-          ? NetworkImage(avatarUrl!)
-          : null,
-      child: avatarUrl == null || avatarUrl!.isEmpty
-          ? Icon(Icons.person, color: colorScheme.primary)
-          : null,
+    return Container(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF8b5cf6).withOpacity(0.3),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: CircleAvatar(
+        radius: 28,
+        backgroundColor: const Color(0xFFf3e8ff),
+        backgroundImage: avatarUrl != null && avatarUrl!.isNotEmpty
+            ? NetworkImage(avatarUrl!)
+            : null,
+        child: avatarUrl == null || avatarUrl!.isEmpty
+            ? const Icon(Icons.person, color: Color(0xFF8b5cf6))
+            : null,
+      ),
     );
   }
 }
@@ -1742,7 +2011,6 @@ class _RecommendedCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
     final cover = story.photos.isNotEmpty ? story.photos.first.photoUrl : null;
     final excerpt = story.excerpt ??
         (story.content ?? '').split('\n').firstWhere(
@@ -1750,68 +2018,107 @@ class _RecommendedCard extends StatelessWidget {
               orElse: () => 'Un recuerdo especial',
             );
 
-    return Material(
-      color: colorScheme.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(20),
-      child: InkWell(
-        onTap: onTap,
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (cover != null)
-              ClipRRect(
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(20)),
-                child: AspectRatio(
-                  aspectRatio: 16 / 9,
-                  child: Image.network(
-                    cover,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) => Container(
-                      color: colorScheme.surfaceContainerHighest,
-                      alignment: Alignment.center,
-                      child: const Icon(Icons.image_outlined, size: 42),
+        border: Border.all(
+          color: const Color(0xFF8b5cf6).withOpacity(0.1),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF7c3aed).withOpacity(0.08),
+            blurRadius: 20,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (cover != null)
+                ClipRRect(
+                  borderRadius:
+                      const BorderRadius.vertical(top: Radius.circular(20)),
+                  child: AspectRatio(
+                    aspectRatio: 16 / 9,
+                    child: Image.network(
+                      cover,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) => Container(
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [Color(0xFFf3e8ff), Color(0xFFfdfbf7)],
+                          ),
+                        ),
+                        alignment: Alignment.center,
+                        child: const Icon(
+                          Icons.image_outlined,
+                          size: 48,
+                          color: Color(0xFF8b5cf6),
+                        ),
+                      ),
                     ),
                   ),
                 ),
-              ),
-            Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    story.title.isEmpty ? 'Historia sin título' : story.title,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    excerpt,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Icon(Icons.arrow_forward,
-                          size: 18, color: colorScheme.primary),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Leer historia',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: colorScheme.primary,
-                        ),
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      story.title.isEmpty ? 'Historia sin título' : story.title,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF1f1b16),
                       ),
-                    ],
-                  ),
-                ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      excerpt,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: const Color(0xFF6d6d6d),
+                        height: 1.5,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Leer historia',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: const Color(0xFF8b5cf6),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFf3e8ff),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.arrow_forward,
+                            size: 18,
+                            color: Color(0xFF8b5cf6),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

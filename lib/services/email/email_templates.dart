@@ -40,28 +40,77 @@ class EmailTemplates {
 <html lang="es">
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>$escapedTitle</title>
   </head>
-  <body style="margin:0;padding:0;background-color:#f4f3f0;font-family:'Helvetica Neue',Arial,sans-serif;color:#2d2a26;">
-    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:640px;margin:0 auto;padding:24px 16px;">
+  <body style="margin:0;padding:0;background:linear-gradient(135deg, #fdfbf7 0%, #f0ebe3 100%);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;color:#2d2a26;">
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:660px;margin:40px auto;padding:0 20px;">
       <tr>
-        <td style="background:#ffffff;border-radius:20px;padding:32px;box-shadow:0 12px 40px rgba(15,23,42,0.08);">
-          <p style="margin:0;font-size:16px;color:#6b5b50;letter-spacing:0.04em;text-transform:uppercase;">$escapedAuthor compartió un recuerdo contigo</p>
-          <h1 style="font-size:28px;line-height:1.25;margin:16px 0 12px;font-weight:700;color:#1f1b16;">$escapedTitle</h1>
-          <p style="margin:0;font-size:17px;line-height:1.6;color:#443f39;">$greeting, $escapedAuthor acaba de publicar una historia para ti en Narra.</p>
-
-          ${escapedHero != null ? '<div style="margin:28px 0;border-radius:16px;overflow:hidden;"><img src="$escapedHero" alt="" style="display:block;width:100%;height:auto;" /></div>' : ''}
-
-          ${escapedExcerpt != null ? '<p style="margin:0;font-size:17px;line-height:1.65;color:#443f39;background-color:#f7f4ef;padding:20px;border-radius:16px;">$escapedExcerpt</p>' : ''}
-
-          <div style="text-align:center;margin:32px 0 24px;">
-            <a href="$escapedLink" style="display:inline-block;background-color:#7f5af0;color:#ffffff;text-decoration:none;font-weight:600;font-size:16px;padding:16px 32px;border-radius:999px;">Leer historia completa</a>
+        <td>
+          <!-- Logo/Brand -->
+          <div style="text-align:center;margin-bottom:32px;">
+            <div style="display:inline-block;background:linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);color:#ffffff;font-weight:800;font-size:18px;padding:10px 20px;border-radius:12px;letter-spacing:-0.02em;">Narra</div>
           </div>
 
-          <p style="margin:0;font-size:15px;line-height:1.6;color:#6b5b50;">Este enlace es único para ti. Al abrirlo te reconoceremos como <strong>${_escape(subscriber.name)}</strong> para que puedas dejar comentarios y reacciones.</p>
-          <p style="margin:16px 0 0;font-size:14px;line-height:1.6;color:#8c8176;">Si el botón no funciona, copia y pega este enlace en tu navegador:<br /><a href="$escapedLink" style="color:#7f5af0;">$escapedLink</a></p>
-          <hr style="border:none;border-top:1px solid #ece7e1;margin:32px 0;" />
-          <p style="margin:0;font-size:12px;color:#a59b92;line-height:1.5;">Recibiste este correo porque formas parte del círculo de confianza de $escapedAuthor en Narra. Si necesitas un nuevo enlace o quieres dejar de recibir historias, responde directamente a este mensaje.</p>
+          <!-- Main Card -->
+          <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#ffffff;border-radius:24px;box-shadow:0 20px 60px rgba(124,58,237,0.12),0 8px 20px rgba(0,0,0,0.06);overflow:hidden;">
+            <tr>
+              <td style="padding:0;">
+                <!-- Header Section -->
+                <div style="background:linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);padding:40px 36px;text-align:center;">
+                  <div style="display:inline-block;background:rgba(255,255,255,0.25);backdrop-filter:blur(10px);border-radius:16px;padding:12px 24px;margin-bottom:20px;">
+                    <p style="margin:0;font-size:14px;color:#f3e8ff;letter-spacing:0.08em;text-transform:uppercase;font-weight:600;">✨ Nueva Historia</p>
+                  </div>
+                  <h1 style="font-size:32px;line-height:1.2;margin:0;font-weight:800;color:#ffffff;text-shadow:0 2px 8px rgba(0,0,0,0.15);">$escapedTitle</h1>
+                </div>
+
+                <!-- Content Section -->
+                <div style="padding:40px 36px;">
+                  <p style="margin:0 0 24px 0;font-size:18px;line-height:1.65;color:#374151;font-weight:500;">$greeting,</p>
+                  <p style="margin:0 0 28px 0;font-size:17px;line-height:1.7;color:#4b5563;">$escapedAuthor acaba de compartir un nuevo recuerdo contigo. Cada historia es una ventana a sus experiencias y momentos especiales.</p>
+
+                  ${escapedHero != null ? '<div style="margin:32px 0;border-radius:20px;overflow:hidden;box-shadow:0 12px 32px rgba(0,0,0,0.12);"><img src="$escapedHero" alt="Imagen de la historia" style="display:block;width:100%;height:auto;" /></div>' : ''}
+
+                  ${escapedExcerpt != null ? '<div style="margin:32px 0;background:linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%);padding:28px;border-radius:20px;border-left:4px solid #8b5cf6;"><p style="margin:0;font-size:17px;line-height:1.75;color:#4b5563;font-style:italic;">"$escapedExcerpt"</p></div>' : ''}
+
+                  <!-- CTA Button -->
+                  <div style="text-align:center;margin:40px 0 32px;">
+                    <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;">
+                      <tr>
+                        <td style="border-radius:16px;background:linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);box-shadow:0 8px 24px rgba(124,58,237,0.35),0 4px 12px rgba(0,0,0,0.1);">
+                          <a href="$escapedLink" style="display:inline-block;color:#ffffff;text-decoration:none;font-weight:700;font-size:17px;padding:18px 42px;border-radius:16px;letter-spacing:0.01em;">📖 Leer Historia Completa</a>
+                        </td>
+                      </tr>
+                    </table>
+                  </div>
+
+                  <!-- Info Box -->
+                  <div style="background:#fafaf9;border-radius:16px;padding:24px;margin:32px 0;">
+                    <p style="margin:0 0 12px 0;font-size:15px;line-height:1.6;color:#57534e;">
+                      <span style="display:inline-block;background:#8b5cf6;color:#ffffff;font-size:12px;font-weight:700;padding:4px 10px;border-radius:6px;margin-right:8px;vertical-align:middle;">PERSONALIZADO</span>
+                      Este enlace es único para ti
+                    </p>
+                    <p style="margin:0;font-size:14px;line-height:1.65;color:#78716c;">Al abrirlo te reconoceremos como <strong style="color:#292524;">${_escape(subscriber.name)}</strong> para que puedas dejar comentarios y reacciones en la historia.</p>
+                  </div>
+
+                  <!-- Alternative Link -->
+                  <div style="background:#f9fafb;border:2px dashed #e5e7eb;border-radius:12px;padding:20px;margin:24px 0 0 0;">
+                    <p style="margin:0 0 8px 0;font-size:13px;color:#6b7280;font-weight:600;">Si el botón no funciona, usa este enlace:</p>
+                    <p style="margin:0;font-size:13px;word-break:break-all;"><a href="$escapedLink" style="color:#7c3aed;text-decoration:none;">$escapedLink</a></p>
+                  </div>
+                </div>
+
+                <!-- Footer -->
+                <div style="background:#fafaf9;padding:32px 36px;border-top:1px solid #e7e5e4;">
+                  <p style="margin:0 0 16px 0;font-size:14px;line-height:1.6;color:#78716c;text-align:center;">Formas parte del círculo de confianza de <strong style="color:#292524;">$escapedAuthor</strong> en Narra</p>
+                  <p style="margin:0;font-size:12px;color:#a8a29e;line-height:1.6;text-align:center;">¿Necesitas un nuevo enlace o prefieres no recibir más historias? Responde directamente a este mensaje y te ayudaremos.</p>
+                </div>
+              </td>
+            </tr>
+          </table>
+
+          <!-- Bottom Spacing -->
+          <div style="height:40px;"></div>
         </td>
       </tr>
     </table>
@@ -127,24 +176,88 @@ class EmailTemplates {
 <html lang="es">
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Tu acceso a las historias privadas de $escapedAuthor</title>
   </head>
-  <body style="margin:0;padding:0;background-color:#f4f3f0;font-family:'Helvetica Neue',Arial,sans-serif;color:#2d2a26;">
-    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:640px;margin:0 auto;padding:24px 16px;">
+  <body style="margin:0;padding:0;background:linear-gradient(135deg, #fdfbf7 0%, #f0ebe3 100%);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;color:#2d2a26;">
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:660px;margin:40px auto;padding:0 20px;">
       <tr>
-        <td style="background:#ffffff;border-radius:20px;padding:36px;box-shadow:0 18px 40px rgba(15,23,42,0.08);">
-          <p style="margin:0;font-size:15px;letter-spacing:0.08em;text-transform:uppercase;color:#8c8176;">Invitación privada</p>
-          <h1 style="margin:12px 0 16px;font-size:28px;line-height:1.2;color:#1f1b16;">$escapedAuthor te abrió su círculo</h1>
-          <p style="margin:0;font-size:17px;line-height:1.65;color:#443f39;">$greeting, usamos este enlace único para reconocer que eres <strong>$escapedSubscriber</strong> al leer historias en Narra.</p>
-
-          <div style="margin:32px 0 28px;text-align:center;">
-            <a href="$escapedLink" style="display:inline-block;background-color:#7f5af0;color:#ffffff;text-decoration:none;font-weight:600;font-size:17px;padding:18px 34px;border-radius:999px;">Guardar mi acceso privado</a>
+        <td>
+          <!-- Logo/Brand -->
+          <div style="text-align:center;margin-bottom:32px;">
+            <div style="display:inline-block;background:linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);color:#ffffff;font-weight:800;font-size:18px;padding:10px 20px;border-radius:12px;letter-spacing:-0.02em;">Narra</div>
           </div>
 
-          <p style="margin:0;font-size:15px;line-height:1.65;color:#6b5b50;">El enlace funciona una sola vez por dispositivo. Después de abrirlo podrás leer cualquier historia privada de $escapedAuthor sin volver a pedir acceso.</p>
-          <p style="margin:18px 0 0;font-size:14px;line-height:1.6;color:#8c8176;">Si el botón no funciona, copia y pega este enlace en tu navegador:<br /><a href="$escapedLink" style="color:#7f5af0;">$escapedLink</a></p>
-          <hr style="border:none;border-top:1px solid #ece7e1;margin:32px 0;" />
-          <p style="margin:0;font-size:12px;color:#a59b92;line-height:1.5;">Recibiste este correo porque $escapedAuthor te agregó como suscriptor privado en Narra. Si necesitas un nuevo enlace o deseas dejar de recibir recuerdos, responde directamente a este correo.</p>
+          <!-- Main Card -->
+          <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#ffffff;border-radius:24px;box-shadow:0 20px 60px rgba(124,58,237,0.12),0 8px 20px rgba(0,0,0,0.06);overflow:hidden;">
+            <tr>
+              <td style="padding:0;">
+                <!-- Header Section -->
+                <div style="background:linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);padding:48px 36px;text-align:center;">
+                  <div style="display:inline-block;background:rgba(255,255,255,0.25);backdrop-filter:blur(10px);border-radius:16px;padding:12px 24px;margin-bottom:20px;">
+                    <p style="margin:0;font-size:14px;color:#f3e8ff;letter-spacing:0.08em;text-transform:uppercase;font-weight:600;">🔐 Invitación Privada</p>
+                  </div>
+                  <h1 style="font-size:30px;line-height:1.25;margin:0;font-weight:800;color:#ffffff;text-shadow:0 2px 8px rgba(0,0,0,0.15);">$escapedAuthor te abrió su círculo de confianza</h1>
+                </div>
+
+                <!-- Content Section -->
+                <div style="padding:40px 36px;">
+                  <p style="margin:0 0 24px 0;font-size:18px;line-height:1.65;color:#374151;font-weight:500;">$greeting,</p>
+                  <p style="margin:0 0 28px 0;font-size:17px;line-height:1.7;color:#4b5563;">Has sido invitado a un círculo privado en Narra. Este enlace mágico te permite acceder a las historias personales que <strong style="color:#292524;">$escapedAuthor</strong> comparte contigo.</p>
+
+                  <!-- Feature Boxes -->
+                  <div style="background:linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%);border-radius:20px;padding:28px;margin:32px 0;border-left:4px solid #8b5cf6;">
+                    <div style="margin-bottom:20px;">
+                      <p style="margin:0 0 8px 0;font-size:15px;font-weight:700;color:#6d28d9;">✨ Acceso automático</p>
+                      <p style="margin:0;font-size:14px;line-height:1.6;color:#57534e;">Te reconoceremos como <strong style="color:#292524;">$escapedSubscriber</strong> cada vez que leas una historia.</p>
+                    </div>
+                    <div style="margin-bottom:20px;">
+                      <p style="margin:0 0 8px 0;font-size:15px;font-weight:700;color:#6d28d9;">💬 Interacción personal</p>
+                      <p style="margin:0;font-size:14px;line-height:1.6;color:#57534e;">Podrás dejar comentarios y reacciones en cada historia.</p>
+                    </div>
+                    <div>
+                      <p style="margin:0 0 8px 0;font-size:15px;font-weight:700;color:#6d28d9;">📱 Un clic por dispositivo</p>
+                      <p style="margin:0;font-size:14px;line-height:1.6;color:#57534e;">Solo necesitas hacer clic una vez en este enlace desde cada dispositivo que uses.</p>
+                    </div>
+                  </div>
+
+                  <!-- CTA Button -->
+                  <div style="text-align:center;margin:40px 0 32px;">
+                    <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;">
+                      <tr>
+                        <td style="border-radius:16px;background:linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);box-shadow:0 8px 24px rgba(124,58,237,0.35),0 4px 12px rgba(0,0,0,0.1);">
+                          <a href="$escapedLink" style="display:inline-block;color:#ffffff;text-decoration:none;font-weight:700;font-size:17px;padding:18px 42px;border-radius:16px;letter-spacing:0.01em;">🎁 Activar Mi Acceso Privado</a>
+                        </td>
+                      </tr>
+                    </table>
+                  </div>
+
+                  <!-- Info Box -->
+                  <div style="background:#fffbeb;border:2px solid #fde047;border-radius:16px;padding:24px;margin:32px 0;">
+                    <p style="margin:0 0 12px 0;font-size:15px;line-height:1.6;color:#78350f;font-weight:600;">
+                      ⚡ Importante
+                    </p>
+                    <p style="margin:0;font-size:14px;line-height:1.65;color:#92400e;">Este enlace funciona una sola vez por dispositivo. Después de activarlo, podrás leer todas las historias privadas de $escapedAuthor sin volver a necesitar el enlace.</p>
+                  </div>
+
+                  <!-- Alternative Link -->
+                  <div style="background:#f9fafb;border:2px dashed #e5e7eb;border-radius:12px;padding:20px;margin:24px 0 0 0;">
+                    <p style="margin:0 0 8px 0;font-size:13px;color:#6b7280;font-weight:600;">Si el botón no funciona, copia y pega este enlace:</p>
+                    <p style="margin:0;font-size:13px;word-break:break-all;"><a href="$escapedLink" style="color:#7c3aed;text-decoration:none;">$escapedLink</a></p>
+                  </div>
+                </div>
+
+                <!-- Footer -->
+                <div style="background:#fafaf9;padding:32px 36px;border-top:1px solid #e7e5e4;">
+                  <p style="margin:0 0 16px 0;font-size:14px;line-height:1.6;color:#78716c;text-align:center;">Has sido agregado al círculo privado de <strong style="color:#292524;">$escapedAuthor</strong></p>
+                  <p style="margin:0;font-size:12px;color:#a8a29e;line-height:1.6;text-align:center;">¿Necesitas un nuevo enlace o prefieres no recibir más invitaciones? Responde directamente a este mensaje y te ayudaremos.</p>
+                </div>
+              </td>
+            </tr>
+          </table>
+
+          <!-- Bottom Spacing -->
+          <div style="height:40px;"></div>
         </td>
       </tr>
     </table>

@@ -24,6 +24,8 @@ import 'package:narra/services/voice_recorder.dart';
 import 'package:narra/services/audio_upload_service.dart';
 import 'package:narra/repositories/voice_recording_repository.dart';
 import 'package:narra/services/user_service.dart';
+import 'package:narra/services/subscriber_service.dart';
+import 'package:narra/services/email/subscriber_email_service.dart';
 import 'package:narra/screens/app/top_navigation_bar.dart';
 import 'package:narra/supabase/narra_client.dart';
 
@@ -2310,7 +2312,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                 smartQuotesType: SmartQuotesType.disabled,
                 textCapitalization: TextCapitalization.sentences,
                 enableIMEPersonalizedLearning: false,
-                autofillHints: const <String>[],
+                autofillHints: null,
+                scribbleEnabled: false,
               ),
               SizedBox(height: verticalSpacing),
               Text(
@@ -2351,7 +2354,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                   smartQuotesType: SmartQuotesType.disabled,
                   textCapitalization: TextCapitalization.sentences,
                   enableIMEPersonalizedLearning: false,
-                  autofillHints: const <String>[],
+                  autofillHints: null,
+                  scribbleEnabled: false,
                 ),
               ),
               SizedBox(height: verticalSpacing),
@@ -6292,6 +6296,9 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         _hasChanges = false;
       });
 
+      // Send emails to subscribers in background
+      _sendPublishedStoryEmails(publishedStory);
+
       messenger.showSnackBar(
         const SnackBar(
           content: Text('✓ Historia publicada y enviada a suscriptores'),
@@ -6307,6 +6314,35 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error al publicar: $e')),
       );
+    }
+  }
+
+  Future<void> _sendPublishedStoryEmails(Story story) async {
+    try {
+      // Get current user
+      final user = NarraSupabaseClient.currentUser;
+      if (user == null) return;
+
+      // Get confirmed subscribers only
+      final subscribers = await SubscriberService.getConfirmedSubscribers();
+      if (subscribers.isEmpty) return;
+
+      // Get user profile for display name
+      final profile = await UserService.getCurrentUserProfile();
+      final authorName = profile?['display_name'] as String? ??
+                        profile?['name'] as String? ??
+                        user.email?.split('@').first ??
+                        'Tu autor en Narra';
+
+      // Send emails
+      await SubscriberEmailService.sendStoryPublished(
+        story: story,
+        subscribers: subscribers,
+        authorDisplayName: authorName,
+      );
+    } catch (e) {
+      debugPrint('Error sending story published emails: $e');
+      // Don't show error to user - emails are sent in background
     }
   }
 

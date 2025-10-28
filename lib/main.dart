@@ -4,7 +4,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:narra/screens/app/app_navigation.dart';
-import 'package:narra/screens/landing_page.dart';
 import 'package:narra/supabase/supabase_config.dart';
 import 'package:narra/theme_controller.dart';
 
@@ -14,11 +13,12 @@ void main() async {
   if (kIsWeb) {
     usePathUrlStrategy();
 
-    // Check if we're on a /blog/* route - these should be handled by React, not Flutter
+    // Flutter ONLY handles /app/* routes
+    // All other routes (/, /blog/*) are handled by React
     final currentPath = Uri.base.path;
-    if (currentPath.startsWith('/blog/')) {
-      // Force reload so Cloudflare Pages can serve the React blog
-      runApp(const _BlogRedirectWidget());
+    if (!currentPath.startsWith('/app')) {
+      // Not an app route - redirect to let React handle it
+      runApp(const _ReactRedirectWidget());
       return;
     }
   }
@@ -57,23 +57,12 @@ class NarraApp extends StatelessWidget {
             themeMode: ThemeMode.system,
             initialRoute: _resolveInitialRoute(),
             onGenerateRoute: (settings) {
-              final routeName = settings.name ?? '/';
+              final routeName = settings.name ?? '/app';
 
-              // Ignore /blog/* routes - these are handled by React app
-              if (routeName.startsWith('/blog/')) {
-                return null;
-              }
-
-              // All Flutter app routes are now under /app/*
-              // Blog routes (/blog/*) are handled by React
+              // Flutter ONLY handles /app/* routes
+              // All other routes are handled by React
 
               switch (routeName) {
-                case '/':
-                case '/landing':
-                  return MaterialPageRoute(
-                    builder: (_) => const LandingPage(),
-                    settings: settings,
-                  );
                 case '/app':
                   final initialIndex =
                       settings.arguments is int ? settings.arguments as int : 0;
@@ -83,8 +72,9 @@ class NarraApp extends StatelessWidget {
                   );
               }
 
+              // Default to app navigation
               return MaterialPageRoute(
-                builder: (_) => const LandingPage(),
+                builder: (_) => AppNavigation(initialIndex: 0),
                 settings: settings,
               );
             },
@@ -96,38 +86,16 @@ class NarraApp extends StatelessWidget {
 }
 
 String _resolveInitialRoute() {
-  final baseUri = Uri.base;
-
-  // Check if accessing /app route directly
-  if (baseUri.pathSegments.isNotEmpty) {
-    final first = baseUri.pathSegments.first;
-    if (first == 'app') {
-      return '/app';
-    }
-    if (first == 'landing') {
-      return '/landing';
-    }
-  }
-
-  final defaultRouteName =
-      WidgetsBinding.instance.platformDispatcher.defaultRouteName;
-  if (defaultRouteName.isNotEmpty && defaultRouteName != '/') {
-    final normalized = defaultRouteName.startsWith('/')
-        ? defaultRouteName
-        : '/$defaultRouteName';
-
-    if (normalized == '/app' || normalized == '/landing') {
-      return normalized;
-    }
-  }
-
-  return '/';
+  // Flutter only handles /app/* routes
+  // This function should always return '/app' since we've already
+  // filtered out non-app routes in main()
+  return '/app';
 }
 
-/// Lightweight widget shown when accessing /blog/* routes
-/// This prevents Flutter from loading and allows Cloudflare Pages to serve the React blog
-class _BlogRedirectWidget extends StatelessWidget {
-  const _BlogRedirectWidget();
+/// Lightweight widget shown when accessing non-/app routes (/, /blog/*)
+/// This prevents Flutter from loading and allows Cloudflare Pages to serve the React app
+class _ReactRedirectWidget extends StatelessWidget {
+  const _ReactRedirectWidget();
 
   @override
   Widget build(BuildContext context) {
@@ -166,7 +134,7 @@ class _BlogRedirectWidget extends StatelessWidget {
               ),
               const SizedBox(height: 24),
               Text(
-                'Cargando blog...',
+                'Cargando...',
                 style: TextStyle(
                   fontSize: 16,
                   color: Colors.grey[700],

@@ -365,7 +365,8 @@ class _SubscriberWelcomePageState extends State<SubscriberWelcomePage> {
     Story? highlightStory,
   }) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final mediaQuery = MediaQuery.of(context);
+    final isCompact = mediaQuery.size.width < 720;
     final hasCover = profile?.coverImageUrl?.trim().isNotEmpty == true;
     final displayName = profile?.resolvedDisplayName ?? 'Tu autor/a en Narra';
     final tagline = profile?.tagline?.trim();
@@ -375,27 +376,34 @@ class _SubscriberWelcomePageState extends State<SubscriberWelcomePage> {
 
     final statsChips = _buildAuthorStats(
       theme: theme,
-      colorScheme: colorScheme,
       totalStories: totalStories,
       highlightStory: highlightStory,
       highlightHearted: highlightHearted,
+      isCompact: isCompact,
     );
 
     return Container(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(32),
+        borderRadius: BorderRadius.circular(isCompact ? 24 : 32),
         boxShadow: [
           BoxShadow(
-            color: colorScheme.shadow.withOpacity(0.12),
-            blurRadius: 40,
-            offset: const Offset(0, 24),
+            color: const Color(0xFF7c3aed).withOpacity(0.15),
+            blurRadius: 60,
+            offset: const Offset(0, 20),
+            spreadRadius: -5,
+          ),
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 30,
+            offset: const Offset(0, 10),
           ),
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(32),
+        borderRadius: BorderRadius.circular(isCompact ? 24 : 32),
         child: Stack(
           children: [
+            // Background - Cover image or gradient
             if (hasCover)
               Positioned.fill(
                 child: Image.network(
@@ -405,18 +413,19 @@ class _SubscriberWelcomePageState extends State<SubscriberWelcomePage> {
                   errorBuilder: (_, __, ___) => const SizedBox.shrink(),
                 ),
               ),
+            // Gradient overlay
             Positioned.fill(
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: hasCover
                         ? [
-                            colorScheme.surface.withOpacity(0.92),
-                            colorScheme.surface.withOpacity(0.82),
+                            const Color(0xFFfdfbf7).withOpacity(0.96),
+                            const Color(0xFFf0ebe3).withOpacity(0.92),
                           ]
                         : [
-                            colorScheme.primaryContainer.withOpacity(0.5),
-                            colorScheme.surface,
+                            const Color(0xFFfaf5ff), // Light purple
+                            const Color(0xFFfdfbf7), // Cream
                           ],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
@@ -424,41 +433,74 @@ class _SubscriberWelcomePageState extends State<SubscriberWelcomePage> {
                 ),
               ),
             ),
+            // Content
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 36, vertical: 40),
+              padding: EdgeInsets.all(isCompact ? 24 : 40),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Hola, $subscriberName',
-                    style: theme.textTheme.labelLarge?.copyWith(
-                      letterSpacing: 0.2,
-                      color: colorScheme.onSurfaceVariant,
+                  // Welcome badge
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF8b5cf6), Color(0xFF7c3aed)],
+                      ),
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF7c3aed).withOpacity(0.3),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.waving_hand, size: 16, color: Colors.white),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Hola, $subscriberName',
+                          style: theme.textTheme.labelLarge?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  SizedBox(height: isCompact ? 20 : 24),
+                  // Author info
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      _AuthorPortrait(avatarUrl: profile?.avatarUrl),
-                      const SizedBox(width: 20),
+                      _AuthorPortrait(avatarUrl: profile?.avatarUrl, isCompact: isCompact),
+                      SizedBox(width: isCompact ? 16 : 24),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
                               displayName,
-                              style: theme.textTheme.headlineMedium?.copyWith(
-                                fontWeight: FontWeight.w800,
-                                height: 1.05,
+                              style: (isCompact
+                                ? theme.textTheme.headlineSmall
+                                : theme.textTheme.headlineLarge)?.copyWith(
+                                fontWeight: FontWeight.w900,
+                                height: 1.1,
+                                letterSpacing: -0.5,
+                                color: const Color(0xFF1f1b16),
                               ),
                             ),
                             if (tagline?.isNotEmpty == true) ...[
-                              const SizedBox(height: 6),
+                              const SizedBox(height: 8),
                               Text(
                                 tagline!,
                                 style: theme.textTheme.titleMedium?.copyWith(
-                                  color: colorScheme.onSurfaceVariant,
+                                  color: const Color(0xFF6d28d9),
+                                  fontWeight: FontWeight.w600,
+                                  height: 1.3,
                                 ),
                               ),
                             ],
@@ -467,38 +509,69 @@ class _SubscriberWelcomePageState extends State<SubscriberWelcomePage> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 20),
+                  SizedBox(height: isCompact ? 20 : 24),
+                  // Description
                   ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 680),
+                    constraints: const BoxConstraints(maxWidth: 720),
                     child: Text(
                       summary?.isNotEmpty == true ? summary! : fallbackSummary,
-                      style: theme.textTheme.bodyLarge?.copyWith(height: 1.55),
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        height: 1.65,
+                        fontSize: isCompact ? 16 : 17,
+                        color: const Color(0xFF4b5563),
+                      ),
                     ),
                   ),
+                  // Stats chips
                   if (statsChips.isNotEmpty) ...[
-                    const SizedBox(height: 20),
+                    SizedBox(height: isCompact ? 20 : 24),
                     Wrap(
                       spacing: 12,
                       runSpacing: 12,
                       children: statsChips,
                     ),
                   ],
-                  const SizedBox(height: 24),
+                  // Action buttons
+                  SizedBox(height: isCompact ? 24 : 32),
                   Wrap(
                     spacing: 12,
                     runSpacing: 12,
                     children: [
                       if (onReadLatest != null && !isUnsubscribed)
-                        FilledButton.icon(
+                        ElevatedButton.icon(
                           onPressed: onReadLatest,
-                          icon: const Icon(Icons.auto_stories_outlined),
-                          label: const Text('Leer la historia más reciente'),
+                          icon: const Icon(Icons.auto_stories, size: 20),
+                          label: Text(isCompact ? 'Leer última historia' : 'Leer la historia más reciente'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF8b5cf6),
+                            foregroundColor: Colors.white,
+                            padding: EdgeInsets.symmetric(
+                              horizontal: isCompact ? 20 : 28,
+                              vertical: isCompact ? 14 : 18,
+                            ),
+                            elevation: 0,
+                            shadowColor: const Color(0xFF7c3aed).withOpacity(0.4),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
                         ),
                       OutlinedButton.icon(
                         onPressed: () =>
                             Navigator.of(context).pushReplacementNamed('/'),
-                        icon: const Icon(Icons.home_outlined),
+                        icon: const Icon(Icons.explore_outlined, size: 20),
                         label: const Text('Explorar Narra'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF6d28d9),
+                          side: const BorderSide(color: Color(0xFF8b5cf6), width: 2),
+                          padding: EdgeInsets.symmetric(
+                            horizontal: isCompact ? 20 : 28,
+                            vertical: isCompact ? 14 : 18,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -517,42 +590,98 @@ class _SubscriberWelcomePageState extends State<SubscriberWelcomePage> {
     required String authorName,
   }) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final mediaQuery = MediaQuery.of(context);
+    final isCompact = mediaQuery.size.width < 600;
 
-    return Card(
-      color: colorScheme.surfaceVariant.withOpacity(0.4),
-      elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+    return Container(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFFfaf5ff), Color(0xFFf3e8ff)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: const Color(0xFF8b5cf6).withOpacity(0.2),
+          width: 2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF7c3aed).withOpacity(0.1),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: EdgeInsets.all(isCompact ? 20 : 28),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(Icons.verified_user_outlined,
-                color: colorScheme.primary, size: 30),
-            const SizedBox(width: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF8b5cf6), Color(0xFF7c3aed)],
+                ),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF7c3aed).withOpacity(0.3),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.verified_user,
+                color: Colors.white,
+                size: 28,
+              ),
+            ),
+            SizedBox(width: isCompact ? 16 : 20),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Acceso confirmado',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
+                    '✨ Acceso Confirmado',
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: const Color(0xFF6d28d9),
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 12),
                   Text(
                     'Guardamos que eres $subscriberName. Cada vez que $authorName publique un nuevo recuerdo podrás abrirlo desde aquí, reaccionar con corazones y dejar comentarios privados.',
                     style: theme.textTheme.bodyMedium?.copyWith(
-                      height: 1.55,
+                      height: 1.65,
+                      fontSize: 15,
+                      color: const Color(0xFF4b5563),
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'También recibirás un correo cuando haya una nueva historia dedicada a ti.',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.8),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.email_outlined, size: 16, color: Color(0xFF8b5cf6)),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            'Recibirás un correo con cada nueva historia',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: const Color(0xFF6d28d9),
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -598,10 +727,10 @@ class _SubscriberWelcomePageState extends State<SubscriberWelcomePage> {
 
   List<Widget> _buildAuthorStats({
     required ThemeData theme,
-    required ColorScheme colorScheme,
     required int totalStories,
     Story? highlightStory,
     bool highlightHearted = false,
+    bool isCompact = false,
   }) {
     final chips = <Widget>[];
 
@@ -883,24 +1012,46 @@ class _SubscriberWelcomePageState extends State<SubscriberWelcomePage> {
 }
 
 class _AuthorPortrait extends StatelessWidget {
-  const _AuthorPortrait({required this.avatarUrl, this.size = 72});
+  const _AuthorPortrait({
+    required this.avatarUrl,
+    this.size,
+    this.isCompact = false,
+  });
 
   final String? avatarUrl;
-  final double size;
+  final double? size;
+  final bool isCompact;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return CircleAvatar(
-      radius: size / 2,
-      backgroundImage: avatarUrl != null && avatarUrl!.trim().isNotEmpty
-          ? NetworkImage(avatarUrl!)
-          : null,
-      backgroundColor: theme.colorScheme.primaryContainer,
-      child: avatarUrl == null || avatarUrl!.trim().isEmpty
-          ? Icon(Icons.person_outline,
-              color: theme.colorScheme.primary, size: size / 1.4)
-          : null,
+    final effectiveSize = size ?? (isCompact ? 64.0 : 80.0);
+    return Container(
+      width: effectiveSize,
+      height: effectiveSize,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF7c3aed).withOpacity(0.25),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: CircleAvatar(
+        radius: effectiveSize / 2,
+        backgroundImage: avatarUrl != null && avatarUrl!.trim().isNotEmpty
+            ? NetworkImage(avatarUrl!)
+            : null,
+        backgroundColor: const Color(0xFFf3e8ff),
+        child: avatarUrl == null || avatarUrl!.trim().isEmpty
+            ? Icon(
+                Icons.person,
+                color: const Color(0xFF8b5cf6),
+                size: effectiveSize / 1.5,
+              )
+            : null,
+      ),
     );
   }
 }

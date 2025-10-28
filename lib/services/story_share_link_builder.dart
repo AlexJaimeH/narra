@@ -41,7 +41,7 @@ class StoryShareLinkBuilder {
   }) {
     final resolvedBase = _resolveBaseUri(baseUri);
     final origin = _sanitizeBaseUri(resolvedBase);
-    final pathSegments = <String>['blog', 'story', story.id];
+    final pathSegments = <String>['story', story.id];
 
     final queryParameters = <String, String>{
       'author': story.userId,
@@ -124,7 +124,7 @@ class StoryShareLinkBuilder {
       queryParameters['welcome'] = '1';
     }
 
-    final pathSegments = <String>['blog', 'subscriber', subscriber.id];
+    final pathSegments = <String>['subscriber', subscriber.id];
 
     if (_usesHashRouting(resolvedBase)) {
       final fragmentUri = Uri(

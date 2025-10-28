@@ -49,7 +49,7 @@ class EmailTemplates {
         <td>
           <!-- Logo/Brand -->
           <div style="text-align:center;margin-bottom:32px;">
-            <div style="display:inline-block;background:linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);color:#ffffff;font-weight:800;font-size:18px;padding:10px 20px;border-radius:12px;letter-spacing:-0.02em;">Narra</div>
+            <div style="display:inline-block;background:linear-gradient(135deg, #4DB3A8 0%, #38827A 100%);color:#ffffff;font-weight:800;font-size:18px;padding:10px 20px;border-radius:12px;letter-spacing:-0.02em;">Narra</div>
           </div>
 
           <!-- Main Card -->
@@ -57,7 +57,7 @@ class EmailTemplates {
             <tr>
               <td style="padding:0;">
                 <!-- Header Section -->
-                <div style="background:linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);padding:40px 36px;text-align:center;">
+                <div style="background:linear-gradient(135deg, #38827A 0%, #6d28d9 100%);padding:40px 36px;text-align:center;">
                   <div style="display:inline-block;background:rgba(255,255,255,0.25);backdrop-filter:blur(10px);border-radius:16px;padding:12px 24px;margin-bottom:20px;">
                     <p style="margin:0;font-size:14px;color:#f3e8ff;letter-spacing:0.08em;text-transform:uppercase;font-weight:600;">✨ Nueva Historia</p>
                   </div>
@@ -71,13 +71,13 @@ class EmailTemplates {
 
                   ${escapedHero != null ? '<div style="margin:32px 0;border-radius:20px;overflow:hidden;box-shadow:0 12px 32px rgba(0,0,0,0.12);"><img src="$escapedHero" alt="Imagen de la historia" style="display:block;width:100%;height:auto;" /></div>' : ''}
 
-                  ${escapedExcerpt != null ? '<div style="margin:32px 0;background:linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%);padding:28px;border-radius:20px;border-left:4px solid #8b5cf6;"><p style="margin:0;font-size:17px;line-height:1.75;color:#4b5563;font-style:italic;">"$escapedExcerpt"</p></div>' : ''}
+                  ${escapedExcerpt != null ? '<div style="margin:32px 0;background:linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%);padding:28px;border-radius:20px;border-left:4px solid #4DB3A8;"><p style="margin:0;font-size:17px;line-height:1.75;color:#4b5563;font-style:italic;">"$escapedExcerpt"</p></div>' : ''}
 
                   <!-- CTA Button -->
                   <div style="text-align:center;margin:40px 0 32px;">
                     <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;">
                       <tr>
-                        <td style="border-radius:16px;background:linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);box-shadow:0 8px 24px rgba(124,58,237,0.35),0 4px 12px rgba(0,0,0,0.1);">
+                        <td style="border-radius:16px;background:linear-gradient(135deg, #4DB3A8 0%, #38827A 100%);box-shadow:0 8px 24px rgba(124,58,237,0.35),0 4px 12px rgba(0,0,0,0.1);">
                           <a href="$escapedLink" style="display:inline-block;color:#ffffff;text-decoration:none;font-weight:700;font-size:17px;padding:18px 42px;border-radius:16px;letter-spacing:0.01em;">📖 Leer Historia Completa</a>
                         </td>
                       </tr>
@@ -87,7 +87,7 @@ class EmailTemplates {
                   <!-- Info Box -->
                   <div style="background:#fafaf9;border-radius:16px;padding:24px;margin:32px 0;">
                     <p style="margin:0 0 12px 0;font-size:15px;line-height:1.6;color:#57534e;">
-                      <span style="display:inline-block;background:#8b5cf6;color:#ffffff;font-size:12px;font-weight:700;padding:4px 10px;border-radius:6px;margin-right:8px;vertical-align:middle;">PERSONALIZADO</span>
+                      <span style="display:inline-block;background:#4DB3A8;color:#ffffff;font-size:12px;font-weight:700;padding:4px 10px;border-radius:6px;margin-right:8px;vertical-align:middle;">PERSONALIZADO</span>
                       Este enlace es único para ti
                     </p>
                     <p style="margin:0;font-size:14px;line-height:1.65;color:#78716c;">Al abrirlo te reconoceremos como <strong style="color:#292524;">${_escape(subscriber.name)}</strong> para que puedas dejar comentarios y reacciones en la historia.</p>
@@ -96,7 +96,7 @@ class EmailTemplates {
                   <!-- Alternative Link -->
                   <div style="background:#f9fafb;border:2px dashed #e5e7eb;border-radius:12px;padding:20px;margin:24px 0 0 0;">
                     <p style="margin:0 0 8px 0;font-size:13px;color:#6b7280;font-weight:600;">Si el botón no funciona, usa este enlace:</p>
-                    <p style="margin:0;font-size:13px;word-break:break-all;"><a href="$escapedLink" style="color:#7c3aed;text-decoration:none;">$escapedLink</a></p>
+                    <p style="margin:0;font-size:13px;word-break:break-all;"><a href="$escapedLink" style="color:#38827A;text-decoration:none;">$escapedLink</a></p>
                   </div>
                 </div>
 
@@ -185,7 +185,7 @@ class EmailTemplates {
         <td>
           <!-- Logo/Brand -->
           <div style="text-align:center;margin-bottom:32px;">
-            <div style="display:inline-block;background:linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);color:#ffffff;font-weight:800;font-size:18px;padding:10px 20px;border-radius:12px;letter-spacing:-0.02em;">Narra</div>
+            <div style="display:inline-block;background:linear-gradient(135deg, #4DB3A8 0%, #38827A 100%);color:#ffffff;font-weight:800;font-size:18px;padding:10px 20px;border-radius:12px;letter-spacing:-0.02em;">Narra</div>
           </div>
 
           <!-- Main Card -->
@@ -193,7 +193,7 @@ class EmailTemplates {
             <tr>
               <td style="padding:0;">
                 <!-- Header Section -->
-                <div style="background:linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);padding:48px 36px;text-align:center;">
+                <div style="background:linear-gradient(135deg, #38827A 0%, #6d28d9 100%);padding:48px 36px;text-align:center;">
                   <div style="display:inline-block;background:rgba(255,255,255,0.25);backdrop-filter:blur(10px);border-radius:16px;padding:12px 24px;margin-bottom:20px;">
                     <p style="margin:0;font-size:14px;color:#f3e8ff;letter-spacing:0.08em;text-transform:uppercase;font-weight:600;">🔐 Invitación Privada</p>
                   </div>
@@ -206,7 +206,7 @@ class EmailTemplates {
                   <p style="margin:0 0 28px 0;font-size:17px;line-height:1.7;color:#4b5563;">Has sido invitado a un círculo privado en Narra. Este enlace mágico te permite acceder a las historias personales que <strong style="color:#292524;">$escapedAuthor</strong> comparte contigo.</p>
 
                   <!-- Feature Boxes -->
-                  <div style="background:linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%);border-radius:20px;padding:28px;margin:32px 0;border-left:4px solid #8b5cf6;">
+                  <div style="background:linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%);border-radius:20px;padding:28px;margin:32px 0;border-left:4px solid #4DB3A8;">
                     <div style="margin-bottom:20px;">
                       <p style="margin:0 0 8px 0;font-size:15px;font-weight:700;color:#6d28d9;">✨ Acceso automático</p>
                       <p style="margin:0;font-size:14px;line-height:1.6;color:#57534e;">Te reconoceremos como <strong style="color:#292524;">$escapedSubscriber</strong> cada vez que leas una historia.</p>
@@ -225,7 +225,7 @@ class EmailTemplates {
                   <div style="text-align:center;margin:40px 0 32px;">
                     <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;">
                       <tr>
-                        <td style="border-radius:16px;background:linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);box-shadow:0 8px 24px rgba(124,58,237,0.35),0 4px 12px rgba(0,0,0,0.1);">
+                        <td style="border-radius:16px;background:linear-gradient(135deg, #4DB3A8 0%, #38827A 100%);box-shadow:0 8px 24px rgba(124,58,237,0.35),0 4px 12px rgba(0,0,0,0.1);">
                           <a href="$escapedLink" style="display:inline-block;color:#ffffff;text-decoration:none;font-weight:700;font-size:17px;padding:18px 42px;border-radius:16px;letter-spacing:0.01em;">🎁 Activar Mi Acceso Privado</a>
                         </td>
                       </tr>
@@ -243,7 +243,7 @@ class EmailTemplates {
                   <!-- Alternative Link -->
                   <div style="background:#f9fafb;border:2px dashed #e5e7eb;border-radius:12px;padding:20px;margin:24px 0 0 0;">
                     <p style="margin:0 0 8px 0;font-size:13px;color:#6b7280;font-weight:600;">Si el botón no funciona, copia y pega este enlace:</p>
-                    <p style="margin:0;font-size:13px;word-break:break-all;"><a href="$escapedLink" style="color:#7c3aed;text-decoration:none;">$escapedLink</a></p>
+                    <p style="margin:0;font-size:13px;word-break:break-all;"><a href="$escapedLink" style="color:#38827A;text-decoration:none;">$escapedLink</a></p>
                   </div>
                 </div>
 

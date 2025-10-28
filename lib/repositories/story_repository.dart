@@ -667,7 +667,6 @@ class Story {
       publishedAt: publishedAt ?? this.publishedAt,
       tags: tags,
       photos: photos,
-      people: people,
       storyTags: storyTags,
     );
   }

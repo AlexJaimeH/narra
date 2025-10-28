@@ -230,54 +230,6 @@ class NarraAPI {
   }
 
   // ================================
-  // PEOPLE
-  // ================================
-
-  /// Get all user people
-  static Future<List<Person>> getPeople() async {
-    final data = await NarraSupabaseClient.getUserPeople();
-    return data.map((item) => Person.fromMap(item)).toList();
-  }
-
-  /// Create new person
-  static Future<Person> createPerson({
-    required String name,
-    String? relationship,
-    DateTime? birthDate,
-    String? notes,
-    String? avatarUrl,
-  }) async {
-    final data = await NarraSupabaseClient.createPerson(
-      name: name,
-      relationship: relationship,
-      birthDate: birthDate?.toIso8601String(),
-      notes: notes,
-    );
-    return Person.fromMap(data);
-  }
-
-  /// Update person
-  static Future<Person> updatePerson(String personId, Map<String, dynamic> updates) async {
-    final data = await NarraSupabaseClient.updatePerson(personId, updates);
-    return Person.fromMap(data);
-  }
-
-  /// Delete person
-  static Future<void> deletePerson(String personId) async {
-    await NarraSupabaseClient.deletePerson(personId);
-  }
-
-  /// Add person to story
-  static Future<void> addPersonToStory(String storyId, String personId) async {
-    await StoryRepository.addPerson(storyId, personId);
-  }
-
-  /// Remove person from story
-  static Future<void> removePersonFromStory(String storyId, String personId) async {
-    await StoryRepository.removePerson(storyId, personId);
-  }
-
-  // ================================
   // SUBSCRIBERS
   // ================================
 
@@ -499,57 +451,6 @@ class NarraAPI {
   /// Cleanup resources
   static Future<void> dispose() async {
     // Cleanup logic here
-  }
-}
-
-/// Person data model
-class Person {
-  final String id;
-  final String userId;
-  final String name;
-  final String? relationship;
-  final DateTime? birthDate;
-  final String? notes;
-  final String? avatarUrl;
-  final DateTime createdAt;
-
-  const Person({
-    required this.id,
-    required this.userId,
-    required this.name,
-    this.relationship,
-    this.birthDate,
-    this.notes,
-    this.avatarUrl,
-    required this.createdAt,
-  });
-
-  factory Person.fromMap(Map<String, dynamic> map) {
-    return Person(
-      id: map['id'] as String,
-      userId: map['user_id'] as String,
-      name: map['name'] as String,
-      relationship: map['relationship'] as String?,
-      birthDate: map['birth_date'] != null 
-          ? DateTime.parse(map['birth_date']) 
-          : null,
-      notes: map['notes'] as String?,
-      avatarUrl: map['avatar_url'] as String?,
-      createdAt: DateTime.parse(map['created_at']),
-    );
-  }
-
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'user_id': userId,
-      'name': name,
-      'relationship': relationship,
-      'birth_date': birthDate?.toIso8601String(),
-      'notes': notes,
-      'avatar_url': avatarUrl,
-      'created_at': createdAt.toIso8601String(),
-    };
   }
 }
 

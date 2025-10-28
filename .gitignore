@@ -27,3 +27,7 @@ DerivedData/
 .wrangler/
 
 # Web
+
+# Blog React
+blog/node_modules/
+blog/dist/

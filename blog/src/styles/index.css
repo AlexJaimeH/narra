@@ -1,0 +1,61 @@
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply font-sans text-text-primary bg-surface-light antialiased;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-semibold;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply px-6 py-3 bg-brand-primary text-white rounded-lg font-medium
+           hover:bg-brand-primary-hover transition-colors duration-200
+           focus:outline-none focus:ring-2 focus:ring-brand-primary focus:ring-offset-2;
+  }
+
+  .btn-secondary {
+    @apply px-6 py-3 bg-white text-brand-primary border-2 border-brand-primary rounded-lg font-medium
+           hover:bg-brand-primary hover:text-white transition-all duration-200
+           focus:outline-none focus:ring-2 focus:ring-brand-primary focus:ring-offset-2;
+  }
+
+  .card {
+    @apply bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow duration-200;
+  }
+
+  .prose {
+    @apply text-lg leading-relaxed text-text-primary;
+  }
+
+  .prose p {
+    @apply mb-4;
+  }
+
+  .prose h1 {
+    @apply text-4xl font-bold mb-6 text-text-primary;
+  }
+
+  .prose h2 {
+    @apply text-3xl font-bold mb-4 mt-8 text-text-primary;
+  }
+
+  .prose h3 {
+    @apply text-2xl font-semibold mb-3 mt-6 text-text-primary;
+  }
+
+  .prose img {
+    @apply rounded-lg my-6;
+  }
+
+  .prose blockquote {
+    @apply border-l-4 border-brand-primary pl-4 italic text-text-secondary my-6;
+  }
+}

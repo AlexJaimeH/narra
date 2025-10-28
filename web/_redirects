@@ -1,15 +1,16 @@
-# Blog React - serve React SPA for blog routes
-/blog/story/* /blog/index.html 200
-/blog/subscriber/* /blog/index.html 200
-/blog /blog/index.html 200
+# React app - landing page and blog (served from root /index.html)
+/blog/story/* /index.html 200
+/blog/subscriber/* /index.html 200
+/blog/* /index.html 200
 
 # API routes - pass through to Cloudflare Functions
 /api/* /:splat 200
 
-# Flutter app routes
-/app/* /index.html 200
-/landing /index.html 200
+# Flutter app routes - served from /app subdirectory
+/app/* /app/index.html 200
 
-# Root and default - serve Flutter landing page
+# Root - serve React landing page
 / /index.html 200
+
+# Fallback - serve React
 /* /index.html 200

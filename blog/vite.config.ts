@@ -9,9 +9,9 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
-  base: '/blog/',
+  base: '/',
   build: {
-    outDir: '../build/web/blog',
-    emptyOutDir: true,
+    outDir: '../build/web',
+    emptyOutDir: false, // Don't empty because Flutter app files will be in /app subdirectory
   },
 })

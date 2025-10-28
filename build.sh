@@ -6,7 +6,7 @@ echo ""
 
 # Step 1: Build Flutter app
 echo "Step 1: Building Flutter app..."
-flutter build web --release
+flutter build web --release --base-href=/app/
 echo "Flutter build complete."
 echo ""
 

@@ -1,0 +1,135 @@
+name: Build & Deploy (Cloudflare Pages)
+
+on:
+  push:
+    branches: [ "**" ]   # todas las ramas (incluida main)
+  pull_request:
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Cache pub
+        uses: actions/cache@v4
+        with:
+          path: ~/.pub-cache
+          key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pub-
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze (errors only; warnings no-fatales)
+        run: dart analyze --no-fatal-warnings
+
+      - name: Run tests (only if present)
+        if: ${{ hashFiles('test/**') != '' }}
+        run: flutter test -r expanded
+
+      - name: Build Web (release)
+        run: >
+          flutter build web --release
+          --base-href=/app/
+          --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }}
+          --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
+
+      - name: Move Flutter to /app subdirectory
+        run: |
+          echo "Moving Flutter files to build/web/app/"
+          mkdir -p build/web/app
+          cd build/web
+          for item in *; do
+            if [ "$item" != "app" ] && [ "$item" != "_redirects" ]; then
+              mv "$item" app/ || true
+            fi
+          done
+          cd ../..
+          echo "Flutter files moved successfully"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: blog/package-lock.json
+
+      - name: Install React dependencies
+        run: |
+          cd blog
+          npm ci
+          cd ..
+
+      - name: Build React app (landing + blog)
+        run: |
+          cd blog
+          npm run build
+          cd ..
+          echo "React build complete"
+
+      - name: Copy _redirects file
+        run: |
+          cp web/_redirects build/web/_redirects
+          echo "Final structure:"
+          ls -la build/web/ | head -15
+
+      - name: Deploy Preview
+        if: github.event_name == 'pull_request' || github.ref != 'refs/heads/main'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: >
+            pages deploy build/web
+            --project-name=narra
+            --branch=${{ github.head_ref || github.ref_name }}
+            --commit-hash=${{ github.sha }}
+            --commit-dirty=true
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Slugify branch for Pages subdomain
+        if: github.event_name == 'pull_request'
+        run: |
+          BRANCH="${{ github.head_ref || github.ref_name }}"
+          SAFE="${BRANCH//\//-}"
+          echo "BRANCH_SLUG_SAFE=$SAFE" >> $GITHUB_ENV
+
+      - name: Comment Preview URL on PR
+        if: github.event_name == 'pull_request'
+        uses: peter-evans/create-or-update-comment@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          issue-number: ${{ github.event.pull_request.number }}
+          body: |
+            ✅ Preview listo:
+            https://${{ env.BRANCH_SLUG_SAFE }}.${{ vars.CF_PAGES_SUBDOMAIN }}
+
+      - name: Deploy Production
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: >
+            pages deploy build/web
+            --project-name=narra
+            --branch=main
+            --commit-hash=${{ github.sha }}
+            --commit-dirty=true
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}

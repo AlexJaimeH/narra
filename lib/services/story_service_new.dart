@@ -213,22 +213,6 @@ class StoryServiceNew {
     return await NarraAPI.getStories(tagIds: [tagId]);
   }
 
-  /// Add person to story
-  static Future<void> addPersonToStory(String storyId, String personId) async {
-    await NarraAPI.addPersonToStory(storyId, personId);
-  }
-
-  /// Remove person from story
-  static Future<void> removePersonFromStory(String storyId, String personId) async {
-    await NarraAPI.removePersonFromStory(storyId, personId);
-  }
-
-  /// Get stories by person
-  static Future<List<Story>> getStoriesByPerson(String personId) async {
-    // This would require a custom query - for now return empty
-    return [];
-  }
-
   // ================================
   // STATISTICS & ANALYTICS
   // ================================
@@ -342,14 +326,12 @@ class StoryServiceNew {
   static Future<Map<String, dynamic>> exportAllStories() async {
     final stories = await NarraAPI.getStories();
     final tags = await NarraAPI.getTags();
-    final people = await NarraAPI.getPeople();
-    
+
     return {
       'export_date': DateTime.now().toIso8601String(),
       'total_stories': stories.length,
       'stories': stories.map((s) => s.toMap()).toList(),
       'tags': tags.map((t) => t.toMap()).toList(),
-      'people': people.map((p) => p.toMap()).toList(),
     };
   }
 }

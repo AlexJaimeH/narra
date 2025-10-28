@@ -46,8 +46,48 @@ jobs:
       - name: Build Web (release)
         run: >
           flutter build web --release
+          --base-href=/app/
           --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }}
           --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
+
+      - name: Move Flutter to /app subdirectory
+        run: |
+          echo "Moving Flutter files to build/web/app/"
+          mkdir -p build/web/app
+          cd build/web
+          for item in *; do
+            if [ "$item" != "app" ] && [ "$item" != "_redirects" ]; then
+              mv "$item" app/ || true
+            fi
+          done
+          cd ../..
+          echo "Flutter files moved successfully"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: blog/package-lock.json
+
+      - name: Install React dependencies
+        run: |
+          cd blog
+          npm ci
+          cd ..
+
+      - name: Build React app (landing + blog)
+        run: |
+          cd blog
+          npm run build
+          cd ..
+          echo "React build complete"
+
+      - name: Copy _redirects file
+        run: |
+          cp web/_redirects build/web/_redirects
+          echo "Final structure:"
+          ls -la build/web/ | head -15
 
       - name: Deploy Preview
         if: github.event_name == 'pull_request' || github.ref != 'refs/heads/main'

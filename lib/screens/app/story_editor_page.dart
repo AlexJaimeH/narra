@@ -6299,7 +6299,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     }
   }
 
-  void _showPublishDialog() {
+  void _showPublishDialog() async {
     // Validate required fields
     if (_titleController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -6316,6 +6316,20 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       return;
     }
 
+    // 1. Validate minimum word count (300 words)
+    final wordCount = _getWordCount();
+    if (wordCount < 300) {
+      final shouldContinue = await _showWordCountDialog(wordCount);
+      if (!shouldContinue) return;
+    }
+
+    // 2. Check if Ghost Writer has been used and offer if not
+    if (!_hasUsedGhostWriter()) {
+      final shouldContinue = await _showGhostWriterOfferDialog();
+      if (!shouldContinue) return;
+    }
+
+    // 3. Validate date (in order: first date, then tags)
     if (_startDate == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -6329,6 +6343,21 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       return;
     }
 
+    // 4. Validate at least one tag
+    if (_selectedTags.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+              'Por favor, añade al menos una etiqueta a tu historia para poder publicarla'),
+          duration: Duration(seconds: 4),
+        ),
+      );
+      // Switch to tags tab to help user
+      _tabController.animateTo(3);
+      return;
+    }
+
+    // All validations passed, show final publish confirmation
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -6351,6 +6380,95 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         ],
       ),
     );
+  }
+
+  bool _hasUsedGhostWriter() {
+    return _versionHistory.any(
+      (version) => version.reason.contains('Ghost Writer afinó tu historia'),
+    );
+  }
+
+  Future<bool> _showWordCountDialog(int currentWordCount) async {
+    final missingWords = 300 - currentWordCount;
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Historia muy corta'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Tu historia tiene $currentWordCount palabras. Para publicar, necesitas al menos 300 palabras (te faltan $missingWords).',
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Puedes usar las sugerencias para ayudarte a expandir tu historia con más detalles.',
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context, false);
+              // Activate suggestions
+              if (!_showSuggestions) {
+                setState(() => _showSuggestions = true);
+                _generateAISuggestions();
+              }
+            },
+            child: const Text('Ver Sugerencias'),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
+  }
+
+  Future<bool> _showGhostWriterOfferDialog() async {
+    if (!_canUseGhostWriter()) {
+      // If story doesn't meet Ghost Writer requirements (300 words), skip this step
+      return true;
+    }
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('¿Usar Ghost Writer?'),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Aún no has usado Ghost Writer en esta historia.',
+            ),
+            SizedBox(height: 12),
+            Text(
+              'Ghost Writer puede ayudarte a pulir y mejorar tu historia antes de publicarla, manteniéndose fiel a tus palabras.',
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('No, gracias'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context, false);
+              // Run Ghost Writer
+              _runGhostWriter();
+            },
+            child: const Text('Usar Ghost Writer'),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
   }
 
   void _showDiscardChangesDialog() {

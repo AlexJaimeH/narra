@@ -513,7 +513,7 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF7c3aed).withOpacity(0.08),
+                    color: const Color(0xFF38827A).withOpacity(0.08),
                     blurRadius: 30,
                     offset: const Offset(0, 10),
                   ),
@@ -588,12 +588,12 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
                         Container(
                           decoration: BoxDecoration(
                             gradient: const LinearGradient(
-                              colors: [Color(0xFF8b5cf6), Color(0xFF7c3aed)],
+                              colors: [Color(0xFF4DB3A8), Color(0xFF38827A)],
                             ),
                             borderRadius: BorderRadius.circular(12),
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFF8b5cf6).withOpacity(0.3),
+                                color: const Color(0xFF4DB3A8).withOpacity(0.3),
                                 blurRadius: 12,
                                 offset: const Offset(0, 4),
                               ),
@@ -697,12 +697,12 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
         ),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: const Color(0xFF8b5cf6).withOpacity(0.1),
+          color: const Color(0xFF4DB3A8).withOpacity(0.1),
           width: 1,
         ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF7c3aed).withOpacity(0.08),
+            color: const Color(0xFF38827A).withOpacity(0.08),
             blurRadius: 20,
             offset: const Offset(0, 4),
           ),
@@ -714,14 +714,14 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
             decoration: BoxDecoration(
               gradient: _isHearted
                   ? const LinearGradient(
-                      colors: [Color(0xFF8b5cf6), Color(0xFF7c3aed)],
+                      colors: [Color(0xFF4DB3A8), Color(0xFF38827A)],
                     )
                   : null,
               borderRadius: BorderRadius.circular(12),
               boxShadow: _isHearted
                   ? [
                       BoxShadow(
-                        color: const Color(0xFF8b5cf6).withOpacity(0.4),
+                        color: const Color(0xFF4DB3A8).withOpacity(0.4),
                         blurRadius: 12,
                         offset: const Offset(0, 4),
                       ),
@@ -741,7 +741,7 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
                     children: [
                       Icon(
                         _isHearted ? Icons.favorite : Icons.favorite_border,
-                        color: _isHearted ? Colors.white : const Color(0xFF8b5cf6),
+                        color: _isHearted ? Colors.white : const Color(0xFF4DB3A8),
                         size: 24,
                       ),
                       const SizedBox(width: 12),
@@ -752,7 +752,7 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
                                 ? 'Te encantó'
                                 : 'Enviar cariño',
                         style: theme.textTheme.titleMedium?.copyWith(
-                          color: _isHearted ? Colors.white : const Color(0xFF8b5cf6),
+                          color: _isHearted ? Colors.white : const Color(0xFF4DB3A8),
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -792,12 +792,12 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
         ),
         borderRadius: BorderRadius.circular(24),
         border: Border.all(
-          color: const Color(0xFF8b5cf6).withOpacity(0.15),
+          color: const Color(0xFF4DB3A8).withOpacity(0.15),
           width: 1,
         ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF7c3aed).withOpacity(0.08),
+            color: const Color(0xFF38827A).withOpacity(0.08),
             blurRadius: 30,
             offset: const Offset(0, 6),
           ),
@@ -814,7 +814,7 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
-                      colors: [Color(0xFF8b5cf6), Color(0xFF7c3aed)],
+                      colors: [Color(0xFF4DB3A8), Color(0xFF38827A)],
                     ),
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -842,7 +842,7 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
                   child: Text(
                     '$_totalComments',
                     style: theme.textTheme.labelLarge?.copyWith(
-                      color: const Color(0xFF8b5cf6),
+                      color: const Color(0xFF4DB3A8),
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -1023,12 +1023,12 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
               color: Colors.white,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: const Color(0xFF8b5cf6).withOpacity(0.1),
+                color: const Color(0xFF4DB3A8).withOpacity(0.1),
                 width: 1,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF7c3aed).withOpacity(0.05),
+                  color: const Color(0xFF38827A).withOpacity(0.05),
                   blurRadius: 15,
                   offset: const Offset(0, 3),
                 ),
@@ -1043,7 +1043,7 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFF8b5cf6).withOpacity(0.2),
+                        color: const Color(0xFF4DB3A8).withOpacity(0.2),
                         blurRadius: 8,
                         offset: const Offset(0, 2),
                       ),
@@ -1052,12 +1052,12 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
                   child: CircleAvatar(
                     radius: 20,
                     backgroundColor: const Color(0xFFf3e8ff),
-                    foregroundColor: const Color(0xFF8b5cf6),
+                    foregroundColor: const Color(0xFF4DB3A8),
                     child: Text(
                       _initialsFor(comment.authorName),
                       style: theme.textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.w700,
-                        color: const Color(0xFF8b5cf6),
+                        color: const Color(0xFF4DB3A8),
                       ),
                     ),
                   ),
@@ -1272,7 +1272,7 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
-                    colors: [Color(0xFF8b5cf6), Color(0xFF7c3aed)],
+                    colors: [Color(0xFF4DB3A8), Color(0xFF38827A)],
                   ),
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -1312,7 +1312,7 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
-                  colors: [Color(0xFF8b5cf6), Color(0xFF7c3aed)],
+                  colors: [Color(0xFF4DB3A8), Color(0xFF38827A)],
                 ),
                 borderRadius: BorderRadius.circular(12),
               ),
@@ -1599,7 +1599,7 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
         color: const Color(0xFFf3e8ff),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: const Color(0xFF8b5cf6).withOpacity(0.2),
+          color: const Color(0xFF4DB3A8).withOpacity(0.2),
           width: 1,
         ),
       ),
@@ -1622,13 +1622,13 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
                 const Icon(
                   Icons.arrow_back_ios_new,
                   size: 16,
-                  color: Color(0xFF8b5cf6),
+                  color: Color(0xFF4DB3A8),
                 ),
                 const SizedBox(width: 8),
                 Text(
                   'Volver al blog',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFF8b5cf6),
+                    color: const Color(0xFF4DB3A8),
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -1917,14 +1917,14 @@ class _MetadataChip extends StatelessWidget {
         color: const Color(0xFFf3e8ff),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: const Color(0xFF8b5cf6).withOpacity(0.2),
+          color: const Color(0xFF4DB3A8).withOpacity(0.2),
           width: 1,
         ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 18, color: const Color(0xFF8b5cf6)),
+          Icon(icon, size: 18, color: const Color(0xFF4DB3A8)),
           const SizedBox(width: 8),
           Text(
             label,
@@ -1979,7 +1979,7 @@ class _AuthorAvatar extends StatelessWidget {
         shape: BoxShape.circle,
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF8b5cf6).withOpacity(0.3),
+            color: const Color(0xFF4DB3A8).withOpacity(0.3),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -1992,7 +1992,7 @@ class _AuthorAvatar extends StatelessWidget {
             ? NetworkImage(avatarUrl!)
             : null,
         child: avatarUrl == null || avatarUrl!.isEmpty
-            ? const Icon(Icons.person, color: Color(0xFF8b5cf6))
+            ? const Icon(Icons.person, color: Color(0xFF4DB3A8))
             : null,
       ),
     );
@@ -2023,12 +2023,12 @@ class _RecommendedCard extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: const Color(0xFF8b5cf6).withOpacity(0.1),
+          color: const Color(0xFF4DB3A8).withOpacity(0.1),
           width: 1,
         ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF7c3aed).withOpacity(0.08),
+            color: const Color(0xFF38827A).withOpacity(0.08),
             blurRadius: 20,
             offset: const Offset(0, 4),
           ),
@@ -2061,7 +2061,7 @@ class _RecommendedCard extends StatelessWidget {
                         child: const Icon(
                           Icons.image_outlined,
                           size: 48,
-                          color: Color(0xFF8b5cf6),
+                          color: Color(0xFF4DB3A8),
                         ),
                       ),
                     ),
@@ -2096,7 +2096,7 @@ class _RecommendedCard extends StatelessWidget {
                         Text(
                           'Leer historia',
                           style: theme.textTheme.bodyMedium?.copyWith(
-                            color: const Color(0xFF8b5cf6),
+                            color: const Color(0xFF4DB3A8),
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -2109,7 +2109,7 @@ class _RecommendedCard extends StatelessWidget {
                           child: const Icon(
                             Icons.arrow_forward,
                             size: 18,
-                            color: Color(0xFF8b5cf6),
+                            color: Color(0xFF4DB3A8),
                           ),
                         ),
                       ],

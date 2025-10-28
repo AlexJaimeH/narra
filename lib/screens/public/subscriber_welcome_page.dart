@@ -387,7 +387,7 @@ class _SubscriberWelcomePageState extends State<SubscriberWelcomePage> {
         borderRadius: BorderRadius.circular(isCompact ? 24 : 32),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF7c3aed).withOpacity(0.15),
+            color: const Color(0xFF38827A).withOpacity(0.15),
             blurRadius: 60,
             offset: const Offset(0, 20),
             spreadRadius: -5,
@@ -444,12 +444,12 @@ class _SubscriberWelcomePageState extends State<SubscriberWelcomePage> {
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
-                        colors: [Color(0xFF8b5cf6), Color(0xFF7c3aed)],
+                        colors: [Color(0xFF4DB3A8), Color(0xFF38827A)],
                       ),
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF7c3aed).withOpacity(0.3),
+                          color: const Color(0xFF38827A).withOpacity(0.3),
                           blurRadius: 12,
                           offset: const Offset(0, 4),
                         ),
@@ -543,14 +543,14 @@ class _SubscriberWelcomePageState extends State<SubscriberWelcomePage> {
                           icon: const Icon(Icons.auto_stories, size: 20),
                           label: Text(isCompact ? 'Leer última historia' : 'Leer la historia más reciente'),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF8b5cf6),
+                            backgroundColor: const Color(0xFF4DB3A8),
                             foregroundColor: Colors.white,
                             padding: EdgeInsets.symmetric(
                               horizontal: isCompact ? 20 : 28,
                               vertical: isCompact ? 14 : 18,
                             ),
                             elevation: 0,
-                            shadowColor: const Color(0xFF7c3aed).withOpacity(0.4),
+                            shadowColor: const Color(0xFF38827A).withOpacity(0.4),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(16),
                             ),
@@ -563,7 +563,7 @@ class _SubscriberWelcomePageState extends State<SubscriberWelcomePage> {
                         label: const Text('Explorar Narra'),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: const Color(0xFF6d28d9),
-                          side: const BorderSide(color: Color(0xFF8b5cf6), width: 2),
+                          side: const BorderSide(color: Color(0xFF4DB3A8), width: 2),
                           padding: EdgeInsets.symmetric(
                             horizontal: isCompact ? 20 : 28,
                             vertical: isCompact ? 14 : 18,
@@ -602,12 +602,12 @@ class _SubscriberWelcomePageState extends State<SubscriberWelcomePage> {
         ),
         borderRadius: BorderRadius.circular(24),
         border: Border.all(
-          color: const Color(0xFF8b5cf6).withOpacity(0.2),
+          color: const Color(0xFF4DB3A8).withOpacity(0.2),
           width: 2,
         ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF7c3aed).withOpacity(0.1),
+            color: const Color(0xFF38827A).withOpacity(0.1),
             blurRadius: 24,
             offset: const Offset(0, 8),
           ),
@@ -622,12 +622,12 @@ class _SubscriberWelcomePageState extends State<SubscriberWelcomePage> {
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
-                  colors: [Color(0xFF8b5cf6), Color(0xFF7c3aed)],
+                  colors: [Color(0xFF4DB3A8), Color(0xFF38827A)],
                 ),
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF7c3aed).withOpacity(0.3),
+                    color: const Color(0xFF38827A).withOpacity(0.3),
                     blurRadius: 12,
                     offset: const Offset(0, 4),
                   ),
@@ -670,7 +670,7 @@ class _SubscriberWelcomePageState extends State<SubscriberWelcomePage> {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.email_outlined, size: 16, color: Color(0xFF8b5cf6)),
+                        const Icon(Icons.email_outlined, size: 16, color: Color(0xFF4DB3A8)),
                         const SizedBox(width: 8),
                         Flexible(
                           child: Text(
@@ -710,12 +710,12 @@ class _SubscriberWelcomePageState extends State<SubscriberWelcomePage> {
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
-                  colors: [Color(0xFF8b5cf6), Color(0xFF7c3aed)],
+                  colors: [Color(0xFF4DB3A8), Color(0xFF38827A)],
                 ),
                 borderRadius: BorderRadius.circular(12),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF7c3aed).withOpacity(0.25),
+                    color: const Color(0xFF38827A).withOpacity(0.25),
                     blurRadius: 12,
                     offset: const Offset(0, 4),
                   ),
@@ -1077,7 +1077,7 @@ class _AuthorPortrait extends StatelessWidget {
         shape: BoxShape.circle,
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF7c3aed).withOpacity(0.25),
+            color: const Color(0xFF38827A).withOpacity(0.25),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -1092,7 +1092,7 @@ class _AuthorPortrait extends StatelessWidget {
         child: avatarUrl == null || avatarUrl!.trim().isEmpty
             ? Icon(
                 Icons.person,
-                color: const Color(0xFF8b5cf6),
+                color: const Color(0xFF4DB3A8),
                 size: effectiveSize / 1.5,
               )
             : null,
@@ -1130,7 +1130,7 @@ class _FeaturedStoryCard extends StatelessWidget {
         ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF7c3aed).withOpacity(0.12),
+            color: const Color(0xFF38827A).withOpacity(0.12),
             blurRadius: 40,
             offset: const Offset(0, 16),
             spreadRadius: -4,
@@ -1170,7 +1170,7 @@ class _FeaturedStoryCard extends StatelessWidget {
                             child: const Center(
                               child: Icon(
                                 Icons.photo_library_outlined,
-                                color: Color(0xFF8b5cf6),
+                                color: Color(0xFF4DB3A8),
                                 size: 48,
                               ),
                             ),
@@ -1185,12 +1185,12 @@ class _FeaturedStoryCard extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                           decoration: BoxDecoration(
                             gradient: const LinearGradient(
-                              colors: [Color(0xFF8b5cf6), Color(0xFF7c3aed)],
+                              colors: [Color(0xFF4DB3A8), Color(0xFF38827A)],
                             ),
                             borderRadius: BorderRadius.circular(12),
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFF7c3aed).withOpacity(0.4),
+                                color: const Color(0xFF38827A).withOpacity(0.4),
                                 blurRadius: 12,
                                 offset: const Offset(0, 4),
                               ),
@@ -1228,7 +1228,7 @@ class _FeaturedStoryCard extends StatelessWidget {
                     alignment: Alignment.center,
                     child: const Icon(
                       Icons.auto_stories,
-                      color: Color(0xFF8b5cf6),
+                      color: Color(0xFF4DB3A8),
                       size: 64,
                     ),
                   ),
@@ -1324,14 +1324,14 @@ class _FeaturedStoryCard extends StatelessWidget {
                           icon: const Icon(Icons.auto_stories, size: 20),
                           label: const Text('Leer Historia Completa'),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF8b5cf6),
+                            backgroundColor: const Color(0xFF4DB3A8),
                             foregroundColor: Colors.white,
                             padding: EdgeInsets.symmetric(
                               horizontal: isCompact ? 24 : 32,
                               vertical: isCompact ? 16 : 20,
                             ),
                             elevation: 0,
-                            shadowColor: const Color(0xFF7c3aed).withOpacity(0.4),
+                            shadowColor: const Color(0xFF38827A).withOpacity(0.4),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(16),
                             ),
@@ -1375,12 +1375,12 @@ class _StoryGridCard extends StatelessWidget {
           color: Colors.white,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: const Color(0xFF8b5cf6).withOpacity(0.1),
+            color: const Color(0xFF4DB3A8).withOpacity(0.1),
             width: 1.5,
           ),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF7c3aed).withOpacity(0.08),
+              color: const Color(0xFF38827A).withOpacity(0.08),
               blurRadius: 20,
               offset: const Offset(0, 8),
               spreadRadius: -2,
@@ -1455,7 +1455,7 @@ class _StoryGridCard extends StatelessWidget {
                       Text(
                         'Leer historia',
                         style: theme.textTheme.labelLarge?.copyWith(
-                          color: const Color(0xFF8b5cf6),
+                          color: const Color(0xFF4DB3A8),
                           fontWeight: FontWeight.w700,
                           fontSize: 15,
                         ),
@@ -1468,7 +1468,7 @@ class _StoryGridCard extends StatelessWidget {
                         ),
                         child: const Icon(
                           Icons.arrow_forward,
-                          color: Color(0xFF8b5cf6),
+                          color: Color(0xFF4DB3A8),
                           size: 18,
                         ),
                       ),
@@ -1519,7 +1519,7 @@ class _StoryThumbnail extends StatelessWidget {
       alignment: Alignment.center,
       child: const Icon(
         Icons.image_outlined,
-        color: Color(0xFF8b5cf6),
+        color: Color(0xFF4DB3A8),
         size: 36,
       ),
     );
@@ -1550,7 +1550,7 @@ class _StoryChip extends StatelessWidget {
             : colorScheme.secondaryContainer,
         borderRadius: BorderRadius.circular(999),
         border: isPurple
-            ? Border.all(color: const Color(0xFF8b5cf6).withOpacity(0.2))
+            ? Border.all(color: const Color(0xFF4DB3A8).withOpacity(0.2))
             : null,
       ),
       child: Row(
@@ -1560,7 +1560,7 @@ class _StoryChip extends StatelessWidget {
             icon,
             size: 15,
             color: isPurple
-                ? const Color(0xFF7c3aed)
+                ? const Color(0xFF38827A)
                 : colorScheme.onSecondaryContainer,
           ),
           const SizedBox(width: 7),

@@ -622,8 +622,6 @@ class StoriesTab extends StatelessWidget {
       if (story.tags != null) story.tags!.join(' '),
       if (story.storyTags.isNotEmpty)
         story.storyTags.map((tag) => tag.name).join(' '),
-      if (story.people.isNotEmpty)
-        story.people.map((person) => person.name).join(' '),
     ].map(_normalize).where((field) => field.isNotEmpty).toList();
 
     for (final token in tokens) {

@@ -38,7 +38,6 @@ class _DashboardPageState extends State<DashboardPage> {
             'draft_stories': dashboardStats.draftStories,
             'total_words': dashboardStats.totalWords,
             'progress_to_book': dashboardStats.progressToBook,
-            'total_people': dashboardStats.totalPeople,
             'active_subscribers': dashboardStats.activeSubscribers,
             'this_week_stories': dashboardStats.thisWeekStories,
             'recent_activity': dashboardStats.recentActivity
@@ -420,8 +419,6 @@ class RecentActivitySection extends StatelessWidget {
         return 'Historia publicada';
       case 'photo_added':
         return 'Foto añadida a historia';
-      case 'person_added':
-        return 'Nueva persona agregada';
       case 'voice_recorded':
         return 'Audio grabado para historia';
       default:
@@ -439,8 +436,6 @@ class RecentActivitySection extends StatelessWidget {
         return Icons.publish;
       case 'photo_added':
         return Icons.photo;
-      case 'person_added':
-        return Icons.person_add;
       case 'voice_recorded':
         return Icons.mic;
       default:

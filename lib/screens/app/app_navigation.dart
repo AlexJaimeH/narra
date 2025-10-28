@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:narra/supabase/supabase_config.dart';
 import 'dashboard_page.dart';
 import 'stories_list_page.dart';
-import 'people_page.dart';
 import 'subscribers_page.dart';
 import 'settings_page.dart';
 import 'story_editor_page.dart';
@@ -32,11 +31,6 @@ class _AppNavigationState extends State<AppNavigation> {
       label: 'Historias',
       icon: Icons.library_books,
       builder: StoriesListPage.new,
-    ),
-    _NavigationItem(
-      label: 'Personas',
-      icon: Icons.people,
-      builder: PeoplePage.new,
     ),
     _NavigationItem(
       label: 'Suscriptores',

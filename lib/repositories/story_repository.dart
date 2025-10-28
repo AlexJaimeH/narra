@@ -261,16 +261,6 @@ class StoryRepository {
   static Future<void> removeTag(String storyId, String tagId) async {
     await NarraSupabaseClient.removeTagFromStory(storyId, tagId);
   }
-
-  /// Add person to story
-  static Future<void> addPerson(String storyId, String personId) async {
-    await NarraSupabaseClient.addPersonToStory(storyId, personId);
-  }
-
-  /// Remove person from story
-  static Future<void> removePerson(String storyId, String personId) async {
-    await NarraSupabaseClient.removePersonFromStory(storyId, personId);
-  }
 }
 
 /// Story status enumeration
@@ -324,7 +314,6 @@ class Story {
   final List<String>? tags; // Simplified tags as strings
   final List<StoryTag> storyTags; // Full tag objects
   final List<StoryPhoto> photos;
-  final List<StoryPerson> people;
 
   const Story({
     required this.id,
@@ -351,7 +340,6 @@ class Story {
     this.tags,
     required this.storyTags,
     required this.photos,
-    required this.people,
     this.authorName,
     this.authorDisplayName,
     this.authorAvatarUrl,
@@ -529,21 +517,6 @@ class Story {
         }
       }
 
-      final people = <StoryPerson>[];
-      final rawPeople = map['story_people'];
-      if (rawPeople is List) {
-        for (final entry in rawPeople) {
-          final entryMap = _asStringMap(entry);
-          final personMap = _asStringMap(entryMap?['people']);
-          if (personMap == null) continue;
-          try {
-            people.add(StoryPerson.fromMap(personMap));
-          } catch (_) {
-            // Ignore malformed person entries while parsing the rest.
-          }
-        }
-      }
-
       return Story(
         id: map['id'] as String? ?? '',
         userId: map['user_id'] as String? ?? '',
@@ -572,7 +545,6 @@ class Story {
         tags: tagNames.isEmpty ? null : tagNames,
         storyTags: storyTagObjects,
         photos: photos,
-        people: people,
         authorName:
             authorProfile?['name'] as String? ?? map['author_name'] as String?,
         authorDisplayName: authorSettings?['public_author_name'] as String? ??
@@ -600,7 +572,6 @@ class Story {
         publishedAt: null,
         storyTags: [],
         photos: [],
-        people: [],
         authorName: null,
         authorDisplayName: null,
         authorAvatarUrl: null,
@@ -696,7 +667,6 @@ class Story {
       publishedAt: publishedAt ?? this.publishedAt,
       tags: tags,
       photos: photos,
-      people: people,
       storyTags: storyTags,
     );
   }
@@ -851,35 +821,6 @@ class StoryPhoto {
       'caption': caption,
       'position': position,
       'created_at': createdAt.toIso8601String(),
-    };
-  }
-}
-
-/// Story person model
-class StoryPerson {
-  final String id;
-  final String name;
-  final String? relationship;
-
-  const StoryPerson({
-    required this.id,
-    required this.name,
-    this.relationship,
-  });
-
-  factory StoryPerson.fromMap(Map<String, dynamic> map) {
-    return StoryPerson(
-      id: map['id'] as String,
-      name: map['name'] as String,
-      relationship: map['relationship'] as String?,
-    );
-  }
-
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'name': name,
-      'relationship': relationship,
     };
   }
 }

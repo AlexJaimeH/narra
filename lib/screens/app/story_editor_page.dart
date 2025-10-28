@@ -6323,14 +6323,14 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       final user = NarraSupabaseClient.currentUser;
       if (user == null) return;
 
-      // Get subscribers
-      final subscribers = await SubscriberService.getAllSubscribers();
+      // Get confirmed subscribers only
+      final subscribers = await SubscriberService.getConfirmedSubscribers();
       if (subscribers.isEmpty) return;
 
       // Get user profile for display name
-      final profile = await UserService.getProfile(user.id);
-      final authorName = profile?.displayName ??
-                        profile?.fullName ??
+      final profile = await UserService.getCurrentUserProfile();
+      final authorName = profile?['display_name'] as String? ??
+                        profile?['name'] as String? ??
                         user.email?.split('@').first ??
                         'Tu autor en Narra';
 

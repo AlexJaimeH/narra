@@ -42,66 +42,64 @@ class SubscriberEmailService {
     final heroImage =
         story.photos.isNotEmpty ? story.photos.first.photoUrl : null;
     final previewText = story.excerpt ?? _fallbackExcerpt(story.content);
-    final failures = <SubscriberEmailFailure>[];
-    var sentCount = 0;
 
-    for (final subscriber in subscribers) {
-      Subscriber current = subscriber;
-      var token = current.magicKey.trim();
-
-      if (token.isEmpty) {
-        try {
-          current = await SubscriberService.ensureMagicKey(subscriber.id);
-          token = current.magicKey.trim();
-        } catch (error) {
-          failures.add(SubscriberEmailFailure(
-            subscriber: subscriber,
-            message:
-                'No pudimos preparar un enlace mágico para ${subscriber.email}: $error',
-          ));
-          continue;
-        }
-      }
-
-      final shareTarget = StoryShareTarget(
-        id: current.id,
-        name: current.name,
-        token: token,
-        source: 'email',
-      );
-
-      final link = StoryShareLinkBuilder.buildStoryLink(
-        story: story,
-        subscriber: shareTarget,
-        baseUri: baseUri,
-        source: 'email',
-      );
-
-      final html = EmailTemplates.storyPublishedHtml(
-        story: story,
-        subscriber: current,
-        storyLink: link,
-        authorDisplayName: authorDisplayName,
-        previewText: previewText,
-        heroImageUrl: heroImage,
-      );
-
-      final text = EmailTemplates.storyPublishedPlainText(
-        story: story,
-        subscriber: current,
-        storyLink: link,
-        authorDisplayName: authorDisplayName,
-        previewText: previewText,
-      );
-
-      final subjectAuthor =
-          authorDisplayName.isEmpty ? 'Tu autor en Narra' : authorDisplayName;
-      final subjectTitle = story.title.trim().isEmpty
-          ? 'una nueva historia'
-          : '"${story.title.trim()}"';
-      final subject = '$subjectAuthor compartió $subjectTitle contigo';
-
+    // Send all emails in parallel for better performance
+    final emailFutures = subscribers.map((subscriber) async {
       try {
+        Subscriber current = subscriber;
+        var token = current.magicKey.trim();
+
+        if (token.isEmpty) {
+          try {
+            current = await SubscriberService.ensureMagicKey(subscriber.id);
+            token = current.magicKey.trim();
+          } catch (error) {
+            return SubscriberEmailFailure(
+              subscriber: subscriber,
+              message:
+                  'No pudimos preparar un enlace mágico para ${subscriber.email}: $error',
+            );
+          }
+        }
+
+        final shareTarget = StoryShareTarget(
+          id: current.id,
+          name: current.name,
+          token: token,
+          source: 'email',
+        );
+
+        final link = StoryShareLinkBuilder.buildStoryLink(
+          story: story,
+          subscriber: shareTarget,
+          baseUri: baseUri,
+          source: 'email',
+        );
+
+        final html = EmailTemplates.storyPublishedHtml(
+          story: story,
+          subscriber: current,
+          storyLink: link,
+          authorDisplayName: authorDisplayName,
+          previewText: previewText,
+          heroImageUrl: heroImage,
+        );
+
+        final text = EmailTemplates.storyPublishedPlainText(
+          story: story,
+          subscriber: current,
+          storyLink: link,
+          authorDisplayName: authorDisplayName,
+          previewText: previewText,
+        );
+
+        final subjectAuthor =
+            authorDisplayName.isEmpty ? 'Tu autor en Narra' : authorDisplayName;
+        final subjectTitle = story.title.trim().isEmpty
+            ? 'una nueva historia'
+            : '"${story.title.trim()}"';
+        final subject = '$subjectAuthor compartió $subjectTitle contigo';
+
         await EmailService.sendEmail(
           to: [current.email],
           subject: subject,
@@ -109,7 +107,14 @@ class SubscriberEmailService {
           text: text,
           tags: const ['story-published'],
         );
-        await SubscriberService.markMagicLinkSent(current.id);
+
+        // Mark as sent and record event (but don't fail if these fail)
+        try {
+          await SubscriberService.markMagicLinkSent(current.id);
+        } catch (_) {
+          // Email sent successfully, ignore tracking failure
+        }
+
         try {
           await SubscriberService.recordAccessEvent(
             subscriberId: current.id,
@@ -122,21 +127,29 @@ class SubscriberEmailService {
             },
           );
         } catch (_) {
-          // El correo se envió correctamente; ignoramos fallas de auditoría.
+          // Email sent successfully, ignore tracking failure
         }
-        sentCount += 1;
+
+        return null; // Success
       } on EmailServiceException catch (error) {
-        failures.add(SubscriberEmailFailure(
-          subscriber: current,
+        return SubscriberEmailFailure(
+          subscriber: subscriber,
           message: error.message,
-        ));
+        );
       } catch (error) {
-        failures.add(SubscriberEmailFailure(
-          subscriber: current,
+        return SubscriberEmailFailure(
+          subscriber: subscriber,
           message: error.toString(),
-        ));
+        );
       }
-    }
+    }).toList();
+
+    // Wait for all emails to be sent
+    final results = await Future.wait(emailFutures);
+
+    // Count successes and failures
+    final failures = results.whereType<SubscriberEmailFailure>().toList();
+    final sentCount = results.length - failures.length;
 
     return SubscriberEmailSummary(sent: sentCount, failures: failures);
   }

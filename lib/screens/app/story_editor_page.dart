@@ -1601,11 +1601,13 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                       children: [
                         Icon(Icons.flag_outlined, color: colorScheme.error),
                         const SizedBox(width: 8),
-                        Text(
-                          'Información que puedes detallar más',
-                          style: theme.textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: colorScheme.error,
+                        Expanded(
+                          child: Text(
+                            'Información que puedes detallar más',
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: colorScheme.error,
+                            ),
                           ),
                         ),
                       ],
@@ -1643,11 +1645,17 @@ class _StoryEditorPageState extends State<StoryEditorPage>
             ],
             if (plan.nextSteps.isNotEmpty) ...[
               const SizedBox(height: 20),
-              Text(
-                'Siguientes pasos sugeridos',
-                style: theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Siguientes pasos sugeridos',
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 8),
               ...plan.nextSteps.map(
@@ -1675,13 +1683,19 @@ class _StoryEditorPageState extends State<StoryEditorPage>
             ],
             if (plan.warmups.isNotEmpty) ...[
               const SizedBox(height: 20),
-              Text(
-                plan.isStarting
-                    ? 'Ideas para comenzar a escribir'
-                    : 'Preguntas extra para inspirarte',
-                style: theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      plan.isStarting
+                          ? 'Ideas para comenzar a escribir'
+                          : 'Preguntas extra para inspirarte',
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 8),
               ...plan.warmups.map(
@@ -2288,6 +2302,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                 ),
                 minLines: 1,
                 maxLines: 3,
+                keyboardType: TextInputType.text,
                 textInputAction: TextInputAction.next,
                 enableSuggestions: false,
                 autocorrect: false,
@@ -2295,8 +2310,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                 smartQuotesType: SmartQuotesType.disabled,
                 textCapitalization: TextCapitalization.sentences,
                 enableIMEPersonalizedLearning: false,
-                spellCheckConfiguration:
-                    const SpellCheckConfiguration.disabled(),
                 autofillHints: const <String>[],
               ),
               SizedBox(height: verticalSpacing),
@@ -2338,8 +2351,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                   smartQuotesType: SmartQuotesType.disabled,
                   textCapitalization: TextCapitalization.sentences,
                   enableIMEPersonalizedLearning: false,
-                  spellCheckConfiguration:
-                      const SpellCheckConfiguration.disabled(),
                   autofillHints: const <String>[],
                 ),
               ),
@@ -5989,8 +6000,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   }
 
   bool _canPublish() {
-    return _titleController.text.isNotEmpty &&
-        _contentController.text.isNotEmpty;
+    // Always return true - validations are now done in _showPublishDialog()
+    return true;
   }
 
   Future<bool> _saveDraft() async {
@@ -6420,6 +6431,16 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                 setState(() => _showSuggestions = true);
                 _generateAISuggestions();
               }
+              // Scroll down to suggestions section after a short delay
+              Future.delayed(const Duration(milliseconds: 300), () {
+                if (_editorScrollController.hasClients) {
+                  _editorScrollController.animateTo(
+                    _editorScrollController.position.maxScrollExtent,
+                    duration: const Duration(milliseconds: 500),
+                    curve: Curves.easeInOut,
+                  );
+                }
+              });
             },
             child: const Text('Ver Sugerencias'),
           ),

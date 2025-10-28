@@ -1,3 +1,5 @@
+import 'dart:html' as html;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
@@ -14,6 +16,14 @@ void main() async {
 
   if (kIsWeb) {
     usePathUrlStrategy();
+
+    // Check if we're on a /blog/* route - these should be handled by React, not Flutter
+    final currentPath = Uri.base.path;
+    if (currentPath.startsWith('/blog/')) {
+      // Force reload so Cloudflare Pages can serve the React blog
+      runApp(const _BlogRedirectWidget());
+      return;
+    }
   }
 
   // Inicializar Supabase
@@ -51,6 +61,12 @@ class NarraApp extends StatelessWidget {
             initialRoute: _resolveInitialRoute(),
             onGenerateRoute: (settings) {
               final routeName = settings.name ?? '/';
+
+              // Ignore /blog/* routes - these are handled by React app
+              if (routeName.startsWith('/blog/')) {
+                return null;
+              }
+
               Uri? uri = Uri.tryParse(routeName);
               final baseUri = Uri.base;
               final isDefaultRoute = routeName == '/' || routeName.isEmpty;
@@ -203,4 +219,61 @@ String? _extractDeepLinkRoute(Uri uri) {
   }
 
   return null;
+}
+
+/// Lightweight widget shown when accessing /blog/* routes
+/// This prevents Flutter from loading and allows Cloudflare Pages to serve the React blog
+class _BlogRedirectWidget extends StatelessWidget {
+  const _BlogRedirectWidget();
+
+  @override
+  Widget build(BuildContext context) {
+    if (kIsWeb) {
+      // Use a post-frame callback to reload the page
+      // This ensures the widget tree is built before reloading
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        // Reload the page to let Cloudflare Pages serve the React blog
+        // ignore: avoid_web_libraries_in_flutter
+        if (kIsWeb) {
+          // Force reload via JavaScript
+          // This is safe because we're on web and specifically handling /blog/* routes
+          final uri = Uri.base;
+          final url = uri.toString();
+          // Use replace to avoid adding to history
+          // ignore: unsafe_html
+          html.window.location.replace(url);
+        }
+      });
+    }
+
+    return MaterialApp(
+      home: Scaffold(
+        backgroundColor: const Color(0xFFFAFAFA),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const SizedBox(
+                width: 50,
+                height: 50,
+                child: CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4DB3A8)),
+                  strokeWidth: 3,
+                ),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'Cargando blog...',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.grey[700],
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

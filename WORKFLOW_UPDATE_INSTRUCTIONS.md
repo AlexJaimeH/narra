@@ -1,8 +1,13 @@
 # Actualización necesaria del workflow de GitHub Actions
 
-El archivo `.github/workflows/cf-pages.yml` necesita actualizarse para construir correctamente
-tanto Flutter como React. No puedo modificar este archivo automáticamente por restricciones
-de permisos de GitHub.
+## El problema: Refresh en /app/* redirecciona a la página principal
+
+Cuando actualizas en cualquier ruta de Flutter (ej: /app/stories), estás siendo redirigido
+a la página principal de React. Esto significa que el archivo `_redirects` no se está
+aplicando correctamente en Cloudflare Pages.
+
+El archivo `.github/workflows/cf-pages.yml` necesita actualizarse con mejores verificaciones
+para diagnosticar y solucionar este problema.
 
 ## Cambios necesarios:
 
@@ -70,9 +75,27 @@ de permisos de GitHub.
       - name: Copy _redirects file
         run: |
           cp web/_redirects build/web/_redirects
-          echo "Final structure:"
-          ls -la build/web/ | head -15
+          echo "=== _redirects file copied ==="
+          echo "Content of _redirects:"
+          cat build/web/_redirects
+          echo ""
+          echo "=== Final build/web/ structure ==="
+          ls -la build/web/
+          echo ""
+          echo "=== Contents of build/web/app/ ==="
+          ls -la build/web/app/ | head -10
+          echo ""
+          echo "=== Verifying key files exist ==="
+          test -f build/web/_redirects && echo "✓ _redirects exists" || echo "✗ _redirects missing"
+          test -f build/web/index.html && echo "✓ React index.html exists" || echo "✗ React index.html missing"
+          test -f build/web/app/index.html && echo "✓ Flutter index.html exists" || echo "✗ Flutter index.html missing"
 ```
+
+**⚠️ IMPORTANTE:** Este paso ahora incluye verificaciones detalladas para asegurar que:
+- El archivo `_redirects` se copió correctamente
+- El contenido del archivo es el correcto
+- Todos los archivos necesarios existen en sus ubicaciones correctas
+
 
 ### 3. Resultado final
 
@@ -98,22 +121,27 @@ build/web/
 
 ## ¿Cómo aplicar estos cambios?
 
-### Opción 1: Editar directamente en GitHub
+### OPCIÓN RECOMENDADA: Copiar el archivo completo
+
+El contenido completo del workflow actualizado está en el archivo `NEW_WORKFLOW_FILE.yml`
+en la raíz del proyecto.
+
+**Pasos:**
 1. Ve a tu repositorio en GitHub
 2. Navega a `.github/workflows/cf-pages.yml`
 3. Haz clic en el icono de lápiz para editar
-4. Aplica los cambios descritos arriba
-5. Haz commit directamente a la rama `claude/fix-emoji-cloudflare-deploy-011CUZv1bTfeviQ6oMzPyB6a`
+4. Borra TODO el contenido actual
+5. Abre `NEW_WORKFLOW_FILE.yml` (en la raíz del repo)
+6. Copia TODO su contenido y pégalo en `cf-pages.yml`
+7. Haz commit con el mensaje: "Add debug output to workflow for _redirects verification"
+8. El workflow se ejecutará automáticamente
 
-### Opción 2: Editar localmente
-1. Abre `.github/workflows/cf-pages.yml` en tu editor
-2. Aplica los cambios descritos arriba
-3. Commit y push:
-   ```bash
-   git add .github/workflows/cf-pages.yml
-   git commit -m "Update workflow to build React landing and move Flutter to /app"
-   git push
-   ```
+### Verificación después del deploy
+
+Una vez que el workflow termine, revisa los logs del paso "Copy _redirects file":
+- Debe mostrar el contenido completo del archivo `_redirects`
+- Debe mostrar checkmarks (✓) para todos los archivos
+- Si algún archivo falta, el problema está en el build, no en los redirects
 
 ## ¿Por qué es necesario esto?
 

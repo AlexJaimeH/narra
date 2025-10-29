@@ -106,7 +106,7 @@ begin;
 create table if not exists public.voice_recordings (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users (id) on delete cascade,
-  story_id uuid not null references public.stories (id) on delete cascade,
+  story_id uuid references public.stories (id) on delete cascade,
   story_title text not null default '',
   audio_url text not null,
   audio_path text not null,
@@ -116,10 +116,11 @@ create table if not exists public.voice_recordings (
   created_at timestamptz not null default timezone('utc', now())
 );
 
+-- NO forzar story_id a NOT NULL porque puede haber grabaciones sin historia asignada aún
+-- Solo actualizar story_title para que tenga un default
 alter table public.voice_recordings
   alter column story_title set not null,
-  alter column story_title set default '',
-  alter column story_id set not null;
+  alter column story_title set default '';
 
 alter table public.voice_recordings
   drop constraint if exists voice_recordings_story_id_fkey,
@@ -142,7 +143,8 @@ create index if not exists voice_recordings_user_idx
   on public.voice_recordings (user_id, created_at desc);
 
 create index if not exists voice_recordings_story_idx
-  on public.voice_recordings (story_id, created_at desc);
+  on public.voice_recordings (story_id, created_at desc)
+  where story_id is not null;
 
 insert into storage.buckets (id, name, public)
 select 'voice-recordings', 'voice-recordings', false

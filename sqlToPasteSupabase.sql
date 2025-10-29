@@ -107,20 +107,36 @@ create table if not exists public.voice_recordings (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users (id) on delete cascade,
   story_id uuid references public.stories (id) on delete cascade,
-  story_title text not null default '',
+  story_title text default '',
   audio_url text not null,
   audio_path text not null,
-  storage_bucket text not null default 'voice-recordings',
-  transcript text not null default '',
+  storage_bucket text default 'voice-recordings',
+  transcript text default '',
   duration_seconds numeric,
   created_at timestamptz not null default timezone('utc', now())
 );
 
--- NO forzar story_id a NOT NULL porque puede haber grabaciones sin historia asignada aún
--- Solo actualizar story_title para que tenga un default
+-- PRIMERO: Actualizar valores NULL existentes ANTES de forzar NOT NULL
+update public.voice_recordings
+set story_title = ''
+where story_title is null;
+
+update public.voice_recordings
+set transcript = ''
+where transcript is null;
+
+update public.voice_recordings
+set storage_bucket = 'voice-recordings'
+where storage_bucket is null;
+
+-- SEGUNDO: Ahora sí aplicar NOT NULL y defaults
 alter table public.voice_recordings
   alter column story_title set not null,
-  alter column story_title set default '';
+  alter column story_title set default '',
+  alter column transcript set not null,
+  alter column transcript set default '',
+  alter column storage_bucket set not null,
+  alter column storage_bucket set default 'voice-recordings';
 
 alter table public.voice_recordings
   drop constraint if exists voice_recordings_story_id_fkey,
@@ -136,8 +152,7 @@ alter table public.voice_recordings
     references auth.users (id)
     on delete cascade;
 
-alter table public.voice_recordings
-  add column if not exists storage_bucket text not null default 'voice-recordings';
+-- Nota: storage_bucket ya fue configurado arriba
 
 create index if not exists voice_recordings_user_idx
   on public.voice_recordings (user_id, created_at desc);

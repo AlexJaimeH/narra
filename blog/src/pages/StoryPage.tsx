@@ -102,7 +102,7 @@ export const StoryPage: React.FC = () => {
 
       setIsLoading(false);
     } catch (err) {
-      console.error('Error loading story:', err);
+      console.error('[StoryPage] Error loading story:', err);
       setError('Hubo un error al cargar la historia. Por favor, intenta de nuevo.');
       setIsLoading(false);
     }

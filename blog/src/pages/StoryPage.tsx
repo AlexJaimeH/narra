@@ -1,31 +1,24 @@
 import React, { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
-import { Header } from '../components/Header';
-import { Comments } from '../components/Comments';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Loading } from '../components/Loading';
 import { ErrorMessage } from '../components/ErrorMessage';
-import { Story, PublicAuthorProfile, StoryFeedbackState } from '../types';
+import { Story, PublicAuthorProfile } from '../types';
 import { publicAccessService } from '../services/publicAccessService';
 import { accessManager } from '../services/accessManager';
 import { storyService } from '../services/storyService';
-import { feedbackService } from '../services/feedbackService';
+import { NarraColors } from '../styles/colors';
 
 export const StoryPage: React.FC = () => {
   const { storyId } = useParams<{ storyId: string }>();
+  const navigate = useNavigate();
 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [story, setStory] = useState<Story | null>(null);
   const [author, setAuthor] = useState<PublicAuthorProfile | null>(null);
-  const [feedback, setFeedback] = useState<StoryFeedbackState>({
-    hasReacted: false,
-    reactionCount: 0,
-    commentCount: 0,
-    comments: [],
-  });
+  const [relatedStories, setRelatedStories] = useState<Story[]>([]);
   const [subscriberName, setSubscriberName] = useState<string | null>(null);
-  const [isSubmittingComment, setIsSubmittingComment] = useState(false);
-  const [isTogglingReaction, setIsTogglingReaction] = useState(false);
+  const [authorId, setAuthorId] = useState<string | null>(null);
 
   const loadStory = async () => {
     if (!storyId) {
@@ -38,7 +31,6 @@ export const StoryPage: React.FC = () => {
     setError(null);
 
     try {
-      // Parse URL parameters
       const urlParams = publicAccessService.parseSharePayloadFromUrl();
       console.log('[StoryPage] URL params:', urlParams);
 
@@ -49,7 +41,8 @@ export const StoryPage: React.FC = () => {
         return;
       }
 
-      // Register access and validate magic link
+      setAuthorId(urlParams.authorId);
+
       console.log('[StoryPage] Registering access...');
       const accessRecord = await publicAccessService.registerAccess({
         authorId: urlParams.authorId,
@@ -69,15 +62,11 @@ export const StoryPage: React.FC = () => {
         return;
       }
 
-      // Store access locally
       accessManager.grantAccess(accessRecord);
       setSubscriberName(accessRecord.subscriberName || null);
 
       console.log('[StoryPage] Loading story with ID:', storyId);
-      console.log('[StoryPage] Supabase URL:', accessRecord.supabaseUrl);
-      console.log('[StoryPage] Has anon key:', !!accessRecord.supabaseAnonKey);
 
-      // Load story
       const loadedStory = await storyService.getStory(storyId);
       console.log('[StoryPage] Loaded story:', loadedStory);
 
@@ -89,23 +78,15 @@ export const StoryPage: React.FC = () => {
       }
       setStory(loadedStory);
 
-      // Load author profile
       const profile = await storyService.getAuthorProfile(loadedStory.userId);
       setAuthor(profile);
 
-      // Load feedback state
-      const feedbackState = await feedbackService.fetchState({
-        authorId: loadedStory.userId,
-        storyId: storyId,
-        subscriberId: accessRecord.subscriberId,
-        token: accessRecord.accessToken,
-        source: urlParams.source,
-      });
-      setFeedback(feedbackState);
+      const otherStories = await storyService.getLatestStories(loadedStory.userId, 4);
+      setRelatedStories(otherStories.filter(s => s.id !== storyId));
 
       setIsLoading(false);
     } catch (err) {
-      console.error('Error loading story:', err);
+      console.error('[StoryPage] Error loading story:', err);
       setError('Hubo un error al cargar la historia. Por favor, intenta de nuevo.');
       setIsLoading(false);
     }
@@ -115,71 +96,6 @@ export const StoryPage: React.FC = () => {
     loadStory();
   }, [storyId]);
 
-  const handleSubmitComment = async (content: string, parentCommentId?: string) => {
-    if (!story) return;
-
-    const accessRecord = accessManager.getAccess();
-    if (!accessRecord) return;
-
-    setIsSubmittingComment(true);
-
-    try {
-      const success = await feedbackService.submitComment({
-        authorId: story.userId,
-        storyId: story.id,
-        subscriberId: accessRecord.subscriberId,
-        token: accessRecord.accessToken,
-        content,
-        parentCommentId,
-        source: accessRecord.source,
-      });
-
-      if (success) {
-        // Reload feedback to get updated comments
-        const feedbackState = await feedbackService.fetchState({
-          authorId: story.userId,
-          storyId: story.id,
-          subscriberId: accessRecord.subscriberId,
-          token: accessRecord.accessToken,
-          source: accessRecord.source,
-        });
-        setFeedback(feedbackState);
-      }
-    } finally {
-      setIsSubmittingComment(false);
-    }
-  };
-
-  const handleToggleReaction = async () => {
-    if (!story || isTogglingReaction) return;
-
-    const accessRecord = accessManager.getAccess();
-    if (!accessRecord) return;
-
-    setIsTogglingReaction(true);
-
-    try {
-      const success = await feedbackService.toggleReaction({
-        authorId: story.userId,
-        storyId: story.id,
-        subscriberId: accessRecord.subscriberId,
-        token: accessRecord.accessToken,
-        source: accessRecord.source,
-      });
-
-      if (success) {
-        // Update local state optimistically
-        setFeedback(prev => ({
-          ...prev,
-          hasReacted: !prev.hasReacted,
-          reactionCount: prev.hasReacted ? prev.reactionCount - 1 : prev.reactionCount + 1,
-        }));
-      }
-    } finally {
-      setIsTogglingReaction(false);
-    }
-  };
-
   const formatDate = (dateString: string | null): string => {
     if (!dateString) return '';
     const date = new Date(dateString);
@@ -188,6 +104,23 @@ export const StoryPage: React.FC = () => {
       month: 'long',
       day: 'numeric',
     });
+  };
+
+  const handleViewAllStories = () => {
+    if (!authorId) return;
+    const urlParams = publicAccessService.parseSharePayloadFromUrl();
+    const queryString = new URLSearchParams({
+      author: authorId,
+      subscriber: urlParams.subscriberId || '',
+      token: urlParams.token || '',
+      ...(urlParams.source && { source: urlParams.source }),
+    }).toString();
+    navigate(`/blog/subscriber/${urlParams.subscriberId}?${queryString}`);
+  };
+
+  const handleUnsubscribe = () => {
+    // TODO: Implementar desuscripción
+    alert('Funcionalidad de desuscripción próximamente');
   };
 
   if (isLoading) {
@@ -204,18 +137,63 @@ export const StoryPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-surface-light">
-      <Header author={author || undefined} subscriberName={subscriberName || undefined} />
+      {/* Header con info del autor */}
+      <header className="bg-white border-b border-gray-200 sticky top-0 z-10 shadow-sm">
+        <div className="max-w-5xl mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              {author?.avatarUrl && (
+                <img
+                  src={author.avatarUrl}
+                  alt={author.name}
+                  className="w-12 h-12 rounded-full object-cover border-2"
+                  style={{ borderColor: NarraColors.brand.primary }}
+                />
+              )}
+              <div>
+                <h2 className="text-xl font-bold text-text-primary">
+                  {author?.displayName || 'Autor'}
+                </h2>
+                {author?.tagline && (
+                  <p className="text-sm text-text-secondary">{author.tagline}</p>
+                )}
+              </div>
+            </div>
+            <button
+              onClick={handleViewAllStories}
+              className="px-4 py-2 rounded-lg font-medium transition-all"
+              style={{
+                backgroundColor: NarraColors.brand.primary,
+                color: 'white',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = NarraColors.brand.primarySolid;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = NarraColors.brand.primary;
+              }}
+            >
+              Ver todas las historias
+            </button>
+          </div>
+        </div>
+      </header>
 
-      <main className="max-w-4xl mx-auto px-4 py-8">
-        <article className="bg-white rounded-xl shadow-sm p-8 md:p-12">
-          <header className="mb-8">
-            <h1 className="text-4xl md:text-5xl font-bold text-text-primary mb-4">
+      {/* Contenido principal */}
+      <main className="max-w-4xl mx-auto px-4 py-12">
+        {/* Historia */}
+        <article className="bg-white rounded-2xl shadow-sm p-8 md:p-12 mb-8">
+          <header className="mb-8 border-b border-gray-100 pb-8">
+            <h1 className="text-4xl md:text-5xl font-bold text-text-primary mb-4 leading-tight">
               {story.title}
             </h1>
 
-            <div className="flex items-center gap-4 text-text-secondary">
+            <div className="flex flex-wrap items-center gap-4 text-text-secondary">
               {story.publishedAt && (
-                <time className="text-sm">
+                <time className="text-sm flex items-center gap-1">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
                   {formatDate(story.publishedAt)}
                 </time>
               )}
@@ -225,7 +203,11 @@ export const StoryPage: React.FC = () => {
                   {story.tags.map(tag => (
                     <span
                       key={tag.id}
-                      className="px-3 py-1 bg-brand-primary/10 text-brand-primary text-sm rounded-full"
+                      className="px-3 py-1 text-sm rounded-full font-medium"
+                      style={{
+                        backgroundColor: NarraColors.brand.primaryLight,
+                        color: NarraColors.brand.primarySolid,
+                      }}
                     >
                       {tag.tag}
                     </span>
@@ -238,14 +220,14 @@ export const StoryPage: React.FC = () => {
           {story.photos && story.photos.length > 0 && (
             <div className="mb-8 space-y-6">
               {story.photos.map(photo => (
-                <figure key={photo.id}>
+                <figure key={photo.id} className="rounded-xl overflow-hidden">
                   <img
                     src={photo.photoUrl}
                     alt={photo.caption || story.title}
-                    className="w-full rounded-lg"
+                    className="w-full rounded-xl shadow-lg"
                   />
                   {photo.caption && (
-                    <figcaption className="mt-2 text-sm text-text-secondary text-center italic">
+                    <figcaption className="mt-3 text-sm text-text-secondary text-center italic">
                       {photo.caption}
                     </figcaption>
                   )}
@@ -256,40 +238,87 @@ export const StoryPage: React.FC = () => {
 
           <div
             className="prose prose-lg max-w-none"
+            style={{ color: NarraColors.text.primary }}
             dangerouslySetInnerHTML={{ __html: story.content }}
           />
 
-          <div className="mt-12 pt-8 border-t border-gray-200">
-            <button
-              onClick={handleToggleReaction}
-              disabled={isTogglingReaction}
-              className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-all ${
-                feedback.hasReacted
-                  ? 'bg-red-50 text-red-600 hover:bg-red-100'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              <span className="text-xl">{feedback.hasReacted ? '♥' : '♡'}</span>
-              <span>
-                {feedback.hasReacted ? 'Me gusta' : 'Me gusta'}
-                {feedback.reactionCount > 0 && ` (${feedback.reactionCount})`}
-              </span>
-            </button>
+          <div className="mt-12 pt-8 border-t border-gray-200 flex items-center justify-between">
+            <div className="text-sm text-text-secondary">
+              {subscriberName && (
+                <p>Hola {subscriberName}, esperamos que hayas disfrutado esta historia.</p>
+              )}
+            </div>
           </div>
         </article>
 
-        <div className="mt-8 bg-white rounded-xl shadow-sm p-8 md:p-12">
-          <Comments
-            comments={feedback.comments}
-            onSubmitComment={handleSubmitComment}
-            isSubmitting={isSubmittingComment}
-          />
+        {/* Historias relacionadas */}
+        {relatedStories.length > 0 && (
+          <section className="mb-8">
+            <h2 className="text-2xl font-bold text-text-primary mb-6">
+              Más historias de {author?.displayName || 'este autor'}
+            </h2>
+            <div className="grid gap-6 md:grid-cols-2">
+              {relatedStories.map(relatedStory => (
+                <a
+                  key={relatedStory.id}
+                  href={`/blog/story/${relatedStory.id}${window.location.search}`}
+                  className="block bg-white rounded-xl shadow-sm p-6 hover:shadow-md transition-all"
+                  style={{
+                    borderTop: `3px solid ${NarraColors.brand.primary}`,
+                  }}
+                >
+                  <h3 className="text-xl font-bold text-text-primary mb-2 line-clamp-2">
+                    {relatedStory.title}
+                  </h3>
+                  {relatedStory.publishedAt && (
+                    <p className="text-sm text-text-secondary mb-3">
+                      {formatDate(relatedStory.publishedAt)}
+                    </p>
+                  )}
+                  <div
+                    className="text-text-secondary line-clamp-3 mb-3"
+                    dangerouslySetInnerHTML={{
+                      __html: relatedStory.content.substring(0, 150) + '...',
+                    }}
+                  />
+                  <span
+                    className="text-sm font-medium"
+                    style={{ color: NarraColors.brand.primary }}
+                  >
+                    Leer historia →
+                  </span>
+                </a>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Botón de desuscripción */}
+        <div className="bg-white rounded-xl shadow-sm p-6 text-center">
+          <p className="text-text-secondary mb-4">
+            ¿No deseas recibir más historias de {author?.displayName || 'este autor'}?
+          </p>
+          <button
+            onClick={handleUnsubscribe}
+            className="text-sm text-text-light hover:text-text-secondary underline"
+          >
+            Desuscribirse
+          </button>
         </div>
       </main>
 
-      <footer className="border-t border-gray-200 mt-16 py-8">
-        <div className="max-w-4xl mx-auto px-4 text-center text-text-light text-sm">
-          <p>Blog creado con Narra</p>
+      {/* Footer */}
+      <footer className="border-t border-gray-200 mt-16 py-8 bg-white">
+        <div className="max-w-4xl mx-auto px-4 text-center">
+          <p className="text-text-secondary text-sm mb-2">
+            Creado con{' '}
+            <span style={{ color: NarraColors.brand.primary }} className="font-semibold">
+              Narra
+            </span>
+          </p>
+          <p className="text-text-light text-xs">
+            Historias que perduran para siempre
+          </p>
         </div>
       </footer>
     </div>

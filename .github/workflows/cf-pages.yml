@@ -83,11 +83,33 @@ jobs:
           cd ..
           echo "React build complete"
 
-      - name: Copy _redirects file
+      - name: Copy routing files (_redirects and middleware)
         run: |
           cp web/_redirects build/web/_redirects
-          echo "Final structure:"
-          ls -la build/web/ | head -15
+          mkdir -p build/web/functions
+          cp functions/_middleware.js build/web/functions/_middleware.js
+          echo "=== _redirects file copied ==="
+          echo "Content of _redirects:"
+          cat build/web/_redirects
+          echo ""
+          echo "=== _middleware.js copied ==="
+          echo "Content of _middleware.js:"
+          cat build/web/functions/_middleware.js
+          echo ""
+          echo "=== Final build/web/ structure ==="
+          ls -la build/web/
+          echo ""
+          echo "=== Contents of build/web/app/ ==="
+          ls -la build/web/app/ | head -10
+          echo ""
+          echo "=== Contents of build/web/functions/ ==="
+          ls -la build/web/functions/
+          echo ""
+          echo "=== Verifying key files exist ==="
+          test -f build/web/_redirects && echo "✓ _redirects exists" || echo "✗ _redirects missing"
+          test -f build/web/functions/_middleware.js && echo "✓ _middleware.js exists" || echo "✗ _middleware.js missing"
+          test -f build/web/index.html && echo "✓ React index.html exists" || echo "✗ React index.html missing"
+          test -f build/web/app/index.html && echo "✓ Flutter index.html exists" || echo "✗ Flutter index.html missing"
 
       - name: Deploy Preview
         if: github.event_name == 'pull_request' || github.ref != 'refs/heads/main'

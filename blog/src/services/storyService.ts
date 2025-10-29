@@ -127,8 +127,9 @@ export const storyService = {
       authorDisplayName: data.author_display_name,
       authorAvatarUrl: data.author_avatar_url,
       storyDate: data.story_date,
-      storyEndDate: data.story_end_date,
-      storyDateType: data.story_date_type,
+      startDate: data.start_date || data.story_date,
+      endDate: data.end_date,
+      datesPrecision: data.dates_precision,
       photos: data.photos?.sort((a: any, b: any) => a.display_order - b.display_order).map((p: any) => ({
         id: p.id,
         storyId: p.story_id,
@@ -140,7 +141,9 @@ export const storyService = {
       tags: data.tags?.map((t: any) => ({
         id: t.id,
         storyId: t.story_id,
-        tag: t.tag,
+        tag: t.tag || t.name,
+        name: t.name || t.tag,
+        color: t.color,
         createdAt: t.created_at,
       })),
     };

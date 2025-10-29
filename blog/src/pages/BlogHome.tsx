@@ -251,26 +251,27 @@ const StoryCard: React.FC<{
   formatDate: (date: string | null) => string;
 }> = ({ story, index }) => {
   const formatStoryDate = (story: Story): string => {
-    if (!story.storyDate) return '';
+    const dateToUse = story.startDate || story.storyDate;
+    if (!dateToUse) return '';
 
-    const startDate = new Date(story.storyDate);
-    const dateType = story.storyDateType || 'exact';
+    const startDate = new Date(dateToUse);
+    const precision = story.datesPrecision || 'day';
 
     let formattedStart = '';
-    if (dateType === 'year') {
+    if (precision === 'year') {
       formattedStart = startDate.getFullYear().toString();
-    } else if (dateType === 'month') {
+    } else if (precision === 'month') {
       formattedStart = startDate.toLocaleDateString('es-MX', { year: 'numeric', month: 'long' });
     } else {
       formattedStart = startDate.toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
     }
 
-    if (story.storyEndDate) {
-      const endDate = new Date(story.storyEndDate);
+    if (story.endDate) {
+      const endDate = new Date(story.endDate);
       let formattedEnd = '';
-      if (dateType === 'year') {
+      if (precision === 'year') {
         formattedEnd = endDate.getFullYear().toString();
-      } else if (dateType === 'month') {
+      } else if (precision === 'month') {
         formattedEnd = endDate.toLocaleDateString('es-MX', { year: 'numeric', month: 'long' });
       } else {
         formattedEnd = endDate.toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
@@ -371,7 +372,7 @@ const StoryCard: React.FC<{
                     color: NarraColors.brand.primarySolid,
                   }}
                 >
-                  #{tag.tag}
+                  #{tag.name || tag.tag}
                 </span>
               ))}
             </div>

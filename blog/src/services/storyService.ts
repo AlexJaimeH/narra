@@ -88,7 +88,7 @@ export const storyService = {
       const client = await getSupabaseClient();
 
       const { data, error } = await client
-        .from('user_profiles')
+        .from('user_settings')
         .select('*')
         .eq('user_id', authorId)
         .single();

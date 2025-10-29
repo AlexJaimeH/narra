@@ -126,6 +126,9 @@ export const storyService = {
       authorName: data.author_name,
       authorDisplayName: data.author_display_name,
       authorAvatarUrl: data.author_avatar_url,
+      storyDate: data.story_date,
+      storyEndDate: data.story_end_date,
+      storyDateType: data.story_date_type,
       photos: data.photos?.sort((a: any, b: any) => a.display_order - b.display_order).map((p: any) => ({
         id: p.id,
         storyId: p.story_id,

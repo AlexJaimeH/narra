@@ -628,7 +628,14 @@ const RelatedStoryCard: React.FC<{
     return formattedStart;
   };
 
+  const extractExcerpt = (content: string, maxLength: number = 150): string => {
+    const text = content.replace(/<[^>]*>/g, '').replace(/\n+/g, ' ').trim();
+    if (text.length <= maxLength) return text;
+    return text.substring(0, maxLength).trim() + '...';
+  };
+
   const storyDateFormatted = formatStoryDate(story);
+  const excerpt = extractExcerpt(story.content);
 
   return (
     <a
@@ -648,6 +655,12 @@ const RelatedStoryCard: React.FC<{
         <h3 className="text-xl font-bold mb-3 line-clamp-2" style={{ color: NarraColors.text.primary }}>
           {story.title}
         </h3>
+
+        {excerpt && (
+          <p className="text-sm mb-3 line-clamp-2" style={{ color: NarraColors.text.secondary }}>
+            {excerpt}
+          </p>
+        )}
 
         <div className="flex flex-wrap items-center gap-2 mb-3">
           {storyDateFormatted && (

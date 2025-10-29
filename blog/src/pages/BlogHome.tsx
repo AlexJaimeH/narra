@@ -249,7 +249,7 @@ const StoryCard: React.FC<{
   story: StoryWithFeedback;
   index: number;
   formatDate: (date: string | null) => string;
-}> = ({ story, index }) => {
+}> = ({ story, index, formatDate }) => {
   const formatStoryDate = (story: Story): string => {
     const dateToUse = story.startDate || story.storyDate;
     if (!dateToUse) return '';
@@ -362,7 +362,7 @@ const StoryCard: React.FC<{
 
           {/* Tags */}
           {story.tags && story.tags.length > 0 && (
-            <div className="flex flex-wrap gap-2 mb-6">
+            <div className="flex flex-wrap gap-2 mb-4">
               {story.tags.map(tag => (
                 <span
                   key={tag.id}
@@ -376,6 +376,13 @@ const StoryCard: React.FC<{
                 </span>
               ))}
             </div>
+          )}
+
+          {/* Fecha de publicación */}
+          {story.publishedAt && (
+            <p className="text-sm italic mb-6" style={{ color: NarraColors.text.light }}>
+              Publicado el {formatDate(story.publishedAt)}
+            </p>
           )}
 
           {/* CTA */}

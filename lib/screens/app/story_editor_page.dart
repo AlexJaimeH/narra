@@ -6042,6 +6042,13 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         // Add optional fields only if they exist
         if (_startDate != null) {
           storyData['story_date'] = _startDate!.toIso8601String();
+          storyData['start_date'] = _startDate!.toIso8601String();
+        }
+        if (_endDate != null) {
+          storyData['end_date'] = _endDate!.toIso8601String();
+        }
+        if (_datesPrecision.isNotEmpty) {
+          storyData['dates_precision'] = _datesPrecision;
         }
 
         // Direct Supabase insert
@@ -6063,6 +6070,13 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         // Add optional fields
         if (_startDate != null) {
           updates['story_date'] = _startDate!.toIso8601String();
+          updates['start_date'] = _startDate!.toIso8601String();
+        }
+        if (_endDate != null) {
+          updates['end_date'] = _endDate!.toIso8601String();
+        }
+        if (_datesPrecision.isNotEmpty) {
+          updates['dates_precision'] = _datesPrecision;
         }
 
         final client = NarraSupabaseClient.client;

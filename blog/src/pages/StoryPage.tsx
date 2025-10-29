@@ -293,31 +293,38 @@ export const StoryPage: React.FC = () => {
               {story.title}
             </h1>
 
-            <div className="flex flex-wrap items-center gap-3">
-              {formatStoryDate(story) && (
-                <div className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold shadow-sm" style={{ backgroundColor: NarraColors.brand.primaryLight, color: NarraColors.brand.primarySolid }}>
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                  <time>{formatStoryDate(story)}</time>
-                </div>
-              )}
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-wrap items-center gap-3">
+                {formatStoryDate(story) && (
+                  <div className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold shadow-sm" style={{ backgroundColor: NarraColors.brand.primaryLight, color: NarraColors.brand.primarySolid }}>
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <time>{formatStoryDate(story)}</time>
+                  </div>
+                )}
 
-              {story.tags && story.tags.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {story.tags.map(tag => (
-                    <span
-                      key={tag.id}
-                      className="px-4 py-2 text-sm rounded-full font-semibold shadow-sm"
-                      style={{
-                        backgroundColor: NarraColors.brand.primaryLight,
-                        color: NarraColors.brand.primarySolid,
-                      }}
-                    >
-                      #{tag.name || tag.tag}
-                    </span>
-                  ))}
-                </div>
+                {story.tags && story.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {story.tags.map(tag => (
+                      <span
+                        key={tag.id}
+                        className="px-4 py-2 text-sm rounded-full font-semibold shadow-sm"
+                        style={{
+                          backgroundColor: NarraColors.brand.primaryLight,
+                          color: NarraColors.brand.primarySolid,
+                        }}
+                      >
+                        #{tag.name || tag.tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {story.publishedAt && (
+                <p className="text-sm italic" style={{ color: NarraColors.text.light }}>
+                  Publicado el {formatDate(story.publishedAt)}
+                </p>
               )}
             </div>
           </header>
@@ -597,7 +604,7 @@ const CommentThread: React.FC<{
 const RelatedStoryCard: React.FC<{
   story: Story;
   formatDate: (date: string | null) => string;
-}> = ({ story }) => {
+}> = ({ story, formatDate }) => {
   const formatStoryDate = (story: Story): string => {
     const dateToUse = story.startDate || story.storyDate;
     if (!dateToUse) return '';
@@ -664,31 +671,38 @@ const RelatedStoryCard: React.FC<{
           </p>
         )}
 
-        <div className="flex flex-wrap items-center gap-2 mb-3">
-          {storyDateFormatted && (
-            <div className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold" style={{ backgroundColor: NarraColors.brand.primaryLight, color: NarraColors.brand.primarySolid }}>
-              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-              <time>{storyDateFormatted}</time>
-            </div>
-          )}
+        <div className="flex flex-col gap-2 mb-3">
+          <div className="flex flex-wrap items-center gap-2">
+            {storyDateFormatted && (
+              <div className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold" style={{ backgroundColor: NarraColors.brand.primaryLight, color: NarraColors.brand.primarySolid }}>
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <time>{storyDateFormatted}</time>
+              </div>
+            )}
 
-          {story.tags && story.tags.length > 0 && (
-            <>
-              {story.tags.slice(0, 2).map(tag => (
-                <span
-                  key={tag.id}
-                  className="px-3 py-1 text-xs rounded-full font-semibold"
-                  style={{
-                    backgroundColor: NarraColors.brand.primaryLight,
-                    color: NarraColors.brand.primarySolid,
-                  }}
-                >
-                  #{tag.tag}
-                </span>
-              ))}
-            </>
+            {story.tags && story.tags.length > 0 && (
+              <>
+                {story.tags.slice(0, 2).map(tag => (
+                  <span
+                    key={tag.id}
+                    className="px-3 py-1 text-xs rounded-full font-semibold"
+                    style={{
+                      backgroundColor: NarraColors.brand.primaryLight,
+                      color: NarraColors.brand.primarySolid,
+                    }}
+                  >
+                    #{tag.name || tag.tag}
+                  </span>
+                ))}
+              </>
+            )}
+          </div>
+          {story.publishedAt && (
+            <p className="text-xs italic" style={{ color: NarraColors.text.light }}>
+              Publicado el {formatDate(story.publishedAt)}
+            </p>
           )}
         </div>
 

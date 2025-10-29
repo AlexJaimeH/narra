@@ -38,6 +38,16 @@ const formatStoryDate = (story: Story): string => {
   return formattedStart;
 };
 
+const formatPublishedDate = (dateString: string | null): string => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  return date.toLocaleDateString('es-MX', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+};
+
 const extractExcerpt = (content: string, maxLength: number = 200): string => {
   const text = content.replace(/<[^>]*>/g, '').replace(/\n+/g, ' ').trim();
   if (text.length <= maxLength) return text;
@@ -96,12 +106,19 @@ export const StoryCard: React.FC<StoryCardProps> = ({ story }) => {
               {excerpt}
             </p>
 
-            <div className="flex items-center gap-4 text-sm text-text-light">
-              {story.commentCount !== undefined && story.commentCount > 0 && (
-                <span>{story.commentCount} comentario{story.commentCount !== 1 ? 's' : ''}</span>
-              )}
-              {story.reactionCount !== undefined && story.reactionCount > 0 && (
-                <span>♥ {story.reactionCount}</span>
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-4 text-sm text-text-light">
+                {story.commentCount !== undefined && story.commentCount > 0 && (
+                  <span>{story.commentCount} comentario{story.commentCount !== 1 ? 's' : ''}</span>
+                )}
+                {story.reactionCount !== undefined && story.reactionCount > 0 && (
+                  <span>♥ {story.reactionCount}</span>
+                )}
+              </div>
+              {story.publishedAt && (
+                <p className="text-xs text-text-light italic">
+                  Publicado el {formatPublishedDate(story.publishedAt)}
+                </p>
               )}
             </div>
           </div>

@@ -199,3 +199,65 @@ CREATE TRIGGER trigger_update_voice_recordings_updated_at
 --    - Subir archivos a carpetas de otros usuarios
 --    - Eliminar archivos de otros usuarios
 -- ============================================================
+
+-- ============================================================
+-- AGREGAR COLUMNAS DE FECHA A LA TABLA STORIES
+-- ============================================================
+--
+-- Estas columnas permiten guardar rangos de fechas y precisión
+-- para las historias (día exacto, mes, o año)
+--
+-- INSTRUCCIONES:
+-- 1. Ve a Supabase Dashboard
+-- 2. Ve a la sección "SQL Editor"
+-- 3. Copia y pega el SQL de abajo
+-- 4. Haz clic en "Run"
+-- ============================================================
+
+-- Agregar columna start_date si no existe
+ALTER TABLE stories
+ADD COLUMN IF NOT EXISTS start_date DATE;
+
+-- Agregar columna end_date si no existe
+ALTER TABLE stories
+ADD COLUMN IF NOT EXISTS end_date DATE;
+
+-- Actualizar el constraint de dates_precision para usar los valores correctos
+-- Primero eliminamos el constraint existente
+ALTER TABLE stories
+DROP CONSTRAINT IF EXISTS stories_dates_precision_check;
+
+-- Crear el nuevo constraint con los valores correctos
+ALTER TABLE stories
+ADD CONSTRAINT stories_dates_precision_check
+CHECK (dates_precision IN ('day', 'month', 'year'));
+
+-- Actualizar valores existentes para que coincidan con los nuevos valores
+-- Mapeo: 'exact' -> 'day', 'month_year' -> 'month', 'year' -> 'year', 'approximate' -> 'day'
+UPDATE stories
+SET dates_precision = CASE
+  WHEN dates_precision = 'exact' THEN 'day'
+  WHEN dates_precision = 'month_year' THEN 'month'
+  WHEN dates_precision = 'approximate' THEN 'day'
+  ELSE dates_precision
+END
+WHERE dates_precision IN ('exact', 'month_year', 'approximate');
+
+-- Copiar story_date a start_date si start_date está vacío
+UPDATE stories
+SET start_date = story_date::date
+WHERE start_date IS NULL AND story_date IS NOT NULL;
+
+-- ============================================================
+-- RESUMEN DE CAMBIOS
+-- ============================================================
+--
+-- ✅ Columnas agregadas:
+--    - start_date: Fecha de inicio de la historia (puede ser el único valor)
+--    - end_date: Fecha de fin de la historia (opcional, para rangos)
+--
+-- ✅ Constraint actualizado:
+--    - dates_precision ahora acepta: 'day', 'month', 'year'
+--    - Valores antiguos migrados automáticamente
+--
+-- ============================================================

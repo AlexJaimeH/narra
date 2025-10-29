@@ -10,6 +10,7 @@ import 'package:narra/services/email/subscriber_email_service.dart';
 import 'package:narra/services/story_service_new.dart';
 import 'package:narra/services/story_share_link_builder.dart';
 import 'package:narra/services/subscriber_service.dart';
+import 'package:narra/supabase/supabase_config.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'story_editor_page.dart';
@@ -64,7 +65,10 @@ class _StoriesListPageState extends State<StoriesListPage>
   }
 
   Future<void> _sendStoryToSubscribers(
-      BuildContext context, Story story) async {
+    BuildContext context,
+    Story story,
+    List<Subscriber> selectedSubscribers,
+  ) async {
     final storyId = story.id;
     if (_sendingStoryEmails.contains(storyId)) {
       return;
@@ -77,13 +81,10 @@ class _StoriesListPageState extends State<StoriesListPage>
     final messenger = ScaffoldMessenger.of(context);
 
     try {
-      final subscribers = await SubscriberService.getConfirmedSubscribers();
-      if (!mounted) return;
-
-      if (subscribers.isEmpty) {
+      if (selectedSubscribers.isEmpty) {
         messenger.showSnackBar(
           const SnackBar(
-            content: Text('Todavía no tienes suscriptores confirmados.'),
+            content: Text('No has seleccionado ningún suscriptor.'),
           ),
         );
         return;
@@ -91,7 +92,7 @@ class _StoriesListPageState extends State<StoriesListPage>
 
       final summary = await SubscriberEmailService.sendStoryPublished(
         story: story,
-        subscribers: subscribers,
+        subscribers: selectedSubscribers,
         authorDisplayName:
             story.authorDisplayName ?? story.authorName ?? 'Autor/a de Narra',
       );
@@ -514,7 +515,8 @@ class StoriesTab extends StatelessWidget {
   final VoidCallback onStoriesChanged;
   final Future<void> Function() onCreateStory;
   final Set<String> sendingStoryEmails;
-  final Future<void> Function(BuildContext context, Story story)?
+  final Future<void> Function(
+      BuildContext context, Story story, List<Subscriber> selectedSubscribers)?
       onSendStoryToSubscribers;
 
   @override
@@ -587,7 +589,8 @@ class StoriesTab extends StatelessWidget {
             accentColor: _cardAccentColor(context, index),
             onSendToSubscribers: onSendStoryToSubscribers == null
                 ? null
-                : () => onSendStoryToSubscribers!(context, story),
+                : (selectedSubscribers) => onSendStoryToSubscribers!(
+                    context, story, selectedSubscribers),
             isSendingToSubscribers: sendingStoryEmails.contains(story.id),
           );
         },
@@ -862,7 +865,8 @@ class StoryListCard extends StatelessWidget {
   final Story story;
   final VoidCallback onActionComplete;
   final Color accentColor;
-  final Future<void> Function()? onSendToSubscribers;
+  final Future<void> Function(List<Subscriber> selectedSubscribers)?
+      onSendToSubscribers;
   final bool isSendingToSubscribers;
 
   @override
@@ -1163,14 +1167,14 @@ class _PublicStoryPreview extends StatelessWidget {
 
   final Story story;
   final VoidCallback onViewPage;
-  final Future<void> Function()? onSendToSubscribers;
+  final Future<void> Function(List<Subscriber> selectedSubscribers)?
+      onSendToSubscribers;
   final bool isSendingToSubscribers;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final link = StoryShareLinkBuilder.buildStoryLink(story: story).toString();
     final publishedAt = story.publishedAt ?? story.updatedAt;
 
     return Container(
@@ -1209,7 +1213,7 @@ class _PublicStoryPreview extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              'Comparte tu historia con quien tú decidas a través de este enlace.',
+              'Comparte tu historia con enlaces seguros personalizados.',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: colorScheme.onSurfaceVariant.withValues(alpha: 0.8),
               ),
@@ -1222,35 +1226,37 @@ class _PublicStoryPreview extends StatelessWidget {
           ),
           if (onSendToSubscribers != null) ...[
             const SizedBox(height: 12),
-            FilledButton.icon(
-              onPressed: isSendingToSubscribers
-                  ? null
-                  : () {
-                      onSendToSubscribers?.call();
-                    },
-              icon: isSendingToSubscribers
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.mark_email_read_outlined),
-              label: Text(
-                isSendingToSubscribers ? 'Enviando...' : 'Compartir por correo',
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: isSendingToSubscribers
+                    ? null
+                    : () async {
+                        await _showSubscriberSelectionModal(
+                          context,
+                          story,
+                          onSendToSubscribers!,
+                        );
+                      },
+                icon: isSendingToSubscribers
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.group),
+                label: Text(
+                  isSendingToSubscribers
+                      ? 'Enviando...'
+                      : 'Compartir a suscriptores',
+                ),
+                style: FilledButton.styleFrom(
+                  backgroundColor: colorScheme.secondary,
+                  foregroundColor: colorScheme.onSecondary,
+                ),
               ),
             ),
           ],
-          const SizedBox(height: 14),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: _PublicStoryLinkField(link: link),
-              ),
-              const SizedBox(width: 12),
-              _CopyLinkButton(link: link),
-            ],
-          ),
         ],
       ),
     );
@@ -1299,7 +1305,7 @@ class _PublicStoryLinkButton extends StatelessWidget {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    'Visitar página publicada',
+                    'Ver historia publicada',
                     style: theme.textTheme.titleSmall?.copyWith(
                       color: colorScheme.onPrimary,
                       fontWeight: FontWeight.w700,
@@ -1321,73 +1327,299 @@ class _PublicStoryLinkButton extends StatelessWidget {
   }
 }
 
-class _PublicStoryLinkField extends StatelessWidget {
-  const _PublicStoryLinkField({required this.link});
 
-  final String link;
+Future<void> _showSubscriberSelectionModal(
+  BuildContext context,
+  Story story,
+  Future<void> Function(List<Subscriber> selectedSubscribers)
+      onSendToSubscribers,
+) async {
+  final subscribers = await SubscriberService.getConfirmedSubscribers();
 
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+  if (!context.mounted) return;
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHigh.withValues(alpha: 0.45),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.4),
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: SelectableText(
-          link,
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: colorScheme.onSurfaceVariant,
-            fontFeatures: const [ui.FontFeature.tabularFigures()],
-          ),
-        ),
+  if (subscribers.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Todavía no tienes suscriptores confirmados.'),
       ),
     );
+    return;
   }
+
+  await showDialog<void>(
+    context: context,
+    builder: (dialogContext) => _SubscriberSelectionDialog(
+      story: story,
+      subscribers: subscribers,
+      onSendToSubscribers: onSendToSubscribers,
+    ),
+  );
 }
 
-class _CopyLinkButton extends StatelessWidget {
-  const _CopyLinkButton({required this.link});
+class _SubscriberSelectionDialog extends StatefulWidget {
+  const _SubscriberSelectionDialog({
+    required this.story,
+    required this.subscribers,
+    required this.onSendToSubscribers,
+  });
 
-  final String link;
+  final Story story;
+  final List<Subscriber> subscribers;
+  final Future<void> Function(List<Subscriber> selectedSubscribers)
+      onSendToSubscribers;
+
+  @override
+  State<_SubscriberSelectionDialog> createState() =>
+      _SubscriberSelectionDialogState();
+}
+
+class _SubscriberSelectionDialogState
+    extends State<_SubscriberSelectionDialog> {
+  late Set<String> _selectedIds;
+  bool _isSending = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Start with all subscribers selected
+    _selectedIds = widget.subscribers.map((s) => s.id).toSet();
+  }
+
+  void _toggleAll(bool selectAll) {
+    setState(() {
+      if (selectAll) {
+        _selectedIds = widget.subscribers.map((s) => s.id).toSet();
+      } else {
+        _selectedIds.clear();
+      }
+    });
+  }
+
+  void _toggleSubscriber(String id) {
+    setState(() {
+      if (_selectedIds.contains(id)) {
+        _selectedIds.remove(id);
+      } else {
+        _selectedIds.add(id);
+      }
+    });
+  }
+
+  Future<void> _sendToSelected() async {
+    if (_selectedIds.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Selecciona al menos un suscriptor'),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isSending = true;
+    });
+
+    final selectedSubscribers = widget.subscribers
+        .where((s) => _selectedIds.contains(s.id))
+        .toList();
+
+    try {
+      await widget.onSendToSubscribers(selectedSubscribers);
+      if (!mounted) return;
+      Navigator.of(context).pop();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isSending = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final allSelected = _selectedIds.length == widget.subscribers.length;
+    final noneSelected = _selectedIds.isEmpty;
 
-    return SizedBox(
-      height: 48,
-      child: OutlinedButton.icon(
-        onPressed: () async {
-          final messenger = ScaffoldMessenger.of(context);
-          await Clipboard.setData(ClipboardData(text: link));
-          messenger.showSnackBar(
-            const SnackBar(content: Text('Enlace copiado al portapapeles')),
-          );
-        },
-        icon: const Icon(Icons.copy_rounded),
-        label: const Text('Copiar enlace'),
-        style: OutlinedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          side: BorderSide(
-            color: colorScheme.primary.withValues(alpha: 0.45),
-            width: 1.4,
-          ),
-          foregroundColor: colorScheme.primary,
-          textStyle: theme.textTheme.labelLarge?.copyWith(
-            fontWeight: FontWeight.w600,
-          ),
+    return Dialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 500, maxHeight: 600),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: colorScheme.primary.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          Icons.group,
+                          color: colorScheme.primary,
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Seleccionar suscriptores',
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: _isSending
+                            ? null
+                            : () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.close),
+                        tooltip: 'Cerrar',
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Selecciona a quién enviar "${widget.story.title}"',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _isSending
+                              ? null
+                              : () => _toggleAll(!allSelected),
+                          icon: Icon(
+                            allSelected
+                                ? Icons.deselect
+                                : Icons.select_all_rounded,
+                            size: 18,
+                          ),
+                          label: Text(
+                            allSelected
+                                ? 'Deseleccionar todos'
+                                : 'Seleccionar todos',
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 12,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                itemCount: widget.subscribers.length,
+                itemBuilder: (context, index) {
+                  final subscriber = widget.subscribers[index];
+                  final isSelected = _selectedIds.contains(subscriber.id);
+
+                  return CheckboxListTile(
+                    enabled: !_isSending,
+                    value: isSelected,
+                    onChanged: (_) => _toggleSubscriber(subscriber.id),
+                    title: Text(
+                      subscriber.name,
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    subtitle: Text(
+                      subscriber.email,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    secondary: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? colorScheme.primary.withValues(alpha: 0.12)
+                            : colorScheme.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        Icons.person,
+                        color: isSelected
+                            ? colorScheme.primary
+                            : colorScheme.onSurfaceVariant,
+                        size: 20,
+                      ),
+                    ),
+                    controlAffinity: ListTileControlAffinity.trailing,
+                  );
+                },
+              ),
+            ),
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    '${_selectedIds.length} de ${widget.subscribers.length} seleccionados',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  FilledButton.icon(
+                    onPressed:
+                        _isSending || noneSelected ? null : _sendToSelected,
+                    icon: _isSending
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor:
+                                  AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          )
+                        : const Icon(Icons.send),
+                    label: Text(
+                      _isSending
+                          ? 'Enviando...'
+                          : 'Enviar a seleccionados',
+                    ),
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 16,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -1395,9 +1627,30 @@ class _CopyLinkButton extends StatelessWidget {
 }
 
 Future<void> _openStoryPublicPage(BuildContext context, Story story) async {
-  final link = StoryShareLinkBuilder.buildStoryLink(story: story);
   final messenger = ScaffoldMessenger.of(context);
   final navigator = Navigator.of(context);
+
+  // Get current user info for author magic link
+  final currentUser = SupabaseAuth.currentUser;
+  if (currentUser == null) {
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text('Error: Usuario no autenticado'),
+      ),
+    );
+    return;
+  }
+
+  // Build author magic link
+  final link = StoryShareLinkBuilder.buildAuthorStoryLink(
+    story: story,
+    authorId: currentUser.id,
+    authorName: currentUser.userMetadata?['full_name']?.toString() ??
+        currentUser.email ??
+        'Autor',
+    authorToken: currentUser.id, // Using user ID as token for author
+  );
+
   final routeName = '/story/${story.id}';
   final routeArguments = StoryBlogPageArguments(
     story: story,

@@ -292,7 +292,7 @@ export const StoryPage: React.FC = () => {
 
           {story.photos && story.photos.length > 0 && (
             <div className="mb-8 space-y-6">
-              {story.photos.map((photo, index) => (
+              {story.photos.map((photo) => (
                 <figure key={photo.id} className="group">
                   <div className="rounded-2xl overflow-hidden shadow-xl transform transition-all hover:scale-[1.02]">
                     <img
@@ -365,7 +365,6 @@ export const StoryPage: React.FC = () => {
               className="w-full px-4 py-3 rounded-xl border-2 focus:outline-none focus:ring-2 transition-all"
               style={{
                 borderColor: NarraColors.border.light,
-                focusRing: NarraColors.brand.primary,
               }}
               rows={3}
             />

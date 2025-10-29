@@ -86,7 +86,6 @@ export const BlogHome: React.FC = () => {
       setStories(storiesWithFeedback);
       setIsLoading(false);
     } catch (err) {
-      console.error('Error loading blog:', err);
       setError('Hubo un error al cargar el blog. Por favor, intenta de nuevo.');
       setIsLoading(false);
     }

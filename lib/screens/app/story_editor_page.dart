@@ -7346,10 +7346,22 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       setState(() {
         if (isStartDate) {
           _startDate = picked!;
+          // If end date exists and is before the new start date, update end date
           if (_endDate != null && _endDate!.isBefore(picked!)) {
             _endDate = picked!;
           }
         } else {
+          // Validate that end date is not before start date
+          if (_startDate != null && picked!.isBefore(_startDate!)) {
+            // Show error message
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('La fecha de fin no puede ser anterior a la fecha de inicio'),
+                duration: Duration(seconds: 2),
+              ),
+            );
+            return;
+          }
           _endDate = picked!;
         }
         _hasChanges = true;

@@ -97,12 +97,11 @@ export const StoryPage: React.FC = () => {
         });
         setFeedback(feedbackState);
       } catch (err) {
-        console.error('Error loading feedback:', err);
+        // Silently fail - feedback is optional
       }
 
       setIsLoading(false);
     } catch (err) {
-      console.error('[StoryPage] Error loading story:', err);
       setError('Hubo un error al cargar la historia. Por favor, intenta de nuevo.');
       setIsLoading(false);
     }

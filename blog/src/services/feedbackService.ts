@@ -33,7 +33,16 @@ export const feedbackService = {
       const response = await fetch(`${API_BASE}/story-feedback?${queryParams}`);
 
       if (!response.ok) {
-        console.error('Failed to fetch feedback state:', response.status);
+        return {
+          hasReacted: false,
+          reactionCount: 0,
+          commentCount: 0,
+          comments: [],
+        };
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
         return {
           hasReacted: false,
           reactionCount: 0,
@@ -50,7 +59,6 @@ export const feedbackService = {
         comments: this.buildCommentTree(data.comments || []),
       };
     } catch (error) {
-      console.error('Error fetching feedback state:', error);
       return {
         hasReacted: false,
         reactionCount: 0,
@@ -81,7 +89,6 @@ export const feedbackService = {
 
       return response.ok;
     } catch (error) {
-      console.error('Error submitting comment:', error);
       return false;
     }
   },
@@ -106,7 +113,6 @@ export const feedbackService = {
 
       return response.ok;
     } catch (error) {
-      console.error('Error toggling reaction:', error);
       return false;
     }
   },

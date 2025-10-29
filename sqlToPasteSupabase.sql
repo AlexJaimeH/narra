@@ -1149,24 +1149,51 @@ add column if not exists start_date date;
 alter table public.stories
 add column if not exists end_date date;
 
--- PRIMERO: Actualizar valores existentes ANTES de cambiar el constraint
+-- PASO 1: Actualizar valores existentes ANTES de cambiar constraint y default
 -- Mapeo: 'exact' -> 'day', 'month_year' -> 'month', 'year' -> 'year', 'approximate' -> 'day'
 update public.stories
 set dates_precision = case
   when dates_precision = 'exact' then 'day'
   when dates_precision = 'month_year' then 'month'
   when dates_precision = 'approximate' then 'day'
+  when dates_precision is null then 'day'
   else dates_precision
 end
-where dates_precision in ('exact', 'month_year', 'approximate');
+where dates_precision in ('exact', 'month_year', 'approximate') or dates_precision is null;
 
--- SEGUNDO: Ahora sí eliminar y recrear el constraint
+-- Actualizar date_type también (columna legacy que puede estar en uso)
+update public.stories
+set date_type = case
+  when date_type = 'exact' then 'day'
+  when date_type = 'month_year' then 'month'
+  when date_type = 'approximate' then 'day'
+  when date_type is null then 'day'
+  else date_type
+end
+where date_type in ('exact', 'month_year', 'approximate') or date_type is null;
+
+-- PASO 2: Cambiar el DEFAULT ANTES de cambiar el constraint
+alter table public.stories
+  alter column dates_precision set default 'day';
+
+alter table public.stories
+  alter column date_type set default 'day';
+
+-- PASO 3: Ahora sí eliminar y recrear el constraint
 alter table public.stories
 drop constraint if exists stories_dates_precision_check;
 
 alter table public.stories
 add constraint stories_dates_precision_check
 check (dates_precision in ('day', 'month', 'year'));
+
+-- También actualizar constraint de date_type si existe
+alter table public.stories
+drop constraint if exists stories_date_type_check;
+
+alter table public.stories
+add constraint stories_date_type_check
+check (date_type in ('day', 'month', 'year'));
 
 -- Copiar story_date a start_date si start_date está vacío
 update public.stories

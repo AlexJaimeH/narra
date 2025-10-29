@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:narra/screens/app/app_navigation.dart';
+import 'package:narra/screens/auth/login_page.dart';
+import 'package:narra/screens/auth/register_page.dart';
 import 'package:narra/supabase/supabase_config.dart';
 import 'package:narra/theme_controller.dart';
 
@@ -59,20 +61,31 @@ class NarraApp extends StatelessWidget {
             onGenerateRoute: (settings) {
               final routeName = settings.name ?? '/app';
 
-              // Flutter ONLY handles /app/* routes
-              // All other routes are handled by React
+              // Flutter handles /app/* routes and auth routes (/login, /register)
+              // All other routes (/, /blog/*) are handled by React
 
               switch (routeName) {
                 case '/app':
+                case '/app/':
                   final initialIndex =
                       settings.arguments is int ? settings.arguments as int : 0;
                   return MaterialPageRoute(
                     builder: (_) => AppNavigation(initialIndex: initialIndex),
                     settings: settings,
                   );
+                case '/app/login':
+                  return MaterialPageRoute(
+                    builder: (_) => const LoginPage(),
+                    settings: settings,
+                  );
+                case '/app/register':
+                  return MaterialPageRoute(
+                    builder: (_) => const RegisterPage(),
+                    settings: settings,
+                  );
               }
 
-              // Default to app navigation
+              // Default to app navigation (will redirect to login if not authenticated)
               return MaterialPageRoute(
                 builder: (_) => AppNavigation(initialIndex: 0),
                 settings: settings,

@@ -65,7 +65,9 @@ class _AppNavigationState extends State<AppNavigation> {
   void _checkAuthentication() {
     if (!SupabaseAuth.isAuthenticated) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        Navigator.pushReplacementNamed(context, '/landing');
+        if (mounted) {
+          Navigator.pushReplacementNamed(context, '/app/login');
+        }
       });
     }
   }

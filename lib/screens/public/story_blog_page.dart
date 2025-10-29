@@ -189,13 +189,13 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
           final payload = _sharePayload!;
           final token = payload.token;
 
-          // Check if this is an author magic link
-          if (payload.source == 'author_preview' &&
-              payload.subscriberId == story.userId) {
+          // Check if this is an author magic link FIRST, before backend validation
+          if (payload.source == 'author_preview') {
             // This is an author accessing their own story via magic link
+            // No backend validation needed - grant access immediately
             accessRecord = StoryAccessManager.grantAccess(
               authorId: story.userId,
-              subscriberId: story.userId,
+              subscriberId: payload.subscriberId,
               subscriberName: payload.subscriberName ?? 'Autor',
               accessToken: token ?? '',
               source: 'author_preview',
@@ -1700,7 +1700,16 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
     final record = _accessRecord;
     final payload = _resolvedSharePayload;
 
-    if (story == null || record == null || record.subscriberId == 'author') {
+    if (story == null || record == null) {
+      messenger.showSnackBar(
+        const SnackBar(
+            content: Text('Este comentario es solo para suscriptores.')),
+      );
+      return;
+    }
+
+    // Don't allow comments from author without author_preview source
+    if (record.subscriberId == 'author' && record.source != 'author_preview') {
       messenger.showSnackBar(
         const SnackBar(
             content: Text('Este comentario es solo para suscriptores.')),
@@ -1794,7 +1803,12 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
     final record = _accessRecord;
     final payload = _resolvedSharePayload;
 
-    if (story == null || record == null || record.subscriberId == 'author') {
+    if (story == null || record == null) {
+      return;
+    }
+
+    // Don't allow reactions from author without author_preview source
+    if (record.subscriberId == 'author' && record.source != 'author_preview') {
       return;
     }
 
@@ -1859,7 +1873,12 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
 
   void _goToAuthorLibrary(Story story) {
     final record = _accessRecord;
-    if (record == null || record.subscriberId == 'author') {
+    if (record == null) {
+      return;
+    }
+
+    // Don't allow navigation for author without author_preview source
+    if (record.subscriberId == 'author' && record.source != 'author_preview') {
       return;
     }
 

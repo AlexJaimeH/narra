@@ -78,7 +78,11 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
 
   StoryShareTarget? get _currentShareTarget {
     final record = _accessRecord;
-    if (record == null || record.subscriberId == 'author') {
+    if (record == null) {
+      return null;
+    }
+    // Allow author with author_preview source to be treated as a share target
+    if (record.subscriberId == 'author' && record.source != 'author_preview') {
       return null;
     }
     return StoryShareTarget(
@@ -91,13 +95,17 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
 
   StorySharePayload? get _resolvedSharePayload {
     final record = _accessRecord;
-    if (record != null && record.subscriberId != 'author') {
-      return StorySharePayload(
-        subscriberId: record.subscriberId,
-        subscriberName: record.subscriberName,
-        token: record.accessToken,
-        source: record.source,
-      );
+    if (record != null) {
+      // Include both subscribers and author with author_preview source
+      if (record.subscriberId != 'author' ||
+          record.source == 'author_preview') {
+        return StorySharePayload(
+          subscriberId: record.subscriberId,
+          subscriberName: record.subscriberName,
+          token: record.accessToken,
+          source: record.source,
+        );
+      }
     }
     return _sharePayload;
   }
@@ -105,7 +113,8 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
   bool get _canInteract {
     final record = _accessRecord;
     if (record == null) return false;
-    return record.subscriberId != 'author';
+    // Allow interaction for subscribers and author with author_preview source
+    return record.subscriberId != 'author' || record.source == 'author_preview';
   }
 
   TextEditingController _replyControllerFor(String commentId) {
@@ -113,6 +122,14 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
       commentId,
       () => TextEditingController(),
     );
+  }
+
+  /// Format author name with "(Autor)" suffix if the comment/reaction is from the author
+  String _formatAuthorName(String name, String? source) {
+    if (source == 'author_preview') {
+      return '$name (Autor)';
+    }
+    return name;
   }
 
   void _pruneReplyControllers(List<StoryFeedbackComment> comments) {
@@ -172,7 +189,22 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
           final payload = _sharePayload!;
           final token = payload.token;
 
-          if (token != null && token.isNotEmpty) {
+          // Check if this is an author magic link
+          if (payload.source == 'author_preview' &&
+              payload.subscriberId == story.userId) {
+            // This is an author accessing their own story via magic link
+            accessRecord = StoryAccessManager.grantAccess(
+              authorId: story.userId,
+              subscriberId: story.userId,
+              subscriberName: payload.subscriberName ?? 'Autor',
+              accessToken: token ?? '',
+              source: 'author_preview',
+              grantedAt: DateTime.now(),
+              status: 'author',
+              supabaseUrl: SupabaseConfig.supabaseUrl,
+              supabaseAnonKey: SupabaseConfig.supabaseAnonKey,
+            );
+          } else if (token != null && token.isNotEmpty) {
             try {
               final validated = await StoryPublicAccessService.registerAccess(
                 authorId: story.userId,
@@ -272,7 +304,19 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
     final record = accessRecord ?? _accessRecord;
     final share = sharePayload ?? _resolvedSharePayload;
 
-    if (record == null || record.subscriberId == 'author') {
+    if (record == null) {
+      setState(() {
+        _comments.clear();
+        _isHearted = false;
+        _isFeedbackLoading = false;
+        _replyingToCommentId = null;
+        _totalComments = 0;
+      });
+      return;
+    }
+
+    // Don't load feedback if author is accessing without author_preview
+    if (record.subscriberId == 'author' && record.source != 'author_preview') {
       setState(() {
         _comments.clear();
         _isHearted = false;
@@ -780,7 +824,10 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
   }
 
   Widget _buildCommentsSection(ThemeData theme, ColorScheme colorScheme) {
-    final viewerName = _accessRecord?.subscriberName ?? 'Suscriptor';
+    final viewerName = _formatAuthorName(
+      _accessRecord?.subscriberName ?? 'Suscriptor',
+      _accessRecord?.source,
+    );
     final canComment = _canInteract;
 
     return Container(
@@ -1071,7 +1118,8 @@ class _StoryBlogPageState extends State<StoryBlogPage> {
                         children: [
                           Expanded(
                             child: Text(
-                              comment.authorName,
+                              _formatAuthorName(
+                                  comment.authorName, comment.source),
                               style: theme.textTheme.titleSmall?.copyWith(
                                 fontWeight: FontWeight.w600,
                               ),

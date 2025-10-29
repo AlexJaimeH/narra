@@ -1,3 +1,5 @@
+import 'dart:html' as html;
+
 import 'package:flutter/material.dart';
 import 'package:narra/supabase/supabase_config.dart';
 import 'package:narra/services/user_service.dart';
@@ -661,17 +663,23 @@ class _SettingsPageState extends State<SettingsPage> {
           ElevatedButton(
             onPressed: () async {
               Navigator.pop(context);
+
+              // Show loading indicator
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (context) => const Center(
+                  child: CircularProgressIndicator(),
+                ),
+              );
+
               try {
                 await SupabaseAuth.signOut();
-                if (mounted) {
-                  Navigator.pushNamedAndRemoveUntil(
-                    context,
-                    '/landing',
-                    (route) => false,
-                  );
-                }
+                // Redirect to React landing page (Flutter only handles /app/*)
+                html.window.location.href = '/';
               } catch (e) {
                 if (mounted) {
+                  Navigator.pop(context); // Close loading dialog
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text('Error al cerrar sesión: $e')),
                   );
@@ -752,23 +760,23 @@ class _SettingsPageState extends State<SettingsPage> {
               onPressed: value.text == 'ELIMINAR CUENTA'
                   ? () async {
                       Navigator.pop(context);
+
+                      // Show loading indicator
+                      showDialog(
+                        context: context,
+                        barrierDismissible: false,
+                        builder: (context) => const Center(
+                          child: CircularProgressIndicator(),
+                        ),
+                      );
+
                       try {
                         await UserService.deleteUserAccount();
-                        if (mounted) {
-                          Navigator.pushNamedAndRemoveUntil(
-                            context,
-                            '/landing',
-                            (route) => false,
-                          );
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Cuenta eliminada. Lamentamos verte partir.'),
-                              backgroundColor: Colors.red,
-                            ),
-                          );
-                        }
+                        // Redirect to React landing page (Flutter only handles /app/*)
+                        html.window.location.href = '/';
                       } catch (e) {
                         if (mounted) {
+                          Navigator.pop(context); // Close loading dialog
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(content: Text('Error al eliminar cuenta: $e')),
                           );

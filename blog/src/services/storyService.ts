@@ -8,13 +8,21 @@ async function getSupabaseClient() {
   if (supabaseClient) return supabaseClient;
 
   const accessRecord = accessManager.getAccess();
+  console.log('[storyService] Access record:', {
+    hasUrl: !!accessRecord?.supabaseUrl,
+    hasKey: !!accessRecord?.supabaseAnonKey,
+    url: accessRecord?.supabaseUrl,
+  });
+
   if (!accessRecord?.supabaseUrl || !accessRecord?.supabaseAnonKey) {
+    console.error('[storyService] Missing Supabase credentials:', accessRecord);
     throw new Error('No valid access credentials found');
   }
 
   // Import Supabase client
   const { createClient } = await import('@supabase/supabase-js');
   supabaseClient = createClient(accessRecord.supabaseUrl, accessRecord.supabaseAnonKey);
+  console.log('[storyService] Supabase client created');
 
   return supabaseClient;
 }

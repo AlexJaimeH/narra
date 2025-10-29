@@ -40,14 +40,17 @@ export const StoryPage: React.FC = () => {
     try {
       // Parse URL parameters
       const urlParams = publicAccessService.parseSharePayloadFromUrl();
+      console.log('[StoryPage] URL params:', urlParams);
 
       if (!urlParams.authorId || !urlParams.subscriberId || !urlParams.token) {
+        console.error('[StoryPage] Missing URL params:', urlParams);
         setError('El enlace parece incompleto. Por favor, solicita uno nuevo al autor.');
         setIsLoading(false);
         return;
       }
 
       // Register access and validate magic link
+      console.log('[StoryPage] Registering access...');
       const accessRecord = await publicAccessService.registerAccess({
         authorId: urlParams.authorId,
         subscriberId: urlParams.subscriberId,
@@ -57,7 +60,10 @@ export const StoryPage: React.FC = () => {
         eventType: 'access_granted',
       });
 
+      console.log('[StoryPage] Access record:', accessRecord);
+
       if (!accessRecord) {
+        console.error('[StoryPage] No access record returned');
         setError('Este enlace ya no es válido. Por favor, pide uno nuevo al autor.');
         setIsLoading(false);
         return;
@@ -67,9 +73,16 @@ export const StoryPage: React.FC = () => {
       accessManager.grantAccess(accessRecord);
       setSubscriberName(accessRecord.subscriberName || null);
 
+      console.log('[StoryPage] Loading story with ID:', storyId);
+      console.log('[StoryPage] Supabase URL:', accessRecord.supabaseUrl);
+      console.log('[StoryPage] Has anon key:', !!accessRecord.supabaseAnonKey);
+
       // Load story
       const loadedStory = await storyService.getStory(storyId);
+      console.log('[StoryPage] Loaded story:', loadedStory);
+
       if (!loadedStory) {
+        console.error('[StoryPage] Failed to load story');
         setError('No se pudo cargar la historia. Por favor, intenta de nuevo.');
         setIsLoading(false);
         return;

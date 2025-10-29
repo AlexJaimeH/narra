@@ -106,7 +106,7 @@ begin;
 create table if not exists public.voice_recordings (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users (id) on delete cascade,
-  story_id uuid not null references public.stories (id) on delete cascade,
+  story_id uuid references public.stories (id) on delete cascade,
   story_title text not null default '',
   audio_url text not null,
   audio_path text not null,
@@ -116,10 +116,11 @@ create table if not exists public.voice_recordings (
   created_at timestamptz not null default timezone('utc', now())
 );
 
+-- NO forzar story_id a NOT NULL porque puede haber grabaciones sin historia asignada aún
+-- Solo actualizar story_title para que tenga un default
 alter table public.voice_recordings
   alter column story_title set not null,
-  alter column story_title set default '',
-  alter column story_id set not null;
+  alter column story_title set default '';
 
 alter table public.voice_recordings
   drop constraint if exists voice_recordings_story_id_fkey,
@@ -142,7 +143,8 @@ create index if not exists voice_recordings_user_idx
   on public.voice_recordings (user_id, created_at desc);
 
 create index if not exists voice_recordings_story_idx
-  on public.voice_recordings (story_id, created_at desc);
+  on public.voice_recordings (story_id, created_at desc)
+  where story_id is not null;
 
 insert into storage.buckets (id, name, public)
 select 'voice-recordings', 'voice-recordings', false
@@ -1160,68 +1162,6 @@ commit;
 
 -- ============================================================
 -- RESUMEN
--- ============================================================
---
--- ✅ Columnas agregadas:
---    - start_date: Fecha de inicio de la historia (puede ser el único valor)
---    - end_date: Fecha de fin de la historia (opcional, para rangos)
---
--- ✅ Constraint actualizado:
---    - dates_precision ahora acepta: 'day', 'month', 'year'
---    - Valores antiguos migrados automáticamente
---
--- ============================================================
-
--- ============================================================
--- AGREGAR COLUMNAS DE FECHA A LA TABLA STORIES
--- ============================================================
---
--- Estas columnas permiten guardar rangos de fechas y precisión
--- para las historias (día exacto, mes, o año)
---
--- INSTRUCCIONES:
--- 1. Ve a Supabase Dashboard
--- 2. Ve a la sección "SQL Editor"
--- 3. Copia y pega el SQL de abajo
--- 4. Haz clic en "Run"
--- ============================================================
-
--- Agregar columna start_date si no existe
-ALTER TABLE stories
-ADD COLUMN IF NOT EXISTS start_date DATE;
-
--- Agregar columna end_date si no existe
-ALTER TABLE stories
-ADD COLUMN IF NOT EXISTS end_date DATE;
-
--- Actualizar el constraint de dates_precision para usar los valores correctos
--- Primero eliminamos el constraint existente
-ALTER TABLE stories
-DROP CONSTRAINT IF EXISTS stories_dates_precision_check;
-
--- Crear el nuevo constraint con los valores correctos
-ALTER TABLE stories
-ADD CONSTRAINT stories_dates_precision_check
-CHECK (dates_precision IN ('day', 'month', 'year'));
-
--- Actualizar valores existentes para que coincidan con los nuevos valores
--- Mapeo: 'exact' -> 'day', 'month_year' -> 'month', 'year' -> 'year', 'approximate' -> 'day'
-UPDATE stories
-SET dates_precision = CASE
-  WHEN dates_precision = 'exact' THEN 'day'
-  WHEN dates_precision = 'month_year' THEN 'month'
-  WHEN dates_precision = 'approximate' THEN 'day'
-  ELSE dates_precision
-END
-WHERE dates_precision IN ('exact', 'month_year', 'approximate');
-
--- Copiar story_date a start_date si start_date está vacío
-UPDATE stories
-SET start_date = story_date::date
-WHERE start_date IS NULL AND story_date IS NOT NULL;
-
--- ============================================================
--- RESUMEN DE CAMBIOS
 -- ============================================================
 --
 -- ✅ Columnas agregadas:

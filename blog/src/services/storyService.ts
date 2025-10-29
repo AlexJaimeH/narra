@@ -37,7 +37,7 @@ export const storyService = {
         .select(`
           *,
           photos:story_photos(*),
-          tags:story_tags(*)
+          tags:story_tags(tag_id, tags(id, name, color))
         `)
         .eq('id', storyId)
         .eq('status', 'published')
@@ -64,7 +64,7 @@ export const storyService = {
         .select(`
           *,
           photos:story_photos(*),
-          tags:story_tags(*)
+          tags:story_tags(tag_id, tags(id, name, color))
         `)
         .eq('user_id', authorId)
         .eq('status', 'published')
@@ -138,14 +138,17 @@ export const storyService = {
         displayOrder: p.display_order,
         createdAt: p.created_at,
       })),
-      tags: data.tags?.map((t: any) => ({
-        id: t.id,
-        storyId: t.story_id,
-        tag: t.tag || t.name,
-        name: t.name || t.tag,
-        color: t.color,
-        createdAt: t.created_at,
-      })),
+      tags: data.tags?.map((t: any) => {
+        const tagData = t.tags || t;
+        return {
+          id: tagData.id || t.tag_id,
+          storyId: data.id,
+          tag: tagData.name || tagData.tag || '',
+          name: tagData.name || tagData.tag || '',
+          color: tagData.color,
+          createdAt: t.created_at,
+        };
+      }),
     };
   },
 };

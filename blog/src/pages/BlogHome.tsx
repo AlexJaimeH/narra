@@ -250,11 +250,17 @@ const StoryCard: React.FC<{
   index: number;
   formatDate: (date: string | null) => string;
 }> = ({ story, index, formatDate }) => {
+  // Parse date string correctly to avoid timezone issues
+  const parseDate = (dateString: string): Date => {
+    const [year, month, day] = dateString.split('-').map(Number);
+    return new Date(year, month - 1, day); // month is 0-indexed
+  };
+
   const formatStoryDate = (story: Story): string => {
     const dateToUse = story.startDate || story.storyDate;
     if (!dateToUse) return '';
 
-    const startDate = new Date(dateToUse);
+    const startDate = parseDate(dateToUse);
     const precision = story.datesPrecision || 'day';
 
     let formattedStart = '';
@@ -267,7 +273,7 @@ const StoryCard: React.FC<{
     }
 
     if (story.endDate) {
-      const endDate = new Date(story.endDate);
+      const endDate = parseDate(story.endDate);
       let formattedEnd = '';
       if (precision === 'year') {
         formattedEnd = endDate.getFullYear().toString();

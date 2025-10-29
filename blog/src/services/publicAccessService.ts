@@ -58,14 +58,14 @@ export const publicAccessService = {
         return null;
       }
 
-      const accessRecord = {
+      const accessRecord: StoryAccessRecord = {
         authorId: params.authorId,
         subscriberId: params.subscriberId,
         subscriberName: data.subscriber?.name,
         accessToken: data.token,
         source: data.source || params.source,
         grantedAt: data.grantedAt,
-        status: data.subscriber?.status === 'unsubscribed' ? 'revoked' : 'active',
+        status: (data.subscriber?.status === 'unsubscribed' ? 'revoked' : 'active') as 'active' | 'revoked',
         supabaseUrl: data.supabase?.url,
         supabaseAnonKey: data.supabase?.anonKey,
       };

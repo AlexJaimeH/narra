@@ -189,26 +189,27 @@ export const StoryPage: React.FC = () => {
   };
 
   const formatStoryDate = (story: Story): string => {
-    if (!story.storyDate) return '';
+    const dateToUse = story.startDate || story.storyDate;
+    if (!dateToUse) return '';
 
-    const startDate = new Date(story.storyDate);
-    const dateType = story.storyDateType || 'exact';
+    const startDate = new Date(dateToUse);
+    const precision = story.datesPrecision || 'day';
 
     let formattedStart = '';
-    if (dateType === 'year') {
+    if (precision === 'year') {
       formattedStart = startDate.getFullYear().toString();
-    } else if (dateType === 'month') {
+    } else if (precision === 'month') {
       formattedStart = startDate.toLocaleDateString('es-MX', { year: 'numeric', month: 'long' });
     } else {
       formattedStart = startDate.toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
     }
 
-    if (story.storyEndDate) {
-      const endDate = new Date(story.storyEndDate);
+    if (story.endDate) {
+      const endDate = new Date(story.endDate);
       let formattedEnd = '';
-      if (dateType === 'year') {
+      if (precision === 'year') {
         formattedEnd = endDate.getFullYear().toString();
-      } else if (dateType === 'month') {
+      } else if (precision === 'month') {
         formattedEnd = endDate.toLocaleDateString('es-MX', { year: 'numeric', month: 'long' });
       } else {
         formattedEnd = endDate.toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
@@ -313,7 +314,7 @@ export const StoryPage: React.FC = () => {
                         color: NarraColors.brand.primarySolid,
                       }}
                     >
-                      #{tag.tag}
+                      #{tag.name || tag.tag}
                     </span>
                   ))}
                 </div>
@@ -598,26 +599,27 @@ const RelatedStoryCard: React.FC<{
   formatDate: (date: string | null) => string;
 }> = ({ story }) => {
   const formatStoryDate = (story: Story): string => {
-    if (!story.storyDate) return '';
+    const dateToUse = story.startDate || story.storyDate;
+    if (!dateToUse) return '';
 
-    const startDate = new Date(story.storyDate);
-    const dateType = story.storyDateType || 'exact';
+    const startDate = new Date(dateToUse);
+    const precision = story.datesPrecision || 'day';
 
     let formattedStart = '';
-    if (dateType === 'year') {
+    if (precision === 'year') {
       formattedStart = startDate.getFullYear().toString();
-    } else if (dateType === 'month') {
+    } else if (precision === 'month') {
       formattedStart = startDate.toLocaleDateString('es-MX', { year: 'numeric', month: 'long' });
     } else {
       formattedStart = startDate.toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
     }
 
-    if (story.storyEndDate) {
-      const endDate = new Date(story.storyEndDate);
+    if (story.endDate) {
+      const endDate = new Date(story.endDate);
       let formattedEnd = '';
-      if (dateType === 'year') {
+      if (precision === 'year') {
         formattedEnd = endDate.getFullYear().toString();
-      } else if (dateType === 'month') {
+      } else if (precision === 'month') {
         formattedEnd = endDate.toLocaleDateString('es-MX', { year: 'numeric', month: 'long' });
       } else {
         formattedEnd = endDate.toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
@@ -628,7 +630,14 @@ const RelatedStoryCard: React.FC<{
     return formattedStart;
   };
 
+  const extractExcerpt = (content: string, maxLength: number = 150): string => {
+    const text = content.replace(/<[^>]*>/g, '').replace(/\n+/g, ' ').trim();
+    if (text.length <= maxLength) return text;
+    return text.substring(0, maxLength).trim() + '...';
+  };
+
   const storyDateFormatted = formatStoryDate(story);
+  const excerpt = extractExcerpt(story.content);
 
   return (
     <a
@@ -648,6 +657,12 @@ const RelatedStoryCard: React.FC<{
         <h3 className="text-xl font-bold mb-3 line-clamp-2" style={{ color: NarraColors.text.primary }}>
           {story.title}
         </h3>
+
+        {excerpt && (
+          <p className="text-sm mb-3 line-clamp-2" style={{ color: NarraColors.text.secondary }}>
+            {excerpt}
+          </p>
+        )}
 
         <div className="flex flex-wrap items-center gap-2 mb-3">
           {storyDateFormatted && (

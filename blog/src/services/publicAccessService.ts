@@ -31,6 +31,8 @@ export interface RegisterAccessResponse {
 export const publicAccessService = {
   async registerAccess(params: RegisterAccessParams): Promise<StoryAccessRecord | null> {
     try {
+      console.log('[publicAccessService] Registering access with params:', params);
+
       const response = await fetch(`${API_BASE}/story-access`, {
         method: 'POST',
         headers: {
@@ -39,33 +41,43 @@ export const publicAccessService = {
         body: JSON.stringify(params),
       });
 
+      console.log('[publicAccessService] Response status:', response.status);
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        console.error('Failed to register access:', response.status, response.statusText, errorData);
+        console.error('[publicAccessService] Failed to register access:', response.status, response.statusText, errorData);
         return null;
       }
 
       const data: RegisterAccessResponse = await response.json();
+      console.log('[publicAccessService] Response data:', data);
 
       // If unsubscribed, return null
       if (data.unsubscribed) {
-        console.warn('Subscriber has unsubscribed');
+        console.warn('[publicAccessService] Subscriber has unsubscribed');
         return null;
       }
 
-      return {
+      const accessRecord: StoryAccessRecord = {
         authorId: params.authorId,
         subscriberId: params.subscriberId,
         subscriberName: data.subscriber?.name,
         accessToken: data.token,
         source: data.source || params.source,
         grantedAt: data.grantedAt,
-        status: data.subscriber?.status === 'unsubscribed' ? 'revoked' : 'active',
+        status: (data.subscriber?.status === 'unsubscribed' ? 'revoked' : 'active') as 'active' | 'revoked',
         supabaseUrl: data.supabase?.url,
         supabaseAnonKey: data.supabase?.anonKey,
       };
+
+      console.log('[publicAccessService] Created access record:', {
+        ...accessRecord,
+        supabaseAnonKey: accessRecord.supabaseAnonKey ? '[REDACTED]' : undefined,
+      });
+
+      return accessRecord;
     } catch (error) {
-      console.error('Error registering access:', error);
+      console.error('[publicAccessService] Error registering access:', error);
       return null;
     }
   },

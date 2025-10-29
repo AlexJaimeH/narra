@@ -12,13 +12,20 @@ export interface RegisterAccessParams {
 }
 
 export interface RegisterAccessResponse {
-  authorId: string;
-  subscriberId: string;
-  subscriberName?: string;
-  accessToken: string;
-  status: 'active' | 'revoked';
-  supabaseUrl?: string;
-  supabaseAnonKey?: string;
+  grantedAt: string;
+  token: string;
+  source: string;
+  subscriber: {
+    id: string;
+    name?: string;
+    email?: string;
+    status?: string;
+  };
+  unsubscribed: boolean;
+  supabase?: {
+    url: string;
+    anonKey: string;
+  };
 }
 
 export const publicAccessService = {
@@ -33,22 +40,29 @@ export const publicAccessService = {
       });
 
       if (!response.ok) {
-        console.error('Failed to register access:', response.status, response.statusText);
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Failed to register access:', response.status, response.statusText, errorData);
         return null;
       }
 
       const data: RegisterAccessResponse = await response.json();
 
+      // If unsubscribed, return null
+      if (data.unsubscribed) {
+        console.warn('Subscriber has unsubscribed');
+        return null;
+      }
+
       return {
-        authorId: data.authorId,
-        subscriberId: data.subscriberId,
-        subscriberName: data.subscriberName,
-        accessToken: data.accessToken,
-        source: params.source,
-        grantedAt: new Date().toISOString(),
-        status: data.status,
-        supabaseUrl: data.supabaseUrl,
-        supabaseAnonKey: data.supabaseAnonKey,
+        authorId: params.authorId,
+        subscriberId: params.subscriberId,
+        subscriberName: data.subscriber?.name,
+        accessToken: data.token,
+        source: data.source || params.source,
+        grantedAt: data.grantedAt,
+        status: data.subscriber?.status === 'unsubscribed' ? 'revoked' : 'active',
+        supabaseUrl: data.supabase?.url,
+        supabaseAnonKey: data.supabase?.anonKey,
       };
     } catch (error) {
       console.error('Error registering access:', error);

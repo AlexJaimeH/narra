@@ -249,7 +249,7 @@ const StoryCard: React.FC<{
   story: StoryWithFeedback;
   index: number;
   formatDate: (date: string | null) => string;
-}> = ({ story, index, formatDate }) => {
+}> = ({ story, index }) => {
   const formatStoryDate = (story: Story): string => {
     if (!story.storyDate) return '';
 

@@ -6,16 +6,6 @@ interface StoryCardProps {
   story: Story;
 }
 
-const formatDate = (dateString: string | null): string => {
-  if (!dateString) return '';
-  const date = new Date(dateString);
-  return date.toLocaleDateString('es-MX', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
-};
-
 const formatStoryDate = (story: Story): string => {
   if (!story.storyDate) return '';
 
@@ -54,7 +44,6 @@ const extractExcerpt = (content: string, maxLength: number = 200): string => {
 };
 
 export const StoryCard: React.FC<StoryCardProps> = ({ story }) => {
-  const publishDate = formatDate(story.publishedAt);
   const storyDateFormatted = formatStoryDate(story);
   const excerpt = extractExcerpt(story.content);
   const featuredImage = story.photos?.[0]?.photoUrl;

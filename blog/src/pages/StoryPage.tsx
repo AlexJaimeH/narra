@@ -596,7 +596,7 @@ const CommentThread: React.FC<{
 const RelatedStoryCard: React.FC<{
   story: Story;
   formatDate: (date: string | null) => string;
-}> = ({ story, formatDate }) => {
+}> = ({ story }) => {
   const formatStoryDate = (story: Story): string => {
     if (!story.storyDate) return '';
 

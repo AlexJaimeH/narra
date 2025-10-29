@@ -107,20 +107,36 @@ create table if not exists public.voice_recordings (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users (id) on delete cascade,
   story_id uuid references public.stories (id) on delete cascade,
-  story_title text not null default '',
+  story_title text default '',
   audio_url text not null,
   audio_path text not null,
-  storage_bucket text not null default 'voice-recordings',
-  transcript text not null default '',
+  storage_bucket text default 'voice-recordings',
+  transcript text default '',
   duration_seconds numeric,
   created_at timestamptz not null default timezone('utc', now())
 );
 
--- NO forzar story_id a NOT NULL porque puede haber grabaciones sin historia asignada aún
--- Solo actualizar story_title para que tenga un default
+-- PRIMERO: Actualizar valores NULL existentes ANTES de forzar NOT NULL
+update public.voice_recordings
+set story_title = ''
+where story_title is null;
+
+update public.voice_recordings
+set transcript = ''
+where transcript is null;
+
+update public.voice_recordings
+set storage_bucket = 'voice-recordings'
+where storage_bucket is null;
+
+-- SEGUNDO: Ahora sí aplicar NOT NULL y defaults
 alter table public.voice_recordings
   alter column story_title set not null,
-  alter column story_title set default '';
+  alter column story_title set default '',
+  alter column transcript set not null,
+  alter column transcript set default '',
+  alter column storage_bucket set not null,
+  alter column storage_bucket set default 'voice-recordings';
 
 alter table public.voice_recordings
   drop constraint if exists voice_recordings_story_id_fkey,
@@ -136,8 +152,7 @@ alter table public.voice_recordings
     references auth.users (id)
     on delete cascade;
 
-alter table public.voice_recordings
-  add column if not exists storage_bucket text not null default 'voice-recordings';
+-- Nota: storage_bucket ya fue configurado arriba
 
 create index if not exists voice_recordings_user_idx
   on public.voice_recordings (user_id, created_at desc);
@@ -1134,24 +1149,51 @@ add column if not exists start_date date;
 alter table public.stories
 add column if not exists end_date date;
 
--- PRIMERO: Actualizar valores existentes ANTES de cambiar el constraint
+-- PASO 1: Actualizar valores existentes ANTES de cambiar constraint y default
 -- Mapeo: 'exact' -> 'day', 'month_year' -> 'month', 'year' -> 'year', 'approximate' -> 'day'
 update public.stories
 set dates_precision = case
   when dates_precision = 'exact' then 'day'
   when dates_precision = 'month_year' then 'month'
   when dates_precision = 'approximate' then 'day'
+  when dates_precision is null then 'day'
   else dates_precision
 end
-where dates_precision in ('exact', 'month_year', 'approximate');
+where dates_precision in ('exact', 'month_year', 'approximate') or dates_precision is null;
 
--- SEGUNDO: Ahora sí eliminar y recrear el constraint
+-- Actualizar date_type también (columna legacy que puede estar en uso)
+update public.stories
+set date_type = case
+  when date_type = 'exact' then 'day'
+  when date_type = 'month_year' then 'month'
+  when date_type = 'approximate' then 'day'
+  when date_type is null then 'day'
+  else date_type
+end
+where date_type in ('exact', 'month_year', 'approximate') or date_type is null;
+
+-- PASO 2: Cambiar el DEFAULT ANTES de cambiar el constraint
+alter table public.stories
+  alter column dates_precision set default 'day';
+
+alter table public.stories
+  alter column date_type set default 'day';
+
+-- PASO 3: Ahora sí eliminar y recrear el constraint
 alter table public.stories
 drop constraint if exists stories_dates_precision_check;
 
 alter table public.stories
 add constraint stories_dates_precision_check
 check (dates_precision in ('day', 'month', 'year'));
+
+-- También actualizar constraint de date_type si existe
+alter table public.stories
+drop constraint if exists stories_date_type_check;
+
+alter table public.stories
+add constraint stories_date_type_check
+check (date_type in ('day', 'month', 'year'));
 
 -- Copiar story_date a start_date si start_date está vacío
 update public.stories

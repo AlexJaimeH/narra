@@ -1,4 +1,9 @@
-# React app - landing page and blog (served from root /index.html)
+# Flutter app routes - must be FIRST to take priority
+/app /app/index.html 200
+/app/ /app/index.html 200
+/app/* /app/index.html 200
+
+# React blog routes
 /blog/story/* /index.html 200
 /blog/subscriber/* /index.html 200
 /blog/* /index.html 200
@@ -6,11 +11,8 @@
 # API routes - pass through to Cloudflare Functions
 /api/* /:splat 200
 
-# Flutter app routes - served from /app subdirectory
-/app/* /app/index.html 200
-
 # Root - serve React landing page
 / /index.html 200
 
-# Fallback - serve React
+# Fallback - serve React (but won't match /app/* because it's handled above)
 /* /index.html 200

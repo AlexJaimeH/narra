@@ -86,6 +86,49 @@ class StoryShareLinkBuilder {
     );
   }
 
+  /// Generate a magic link for the author to view their own story
+  /// This creates a special subscriber-like access but marked as the author
+  static Uri buildAuthorStoryLink({
+    required Story story,
+    required String authorId,
+    required String authorName,
+    required String authorToken,
+    Uri? baseUri,
+  }) {
+    final resolvedBase = _resolveBaseUri(baseUri);
+    final origin = _sanitizeBaseUri(resolvedBase);
+    final pathSegments = <String>['blog', 'story', story.id];
+
+    final queryParameters = <String, String>{
+      'author': authorId,
+      'subscriber': authorId, // Use author ID as subscriber ID
+      'token': authorToken,
+      'name': authorName,
+      'source': 'author_preview', // Special source to identify author
+    };
+
+    if (_usesHashRouting(resolvedBase)) {
+      final fragmentUri = Uri(
+        pathSegments: pathSegments,
+        queryParameters: queryParameters,
+      );
+      final fragment = fragmentUri.toString();
+      final normalizedFragment =
+          fragment.startsWith('/') ? fragment : '/$fragment';
+
+      return origin.replace(
+        fragment: normalizedFragment,
+        queryParameters: null,
+        path: origin.path.isEmpty || origin.path == '/' ? '' : origin.path,
+      );
+    }
+
+    return origin.replace(
+      pathSegments: pathSegments,
+      queryParameters: queryParameters,
+    );
+  }
+
   /// Generate a deep link for a subscriber invite page so they can
   /// authenticate their device before any story is shared with them.
   static Uri buildSubscriberLink({

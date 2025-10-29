@@ -8,21 +8,14 @@ async function getSupabaseClient() {
   if (supabaseClient) return supabaseClient;
 
   const accessRecord = accessManager.getAccess();
-  console.log('[storyService] Access record:', {
-    hasUrl: !!accessRecord?.supabaseUrl,
-    hasKey: !!accessRecord?.supabaseAnonKey,
-    url: accessRecord?.supabaseUrl,
-  });
 
   if (!accessRecord?.supabaseUrl || !accessRecord?.supabaseAnonKey) {
-    console.error('[storyService] Missing Supabase credentials:', accessRecord);
     throw new Error('No valid access credentials found');
   }
 
   // Import Supabase client
   const { createClient } = await import('@supabase/supabase-js');
   supabaseClient = createClient(accessRecord.supabaseUrl, accessRecord.supabaseAnonKey);
-  console.log('[storyService] Supabase client created');
 
   return supabaseClient;
 }
@@ -44,13 +37,11 @@ export const storyService = {
         .single();
 
       if (error) {
-        console.error('Error fetching story:', error);
         return null;
       }
 
       return this.transformStory(data);
     } catch (error) {
-      console.error('Error in getStory:', error);
       return null;
     }
   },
@@ -72,13 +63,11 @@ export const storyService = {
         .limit(limit);
 
       if (error) {
-        console.error('Error fetching stories:', error);
         return [];
       }
 
       return (data || []).map(this.transformStory);
     } catch (error) {
-      console.error('Error in getLatestStories:', error);
       return [];
     }
   },
@@ -94,7 +83,6 @@ export const storyService = {
         .single();
 
       if (error) {
-        console.error('Error fetching author profile:', error);
         return null;
       }
 
@@ -108,7 +96,6 @@ export const storyService = {
         coverImageUrl: data.cover_image_url,
       };
     } catch (error) {
-      console.error('Error in getAuthorProfile:', error);
       return null;
     }
   },

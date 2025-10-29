@@ -11,7 +11,7 @@ export const accessManager = {
     try {
       localStorage.setItem(STORAGE_KEY, data);
     } catch (e) {
-      console.warn('Failed to store access in localStorage:', e);
+      // Silently fail
     }
 
     // Store in cookie (for cross-tab persistence)
@@ -19,7 +19,7 @@ export const accessManager = {
       const maxAge = 90 * 24 * 60 * 60; // 90 days
       document.cookie = `${COOKIE_NAME}=${encodeURIComponent(data)}; path=/; max-age=${maxAge}; SameSite=Lax`;
     } catch (e) {
-      console.warn('Failed to store access in cookie:', e);
+      // Silently fail
     }
   },
 
@@ -31,7 +31,7 @@ export const accessManager = {
         return JSON.parse(data) as StoryAccessRecord;
       }
     } catch (e) {
-      console.warn('Failed to read access from localStorage:', e);
+      // Silently fail
     }
 
     // Fallback to cookie
@@ -44,7 +44,7 @@ export const accessManager = {
         }
       }
     } catch (e) {
-      console.warn('Failed to read access from cookie:', e);
+      // Silently fail
     }
 
     return null;
@@ -55,14 +55,14 @@ export const accessManager = {
     try {
       localStorage.removeItem(STORAGE_KEY);
     } catch (e) {
-      console.warn('Failed to remove access from localStorage:', e);
+      // Silently fail
     }
 
     // Remove cookie
     try {
       document.cookie = `${COOKIE_NAME}=; path=/; max-age=0`;
     } catch (e) {
-      console.warn('Failed to remove access cookie:', e);
+      // Silently fail
     }
   },
 

@@ -31,8 +31,6 @@ export interface RegisterAccessResponse {
 export const publicAccessService = {
   async registerAccess(params: RegisterAccessParams): Promise<StoryAccessRecord | null> {
     try {
-      console.log('[publicAccessService] Registering access with params:', params);
-
       const response = await fetch(`${API_BASE}/story-access`, {
         method: 'POST',
         headers: {
@@ -41,20 +39,14 @@ export const publicAccessService = {
         body: JSON.stringify(params),
       });
 
-      console.log('[publicAccessService] Response status:', response.status);
-
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error('[publicAccessService] Failed to register access:', response.status, response.statusText, errorData);
         return null;
       }
 
       const data: RegisterAccessResponse = await response.json();
-      console.log('[publicAccessService] Response data:', data);
 
       // If unsubscribed, return null
       if (data.unsubscribed) {
-        console.warn('[publicAccessService] Subscriber has unsubscribed');
         return null;
       }
 
@@ -70,14 +62,8 @@ export const publicAccessService = {
         supabaseAnonKey: data.supabase?.anonKey,
       };
 
-      console.log('[publicAccessService] Created access record:', {
-        ...accessRecord,
-        supabaseAnonKey: accessRecord.supabaseAnonKey ? '[REDACTED]' : undefined,
-      });
-
       return accessRecord;
     } catch (error) {
-      console.error('[publicAccessService] Error registering access:', error);
       return null;
     }
   },

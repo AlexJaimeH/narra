@@ -250,6 +250,39 @@ const StoryCard: React.FC<{
   index: number;
   formatDate: (date: string | null) => string;
 }> = ({ story, index, formatDate }) => {
+  const formatStoryDate = (story: Story): string => {
+    if (!story.storyDate) return '';
+
+    const startDate = new Date(story.storyDate);
+    const dateType = story.storyDateType || 'exact';
+
+    let formattedStart = '';
+    if (dateType === 'year') {
+      formattedStart = startDate.getFullYear().toString();
+    } else if (dateType === 'month') {
+      formattedStart = startDate.toLocaleDateString('es-MX', { year: 'numeric', month: 'long' });
+    } else {
+      formattedStart = startDate.toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
+    }
+
+    if (story.storyEndDate) {
+      const endDate = new Date(story.storyEndDate);
+      let formattedEnd = '';
+      if (dateType === 'year') {
+        formattedEnd = endDate.getFullYear().toString();
+      } else if (dateType === 'month') {
+        formattedEnd = endDate.toLocaleDateString('es-MX', { year: 'numeric', month: 'long' });
+      } else {
+        formattedEnd = endDate.toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
+      }
+      return `${formattedStart} - ${formattedEnd}`;
+    }
+
+    return formattedStart;
+  };
+
+  const storyDateFormatted = formatStoryDate(story);
+
   return (
     <article className="group bg-white rounded-3xl shadow-xl overflow-hidden hover:shadow-2xl transition-all transform hover:-translate-y-2">
       <a href={`/blog/story/${story.id}${window.location.search}`} className="block">
@@ -283,17 +316,17 @@ const StoryCard: React.FC<{
         <div className="p-8">
           {/* Metadata */}
           <div className="flex flex-wrap items-center gap-3 mb-4">
-            {story.publishedAt && (
-              <time className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold" style={{ backgroundColor: NarraColors.brand.primaryLight, color: NarraColors.brand.primarySolid }}>
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            {storyDateFormatted && (
+              <div className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold" style={{ backgroundColor: NarraColors.brand.primaryLight, color: NarraColors.brand.primarySolid }}>
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
-                {formatDate(story.publishedAt)}
-              </time>
+                <time>{storyDateFormatted}</time>
+              </div>
             )}
 
             {/* Conteos */}
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
               {(story.reactionCount ?? 0) > 0 && (
                 <div className="flex items-center gap-2 px-3 py-2 rounded-full" style={{ backgroundColor: NarraColors.interactive.heartLight, color: NarraColors.interactive.heart }}>
                   <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">

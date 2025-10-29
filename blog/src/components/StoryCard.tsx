@@ -16,6 +16,37 @@ const formatDate = (dateString: string | null): string => {
   });
 };
 
+const formatStoryDate = (story: Story): string => {
+  if (!story.storyDate) return '';
+
+  const startDate = new Date(story.storyDate);
+  const dateType = story.storyDateType || 'exact';
+
+  let formattedStart = '';
+  if (dateType === 'year') {
+    formattedStart = startDate.getFullYear().toString();
+  } else if (dateType === 'month') {
+    formattedStart = startDate.toLocaleDateString('es-MX', { year: 'numeric', month: 'long' });
+  } else {
+    formattedStart = startDate.toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
+  }
+
+  if (story.storyEndDate) {
+    const endDate = new Date(story.storyEndDate);
+    let formattedEnd = '';
+    if (dateType === 'year') {
+      formattedEnd = endDate.getFullYear().toString();
+    } else if (dateType === 'month') {
+      formattedEnd = endDate.toLocaleDateString('es-MX', { year: 'numeric', month: 'long' });
+    } else {
+      formattedEnd = endDate.toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
+    }
+    return `${formattedStart} - ${formattedEnd}`;
+  }
+
+  return formattedStart;
+};
+
 const extractExcerpt = (content: string, maxLength: number = 200): string => {
   const text = content.replace(/<[^>]*>/g, '').replace(/\n+/g, ' ').trim();
   if (text.length <= maxLength) return text;
@@ -24,6 +55,7 @@ const extractExcerpt = (content: string, maxLength: number = 200): string => {
 
 export const StoryCard: React.FC<StoryCardProps> = ({ story }) => {
   const publishDate = formatDate(story.publishedAt);
+  const storyDateFormatted = formatStoryDate(story);
   const excerpt = extractExcerpt(story.content);
   const featuredImage = story.photos?.[0]?.photoUrl;
 
@@ -46,30 +78,35 @@ export const StoryCard: React.FC<StoryCardProps> = ({ story }) => {
               {story.title}
             </h2>
 
-            {publishDate && (
-              <time className="text-sm text-text-light mb-3 block">
-                {publishDate}
-              </time>
-            )}
+            <div className="flex flex-wrap items-center gap-3 mb-3">
+              {storyDateFormatted && (
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-brand-primary/15 text-brand-primary text-sm font-medium rounded-full">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  <time>{storyDateFormatted}</time>
+                </div>
+              )}
 
-            <p className="text-text-secondary leading-relaxed">
+              {story.tags && story.tags.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {story.tags.map(tag => (
+                    <span
+                      key={tag.id}
+                      className="px-3 py-1.5 bg-brand-primary/10 text-brand-primary text-sm rounded-full font-medium"
+                    >
+                      #{tag.tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <p className="text-text-secondary leading-relaxed mb-3">
               {excerpt}
             </p>
 
-            {story.tags && story.tags.length > 0 && (
-              <div className="flex flex-wrap gap-2 mt-4">
-                {story.tags.map(tag => (
-                  <span
-                    key={tag.id}
-                    className="px-3 py-1 bg-brand-primary/10 text-brand-primary text-sm rounded-full"
-                  >
-                    {tag.tag}
-                  </span>
-                ))}
-              </div>
-            )}
-
-            <div className="flex items-center gap-4 mt-4 text-sm text-text-light">
+            <div className="flex items-center gap-4 text-sm text-text-light">
               {story.commentCount !== undefined && story.commentCount > 0 && (
                 <span>{story.commentCount} comentario{story.commentCount !== 1 ? 's' : ''}</span>
               )}

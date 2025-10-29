@@ -188,6 +188,37 @@ export const StoryPage: React.FC = () => {
     });
   };
 
+  const formatStoryDate = (story: Story): string => {
+    if (!story.storyDate) return '';
+
+    const startDate = new Date(story.storyDate);
+    const dateType = story.storyDateType || 'exact';
+
+    let formattedStart = '';
+    if (dateType === 'year') {
+      formattedStart = startDate.getFullYear().toString();
+    } else if (dateType === 'month') {
+      formattedStart = startDate.toLocaleDateString('es-MX', { year: 'numeric', month: 'long' });
+    } else {
+      formattedStart = startDate.toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
+    }
+
+    if (story.storyEndDate) {
+      const endDate = new Date(story.storyEndDate);
+      let formattedEnd = '';
+      if (dateType === 'year') {
+        formattedEnd = endDate.getFullYear().toString();
+      } else if (dateType === 'month') {
+        formattedEnd = endDate.toLocaleDateString('es-MX', { year: 'numeric', month: 'long' });
+      } else {
+        formattedEnd = endDate.toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
+      }
+      return `${formattedStart} - ${formattedEnd}`;
+    }
+
+    return formattedStart;
+  };
+
   const handleViewAllStories = () => {
     if (!authorId) return;
     const urlParams = publicAccessService.parseSharePayloadFromUrl();
@@ -261,14 +292,14 @@ export const StoryPage: React.FC = () => {
               {story.title}
             </h1>
 
-            <div className="flex flex-wrap items-center gap-4">
-              {story.publishedAt && (
-                <time className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium" style={{ backgroundColor: NarraColors.brand.primaryLight, color: NarraColors.brand.primarySolid }}>
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="flex flex-wrap items-center gap-3">
+              {formatStoryDate(story) && (
+                <div className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold shadow-sm" style={{ backgroundColor: NarraColors.brand.primaryLight, color: NarraColors.brand.primarySolid }}>
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                   </svg>
-                  {formatDate(story.publishedAt)}
-                </time>
+                  <time>{formatStoryDate(story)}</time>
+                </div>
               )}
 
               {story.tags && story.tags.length > 0 && (
@@ -566,6 +597,39 @@ const RelatedStoryCard: React.FC<{
   story: Story;
   formatDate: (date: string | null) => string;
 }> = ({ story, formatDate }) => {
+  const formatStoryDate = (story: Story): string => {
+    if (!story.storyDate) return '';
+
+    const startDate = new Date(story.storyDate);
+    const dateType = story.storyDateType || 'exact';
+
+    let formattedStart = '';
+    if (dateType === 'year') {
+      formattedStart = startDate.getFullYear().toString();
+    } else if (dateType === 'month') {
+      formattedStart = startDate.toLocaleDateString('es-MX', { year: 'numeric', month: 'long' });
+    } else {
+      formattedStart = startDate.toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
+    }
+
+    if (story.storyEndDate) {
+      const endDate = new Date(story.storyEndDate);
+      let formattedEnd = '';
+      if (dateType === 'year') {
+        formattedEnd = endDate.getFullYear().toString();
+      } else if (dateType === 'month') {
+        formattedEnd = endDate.toLocaleDateString('es-MX', { year: 'numeric', month: 'long' });
+      } else {
+        formattedEnd = endDate.toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
+      }
+      return `${formattedStart} - ${formattedEnd}`;
+    }
+
+    return formattedStart;
+  };
+
+  const storyDateFormatted = formatStoryDate(story);
+
   return (
     <a
       href={`/blog/story/${story.id}${window.location.search}`}
@@ -581,30 +645,38 @@ const RelatedStoryCard: React.FC<{
         </div>
       )}
       <div className="p-6" style={{ borderTop: `4px solid ${NarraColors.brand.primary}` }}>
-        {story.publishedAt && (
-          <p className="text-xs font-medium mb-2" style={{ color: NarraColors.text.secondary }}>
-            {formatDate(story.publishedAt)}
-          </p>
-        )}
         <h3 className="text-xl font-bold mb-3 line-clamp-2" style={{ color: NarraColors.text.primary }}>
           {story.title}
         </h3>
-        {story.tags && story.tags.length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-3">
-            {story.tags.slice(0, 2).map(tag => (
-              <span
-                key={tag.id}
-                className="px-2 py-1 text-xs rounded-full font-semibold"
-                style={{
-                  backgroundColor: NarraColors.brand.primaryLight,
-                  color: NarraColors.brand.primarySolid,
-                }}
-              >
-                #{tag.tag}
-              </span>
-            ))}
-          </div>
-        )}
+
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          {storyDateFormatted && (
+            <div className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold" style={{ backgroundColor: NarraColors.brand.primaryLight, color: NarraColors.brand.primarySolid }}>
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <time>{storyDateFormatted}</time>
+            </div>
+          )}
+
+          {story.tags && story.tags.length > 0 && (
+            <>
+              {story.tags.slice(0, 2).map(tag => (
+                <span
+                  key={tag.id}
+                  className="px-3 py-1 text-xs rounded-full font-semibold"
+                  style={{
+                    backgroundColor: NarraColors.brand.primaryLight,
+                    color: NarraColors.brand.primarySolid,
+                  }}
+                >
+                  #{tag.tag}
+                </span>
+              ))}
+            </>
+          )}
+        </div>
+
         <div
           className="text-sm font-semibold flex items-center gap-1"
           style={{ color: NarraColors.brand.primary }}

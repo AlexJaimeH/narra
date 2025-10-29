@@ -14,6 +14,9 @@ export interface Story {
   tags?: StoryTag[];
   commentCount?: number;
   reactionCount?: number;
+  storyDate?: string | null;
+  storyEndDate?: string | null;
+  storyDateType?: 'exact' | 'month' | 'year';
 }
 
 export interface StoryPhoto {

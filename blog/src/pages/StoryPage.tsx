@@ -280,7 +280,7 @@ export const StoryPage: React.FC = () => {
   };
 
   // Process story content to replace image placeholders with actual images
-  const processStoryContent = (content: string, photos: any[] | undefined): string => {
+  const processStoryContent = (content: string, photos: any[] | undefined, storyTitle: string): string => {
     if (!photos || photos.length === 0) {
       return content;
     }
@@ -295,7 +295,7 @@ export const StoryPage: React.FC = () => {
           <div class="rounded-2xl overflow-hidden shadow-xl transform transition-all hover:scale-[1.02]">
             <img
               src="${photo.photoUrl}"
-              alt="${photo.caption || story.title}"
+              alt="${photo.caption || storyTitle}"
               class="w-full"
             />
           </div>
@@ -406,7 +406,7 @@ export const StoryPage: React.FC = () => {
           <div
             className="prose prose-lg max-w-none leading-relaxed"
             style={{ color: NarraColors.text.primary }}
-            dangerouslySetInnerHTML={{ __html: processStoryContent(story.content, story.photos) }}
+            dangerouslySetInnerHTML={{ __html: processStoryContent(story.content, story.photos, story.title) }}
           />
 
           {/* Reacciones */}

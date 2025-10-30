@@ -721,6 +721,7 @@ class _BookProgressSection extends StatelessWidget {
                     color: bookColor,
                     fontWeight: FontWeight.w800,
                   ),
+                  child: const Icon(Icons.lightbulb_outline, size: 20),
                 ),
               ],
             ),

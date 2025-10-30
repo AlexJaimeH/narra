@@ -1349,6 +1349,67 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     }
   }
 
+  /// Obtiene temas/etiquetas no usadas para enviar a OpenAI como inspiración
+  List<String> _getUnusedTopicsForSuggestions() {
+    // Obtener etiquetas ya usadas en esta historia
+    final usedTags = _selectedTags.map((t) => t.toLowerCase()).toSet();
+
+    // Temas a excluir
+    const excludedTopics = {
+      'otros momentos',
+      'recuerdos unicos',
+      'recuerdos únicos',
+      'sin categoría',
+      'sin categoria',
+      'naturaleza',
+      'recuperacion',
+      'recuperación',
+      'cultura',
+    };
+
+    // Temas comunes que podemos sugerir
+    const commonTopics = [
+      'Familia',
+      'Viajes',
+      'Infancia',
+      'Amigos',
+      'Trabajo',
+      'Mascotas',
+      'Hobbies',
+      'Logros',
+      'Aventuras',
+      'Momentos especiales',
+      'Aprendizajes',
+      'Celebraciones',
+      'Arte',
+      'Música',
+      'Comida',
+      'Deportes',
+      'Tradiciones',
+      'Sueños',
+      'Reflexiones',
+      'Amor',
+      'Salud',
+      'Educación',
+      'Fotografía',
+      'Libros',
+      'Juegos',
+      'Voluntariado',
+      'Emprendimiento',
+    ];
+
+    // Filtrar temas no usados y no excluidos
+    final unusedTopics = commonTopics
+        .where((topic) =>
+            !usedTags.contains(topic.toLowerCase()) &&
+            !excludedTopics.contains(topic.toLowerCase()))
+        .toList();
+
+    // Mezclar y tomar 5 aleatorios
+    unusedTopics.shuffle();
+    return unusedTopics.take(5).toList();
+  }
+
   Future<void> _generateAISuggestions({bool force = false}) async {
     if (!mounted) return;
 
@@ -1369,9 +1430,22 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     });
 
     try {
+      // Determinar si hay poco o ningún contenido
+      final contentText = _contentController.text.trim();
+      final wordCount = contentText.isEmpty
+          ? 0
+          : contentText.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length;
+
+      // Si hay menos de 20 palabras, enviar temas sugeridos para inspiración
+      List<String>? suggestedTopics;
+      if (wordCount < 20) {
+        suggestedTopics = _getUnusedTopicsForSuggestions();
+      }
+
       final planJson = await OpenAIService.generateStoryCoachPlan(
         title: _titleController.text,
         content: _contentController.text,
+        suggestedTopics: suggestedTopics,
       );
       if (!mounted) return;
       setState(() {

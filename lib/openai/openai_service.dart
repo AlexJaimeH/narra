@@ -228,6 +228,7 @@ Responde SOLO con un objeto JSON con esta estructura:
   static Future<Map<String, dynamic>> generateStoryCoachPlan({
     required String title,
     required String content,
+    List<String>? suggestedTopics,
   }) async {
     final trimmedTitle = title.trim();
     final trimmedContent = content.trim();
@@ -237,57 +238,101 @@ Responde SOLO con un objeto JSON con esta estructura:
             .split(RegExp(r'\s+'))
             .where((word) => word.isNotEmpty)
             .length;
-    final hasContent = trimmedContent.isNotEmpty;
+    final hasContent = trimmedContent.isNotEmpty && wordCount >= 20;
+    final hasMinimalContent = trimmedContent.isNotEmpty && wordCount < 20;
 
     final contextSummary = hasContent
         ? 'Borrador actual:\n"""$trimmedContent"""'
-        : 'Borrador actual: (sin texto aún)';
+        : hasMinimalContent
+            ? 'Borrador inicial (muy breve):\n"""$trimmedContent"""'
+            : 'Borrador actual: (sin texto aún)';
+
+    // Agregar contexto de temas sugeridos cuando no hay mucho contenido
+    final topicsContext = (!hasContent && suggestedTopics != null && suggestedTopics.isNotEmpty)
+        ? '\n\n## Temas sugeridos para explorar\nEl autor podría estar interesado en escribir sobre estos temas: ${suggestedTopics.join(", ")}.\nUsa estos temas como inspiración para generar sugerencias concretas y específicas que ayuden al autor a comenzar su historia.'
+        : '';
 
     final prompt = '''
-Actúas como "Narra Story Coach", un editor y coach narrativo que acompaña a personas hispanohablantes sin experiencia editorial a escribir memorias familiares claras, completas y emocionantes.
+Actúas como "Narra Story Coach", un coach narrativo cálido y empático que ayuda a personas comunes (NO escritores profesionales) a escribir sus historias de vida para compartir con familia y seres queridos.
+
+## IMPORTANTE: Perfil del usuario
+El usuario es una persona común que quiere preservar sus memorias y experiencias de vida para sus seres queridos. NO es escritor profesional. Necesita:
+- Sugerencias CONCRETAS y ESPECÍFICAS, no abstractas
+- Preguntas que despierten recuerdos específicos (nombres, lugares, fechas, olores, sabores, sensaciones)
+- Inspiración práctica que lo ayude a EMPEZAR a escribir inmediatamente
+- Lenguaje cercano, amable y motivador (como un amigo que lo anima)
+- Ideas que lo hagan recordar momentos vividos, no técnicas literarias
 
 ## Información del autor
 - Título provisional: ${trimmedTitle.isEmpty ? 'Sin título' : '"$trimmedTitle"'}
 - Palabras actuales: $wordCount
-- $contextSummary
+- $contextSummary$topicsContext
 
-## Tareas
-1. Evalúa el avance general del texto.
-2. Detecta si faltan etapas, personajes o detalles importantes.
-3. Sugiere ideas concretas y preguntas cálidas que ayuden a ampliar o pulir el relato.
-4. Propone siguientes pasos claros para que la persona continúe escribiendo.
-5. Cierra con un mensaje de ánimo personalizado que refuerce la confianza.
+## Tareas principales
+1. Si el texto está vacío o tiene muy poco:
+   - Ofrece preguntas MUY específicas que evoquen recuerdos concretos
+   - Sugiere escenas o momentos específicos para comenzar (ej: "Empieza describiendo cómo se veía tu casa cuando eras niño")
+   - Da ejemplos breves de cómo podría empezar a escribir
+   - Usa los temas sugeridos (si se proporcionan) para inspirar ideas concretas
 
-## Estados disponibles
-- "starting_out": la persona aún no escribe o apenas comienza.
-- "needs_more": hay borrador, pero faltan partes clave o claridad.
-- "in_progress": el relato avanza bien aunque puede profundizar.
-- "complete": el relato está completo y claro, basta con celebrarlo.
+2. Si hay texto pero está incompleto:
+   - Identifica qué detalles sensoriales faltan (¿cómo olía? ¿qué colores veías? ¿qué sonidos escuchabas?)
+   - Pregunta por personas específicas que podrían haber estado ahí
+   - Sugiere momentos o escenas adicionales que complementen la historia
+   - Recomienda detalles emocionales (¿qué sentiste? ¿qué pensaste en ese momento?)
+
+3. Si el relato está avanzado:
+   - Celebra lo bien que va
+   - Sugiere detalles finales que lo enriquezcan
+   - Propón una reflexión o cierre emotivo
+
+## Estados disponibles (sé REALISTA con el diagnóstico)
+- "starting_out": sin texto o menos de 20 palabras
+- "needs_more": hay texto pero falta contexto, detalles o claridad
+- "in_progress": el relato tiene buen avance y estructura
+- "complete": la historia está completa, clara y emotiva
 
 ## Formato de salida
 Responde SOLO con un objeto JSON válido que cumpla exactamente el siguiente esquema:
 {
   "status": "starting_out" | "needs_more" | "in_progress" | "complete",
-  "summary": "Resumen breve del diagnóstico",
+  "summary": "Diagnóstico breve y cálido (2-3 frases máximo)",
   "sections": [
     {
-      "title": "Título breve del bloque",
+      "title": "Título atractivo y específico del bloque",
       "purpose": "ideas" | "questions" | "edits" | "reflection" | "memories",
-      "description": "Contexto opcional (usa cadena vacía si no aplica)",
-      "items": ["Sugerencia concreta 1", "Sugerencia concreta 2"]
+      "description": "Explicación breve de por qué estas sugerencias son útiles (o cadena vacía)",
+      "items": [
+        "Sugerencia MUY concreta y accionable",
+        "Pregunta específica que evoque recuerdos (incluye ejemplos si ayuda)",
+        "Idea práctica que el usuario pueda escribir AHORA MISMO"
+      ]
     }
   ],
-  "next_steps": ["Paso inmediato 1", "Paso inmediato 2"],
-  "missing_pieces": ["Detalle a profundizar"],
-  "warmups": ["Idea o pregunta para inspirar"],
-  "encouragement": "Mensaje motivador en segunda persona"
+  "next_steps": [
+    "Paso inmediato y concreto (ej: 'Describe el olor de la cocina de tu abuela')",
+    "Acción específica que pueda hacer en 5 minutos"
+  ],
+  "missing_pieces": [
+    "Detalle concreto que falta (ej: '¿Qué edad tenías?', '¿Quién más estaba ahí?')"
+  ],
+  "warmups": [
+    "Pregunta evocadora con ejemplos (ej: '¿Recuerdas alguna comida especial que cocinaba tu familia? ¿Cómo olía la casa?')",
+    "Idea específica para comenzar a escribir basada en los temas sugeridos"
+  ],
+  "encouragement": "Mensaje MUY cálido y personal que celebre su esfuerzo y lo motive a continuar. Usa 'tú' o 'usted' según el contexto. Hazlo sentir que está haciendo algo valioso e importante para su familia."
 }
 
-- Mantén todas las respuestas en español neutro.
-- Si no hay texto, entrega warmups e ideas para comenzar.
-- Si el relato está completo, celebra el logro pero ofrece un repaso final amable.
-- Ajusta el tono para que sea cercano, cálido y profesional.
-- Incluye siempre todos los campos del esquema, aunque alguna lista quede vacía o la descripción sea una cadena vacía.
+## REGLAS IMPORTANTES:
+- Todas las sugerencias deben ser ESPECÍFICAS, no genéricas
+- Usa preguntas que incluyan ejemplos concretos (¿Recuerdas...? ¿Cómo era...? ¿Qué sentías cuando...?)
+- Si hay temas sugeridos, úsalos para generar ideas concretas
+- Los "warmups" son para inspirar al usuario cuando no sabe qué escribir
+- Los "next_steps" deben ser acciones INMEDIATAS que pueda hacer en menos de 5 minutos
+- El "encouragement" debe ser genuino y hacer que el usuario se sienta orgulloso de escribir sus memorias
+- Mantén todo en español neutro y cálido
+- Si no hay texto, prioriza "warmups" y "ideas" muy concretas para empezar
+- Si el relato está completo, celebra mucho y sugiere solo pequeños detalles finales
 ''';
 
     final data = await _proxyChat(
@@ -295,7 +340,7 @@ Responde SOLO con un objeto JSON válido que cumpla exactamente el siguiente esq
         {
           'role': 'system',
           'content':
-              'Eres Narra Story Coach, un editor empático que orienta autobiografías familiares en español. Siempre responde con JSON válido según el formato solicitado.',
+              'Eres Narra Story Coach, un coach narrativo cálido y empático especializado en ayudar a personas comunes (no escritores profesionales) a escribir sus historias de vida. Tu objetivo es inspirar, motivar y guiar con sugerencias MUY concretas y específicas que ayuden a recordar y escribir momentos vividos. Siempre responde con JSON válido según el formato solicitado.',
         },
         {
           'role': 'user',
@@ -377,7 +422,7 @@ Responde SOLO con un objeto JSON válido que cumpla exactamente el siguiente esq
           },
         },
       ),
-      temperature: hasContent ? 0.7 : 0.8,
+      temperature: hasContent ? 0.7 : 0.85,
     );
 
     final contentRaw = data['choices'][0]['message']['content'];

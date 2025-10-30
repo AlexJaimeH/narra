@@ -115,7 +115,7 @@ class _SubscribersPageState extends State<SubscribersPage>
 
     final subscribers = dashboard.subscribers.where((subscriber) {
       final matchesFilter = switch (_filter) {
-        _SubscriberFilter.all => true,
+        _SubscriberFilter.all => subscriber.status != 'unsubscribed',
         _SubscriberFilter.confirmed => subscriber.status == 'confirmed',
         _SubscriberFilter.pending => subscriber.status == 'pending',
         _SubscriberFilter.unsubscribed => subscriber.status == 'unsubscribed',
@@ -1210,7 +1210,7 @@ class _SubscriberCard extends StatelessWidget {
         ),
       ),
       child: InkWell(
-        onTap: onTap,
+        onTap: subscriber.status == 'unsubscribed' ? null : onTap,
         borderRadius: BorderRadius.circular(20),
         child: Padding(
           padding: const EdgeInsets.all(16),

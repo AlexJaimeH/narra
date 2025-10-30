@@ -123,8 +123,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
         // Transform comments to have the correct field names for frontend
         const transformedComments = comments.map(row => {
-          // Check if comment is from author (subscriber_id is null or equals authorId)
-          const isAuthorComment = !row.subscriber_id || row.subscriber_id === authorId;
+          // Check if comment is from author using metadata (preserves original author_name)
+          const metadata = row.metadata || {};
+          const isAuthorComment = metadata.is_author === true;
 
           return {
             id: row.id,
@@ -378,7 +379,7 @@ async function fetchComments(
   url.searchParams.set("status", "eq.visible");
   url.searchParams.set(
     "select",
-    "id,author_name,author_email,content,source,parent_id,subscriber_id,created_at",
+    "id,author_name,author_email,content,source,parent_id,subscriber_id,created_at,metadata",
   );
   url.searchParams.set("order", "created_at.asc");
 

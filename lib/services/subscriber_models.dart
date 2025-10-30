@@ -276,7 +276,8 @@ class SubscriberDashboardData {
   final List<SubscriberCommentRecord> recentComments;
   final List<SubscriberReactionRecord> recentReactions;
 
-  int get totalSubscribers => subscribers.length;
+  int get totalSubscribers =>
+      subscribers.where((s) => s.status != 'unsubscribed').length;
   int get confirmedSubscribers =>
       subscribers.where((s) => s.status == 'confirmed').length;
   int get pendingSubscribers =>
@@ -284,11 +285,27 @@ class SubscriberDashboardData {
   int get unsubscribedSubscribers =>
       subscribers.where((s) => s.status == 'unsubscribed').length;
 
-  int get totalComments => engagementBySubscriber.values
-      .fold<int>(0, (value, item) => value + item.totalComments);
+  int get totalComments {
+    // Solo contar comentarios de suscriptores activos (no desuscritos)
+    final activeSubscriberIds = subscribers
+        .where((s) => s.status != 'unsubscribed')
+        .map((s) => s.id)
+        .toSet();
+    return engagementBySubscriber.entries
+        .where((entry) => activeSubscriberIds.contains(entry.key))
+        .fold<int>(0, (value, item) => value + item.value.totalComments);
+  }
 
-  int get totalReactions => engagementBySubscriber.values
-      .fold<int>(0, (value, item) => value + item.totalReactions);
+  int get totalReactions {
+    // Solo contar reacciones de suscriptores activos (no desuscritos)
+    final activeSubscriberIds = subscribers
+        .where((s) => s.status != 'unsubscribed')
+        .map((s) => s.id)
+        .toSet();
+    return engagementBySubscriber.entries
+        .where((entry) => activeSubscriberIds.contains(entry.key))
+        .fold<int>(0, (value, item) => value + item.value.totalReactions);
+  }
 
   int subscribersEngagedWithin(Duration duration) {
     final threshold = DateTime.now().subtract(duration);

@@ -6,6 +6,8 @@ import 'package:narra/services/story_service_new.dart';
 import 'package:narra/services/subscriber_service.dart';
 import 'dart:math' as math;
 import 'story_editor_page.dart';
+import 'app_navigation.dart';
+import 'stories_list_page.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -424,12 +426,12 @@ class _WelcomeSection extends StatelessWidget {
   }
 
   void _openEditorWithSuggestions(BuildContext context) {
-    // TODO: Implementar apertura del editor con el modal de sugerencias abierto
-    // Por ahora simplemente abrimos el editor
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => const StoryEditorPage(),
+        builder: (context) => const StoryEditorPage(
+          openSuggestionsAutomatically: true,
+        ),
       ),
     );
   }
@@ -656,14 +658,21 @@ class _BookProgressSection extends StatelessWidget {
     const requiredStories = 20;
     final progress = (publishedStories / requiredStories).clamp(0.0, 1.0);
 
+    // Usar un color más vibrante y atractivo
+    final bookColor = Color.lerp(
+      colorScheme.primary,
+      const Color(0xFF6B4DE6), // Morado vibrante
+      0.4,
+    )!;
+
     return Card(
       elevation: 0,
-      color: colorScheme.tertiaryContainer.withValues(alpha: 0.3),
+      color: bookColor.withValues(alpha: 0.08),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(24),
         side: BorderSide(
-          color: colorScheme.tertiary.withValues(alpha: 0.2),
-          width: 1,
+          color: bookColor.withValues(alpha: 0.25),
+          width: 1.5,
         ),
       ),
       child: Padding(
@@ -676,12 +685,12 @@ class _BookProgressSection extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: colorScheme.tertiary.withValues(alpha: 0.15),
+                    color: bookColor.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: Icon(
                     Icons.auto_stories_rounded,
-                    color: colorScheme.tertiary,
+                    color: bookColor,
                     size: 24,
                   ),
                 ),
@@ -694,6 +703,7 @@ class _BookProgressSection extends StatelessWidget {
                         'Progreso hacia tu libro',
                         style: theme.textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.w700,
+                          color: colorScheme.onSurface,
                         ),
                       ),
                       Text(
@@ -708,7 +718,7 @@ class _BookProgressSection extends StatelessWidget {
                 Text(
                   '${(progress * 100).round()}%',
                   style: theme.textTheme.headlineMedium?.copyWith(
-                    color: colorScheme.tertiary,
+                    color: bookColor,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -721,7 +731,7 @@ class _BookProgressSection extends StatelessWidget {
                 value: progress,
                 minHeight: 12,
                 backgroundColor: colorScheme.surfaceContainerHighest,
-                valueColor: AlwaysStoppedAnimation<Color>(colorScheme.tertiary),
+                valueColor: AlwaysStoppedAnimation<Color>(bookColor),
               ),
             ),
             const SizedBox(height: 16),
@@ -732,14 +742,14 @@ class _BookProgressSection extends StatelessWidget {
                   color: colorScheme.surface,
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
-                    color: colorScheme.outlineVariant.withValues(alpha: 0.5),
+                    color: bookColor.withValues(alpha: 0.3),
                   ),
                 ),
                 child: Row(
                   children: [
                     Icon(
                       Icons.check_circle,
-                      color: colorScheme.tertiary,
+                      color: bookColor,
                       size: 20,
                     ),
                     const SizedBox(width: 8),
@@ -760,20 +770,34 @@ class _BookProgressSection extends StatelessWidget {
             ],
             SizedBox(
               width: double.infinity,
-              child: FilledButton.tonal(
+              child: FilledButton(
                 onPressed: () {
-                  // Navegar a la pestaña de publicadas en Historias
-                  DefaultTabController.of(context)?.animateTo(2);
+                  // Navegar a la página de Historias
+                  Navigator.of(context).pushReplacement(
+                    MaterialPageRoute(
+                      builder: (context) => _StoriesPageNavigator(),
+                    ),
+                  );
                 },
                 style: FilledButton.styleFrom(
-                  backgroundColor: colorScheme.tertiary,
-                  foregroundColor: colorScheme.onTertiary,
+                  backgroundColor: bookColor,
+                  foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
                   ),
                 ),
-                child: const Text('Ver historias publicadas'),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Text(
+                      'Ver historias publicadas',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(width: 8),
+                    const Icon(Icons.arrow_forward, size: 18),
+                  ],
+                ),
               ),
             ),
           ],
@@ -1037,4 +1061,36 @@ class _ActivityItem {
     required this.color,
     required this.date,
   });
+}
+
+/// Widget helper para navegar a la página de Historias con la pestaña de Publicadas seleccionada
+class _StoriesPageNavigator extends StatefulWidget {
+  @override
+  State<_StoriesPageNavigator> createState() => _StoriesPageNavigatorState();
+}
+
+class _StoriesPageNavigatorState extends State<_StoriesPageNavigator> {
+  @override
+  void initState() {
+    super.initState();
+    // Navegar a la página principal con el índice de Historias
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (context) => const AppNavigation(initialIndex: 1),
+        ),
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Mostrar un loading mientras se navega
+    return const Scaffold(
+      body: Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+  }
 }

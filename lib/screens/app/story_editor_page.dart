@@ -31,8 +31,13 @@ import 'package:narra/supabase/narra_client.dart';
 
 class StoryEditorPage extends StatefulWidget {
   final String? storyId; // null for new story, id for editing existing
+  final bool openSuggestionsAutomatically;
 
-  const StoryEditorPage({super.key, this.storyId});
+  const StoryEditorPage({
+    super.key,
+    this.storyId,
+    this.openSuggestionsAutomatically = false,
+  });
 
   @override
   State<StoryEditorPage> createState() => _StoryEditorPageState();
@@ -642,6 +647,25 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     unawaited(_loadVoiceRecordings());
 
     // Generate initial AI suggestions when suggestions are shown
+    // Open suggestions automatically if requested
+    if (widget.openSuggestionsAutomatically) {
+      _showSuggestions = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _generateAISuggestions();
+        // Hacer scroll hasta abajo para mostrar las sugerencias
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (!mounted) return;
+          if (_editorScrollController.hasClients) {
+            _editorScrollController.animateTo(
+              _editorScrollController.position.maxScrollExtent,
+              duration: const Duration(milliseconds: 600),
+              curve: Curves.easeOutCubic,
+            );
+          }
+        });
+      });
+    }
   }
 
   void _handleContentChange() {

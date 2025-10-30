@@ -787,7 +787,6 @@ class _BookProgressSection extends StatelessWidget {
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
                   ),
-                  elevation: 2,
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,

@@ -14,7 +14,8 @@ class SubscribersPage extends StatefulWidget {
 
 enum _SubscriberFilter { all, confirmed, pending, unsubscribed }
 
-class _SubscribersPageState extends State<SubscribersPage> {
+class _SubscribersPageState extends State<SubscribersPage>
+    with SingleTickerProviderStateMixin {
   final TextEditingController _searchController = TextEditingController();
 
   bool _isLoading = true;
@@ -25,16 +26,22 @@ class _SubscribersPageState extends State<SubscribersPage> {
   String _searchTerm = '';
   String? _authorDisplayName;
   final Set<String> _sendingInviteIds = <String>{};
+  late AnimationController _fabController;
 
   @override
   void initState() {
     super.initState();
+    _fabController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
     _loadDashboard();
   }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _fabController.dispose();
     super.dispose();
   }
 
@@ -85,6 +92,7 @@ class _SubscribersPageState extends State<SubscribersPage> {
         }
         _isRefreshing = false;
       });
+      _fabController.forward();
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -95,9 +103,6 @@ class _SubscribersPageState extends State<SubscribersPage> {
         _errorMessage =
             'No pudimos cargar tus suscriptores. Intenta nuevamente.';
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error al cargar suscriptores: $error')),
-      );
     }
   }
 
@@ -218,8 +223,21 @@ class _SubscribersPageState extends State<SubscribersPage> {
       if (showSuccessToast) {
         messenger.showSnackBar(
           SnackBar(
-            content: Text(
-              'Listo, enviamos el enlace mágico a ${preparedSubscriber.email}.',
+            backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+            content: Row(
+              children: [
+                Icon(Icons.check_circle,
+                    color: Theme.of(context).colorScheme.primary),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Enlace enviado a ${preparedSubscriber.name}',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         );
@@ -263,7 +281,26 @@ class _SubscribersPageState extends State<SubscribersPage> {
         return StatefulBuilder(
           builder: (context, setLocalState) {
             return AlertDialog(
-              title: const Text('Agregar suscriptor'),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(28)),
+              title: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .primary
+                          .withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(Icons.person_add_alt_1,
+                        color: Theme.of(context).colorScheme.primary),
+                  ),
+                  const SizedBox(width: 12),
+                  const Text('Nuevo suscriptor'),
+                ],
+              ),
               content: Form(
                 key: formKey,
                 child: SingleChildScrollView(
@@ -272,53 +309,62 @@ class _SubscribersPageState extends State<SubscribersPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Comparte historias con personas especiales. Recibirán un enlace mágico por correo.',
-                        style: Theme.of(context).textTheme.bodyMedium,
+                        'Invita a alguien especial a recibir tus historias mediante un enlace mágico único.',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                            ),
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 20),
                       TextFormField(
                         controller: nameController,
-                        decoration: const InputDecoration(
-                          labelText: 'Nombre del suscriptor',
-                          hintText: 'Ej. Ana García',
-                          prefixIcon: Icon(Icons.person_outline),
+                        decoration: InputDecoration(
+                          labelText: 'Nombre completo',
+                          hintText: 'Ej. Ana García López',
+                          prefixIcon: const Icon(Icons.person_outline),
+                          border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16)),
                         ),
                         textCapitalization: TextCapitalization.words,
                         validator: (value) {
                           if (value == null || value.trim().isEmpty) {
-                            return 'Ingresa un nombre para mostrar en los comentarios.';
+                            return 'Por favor ingresa un nombre.';
                           }
                           return null;
                         },
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 16),
                       TextFormField(
                         controller: emailController,
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           labelText: 'Correo electrónico',
                           hintText: 'ejemplo@correo.com',
-                          prefixIcon: Icon(Icons.email_outlined),
+                          prefixIcon: const Icon(Icons.email_outlined),
+                          border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16)),
                         ),
                         keyboardType: TextInputType.emailAddress,
                         validator: (value) {
                           final trimmed = value?.trim() ?? '';
                           if (trimmed.isEmpty) {
-                            return 'Necesitamos el correo para enviar el enlace mágico.';
+                            return 'El correo es necesario para el enlace mágico.';
                           }
-                          if (!trimmed.contains('@') ||
-                              !trimmed.contains('.')) {
+                          if (!trimmed.contains('@') || !trimmed.contains('.')) {
                             return 'Ingresa un correo válido.';
                           }
                           return null;
                         },
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 16),
                       TextFormField(
                         controller: relationshipController,
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           labelText: 'Relación (opcional)',
                           hintText: 'Familia, amistad, cliente…',
-                          prefixIcon: Icon(Icons.favorite_outline),
+                          prefixIcon: const Icon(Icons.favorite_outline),
+                          border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16)),
                         ),
                         textCapitalization: TextCapitalization.sentences,
                       ),
@@ -328,8 +374,7 @@ class _SubscribersPageState extends State<SubscribersPage> {
               ),
               actions: [
                 TextButton(
-                  onPressed:
-                      isSaving ? null : () => Navigator.of(context).pop(),
+                  onPressed: isSaving ? null : () => Navigator.of(context).pop(),
                   child: const Text('Cancelar'),
                 ),
                 FilledButton.icon(
@@ -359,7 +404,7 @@ class _SubscribersPageState extends State<SubscribersPage> {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
                                   content: Text(
-                                      'No se pudo guardar al suscriptor: $error'),
+                                      'No se pudo guardar: $error'),
                                 ),
                               );
                             }
@@ -371,8 +416,8 @@ class _SubscribersPageState extends State<SubscribersPage> {
                           height: 16,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Icon(Icons.person_add_alt_1),
-                  label: Text(isSaving ? 'Guardando…' : 'Agregar'),
+                      : const Icon(Icons.check),
+                  label: Text(isSaving ? 'Guardando…' : 'Agregar y enviar'),
                 ),
               ],
             );
@@ -384,10 +429,8 @@ class _SubscribersPageState extends State<SubscribersPage> {
     if (result != null) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Suscriptor agregado. Enviando su enlace mágico…',
-          ),
+        const SnackBar(
+          content: Text('Enviando enlace mágico…'),
         ),
       );
       await _sendInvite(result);
@@ -398,20 +441,33 @@ class _SubscribersPageState extends State<SubscribersPage> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        icon: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.errorContainer,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Icon(
+            Icons.person_remove_outlined,
+            color: Theme.of(context).colorScheme.error,
+            size: 32,
+          ),
+        ),
         title: const Text('Eliminar suscriptor'),
         content: Text(
-          '¿Seguro que quieres eliminar a ${subscriber.name}? Podrás volver a agregarlo más adelante.',
+          '¿Estás seguro de eliminar a ${subscriber.name}? Esta acción no se puede deshacer.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
             child: const Text('Cancelar'),
           ),
-          FilledButton.tonal(
+          FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
             style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.errorContainer,
-              foregroundColor: Theme.of(context).colorScheme.onErrorContainer,
+              backgroundColor: Theme.of(context).colorScheme.error,
+              foregroundColor: Theme.of(context).colorScheme.onError,
             ),
             child: const Text('Eliminar'),
           ),
@@ -425,14 +481,27 @@ class _SubscribersPageState extends State<SubscribersPage> {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content:
-                  Text('${subscriber.name} ya no recibirá tus historias.')),
+            backgroundColor: Theme.of(context).colorScheme.tertiaryContainer,
+            content: Row(
+              children: [
+                Icon(Icons.check_circle,
+                    color: Theme.of(context).colorScheme.tertiary),
+                const SizedBox(width: 12),
+                Text(
+                  '${subscriber.name} fue eliminado',
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onTertiaryContainer,
+                  ),
+                ),
+              ],
+            ),
+          ),
         );
         await _loadDashboard();
       } catch (error) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('No se pudo eliminar al suscriptor: $error')),
+          SnackBar(content: Text('Error al eliminar: $error')),
         );
       }
     }
@@ -460,41 +529,51 @@ class _SubscribersPageState extends State<SubscribersPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
     if (_isLoading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+      return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(color: colorScheme.primary),
+              const SizedBox(height: 16),
+              Text(
+                'Cargando suscriptores…',
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
       );
     }
 
     if (_errorMessage != null) {
       return Scaffold(
-        appBar: AppBar(
-          title: const Text('Suscripciones privadas'),
-          actions: [
-            IconButton(
-              onPressed: () => _loadDashboard(),
-              icon: const Icon(Icons.refresh_rounded),
-            ),
-          ],
-        ),
         body: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.cloud_off, size: 48, color: theme.colorScheme.outline),
-              const SizedBox(height: 12),
-              Text(
-                _errorMessage!,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyLarge,
-              ),
-              const SizedBox(height: 16),
-              FilledButton(
-                onPressed: () => _loadDashboard(),
-                child: const Text('Reintentar'),
-              ),
-            ],
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.cloud_off, size: 64, color: colorScheme.outline),
+                const SizedBox(height: 16),
+                Text(
+                  _errorMessage!,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.titleMedium,
+                ),
+                const SizedBox(height: 24),
+                FilledButton.icon(
+                  onPressed: () => _loadDashboard(),
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('Reintentar'),
+                ),
+              ],
+            ),
           ),
         ),
       );
@@ -505,44 +584,55 @@ class _SubscribersPageState extends State<SubscribersPage> {
     final hasAnySubscribers = (dashboard?.totalSubscribers ?? 0) > 0;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Suscripciones privadas'),
-        actions: [
-          IconButton(
-            tooltip: 'Actualizar',
-            onPressed:
-                _isRefreshing ? null : () => _loadDashboard(silent: true),
-            icon: const Icon(Icons.refresh_rounded),
-          ),
-          const SizedBox(width: 8),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            child: FilledButton.icon(
-              onPressed: _showAddSubscriberDialog,
-              icon: const Icon(Icons.person_add_alt_1, size: 20),
-              label: const Text('Agregar'),
-            ),
-          ),
-        ],
-      ),
       body: RefreshIndicator(
         onRefresh: _onRefresh,
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: _IntroCard(
-                  dashboard: dashboard,
-                  onInvite: _showAddSubscriberDialog,
+            SliverAppBar.large(
+              floating: false,
+              pinned: true,
+              expandedHeight: 160,
+              flexibleSpace: FlexibleSpaceBar(
+                title: const Text(
+                  'Suscriptores',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                background: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        colorScheme.primaryContainer,
+                        colorScheme.secondaryContainer.withValues(alpha: 0.7),
+                      ],
+                    ),
+                  ),
                 ),
               ),
+              actions: [
+                IconButton(
+                  tooltip: 'Actualizar',
+                  onPressed:
+                      _isRefreshing ? null : () => _loadDashboard(silent: true),
+                  icon: _isRefreshing
+                      ? SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: colorScheme.onSurface,
+                          ),
+                        )
+                      : const Icon(Icons.refresh_rounded),
+                ),
+                const SizedBox(width: 8),
+              ],
             ),
             SliverToBoxAdapter(
               child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                 child: _StatsOverview(dashboard: dashboard),
               ),
             ),
@@ -563,8 +653,13 @@ class _SubscribersPageState extends State<SubscribersPage> {
                     TextField(
                       controller: _searchController,
                       decoration: InputDecoration(
-                        prefixIcon: const Icon(Icons.search),
+                        filled: true,
+                        prefixIcon: const Icon(Icons.search_rounded),
                         hintText: 'Buscar por nombre o correo…',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide.none,
+                        ),
                         suffixIcon: _searchTerm.isNotEmpty
                             ? IconButton(
                                 onPressed: () {
@@ -597,18 +692,18 @@ class _SubscribersPageState extends State<SubscribersPage> {
               ),
             ),
             if (!hasAnySubscribers)
-              SliverToBoxAdapter(
+              SliverFillRemaining(
                 child: Padding(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 48),
+                      const EdgeInsets.symmetric(horizontal: 32, vertical: 48),
                   child: _EmptyState(onAdd: _showAddSubscriberDialog),
                 ),
               )
             else if (subscribers.isEmpty)
-              SliverToBoxAdapter(
+              SliverFillRemaining(
                 child: Padding(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 48),
+                      const EdgeInsets.symmetric(horizontal: 32, vertical: 48),
                   child: _NoResultsPlaceholder(
                     onClearFilters: _resetFilters,
                     onAddSubscriber: _showAddSubscriberDialog,
@@ -616,180 +711,43 @@ class _SubscribersPageState extends State<SubscribersPage> {
                 ),
               )
             else
-              SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                    final subscriber = subscribers[index];
-                    final engagement = dashboard?.engagementFor(subscriber.id);
-                    return Padding(
-                      padding: EdgeInsets.fromLTRB(
-                        16,
-                        index == 0 ? 4 : 8,
-                        16,
-                        index == subscribers.length - 1 ? 24 : 8,
-                      ),
-                      child: _SubscriberCard(
-                        subscriber: subscriber,
-                        engagement: engagement,
-                        onView: () => _openSubscriberDetails(subscriber),
-                        onDelete: () => _confirmDeleteSubscriber(subscriber),
-                        onResend: () => _sendInvite(subscriber),
-                        isSendingInvite:
-                            _sendingInviteIds.contains(subscriber.id),
-                      ),
-                    );
-                  },
-                  childCount: subscribers.length,
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 100),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      final subscriber = subscribers[index];
+                      final engagement = dashboard?.engagementFor(subscriber.id);
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: _SubscriberCard(
+                          subscriber: subscriber,
+                          engagement: engagement,
+                          onTap: () => _openSubscriberDetails(subscriber),
+                          onResend: () => _sendInvite(subscriber),
+                          isSendingInvite:
+                              _sendingInviteIds.contains(subscriber.id),
+                        ),
+                      );
+                    },
+                    childCount: subscribers.length,
+                  ),
                 ),
               ),
           ],
         ),
       ),
-    );
-  }
-}
-
-class _IntroCard extends StatelessWidget {
-  const _IntroCard({required this.dashboard, required this.onInvite});
-
-  final SubscriberDashboardData? dashboard;
-  final VoidCallback onInvite;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final total = dashboard?.totalSubscribers ?? 0;
-    final engaged =
-        dashboard?.subscribersEngagedWithin(const Duration(days: 7)) ?? 0;
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        gradient: LinearGradient(
-          colors: [
-            colorScheme.primaryContainer,
-            colorScheme.secondaryContainer.withValues(alpha: 0.8),
-          ],
+      floatingActionButton: ScaleTransition(
+        scale: CurvedAnimation(
+          parent: _fabController,
+          curve: Curves.easeOutBack,
         ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: colorScheme.onPrimary.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Icon(
-                  Icons.mail_outline,
-                  color: colorScheme.primary,
-                  size: 28,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Comparte tus recuerdos en privado',
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        color: colorScheme.onPrimaryContainer,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Envía enlaces mágicos únicos. Tus suscriptores pueden dejar comentarios y corazones con su nombre.',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: colorScheme.onPrimaryContainer
-                            .withValues(alpha: 0.85),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          Wrap(
-            spacing: 16,
-            runSpacing: 12,
-            children: [
-              _IntroStat(
-                label: 'Suscriptores',
-                value: '$total',
-                icon: Icons.people_outline,
-              ),
-              _IntroStat(
-                label: 'Activos esta semana',
-                value: '$engaged',
-                icon: Icons.auto_awesome,
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          FilledButton.tonalIcon(
-            onPressed: onInvite,
-            icon: const Icon(Icons.alternate_email),
-            label: const Text('Invitar a alguien nuevo'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _IntroStat extends StatelessWidget {
-  const _IntroStat({
-    required this.label,
-    required this.value,
-    required this.icon,
-  });
-
-  final String label;
-  final String value;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: colorScheme.surface.withValues(alpha: 0.65),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 20, color: colorScheme.primary),
-          const SizedBox(width: 10),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                value,
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: colorScheme.onSurface,
-                ),
-              ),
-              Text(
-                label,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
-          ),
-        ],
+        child: FloatingActionButton.extended(
+          onPressed: _showAddSubscriberDialog,
+          icon: const Icon(Icons.person_add_alt_1),
+          label: const Text('Agregar'),
+          elevation: 4,
+        ),
       ),
     );
   }
@@ -807,75 +765,53 @@ class _StatsOverview extends StatelessWidget {
 
     final total = dashboard?.totalSubscribers ?? 0;
     final confirmed = dashboard?.confirmedSubscribers ?? 0;
-    final pending = dashboard?.pendingSubscribers ?? 0;
-    final unsubscribed = dashboard?.unsubscribedSubscribers ?? 0;
     final hearts = dashboard?.totalReactions ?? 0;
     final comments = dashboard?.totalComments ?? 0;
 
-    final stats = [
-      _StatTile(
-        icon: Icons.people_alt_outlined,
-        label: 'Total de suscriptores',
-        value: '$total',
-        color: colorScheme.primary,
-      ),
-      _StatTile(
-        icon: Icons.check_circle_outline,
-        label: 'Confirmados',
-        value: '$confirmed',
-        color: Colors.teal,
-      ),
-      _StatTile(
-        icon: Icons.hourglass_bottom,
-        label: 'Pendientes',
-        value: '$pending',
-        color: Colors.orange,
-      ),
-      _StatTile(
-        icon: Icons.no_accounts,
-        label: 'Desuscritos',
-        value: '$unsubscribed',
-        color: colorScheme.error,
-      ),
-      _StatTile(
-        icon: Icons.favorite_border,
-        label: 'Corazones recibidos',
-        value: '$hearts',
-        color: Colors.pink,
-      ),
-      _StatTile(
-        icon: Icons.chat_bubble_outline,
-        label: 'Comentarios',
-        value: '$comments',
-        color: colorScheme.secondary,
-      ),
-    ];
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isWide = constraints.maxWidth > 840;
-        final crossAxisCount = isWide ? 3 : 2;
-        return GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: stats.length,
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: crossAxisCount,
-            childAspectRatio: isWide ? 3.5 : 3,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
+    return Row(
+      children: [
+        Expanded(
+          child: _StatCard(
+            icon: Icons.people_alt_outlined,
+            label: 'Total',
+            value: '$total',
+            color: colorScheme.primary,
           ),
-          itemBuilder: (context, index) {
-            return stats[index];
-          },
-        );
-      },
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _StatCard(
+            icon: Icons.check_circle_outline,
+            label: 'Activos',
+            value: '$confirmed',
+            color: colorScheme.tertiary,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _StatCard(
+            icon: Icons.favorite,
+            label: 'Corazones',
+            value: '$hearts',
+            color: colorScheme.secondary,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _StatCard(
+            icon: Icons.chat_bubble,
+            label: 'Comentarios',
+            value: '$comments',
+            color: colorScheme.tertiary,
+          ),
+        ),
+      ],
     );
   }
 }
 
-class _StatTile extends StatelessWidget {
-  const _StatTile({
+class _StatCard extends StatelessWidget {
+  const _StatCard({
     required this.icon,
     required this.label,
     required this.value,
@@ -890,45 +826,35 @@ class _StatTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Icon(icon, color: color, size: 22),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    value,
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    label,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: color.withValues(alpha: 0.2),
+          width: 1.5,
         ),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: 28),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: theme.textTheme.headlineMedium?.copyWith(
+              fontWeight: FontWeight.w800,
+              color: color,
+            ),
+          ),
+          Text(
+            label,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -952,20 +878,22 @@ class _FilterChips extends StatelessWidget {
 
     Widget buildChip(_SubscriberFilter filter, String label, int count) {
       final isSelected = current == filter;
-      return ChoiceChip(
-        label: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(label),
-            const SizedBox(width: 6),
-            Text('($count)', style: theme.textTheme.bodySmall),
-          ],
-        ),
+      return FilterChip(
+        label: Text('$label ($count)'),
         selected: isSelected,
         onSelected: (_) => onChanged(filter),
-        selectedColor: colorScheme.primary.withValues(alpha: 0.15),
+        backgroundColor: colorScheme.surfaceContainerHighest,
+        selectedColor: colorScheme.primaryContainer,
+        checkmarkColor: colorScheme.primary,
         labelStyle: theme.textTheme.bodyMedium?.copyWith(
-          color: isSelected ? colorScheme.primary : null,
+          color: isSelected ? colorScheme.primary : colorScheme.onSurface,
+          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: isSelected
+              ? BorderSide(color: colorScheme.primary, width: 1.5)
+              : BorderSide.none,
         ),
       );
     }
@@ -995,11 +923,13 @@ class _RecentActivity extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final comments = dashboard.recentComments;
-    final reactions = dashboard.recentReactions;
+    final colorScheme = theme.colorScheme;
+    final comments = dashboard.recentComments.take(3).toList();
+    final reactions = dashboard.recentReactions.take(4).toList();
 
     return Card(
       elevation: 0,
+      color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -1008,8 +938,16 @@ class _RecentActivity extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(Icons.auto_awesome, color: theme.colorScheme.primary),
-                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: colorScheme.primary.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(Icons.auto_awesome,
+                      color: colorScheme.primary, size: 20),
+                ),
+                const SizedBox(width: 12),
                 Text(
                   'Actividad reciente',
                   style: theme.textTheme.titleMedium?.copyWith(
@@ -1018,35 +956,48 @@ class _RecentActivity extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 16),
-            if (comments.isNotEmpty) ...[
-              Text('Comentarios', style: theme.textTheme.titleSmall),
-              const SizedBox(height: 8),
-              ...comments.take(4).map((comment) => _ActivityTile(
-                    title: comment.subscriberName ?? 'Suscriptor',
-                    subtitle: _truncate(comment.content),
-                    trailing: _formatRelativeDate(comment.createdAt),
-                    icon: Icons.chat_bubble_outline,
-                    iconColor: theme.colorScheme.secondary,
-                  )),
-              const SizedBox(height: 16),
-            ],
-            if (reactions.isNotEmpty) ...[
-              Text('Corazones enviados', style: theme.textTheme.titleSmall),
-              const SizedBox(height: 8),
-              ...reactions.take(6).map((reaction) => _ActivityTile(
-                    title: reaction.subscriberName ?? 'Suscriptor',
-                    subtitle: reaction.storyTitle,
-                    trailing: _formatRelativeDate(reaction.createdAt),
-                    icon: Icons.favorite,
-                    iconColor: Colors.pinkAccent,
-                  )),
-            ],
-            if (comments.isEmpty && reactions.isEmpty)
+            if (comments.isEmpty && reactions.isEmpty) ...[
+              const SizedBox(height: 12),
               Text(
-                'Aún no hay actividad. Cuando envíes tus historias, verás aquí los comentarios y reacciones.',
-                style: theme.textTheme.bodyMedium,
+                'Cuando tus suscriptores interactúen con tus historias, verás aquí su actividad.',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
               ),
+            ] else ...[
+              if (comments.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                ...comments.map((comment) => Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: _ActivityTile(
+                        title: comment.subscriberName ?? 'Suscriptor',
+                        subtitle: _truncate(comment.content, maxLength: 80),
+                        trailing: _formatRelativeDate(comment.createdAt),
+                        icon: Icons.chat_bubble,
+                        iconColor: colorScheme.secondary,
+                      ),
+                    )),
+              ],
+              if (reactions.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: reactions
+                      .map((reaction) => Chip(
+                            avatar: const Icon(Icons.favorite, size: 16),
+                            label: Text(
+                              reaction.subscriberName ?? 'Suscriptor',
+                              style: theme.textTheme.bodySmall,
+                            ),
+                            backgroundColor:
+                                colorScheme.secondaryContainer.withValues(alpha: 0.5),
+                            side: BorderSide.none,
+                          ))
+                      .toList(),
+                ),
+              ],
+            ],
           ],
         ),
       ),
@@ -1072,47 +1023,45 @@ class _ActivityTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: iconColor.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Icon(icon, size: 18, color: iconColor),
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: iconColor.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(10),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: theme.textTheme.bodyLarge?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
+          child: Icon(icon, size: 16, color: iconColor),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: theme.textTheme.bodyMedium,
+              ),
+              Text(
+                subtitle,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
-              ],
-            ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
           ),
-          const SizedBox(width: 12),
-          Text(
-            trailing,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
+        ),
+        Text(
+          trailing,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -1121,16 +1070,14 @@ class _SubscriberCard extends StatelessWidget {
   const _SubscriberCard({
     required this.subscriber,
     required this.engagement,
-    required this.onView,
-    required this.onDelete,
+    required this.onTap,
     required this.onResend,
     required this.isSendingInvite,
   });
 
   final Subscriber subscriber;
   final SubscriberEngagement? engagement;
-  final VoidCallback onView;
-  final VoidCallback onDelete;
+  final VoidCallback onTap;
   final Future<void> Function() onResend;
   final bool isSendingInvite;
 
@@ -1149,235 +1096,139 @@ class _SubscriberCard extends StatelessWidget {
 
     final hearts = engagement?.totalReactions ?? 0;
     final comments = engagement?.totalComments ?? 0;
-    final lastInteraction =
-        engagement?.lastInteractionAt ?? subscriber.lastAccessAt;
-
     final status = subscriber.status;
-    final (Color, String) statusDisplay = switch (status) {
-      'confirmed' => (colorScheme.primary, 'Confirmado'),
-      'unsubscribed' => (colorScheme.error, 'Desuscrito'),
-      _ => (Colors.orange, 'Pendiente'),
+
+    final (Color statusColor, IconData statusIcon, String statusLabel) =
+        switch (status) {
+      'confirmed' => (colorScheme.primary, Icons.check_circle, 'Activo'),
+      'unsubscribed' => (colorScheme.error, Icons.block, 'Desuscrito'),
+      _ => (colorScheme.tertiary, Icons.schedule, 'Pendiente'),
     };
 
     return Card(
       elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.5),
+          width: 1,
+        ),
+      ),
       child: InkWell(
-        onTap: onView,
+        onTap: onTap,
         borderRadius: BorderRadius.circular(20),
         child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          padding: const EdgeInsets.all(16),
+          child: Row(
             children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  CircleAvatar(
-                    radius: 28,
-                    backgroundColor:
-                        colorScheme.primary.withValues(alpha: 0.12),
-                    child: Text(
-                      initials.isEmpty ? 'S' : initials,
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        color: colorScheme.primary,
-                        fontWeight: FontWeight.bold,
-                      ),
+              Hero(
+                tag: 'subscriber-${subscriber.id}',
+                child: CircleAvatar(
+                  radius: 28,
+                  backgroundColor: statusColor.withValues(alpha: 0.15),
+                  child: Text(
+                    initials.isEmpty ? '?' : initials,
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      color: statusColor,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
                       children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                subscriber.name,
-                                style: theme.textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
+                        Expanded(
+                          child: Text(
+                            subscriber.name,
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
                             ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(16),
-                                color: statusDisplay.$1.withValues(alpha: 0.12),
-                              ),
-                              child: Text(
-                                statusDisplay.$2,
-                                style: theme.textTheme.labelMedium?.copyWith(
-                                  color: statusDisplay.$1,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: statusColor.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(statusIcon, size: 14, color: statusColor),
+                              const SizedBox(width: 4),
+                              Text(
+                                statusLabel,
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: statusColor,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
-                            ),
-                            const SizedBox(width: 4),
-                            IconButton(
-                              tooltip: 'Reenviar enlace de suscripción',
-                              onPressed:
-                                  isSendingInvite ? null : () => onResend(),
-                              icon: isSendingInvite
-                                  ? const SizedBox(
-                                      width: 18,
-                                      height: 18,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                  : const Icon(
-                                      Icons.mark_email_read_outlined,
-                                    ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          subscriber.email,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
+                            ],
                           ),
                         ),
-                        if (subscriber.relationship?.isNotEmpty == true)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 4),
-                            child: Text(
-                              subscriber.relationship!,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                          ),
                       ],
                     ),
-                  ),
-                  PopupMenuButton<String>(
-                    onSelected: (value) {
-                      if (value == 'view') {
-                        onView();
-                      } else if (value == 'resend') {
-                        onResend();
-                      } else if (value == 'delete') {
-                        onDelete();
-                      }
-                    },
-                    itemBuilder: (context) => [
-                      const PopupMenuItem(
-                        value: 'view',
-                        child: Row(
-                          children: [
-                            Icon(Icons.visibility_outlined),
-                            SizedBox(width: 8),
-                            Text('Ver detalles'),
-                          ],
-                        ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subscriber.email,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
                       ),
-                      const PopupMenuItem(
-                        value: 'resend',
-                        child: Row(
-                          children: [
-                            Icon(Icons.mail_outline),
-                            SizedBox(width: 8),
-                            Text('Reenviar enlace'),
-                          ],
-                        ),
-                      ),
-                      const PopupMenuItem(
-                        value: 'delete',
-                        child: Row(
-                          children: [
-                            Icon(Icons.delete_outline, color: Colors.red),
-                            SizedBox(width: 8),
-                            Text('Eliminar',
-                                style: TextStyle(color: Colors.red)),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Wrap(
-                spacing: 16,
-                runSpacing: 12,
-                children: [
-                  _MetricChip(
-                    icon: Icons.favorite_border,
-                    label: 'Corazones',
-                    value: hearts,
-                    color: Colors.pink,
-                  ),
-                  _MetricChip(
-                    icon: Icons.chat_bubble_outline,
-                    label: 'Comentarios',
-                    value: comments,
-                    color: theme.colorScheme.secondary,
-                  ),
-                  if (lastInteraction != null)
-                    _MetricChip(
-                      icon: Icons.schedule,
-                      label: 'Última actividad',
-                      valueLabel: _formatRelativeDate(lastInteraction),
-                      color: theme.colorScheme.outline,
-                    )
-                  else
-                    _MetricChip(
-                      icon: Icons.schedule,
-                      label: 'Sin actividad aún',
-                      valueLabel: '—',
-                      color: theme.colorScheme.outline,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                children: [
-                  OutlinedButton.icon(
-                    onPressed: isSendingInvite ? null : onResend,
-                    icon: isSendingInvite
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.email_outlined),
-                    label: Text(isSendingInvite
-                        ? 'Enviando enlace…'
-                        : 'Reenviar enlace mágico'),
-                  ),
-                  FilledButton.tonalIcon(
-                    onPressed: onView,
-                    icon: const Icon(Icons.visibility_outlined),
-                    label: const Text('Ver detalles'),
-                  ),
-                  FilledButton.tonalIcon(
-                    onPressed: onView,
-                    icon: const Icon(Icons.visibility_outlined),
-                    label: const Text('Ver detalles'),
-                  ),
-                  if (lastInteraction != null)
-                    _MetricChip(
-                      icon: Icons.schedule,
-                      label: 'Última actividad',
-                      valueLabel: _formatRelativeDate(lastInteraction),
-                      color: theme.colorScheme.outline,
-                    )
-                  else
-                    _MetricChip(
-                      icon: Icons.schedule,
-                      label: 'Sin actividad aún',
-                      valueLabel: '—',
-                      color: theme.colorScheme.outline,
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        if (hearts > 0)
+                          _MiniMetric(
+                            icon: Icons.favorite,
+                            value: hearts,
+                            color: colorScheme.secondary,
+                          ),
+                        if (hearts > 0 && comments > 0) const SizedBox(width: 8),
+                        if (comments > 0)
+                          _MiniMetric(
+                            icon: Icons.chat_bubble,
+                            value: comments,
+                            color: colorScheme.tertiary,
+                          ),
+                        const Spacer(),
+                        IconButton(
+                          tooltip: 'Reenviar enlace',
+                          onPressed: isSendingInvite ? null : onResend,
+                          icon: isSendingInvite
+                              ? SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: colorScheme.primary,
+                                  ),
+                                )
+                              : Icon(Icons.send, color: colorScheme.primary),
+                          style: IconButton.styleFrom(
+                            backgroundColor:
+                                colorScheme.primaryContainer.withValues(alpha: 0.5),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                ],
+                  ],
+                ),
               ),
             ],
           ),
@@ -1387,52 +1238,37 @@ class _SubscriberCard extends StatelessWidget {
   }
 }
 
-class _MetricChip extends StatelessWidget {
-  const _MetricChip({
+class _MiniMetric extends StatelessWidget {
+  const _MiniMetric({
     required this.icon,
-    required this.label,
-    this.value,
-    this.valueLabel,
+    required this.value,
     required this.color,
-  }) : assert(value != null || valueLabel != null);
+  });
 
   final IconData icon;
-  final String label;
-  final int? value;
-  final String? valueLabel;
+  final int value;
   final Color color;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 18, color: color),
-          const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                valueLabel ?? '$value',
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: color,
-                ),
-              ),
-              Text(
-                label,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: color,
-                ),
-              ),
-            ],
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 4),
+          Text(
+            '$value',
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ],
       ),
@@ -1448,28 +1284,51 @@ class _EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(Icons.mail_outline, size: 64, color: theme.colorScheme.outline),
-        const SizedBox(height: 16),
-        Text(
-          'Todavía no has agregado suscriptores',
-          style: theme.textTheme.titleMedium,
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Invítalos para que reciban tus historias con un enlace único y puedan dejarte mensajes.',
-          style: theme.textTheme.bodyMedium,
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 20),
-        FilledButton.icon(
-          onPressed: onAdd,
-          icon: const Icon(Icons.person_add_alt),
-          label: const Text('Agregar suscriptor'),
-        ),
-      ],
+    final colorScheme = theme.colorScheme;
+
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: colorScheme.primaryContainer.withValues(alpha: 0.3),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.people_outline,
+              size: 64,
+              color: colorScheme.primary,
+            ),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'Tu comunidad empieza aquí',
+            style: theme.textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Invita a personas especiales para compartir\ntus historias de forma privada y segura.',
+            style: theme.textTheme.bodyLarge?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 32),
+          FilledButton.icon(
+            onPressed: onAdd,
+            icon: const Icon(Icons.person_add_alt_1),
+            label: const Text('Agregar primer suscriptor'),
+            style: FilledButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1487,48 +1346,46 @@ class _NoResultsPlaceholder extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(Icons.search_off_rounded,
-            size: 60, color: colorScheme.outline.withValues(alpha: 0.9)),
-        const SizedBox(height: 16),
-        Text(
-          'No encontramos coincidencias',
-          style: theme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w600,
+
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.search_off_rounded,
+              size: 64, color: colorScheme.outline),
+          const SizedBox(height: 16),
+          Text(
+            'No encontramos resultados',
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
           ),
-        ),
-        const SizedBox(height: 8),
-        SizedBox(
-          width: 420,
-          child: Text(
-            'Ajusta la búsqueda o cambia los filtros para ver a tus suscriptores. También puedes agregar a alguien nuevo al instante.',
+          const SizedBox(height: 8),
+          Text(
+            'Prueba con otros términos o ajusta los filtros',
             style: theme.textTheme.bodyMedium?.copyWith(
               color: colorScheme.onSurfaceVariant,
             ),
             textAlign: TextAlign.center,
           ),
-        ),
-        const SizedBox(height: 20),
-        Wrap(
-          alignment: WrapAlignment.center,
-          spacing: 12,
-          runSpacing: 12,
-          children: [
-            FilledButton.tonalIcon(
-              onPressed: onClearFilters,
-              icon: const Icon(Icons.filter_alt_off_rounded),
-              label: const Text('Restablecer filtros'),
-            ),
-            OutlinedButton.icon(
-              onPressed: onAddSubscriber,
-              icon: const Icon(Icons.person_add_alt),
-              label: const Text('Agregar suscriptor'),
-            ),
-          ],
-        ),
-      ],
+          const SizedBox(height: 24),
+          Wrap(
+            alignment: WrapAlignment.center,
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              FilledButton.tonal(
+                onPressed: onClearFilters,
+                child: const Text('Restablecer filtros'),
+              ),
+              OutlinedButton(
+                onPressed: onAddSubscriber,
+                child: const Text('Agregar nuevo'),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1552,16 +1409,25 @@ class _SubscriberDetailSheet extends StatefulWidget {
   State<_SubscriberDetailSheet> createState() => _SubscriberDetailSheetState();
 }
 
-class _SubscriberDetailSheetState extends State<_SubscriberDetailSheet> {
+class _SubscriberDetailSheetState extends State<_SubscriberDetailSheet>
+    with SingleTickerProviderStateMixin {
   late Future<_SubscriberDetailData> _detailFuture;
   bool _localSendingInvite = false;
   late Subscriber _subscriber;
+  late TabController _tabController;
 
   @override
   void initState() {
     super.initState();
     _subscriber = widget.subscriber;
     _detailFuture = _loadDetail();
+    _tabController = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   Future<_SubscriberDetailData> _loadDetail() async {
@@ -1579,324 +1445,495 @@ class _SubscriberDetailSheetState extends State<_SubscriberDetailSheet> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     final subscriber = _subscriber;
     final engagement = widget.engagement;
     final sendingInvite = _localSendingInvite || widget.isSendingInvite;
 
+    final initials = subscriber.name
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((segment) => segment.isNotEmpty)
+        .take(2)
+        .map((segment) => segment.substring(0, 1))
+        .join()
+        .toUpperCase();
+
+    final status = subscriber.status;
+    final (Color statusColor, IconData statusIcon, String statusLabel) =
+        switch (status) {
+      'confirmed' => (colorScheme.primary, Icons.check_circle, 'Activo'),
+      'unsubscribed' => (colorScheme.error, Icons.block, 'Desuscrito'),
+      _ => (colorScheme.tertiary, Icons.schedule, 'Pendiente'),
+    };
+
     return DraggableScrollableSheet(
       expand: false,
-      initialChildSize: 0.88,
-      minChildSize: 0.55,
+      initialChildSize: 0.85,
+      minChildSize: 0.5,
       maxChildSize: 0.95,
       builder: (context, controller) {
         return Container(
           decoration: BoxDecoration(
-            color: theme.colorScheme.surface,
+            color: colorScheme.surface,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
           ),
-          child: SafeArea(
-            top: false,
-            child: FutureBuilder<_SubscriberDetailData>(
-              future: _detailFuture,
-              builder: (context, snapshot) {
-                final comments = snapshot.data?.comments ?? const [];
-                final reactions = snapshot.data?.reactions ?? const [];
-
-                return CustomScrollView(
-                  controller: controller,
-                  slivers: [
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        subscriber.name,
-                                        style: theme.textTheme.headlineSmall
-                                            ?.copyWith(
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        subscriber.email,
-                                        style: theme.textTheme.bodyMedium,
-                                      ),
-                                      if (subscriber.relationship?.isNotEmpty ==
-                                          true)
-                                        Padding(
-                                          padding:
-                                              const EdgeInsets.only(top: 4),
-                                          child: Text(
-                                            subscriber.relationship!,
-                                            style: theme.textTheme.bodySmall,
-                                          ),
-                                        ),
-                                    ],
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                child: Column(
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: colorScheme.onSurfaceVariant.withValues(alpha: 0.3),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      children: [
+                        Hero(
+                          tag: 'subscriber-${subscriber.id}',
+                          child: CircleAvatar(
+                            radius: 32,
+                            backgroundColor: statusColor.withValues(alpha: 0.15),
+                            child: Text(
+                              initials.isEmpty ? '?' : initials,
+                              style: theme.textTheme.headlineSmall?.copyWith(
+                                color: statusColor,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                subscriber.name,
+                                style: theme.textTheme.headlineSmall?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                subscriber.email,
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                              if (subscriber.relationship?.isNotEmpty == true) ...[
+                                const SizedBox(height: 4),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: colorScheme.secondaryContainer
+                                        .withValues(alpha: 0.5),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    subscriber.relationship!,
+                                    style: theme.textTheme.labelMedium?.copyWith(
+                                      color: colorScheme.onSecondaryContainer,
+                                    ),
                                   ),
                                 ),
-                                IconButton(
-                                  tooltip: 'Eliminar suscriptor',
-                                  onPressed: widget.onRemove,
-                                  icon: const Icon(Icons.delete_outline),
-                                ),
                               ],
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: widget.onRemove,
+                          icon: const Icon(Icons.delete_outline),
+                          style: IconButton.styleFrom(
+                            backgroundColor: colorScheme.errorContainer
+                                .withValues(alpha: 0.5),
+                            foregroundColor: colorScheme.error,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: statusColor.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(statusIcon, size: 20, color: statusColor),
+                          const SizedBox(width: 8),
+                          Text(
+                            statusLabel,
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              color: statusColor,
+                              fontWeight: FontWeight.w600,
                             ),
-                            const SizedBox(height: 16),
-                            Wrap(
-                              spacing: 14,
-                              runSpacing: 12,
-                              children: [
-                                _MetricChip(
-                                  icon: Icons.favorite,
-                                  label: 'Corazones',
-                                  value: engagement?.totalReactions ?? 0,
-                                  color: Colors.pink,
-                                ),
-                                _MetricChip(
-                                  icon: Icons.chat_bubble_outline,
-                                  label: 'Comentarios',
-                                  value: engagement?.totalComments ?? 0,
-                                  color: theme.colorScheme.secondary,
-                                ),
-                                _MetricChip(
-                                  icon: Icons.link,
-                                  label: 'Enlace generado',
-                                  valueLabel: _formatLongDate(
-                                    subscriber.magicKeyCreatedAt ??
-                                        subscriber.createdAt,
-                                  ),
-                                  color: theme.colorScheme.outline,
-                                ),
-                                _MetricChip(
-                                  icon: Icons.mark_email_read_outlined,
-                                  label: 'Último envío',
-                                  valueLabel:
-                                      subscriber.magicLinkLastSentAt != null
-                                          ? _formatRelativeDate(
-                                              subscriber.magicLinkLastSentAt!,
-                                            )
-                                          : 'Nunca enviado',
-                                  color: theme.colorScheme.primary,
-                                ),
-                                _MetricChip(
-                                  icon: Icons.schedule,
-                                  label: 'Último acceso',
-                                  valueLabel: subscriber.lastAccessAt != null
-                                      ? _formatRelativeDate(
-                                          subscriber.lastAccessAt!)
-                                      : 'Sin registro',
-                                  color: theme.colorScheme.outline,
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 20),
-                            Wrap(
-                              spacing: 12,
-                              runSpacing: 12,
-                              children: [
-                                OutlinedButton.icon(
-                                  onPressed: sendingInvite
-                                      ? null
-                                      : () async {
-                                          setState(
-                                              () => _localSendingInvite = true);
-                                          try {
-                                            await widget.onSendInvite();
-                                            try {
-                                              final refreshed =
-                                                  await SubscriberService
-                                                      .getSubscriberById(
-                                                subscriber.id,
-                                              );
-                                              if (mounted) {
-                                                setState(() {
-                                                  _subscriber = refreshed;
-                                                  _detailFuture = _loadDetail();
-                                                });
-                                              }
-                                            } catch (_) {
-                                              // Si la recarga falla, ignoramos; el envío ya fue gestionado.
-                                            }
-                                          } finally {
-                                            if (mounted) {
-                                              setState(() =>
-                                                  _localSendingInvite = false);
-                                            }
-                                          }
-                                        },
-                                  icon: sendingInvite
-                                      ? const SizedBox(
-                                          width: 16,
-                                          height: 16,
-                                          child: CircularProgressIndicator(
-                                              strokeWidth: 2),
-                                        )
-                                      : const Icon(Icons.email_outlined),
-                                  label: Text(
-                                    sendingInvite
-                                        ? 'Enviando enlace…'
-                                        : 'Reenviar enlace mágico',
-                                  ),
-                                ),
-                                _MetricChip(
-                                  icon: Icons.schedule,
-                                  label: 'Último acceso',
-                                  valueLabel: subscriber.lastAccessAt != null
-                                      ? _formatRelativeDate(
-                                          subscriber.lastAccessAt!)
-                                      : 'Sin registro',
-                                  color: theme.colorScheme.outline,
-                                ),
-                              ],
-                            ),
-                          ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _DetailMetric(
+                            icon: Icons.favorite,
+                            label: 'Corazones',
+                            value: '${engagement?.totalReactions ?? 0}',
+                            color: colorScheme.secondary,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _DetailMetric(
+                            icon: Icons.chat_bubble,
+                            label: 'Comentarios',
+                            value: '${engagement?.totalComments ?? 0}',
+                            color: colorScheme.tertiary,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: sendingInvite
+                            ? null
+                            : () async {
+                                setState(() => _localSendingInvite = true);
+                                try {
+                                  await widget.onSendInvite();
+                                  if (mounted) {
+                                    final refreshed = await SubscriberService
+                                        .getSubscriberById(subscriber.id);
+                                    setState(() {
+                                      _subscriber = refreshed;
+                                      _detailFuture = _loadDetail();
+                                    });
+                                  }
+                                } finally {
+                                  if (mounted) {
+                                    setState(() => _localSendingInvite = false);
+                                  }
+                                }
+                              },
+                        icon: sendingInvite
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.send),
+                        label: Text(
+                          sendingInvite
+                              ? 'Enviando…'
+                              : 'Reenviar enlace mágico',
+                        ),
+                        style: FilledButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
                         ),
                       ),
                     ),
-                    if (snapshot.connectionState == ConnectionState.waiting)
-                      const SliverFillRemaining(
-                        child: Center(child: CircularProgressIndicator()),
-                      )
-                    else ...[
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
-                          child: Text(
-                            'Comentarios',
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ),
-                      if (comments.isEmpty)
-                        SliverToBoxAdapter(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 20, vertical: 12),
-                            child: Text(
-                              'Todavía no ha dejado comentarios.',
-                              style: theme.textTheme.bodyMedium,
-                            ),
-                          ),
-                        )
-                      else
-                        SliverList(
-                          delegate: SliverChildBuilderDelegate(
-                            (context, index) {
-                              final comment = comments[index];
-                              return Padding(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 12, vertical: 4),
-                                child: _SubscriberFeedbackTile(
-                                  icon: Icons.chat_bubble_outline,
-                                  badgeColor: theme.colorScheme.secondary,
-                                  body: [
-                                    Text(
-                                      comment.subscriberName ?? subscriber.name,
-                                      style:
-                                          theme.textTheme.titleSmall?.copyWith(
-                                        fontWeight: FontWeight.w600,
-                                        color: theme.colorScheme.onSurface,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      comment.content,
-                                      style: theme.textTheme.bodyMedium,
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      '${comment.storyTitle} • ${_formatRelativeDate(comment.createdAt)}',
-                                      style:
-                                          theme.textTheme.bodySmall?.copyWith(
-                                        color:
-                                            theme.colorScheme.onSurfaceVariant,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                            childCount: comments.length,
-                          ),
-                        ),
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
-                          child: Text(
-                            'Reacciones enviadas',
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ),
-                      if (reactions.isEmpty)
-                        SliverToBoxAdapter(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 20, vertical: 12),
-                            child: Text(
-                              'Aún no ha reaccionado con corazones.',
-                              style: theme.textTheme.bodyMedium,
-                            ),
-                          ),
-                        )
-                      else
-                        SliverList(
-                          delegate: SliverChildBuilderDelegate(
-                            (context, index) {
-                              final reaction = reactions[index];
-                              return Padding(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 12, vertical: 4),
-                                child: _SubscriberFeedbackTile(
-                                  icon: Icons.favorite,
-                                  badgeColor: Colors.pink,
-                                  body: [
-                                    Text(
-                                      reaction.storyTitle,
-                                      style:
-                                          theme.textTheme.titleSmall?.copyWith(
-                                        fontWeight: FontWeight.w600,
-                                        color: theme.colorScheme.onSurface,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      _formatRelativeDate(reaction.createdAt),
-                                      style:
-                                          theme.textTheme.bodySmall?.copyWith(
-                                        color:
-                                            theme.colorScheme.onSurfaceVariant,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                            childCount: reactions.length,
-                          ),
-                        ),
-                    ],
-                    const SliverToBoxAdapter(child: SizedBox(height: 24)),
+                    const SizedBox(height: 20),
+                    TabBar(
+                      controller: _tabController,
+                      tabs: const [
+                        Tab(text: 'Comentarios'),
+                        Tab(text: 'Reacciones'),
+                      ],
+                    ),
                   ],
-                );
-              },
-            ),
+                ),
+              ),
+              Expanded(
+                child: FutureBuilder<_SubscriberDetailData>(
+                  future: _detailFuture,
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+
+                    final comments = snapshot.data?.comments ?? [];
+                    final reactions = snapshot.data?.reactions ?? [];
+
+                    return TabBarView(
+                      controller: _tabController,
+                      children: [
+                        _CommentsTab(
+                          comments: comments,
+                          subscriber: subscriber,
+                          controller: controller,
+                        ),
+                        _ReactionsTab(
+                          reactions: reactions,
+                          subscriber: subscriber,
+                          controller: controller,
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+            ],
           ),
         );
       },
+    );
+  }
+}
+
+class _DetailMetric extends StatelessWidget {
+  const _DetailMetric({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: color.withValues(alpha: 0.2),
+          width: 1.5,
+        ),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: 24),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: theme.textTheme.headlineMedium?.copyWith(
+              fontWeight: FontWeight.w800,
+              color: color,
+            ),
+          ),
+          Text(
+            label,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CommentsTab extends StatelessWidget {
+  const _CommentsTab({
+    required this.comments,
+    required this.subscriber,
+    required this.controller,
+  });
+
+  final List<SubscriberCommentRecord> comments;
+  final Subscriber subscriber;
+  final ScrollController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    if (comments.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.chat_bubble_outline,
+                size: 64,
+                color: theme.colorScheme.outline,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Sin comentarios aún',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return ListView.separated(
+      controller: controller,
+      padding: const EdgeInsets.all(20),
+      itemCount: comments.length,
+      separatorBuilder: (context, index) => const SizedBox(height: 12),
+      itemBuilder: (context, index) {
+        final comment = comments[index];
+        return _FeedbackCard(
+          icon: Icons.chat_bubble,
+          color: theme.colorScheme.secondary,
+          title: comment.subscriberName ?? subscriber.name,
+          content: comment.content,
+          metadata: '${comment.storyTitle} • ${_formatRelativeDate(comment.createdAt)}',
+        );
+      },
+    );
+  }
+}
+
+class _ReactionsTab extends StatelessWidget {
+  const _ReactionsTab({
+    required this.reactions,
+    required this.subscriber,
+    required this.controller,
+  });
+
+  final List<SubscriberReactionRecord> reactions;
+  final Subscriber subscriber;
+  final ScrollController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    if (reactions.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.favorite_outline,
+                size: 64,
+                color: theme.colorScheme.outline,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Sin reacciones aún',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return ListView.separated(
+      controller: controller,
+      padding: const EdgeInsets.all(20),
+      itemCount: reactions.length,
+      separatorBuilder: (context, index) => const SizedBox(height: 12),
+      itemBuilder: (context, index) {
+        final reaction = reactions[index];
+        return _FeedbackCard(
+          icon: Icons.favorite,
+          color: theme.colorScheme.secondary,
+          title: reaction.storyTitle,
+          content: null,
+          metadata: _formatRelativeDate(reaction.createdAt),
+        );
+      },
+    );
+  }
+}
+
+class _FeedbackCard extends StatelessWidget {
+  const _FeedbackCard({
+    required this.icon,
+    required this.color,
+    required this.title,
+    this.content,
+    required this.metadata,
+  });
+
+  final IconData icon;
+  final Color color;
+  final String title;
+  final String? content;
+  final String metadata;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.5),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, size: 20, color: color),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                if (content != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    content!,
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                ],
+                const SizedBox(height: 8),
+                Text(
+                  metadata,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1911,57 +1948,6 @@ class _SubscriberDetailData {
   final List<SubscriberReactionRecord> reactions;
 }
 
-class _SubscriberFeedbackTile extends StatelessWidget {
-  const _SubscriberFeedbackTile({
-    required this.icon,
-    required this.badgeColor,
-    required this.body,
-  });
-
-  final IconData icon;
-  final Color badgeColor;
-  final List<Widget> body;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final backgroundColor =
-        theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.35);
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            DecoratedBox(
-              decoration: BoxDecoration(
-                color: badgeColor.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(10),
-                child: Icon(icon, size: 20, color: badgeColor),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: body,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 String _truncate(String text, {int maxLength = 140}) {
   if (text.length <= maxLength) return text;
   return '${text.substring(0, maxLength)}…';
@@ -1970,10 +1956,10 @@ String _truncate(String text, {int maxLength = 140}) {
 String _formatRelativeDate(DateTime date) {
   final now = DateTime.now();
   final diff = now.difference(date);
-  if (diff.inMinutes < 1) return 'Hace instantes';
-  if (diff.inMinutes < 60) return 'Hace ${diff.inMinutes} min';
-  if (diff.inHours < 24) return 'Hace ${diff.inHours} h';
-  if (diff.inDays < 7) return 'Hace ${diff.inDays} días';
+  if (diff.inMinutes < 1) return 'Ahora';
+  if (diff.inMinutes < 60) return 'Hace ${diff.inMinutes}m';
+  if (diff.inHours < 24) return 'Hace ${diff.inHours}h';
+  if (diff.inDays < 7) return 'Hace ${diff.inDays}d';
   return _formatLongDate(date);
 }
 
@@ -1992,5 +1978,5 @@ String _formatLongDate(DateTime date) {
     'nov',
     'dic',
   ];
-  return '${date.day.toString().padLeft(2, '0')} ${months[date.month - 1]} ${date.year}';
+  return '${date.day} ${months[date.month - 1]} ${date.year}';
 }

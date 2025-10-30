@@ -60,6 +60,7 @@ export const publicAccessService = {
         status: (data.subscriber?.status === 'unsubscribed' ? 'revoked' : 'active') as 'active' | 'revoked',
         supabaseUrl: data.supabase?.url,
         supabaseAnonKey: data.supabase?.anonKey,
+        isAuthor: data.isAuthor || false,
       };
 
       return accessRecord;

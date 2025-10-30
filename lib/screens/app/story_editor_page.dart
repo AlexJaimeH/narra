@@ -9833,146 +9833,157 @@ class PhotoCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(26),
         color: colorScheme.surfaceContainerHigh.withValues(alpha: 0.55),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ClipRRect(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
-            child: SizedBox(
-              height: 200,
-              width: double.infinity,
-              child: _buildImageWidget(context),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Image on the left side
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: SizedBox(
+                width: 120,
+                height: 120,
+                child: _buildImageWidget(context),
+              ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(18, 18, 18, 12),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: colorScheme.primary.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: Text(
-                    '#${index + 1}',
-                    style: theme.textTheme.labelLarge?.copyWith(
-                      color: colorScheme.primary,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
+            const SizedBox(width: 16),
+            // Content on the right side
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        photo['fileName'] ?? 'Foto ${index + 1}',
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w700,
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: colorScheme.primary.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        child: Text(
+                          '#${index + 1}',
+                          style: theme.textTheme.labelLarge?.copyWith(
+                            color: colorScheme.primary,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
-                      const SizedBox(height: 6),
-                      Text(
-                        photo['caption']?.isNotEmpty == true
-                            ? photo['caption']
-                            : 'Sin descripción',
-                        style: theme.textTheme.bodyMedium,
-                      ),
-                      const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          Icon(
-                            photo['uploaded']
-                                ? Icons.cloud_done
-                                : Icons.cloud_upload,
-                            size: 16,
-                            color: photo['uploaded']
-                                ? Colors.green
-                                : colorScheme.primary,
+                      const Spacer(),
+                      PopupMenuButton<String>(
+                        onSelected: (value) {
+                          if (value == 'edit') {
+                            onEdit();
+                          } else if (value == 'delete') {
+                            onDelete();
+                          } else if (value == 'insert') {
+                            onInsertIntoText();
+                          }
+                        },
+                        itemBuilder: (context) => [
+                          const PopupMenuItem(
+                            value: 'insert',
+                            child: Row(
+                              children: [
+                                Icon(Icons.add_to_photos),
+                                SizedBox(width: 8),
+                                Text('Colocar foto'),
+                              ],
+                            ),
                           ),
-                          const SizedBox(width: 6),
-                          Text(
-                            photo['uploaded']
-                                ? 'Subida al servidor'
-                                : 'Pendiente de subir',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: photo['uploaded']
-                                  ? Colors.green
-                                  : colorScheme.primary,
-                              fontStyle: FontStyle.italic,
+                          const PopupMenuItem(
+                            value: 'edit',
+                            child: Row(
+                              children: [
+                                Icon(Icons.edit),
+                                SizedBox(width: 8),
+                                Text('Editar'),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: 'delete',
+                            child: Row(
+                              children: [
+                                Icon(Icons.delete, color: Colors.red),
+                                SizedBox(width: 8),
+                                Text('Eliminar',
+                                    style: TextStyle(color: Colors.red)),
+                              ],
                             ),
                           ),
                         ],
                       ),
                     ],
                   ),
-                ),
-                PopupMenuButton<String>(
-                  onSelected: (value) {
-                    if (value == 'edit') {
-                      onEdit();
-                    } else if (value == 'delete') {
-                      onDelete();
-                    } else if (value == 'insert') {
-                      onInsertIntoText();
-                    }
-                  },
-                  itemBuilder: (context) => [
-                    const PopupMenuItem(
-                      value: 'insert',
-                      child: Row(
-                        children: [
-                          Icon(Icons.add_to_photos),
-                          SizedBox(width: 8),
-                          Text('Colocar foto'),
-                        ],
+                  const SizedBox(height: 8),
+                  Text(
+                    photo['fileName'] ?? 'Foto ${index + 1}',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    photo['caption']?.isNotEmpty == true
+                        ? photo['caption']
+                        : 'Sin descripción',
+                    style: theme.textTheme.bodyMedium,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Icon(
+                        photo['uploaded']
+                            ? Icons.cloud_done
+                            : Icons.cloud_upload,
+                        size: 16,
+                        color: photo['uploaded']
+                            ? Colors.green
+                            : colorScheme.primary,
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          photo['uploaded']
+                              ? 'Subida al servidor'
+                              : 'Pendiente de subir',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: photo['uploaded']
+                                ? Colors.green
+                                : colorScheme.primary,
+                            fontStyle: FontStyle.italic,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: onInsertIntoText,
+                      icon: const Icon(Icons.add_to_photos, size: 18),
+                      label: const Text('Colocar foto'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        shape: const StadiumBorder(),
                       ),
                     ),
-                    const PopupMenuItem(
-                      value: 'edit',
-                      child: Row(
-                        children: [
-                          Icon(Icons.edit),
-                          SizedBox(width: 8),
-                          Text('Editar'),
-                        ],
-                      ),
-                    ),
-                    const PopupMenuItem(
-                      value: 'delete',
-                      child: Row(
-                        children: [
-                          Icon(Icons.delete, color: Colors.red),
-                          SizedBox(width: 8),
-                          Text('Eliminar', style: TextStyle(color: Colors.red)),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
-            child: SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: onInsertIntoText,
-                icon: const Icon(Icons.add_to_photos),
-                label: const Text('Colocar foto'),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: const StadiumBorder(),
-                ),
+                  ),
+                ],
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

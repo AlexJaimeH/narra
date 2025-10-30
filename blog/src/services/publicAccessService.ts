@@ -22,6 +22,7 @@ export interface RegisterAccessResponse {
     status?: string;
   };
   unsubscribed: boolean;
+  isAuthor?: boolean;
   supabase?: {
     url: string;
     anonKey: string;

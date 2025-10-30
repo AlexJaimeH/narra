@@ -7054,8 +7054,18 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('✓ Imagen agregada: ${fileName ?? 'imagen'}'),
+            duration: const Duration(milliseconds: 1500),
           ),
         );
+
+        // Automatically open the dialog to place the photo in the text
+        final photoIndex = _photos.length - 1;
+        // Use a small delay to allow the UI to update and show the snackbar
+        Future.delayed(const Duration(milliseconds: 300), () {
+          if (mounted) {
+            _insertPhotoIntoText(photoIndex);
+          }
+        });
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -7348,16 +7358,48 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
   void _showParagraphSelectionDialog(
       int imageIndex, List<Map<String, dynamic>> paragraphs) {
+    final placeholderText = '[img_${imageIndex + 1}]';
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: Text('¿Dónde colocar la imagen ${imageIndex + 1}?'),
+        contentPadding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
         content: SizedBox(
           width: double.maxFinite,
-          height: 400,
-          child: ListView.builder(
-            itemCount: paragraphs.length,
-            itemBuilder: (context, paragraphIndex) {
+          height: 480,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.4),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.info_outline,
+                      size: 20,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Se insertará $placeholderText en tu texto. Al publicar la historia, se mostrará la imagen real.',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Expanded(
+                child: ListView.builder(
+                  itemCount: paragraphs.length,
+                  itemBuilder: (context, paragraphIndex) {
               final paragraph = paragraphs[paragraphIndex];
               final preview = paragraph['preview'] as String;
               final isExpanded =
@@ -7437,7 +7479,10 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                   ],
                 ),
               );
-            },
+                  },
+                ),
+              ),
+            ],
           ),
         ),
         actions: [
@@ -7469,6 +7514,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
   void _showBeforeAfterDialog(BuildContext context, int imageIndex,
       Map<String, dynamic> paragraph, int paragraphNumber) {
+    final placeholderText = '[img_${imageIndex + 1}]';
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -7477,6 +7523,32 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.4),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.info_outline,
+                    size: 18,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Se insertará $placeholderText. Al publicar, se mostrará la imagen.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -7523,6 +7595,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
   void _showFullParagraphDialog(BuildContext context, int imageIndex,
       Map<String, dynamic> paragraph, int paragraphNumber) {
+    final placeholderText = '[img_${imageIndex + 1}]';
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -7532,6 +7605,32 @@ class _StoryEditorPageState extends State<StoryEditorPage>
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.4),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.info_outline,
+                      size: 18,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Se insertará $placeholderText. Al publicar, se mostrará la imagen.',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(

@@ -170,6 +170,26 @@ class SubscriberService {
     }
   }
 
+  // Reactivar un suscriptor desuscrito
+  static Future<void> reactivateUnsubscribed(String subscriberId) async {
+    final userId = SupabaseAuth.currentUser?.id;
+    if (userId == null) throw Exception('Usuario no autenticado');
+
+    final newKey = _generateMagicKey();
+    final now = DateTime.now().toUtc();
+
+    await SupabaseConfig.client
+        .from('subscribers')
+        .update({
+          'status': 'pending',
+          'access_token': newKey,
+          'access_token_created_at': now.toIso8601String(),
+          'access_token_last_sent_at': null,
+        })
+        .eq('user_id', userId)
+        .eq('id', subscriberId);
+  }
+
   static Future<Subscriber> ensureMagicKey(String subscriberId) async {
     final userId = SupabaseAuth.currentUser?.id;
     if (userId == null) throw Exception('Usuario no autenticado');

@@ -38,6 +38,7 @@ void _showSnackBar(BuildContext context, String message,
     SnackBar(
       backgroundColor: bgColor,
       behavior: SnackBarBehavior.floating,
+      elevation: 8,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
       ),
@@ -55,7 +56,8 @@ void _showSnackBar(BuildContext context, String message,
                     : isSuccess
                         ? colorScheme.onPrimaryContainer
                         : colorScheme.onSurfaceVariant,
-                fontWeight: FontWeight.w500,
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
               ),
             ),
           ),
@@ -261,6 +263,12 @@ class _SubscribersPageState extends State<SubscribersPage>
         : 'Tu autor/a en Narra';
 
     try {
+      // Si el suscriptor está desuscrito, reactivarlo como pendiente
+      final wasUnsubscribed = subscriber.status == 'unsubscribed';
+      if (wasUnsubscribed) {
+        await SubscriberService.reactivateUnsubscribed(subscriber.id);
+      }
+
       final preparedSubscriber =
           await SubscriberService.ensureMagicKey(subscriber.id);
 
@@ -273,9 +281,12 @@ class _SubscribersPageState extends State<SubscribersPage>
       if (!mounted) return;
 
       if (showSuccessToast) {
+        final message = wasUnsubscribed
+            ? '${preparedSubscriber.name} ha sido reactivado y se envió nuevo enlace'
+            : 'Enlace enviado a ${preparedSubscriber.name}';
         _showSnackBar(
           context,
-          'Enlace enviado a ${preparedSubscriber.name}',
+          message,
           isSuccess: true,
         );
       }

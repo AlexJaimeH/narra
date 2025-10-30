@@ -279,6 +279,37 @@ export const StoryPage: React.FC = () => {
     navigate('/');
   };
 
+  // Process story content to replace image placeholders with actual images
+  const processStoryContent = (content: string, photos: any[] | undefined, storyTitle: string): string => {
+    if (!photos || photos.length === 0) {
+      return content;
+    }
+
+    let processedContent = content;
+
+    // Replace each [img_N] placeholder with the corresponding image
+    photos.forEach((photo, index) => {
+      const placeholder = `[img_${index + 1}]`;
+      const imageHtml = `
+        <figure class="my-8">
+          <div class="rounded-2xl overflow-hidden shadow-xl transform transition-all hover:scale-[1.02]">
+            <img
+              src="${photo.photoUrl}"
+              alt="${photo.caption || storyTitle}"
+              class="w-full"
+            />
+          </div>
+          ${photo.caption ? `<figcaption class="mt-4 text-center text-sm italic" style="color: #6B7280;">${photo.caption}</figcaption>` : ''}
+        </figure>
+      `;
+
+      // Replace all occurrences of the placeholder
+      processedContent = processedContent.split(placeholder).join(imageHtml);
+    });
+
+    return processedContent;
+  };
+
   if (isLoading) return <Loading />;
   if (error) return <ErrorMessage message={error} onRetry={loadStory} />;
   if (!story) return <ErrorMessage message="Historia no encontrada" />;
@@ -372,31 +403,10 @@ export const StoryPage: React.FC = () => {
             </div>
           </header>
 
-          {story.photos && story.photos.length > 0 && (
-            <div className="mb-8 space-y-6">
-              {story.photos.map((photo) => (
-                <figure key={photo.id} className="group">
-                  <div className="rounded-2xl overflow-hidden shadow-xl transform transition-all hover:scale-[1.02]">
-                    <img
-                      src={photo.photoUrl}
-                      alt={photo.caption || story.title}
-                      className="w-full"
-                    />
-                  </div>
-                  {photo.caption && (
-                    <figcaption className="mt-4 text-center text-sm italic px-4" style={{ color: NarraColors.text.secondary }}>
-                      {photo.caption}
-                    </figcaption>
-                  )}
-                </figure>
-              ))}
-            </div>
-          )}
-
           <div
             className="prose prose-lg max-w-none leading-relaxed"
             style={{ color: NarraColors.text.primary }}
-            dangerouslySetInnerHTML={{ __html: story.content }}
+            dangerouslySetInnerHTML={{ __html: processStoryContent(story.content, story.photos, story.title) }}
           />
 
           {/* Reacciones */}

@@ -7732,22 +7732,12 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
     _contentController.text = cleaned;
 
-    // Position cursor just after the inserted placeholder
-    final finalIndex = cleaned.indexOf(
-        photoPlaceholder, (safePosition - 2).clamp(0, cleaned.length));
-    final cursorAfter = finalIndex >= 0
-        ? (finalIndex + photoPlaceholder.length + 2).clamp(0, cleaned.length)
-        : cleaned.length;
-    _contentController.selection = TextSelection.fromPosition(
-      TextPosition(offset: cursorAfter),
-    );
-
     setState(() => _hasChanges = true);
-    _tabController.animateTo(0);
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('✓ Imagen ${imageIndex + 1} colocada en el texto'),
+        content: Text('✓ Se colocó la etiqueta $photoPlaceholder. Al publicar la historia, los suscriptores verán la imagen en ese espacio.'),
+        duration: const Duration(seconds: 4),
         action: SnackBarAction(
           label: 'Ver',
           onPressed: () => _tabController.animateTo(0),

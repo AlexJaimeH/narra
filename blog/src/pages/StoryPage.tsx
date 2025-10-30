@@ -281,31 +281,40 @@ export const StoryPage: React.FC = () => {
 
   // Process story content to replace image placeholders with actual images
   const processStoryContent = (content: string, photos: any[] | undefined, storyTitle: string): string => {
-    if (!photos || photos.length === 0) {
-      return content;
+    // First, convert plain text line breaks to HTML
+    // Replace double line breaks with paragraph breaks
+    let processedContent = content
+      .split('\n\n')
+      .map(paragraph => paragraph.trim())
+      .filter(paragraph => paragraph.length > 0)
+      .map(paragraph => {
+        // Within each paragraph, replace single line breaks with <br>
+        const paragraphWithBreaks = paragraph.split('\n').join('<br>');
+        return `<p>${paragraphWithBreaks}</p>`;
+      })
+      .join('\n');
+
+    // Then, replace image placeholders with actual images
+    if (photos && photos.length > 0) {
+      photos.forEach((photo, index) => {
+        const placeholder = `[img_${index + 1}]`;
+        const imageHtml = `
+          <figure class="my-8">
+            <div class="rounded-2xl overflow-hidden shadow-xl transform transition-all hover:scale-[1.02]">
+              <img
+                src="${photo.photoUrl}"
+                alt="${photo.caption || storyTitle}"
+                class="w-full"
+              />
+            </div>
+            ${photo.caption ? `<figcaption class="mt-4 text-center text-sm italic" style="color: #6B7280;">${photo.caption}</figcaption>` : ''}
+          </figure>
+        `;
+
+        // Replace all occurrences of the placeholder
+        processedContent = processedContent.split(placeholder).join(imageHtml);
+      });
     }
-
-    let processedContent = content;
-
-    // Replace each [img_N] placeholder with the corresponding image
-    photos.forEach((photo, index) => {
-      const placeholder = `[img_${index + 1}]`;
-      const imageHtml = `
-        <figure class="my-8">
-          <div class="rounded-2xl overflow-hidden shadow-xl transform transition-all hover:scale-[1.02]">
-            <img
-              src="${photo.photoUrl}"
-              alt="${photo.caption || storyTitle}"
-              class="w-full"
-            />
-          </div>
-          ${photo.caption ? `<figcaption class="mt-4 text-center text-sm italic" style="color: #6B7280;">${photo.caption}</figcaption>` : ''}
-        </figure>
-      `;
-
-      // Replace all occurrences of the placeholder
-      processedContent = processedContent.split(placeholder).join(imageHtml);
-    });
 
     return processedContent;
   };

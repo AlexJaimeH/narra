@@ -14,6 +14,58 @@ class SubscribersPage extends StatefulWidget {
 
 enum _SubscriberFilter { all, confirmed, pending, unsubscribed }
 
+// Helper para mostrar SnackBars consistentes
+void _showSnackBar(BuildContext context, String message,
+    {bool isError = false, bool isSuccess = false}) {
+  final colorScheme = Theme.of(context).colorScheme;
+  final icon = isError
+      ? Icons.error_outline
+      : isSuccess
+          ? Icons.check_circle
+          : Icons.info_outline;
+  final bgColor = isError
+      ? colorScheme.errorContainer
+      : isSuccess
+          ? colorScheme.primaryContainer
+          : colorScheme.surfaceContainerHighest;
+  final iconColor = isError
+      ? colorScheme.error
+      : isSuccess
+          ? colorScheme.primary
+          : colorScheme.onSurfaceVariant;
+
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      backgroundColor: bgColor,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      margin: const EdgeInsets.all(16),
+      content: Row(
+        children: [
+          Icon(icon, color: iconColor, size: 22),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(
+                color: isError
+                    ? colorScheme.onErrorContainer
+                    : isSuccess
+                        ? colorScheme.onPrimaryContainer
+                        : colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+      duration: Duration(seconds: isError ? 4 : 3),
+    ),
+  );
+}
+
 class _SubscribersPageState extends State<SubscribersPage>
     with SingleTickerProviderStateMixin {
   final TextEditingController _searchController = TextEditingController();
@@ -191,10 +243,10 @@ class _SubscribersPageState extends State<SubscribersPage>
 
     final authorId = SupabaseAuth.currentUser?.id;
     if (authorId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Debes iniciar sesión nuevamente para enviar enlaces.'),
-        ),
+      _showSnackBar(
+        context,
+        'Debes iniciar sesión nuevamente para enviar enlaces.',
+        isError: true,
       );
       return;
     }
@@ -221,25 +273,10 @@ class _SubscribersPageState extends State<SubscribersPage>
       if (!mounted) return;
 
       if (showSuccessToast) {
-        messenger.showSnackBar(
-          SnackBar(
-            backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-            content: Row(
-              children: [
-                Icon(Icons.check_circle,
-                    color: Theme.of(context).colorScheme.primary),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Enlace enviado a ${preparedSubscriber.name}',
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onPrimaryContainer,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
+        _showSnackBar(
+          context,
+          'Enlace enviado a ${preparedSubscriber.name}',
+          isSuccess: true,
         );
       }
 
@@ -248,17 +285,13 @@ class _SubscribersPageState extends State<SubscribersPage>
       }
     } on EmailServiceException catch (error) {
       if (!mounted) return;
-      messenger.showSnackBar(
-        SnackBar(content: Text(error.message)),
-      );
+      _showSnackBar(context, error.message, isError: true);
     } catch (error) {
       if (!mounted) return;
       final message = error is StateError
           ? 'No pudimos preparar el enlace mágico. Actualiza la página e inténtalo de nuevo.'
           : 'No se pudo enviar el enlace: $error';
-      messenger.showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+      _showSnackBar(context, message, isError: true);
     } finally {
       if (mounted) {
         setState(() {
@@ -401,11 +434,10 @@ class _SubscribersPageState extends State<SubscribersPage>
                           } catch (error) {
                             setLocalState(() => isSaving = false);
                             if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                      'No se pudo guardar: $error'),
-                                ),
+                              _showSnackBar(
+                                context,
+                                'No se pudo guardar: $error',
+                                isError: true,
                               );
                             }
                           }
@@ -428,11 +460,7 @@ class _SubscribersPageState extends State<SubscribersPage>
 
     if (result != null) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Enviando enlace mágico…'),
-        ),
-      );
+      _showSnackBar(context, 'Enviando enlace mágico…');
       await _sendInvite(result);
     }
   }
@@ -479,30 +507,15 @@ class _SubscribersPageState extends State<SubscribersPage>
       try {
         await SubscriberService.deleteSubscriber(subscriber.id);
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: Theme.of(context).colorScheme.tertiaryContainer,
-            content: Row(
-              children: [
-                Icon(Icons.check_circle,
-                    color: Theme.of(context).colorScheme.tertiary),
-                const SizedBox(width: 12),
-                Text(
-                  '${subscriber.name} fue eliminado',
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.onTertiaryContainer,
-                  ),
-                ),
-              ],
-            ),
-          ),
+        _showSnackBar(
+          context,
+          '${subscriber.name} fue eliminado',
+          isSuccess: true,
         );
         await _loadDashboard();
       } catch (error) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al eliminar: $error')),
-        );
+        _showSnackBar(context, 'Error al eliminar: $error', isError: true);
       }
     }
   }
@@ -581,7 +594,7 @@ class _SubscribersPageState extends State<SubscribersPage>
 
     final dashboard = _dashboard;
     final subscribers = _filteredSubscribers;
-    final hasAnySubscribers = (dashboard?.totalSubscribers ?? 0) > 0;
+    final hasAnySubscribers = (dashboard?.totalSubscribersIncludingUnsubscribed ?? 0) > 0;
 
     return Scaffold(
       body: RefreshIndicator(
@@ -785,9 +798,22 @@ class _SubscribersPageState extends State<SubscribersPage>
         ),
         child: FloatingActionButton.extended(
           onPressed: _showAddSubscriberDialog,
-          icon: const Icon(Icons.person_add_alt_1),
-          label: const Text('Agregar'),
-          elevation: 4,
+          icon: const Icon(Icons.person_add_alt_1, size: 24),
+          label: const Text(
+            'Agregar',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.5,
+            ),
+          ),
+          elevation: 6,
+          highlightElevation: 12,
+          backgroundColor: colorScheme.primary,
+          foregroundColor: colorScheme.onPrimary,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
         ),
       ),
     );
@@ -973,22 +999,66 @@ class _FilterChips extends StatelessWidget {
 
     Widget buildChip(_SubscriberFilter filter, String label, int count) {
       final isSelected = current == filter;
-      return FilterChip(
-        label: Text('$label ($count)'),
-        selected: isSelected,
-        onSelected: (_) => onChanged(filter),
-        backgroundColor: colorScheme.surfaceContainerHighest,
-        selectedColor: colorScheme.primaryContainer,
-        checkmarkColor: colorScheme.primary,
-        labelStyle: theme.textTheme.bodyMedium?.copyWith(
-          color: isSelected ? colorScheme.primary : colorScheme.onSurface,
-          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-        ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: isSelected
-              ? BorderSide(color: colorScheme.primary, width: 1.5)
-              : BorderSide.none,
+      return GestureDetector(
+        onTap: () => onChanged(filter),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? colorScheme.primary
+                : colorScheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: isSelected
+                  ? colorScheme.primary
+                  : colorScheme.outlineVariant.withValues(alpha: 0.5),
+              width: isSelected ? 2 : 1,
+            ),
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: colorScheme.primary.withValues(alpha: 0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: isSelected
+                      ? colorScheme.onPrimary
+                      : colorScheme.onSurface,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? colorScheme.onPrimary.withValues(alpha: 0.2)
+                      : colorScheme.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '$count',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: isSelected
+                        ? colorScheme.onPrimary
+                        : colorScheme.primary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }

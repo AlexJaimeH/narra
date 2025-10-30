@@ -88,12 +88,12 @@ export const storyService = {
 
       return {
         userId: data.user_id,
-        displayName: data.display_name || data.name || data.public_author_name || 'Escritor',
-        name: data.name || data.display_name || data.public_author_name || 'Escritor',
-        avatarUrl: data.avatar_url,
-        tagline: data.tagline,
-        summary: data.summary,
-        coverImageUrl: data.cover_image_url,
+        displayName: data.public_author_name || 'Mi Blog',
+        name: data.public_author_name || 'Mi Blog',
+        avatarUrl: data.public_blog_avatar_url,
+        tagline: data.public_author_tagline,
+        summary: data.public_author_summary,
+        coverImageUrl: data.public_blog_cover_url,
       };
     } catch (error) {
       return null;

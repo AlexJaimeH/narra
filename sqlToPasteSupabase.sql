@@ -1276,13 +1276,14 @@ begin
       );
     end if;
 
-    -- Obtener información del autor desde auth.users
+    -- Obtener información del autor desde user_settings y auth.users
     select
-      coalesce(raw_user_meta_data->>'full_name', email, id::text),
-      email
+      coalesce(us.public_author_name, au.raw_user_meta_data->>'full_name', au.email, au.id::text),
+      au.email
     into v_author_name, v_author_email
-    from auth.users
-    where id = author_id;
+    from auth.users au
+    left join public.user_settings us on us.user_id = au.id
+    where au.id = author_id;
 
     if not found then
       return jsonb_build_object(

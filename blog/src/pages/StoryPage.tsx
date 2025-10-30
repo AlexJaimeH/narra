@@ -363,32 +363,32 @@ export const StoryPage: React.FC = () => {
 
           {/* Reacciones */}
           <div className="mt-12 pt-8 border-t border-gray-100">
-            <div className="flex items-center gap-4">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
               <button
                 onClick={handleToggleReaction}
                 disabled={isTogglingReaction}
-                className="group flex items-center gap-3 px-6 py-3 rounded-2xl font-semibold transition-all transform hover:scale-105 active:scale-95 shadow-md hover:shadow-lg"
+                className="group flex items-center justify-center gap-2 sm:gap-3 px-4 sm:px-6 py-3 rounded-2xl font-semibold transition-all transform hover:scale-105 active:scale-95 shadow-md hover:shadow-lg"
                 style={{
                   backgroundColor: feedback.hasReacted ? NarraColors.interactive.heartLight : NarraColors.brand.primaryLight,
                   color: feedback.hasReacted ? NarraColors.interactive.heart : NarraColors.brand.primarySolid,
                 }}
               >
-                <svg className={`w-6 h-6 transition-transform ${feedback.hasReacted ? 'scale-110' : 'group-hover:scale-110'}`} fill={feedback.hasReacted ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor">
+                <svg className={`w-5 sm:w-6 h-5 sm:h-6 flex-shrink-0 transition-transform ${feedback.hasReacted ? 'scale-110' : 'group-hover:scale-110'}`} fill={feedback.hasReacted ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                 </svg>
-                <span>{feedback.hasReacted ? 'Te gusta' : 'Me gusta'}</span>
+                <span className="text-sm sm:text-base">{feedback.hasReacted ? 'Te gusta' : 'Me gusta'}</span>
                 {feedback.reactionCount > 0 && (
-                  <span className="px-2.5 py-1 rounded-full text-sm font-bold" style={{ backgroundColor: 'white' }}>
+                  <span className="px-2 sm:px-2.5 py-1 rounded-full text-xs sm:text-sm font-bold" style={{ backgroundColor: 'white' }}>
                     {feedback.reactionCount}
                   </span>
                 )}
               </button>
 
-              <div className="flex items-center gap-2 px-4 py-2 rounded-full" style={{ backgroundColor: NarraColors.brand.primaryPale, color: NarraColors.text.secondary }}>
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <div className="flex items-center justify-center gap-2 px-4 py-2 rounded-full" style={{ backgroundColor: NarraColors.brand.primaryPale, color: NarraColors.text.secondary }}>
+                <svg className="w-4 sm:w-5 h-4 sm:h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
                 </svg>
-                <span className="font-semibold">{feedback.commentCount} {feedback.commentCount === 1 ? 'comentario' : 'comentarios'}</span>
+                <span className="font-semibold text-sm sm:text-base">{feedback.commentCount} {feedback.commentCount === 1 ? 'comentario' : 'comentarios'}</span>
               </div>
             </div>
           </div>
@@ -439,6 +439,7 @@ export const StoryPage: React.FC = () => {
                 setReplyingTo={setReplyingTo}
                 replyText={replyText}
                 setReplyText={setReplyText}
+                authorId={authorId}
               />
             ))}
 
@@ -509,30 +510,63 @@ const CommentThread: React.FC<{
   setReplyingTo: (id: string | null) => void;
   replyText: string;
   setReplyText: (text: string) => void;
-}> = ({ comment, onReply, isSubmitting, replyingTo, setReplyingTo, replyText, setReplyText }) => {
-  const formatDate = (dateString: string): string => {
+  authorId: string | null;
+}> = ({ comment, onReply, isSubmitting, replyingTo, setReplyingTo, replyText, setReplyText, authorId }) => {
+  const formatRelativeDate = (dateString: string): string => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('es-MX', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
+    const now = new Date();
+    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+    if (diffInSeconds < 60) {
+      return 'Hace un momento';
+    } else if (diffInSeconds < 3600) {
+      const minutes = Math.floor(diffInSeconds / 60);
+      return `Hace ${minutes} ${minutes === 1 ? 'minuto' : 'minutos'}`;
+    } else if (diffInSeconds < 86400) {
+      const hours = Math.floor(diffInSeconds / 3600);
+      return `Hace ${hours} ${hours === 1 ? 'hora' : 'horas'}`;
+    } else if (diffInSeconds < 604800) {
+      const days = Math.floor(diffInSeconds / 86400);
+      return `Hace ${days} ${days === 1 ? 'día' : 'días'}`;
+    } else {
+      return date.toLocaleDateString('es-MX', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      });
+    }
   };
+
+  // Parse the name to check if it's the author
+  const parseNameAndRole = (name: string) => {
+    if (name.endsWith(' - Autor')) {
+      const authorName = name.replace(' - Autor', '');
+      return { name: authorName, isAuthor: true };
+    }
+    return { name, isAuthor: false };
+  };
+
+  const { name, isAuthor } = parseNameAndRole(comment.subscriberName || 'Suscriptor');
 
   return (
     <div className="group">
       <div className="flex gap-4">
         <div className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center font-bold text-white shadow-md" style={{ backgroundColor: NarraColors.brand.primary }}>
-          {comment.subscriberName?.[0]?.toUpperCase() || 'A'}
+          {name[0]?.toUpperCase() || 'S'}
         </div>
         <div className="flex-1">
           <div className="bg-gray-50 rounded-2xl p-4 group-hover:bg-gray-100 transition-colors">
-            <div className="flex items-center gap-2 mb-2">
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
               <span className="font-semibold" style={{ color: NarraColors.text.primary }}>
-                {comment.subscriberName || 'Lector'}
+                {name}
               </span>
+              {isAuthor && (
+                <span className="px-2 py-0.5 text-xs font-bold rounded" style={{ backgroundColor: NarraColors.brand.primary, color: 'white' }}>
+                  Autor
+                </span>
+              )}
               <span className="text-xs" style={{ color: NarraColors.text.light }}>
-                {formatDate(comment.createdAt)}
+                {formatRelativeDate(comment.createdAt)}
               </span>
             </div>
             <p style={{ color: NarraColors.text.secondary }}>{comment.content}</p>
@@ -595,6 +629,7 @@ const CommentThread: React.FC<{
                   setReplyingTo={setReplyingTo}
                   replyText={replyText}
                   setReplyText={setReplyText}
+                  authorId={authorId}
                 />
               ))}
             </div>

@@ -120,14 +120,27 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
           authorId,
           storyId,
         );
-        const tree = buildCommentTree(comments, authorId);
+
+        // Transform comments to have the correct field names for frontend
+        const transformedComments = comments.map(row => ({
+          id: row.id,
+          subscriberId: row.subscriber_id,
+          subscriberName: row.subscriber_id === authorId
+            ? `${row.author_name || 'Suscriptor'} - Autor`
+            : (row.author_name || 'Suscriptor'),
+          content: row.content || "",
+          createdAt: row.created_at,
+          parentCommentId: row.parent_id,
+          source: row.source,
+        }));
+
         return json({
-          comments: tree.roots,
+          comments: transformedComments,
           reaction: {
             ...reaction,
             count: reactionCount,
           },
-          commentCount: tree.count,
+          commentCount: comments.length,
         });
       }
       case "comment": {

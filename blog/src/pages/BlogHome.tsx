@@ -210,19 +210,21 @@ export const BlogHome: React.FC = () => {
           </div>
         )}
 
-        {/* Desuscripción */}
-        <div className="mt-16 bg-white/50 backdrop-blur rounded-3xl p-8 text-center border border-gray-100 shadow-lg">
-          <p className="text-lg mb-4" style={{ color: NarraColors.text.secondary }}>
-            ¿No deseas recibir más historias de {author?.displayName}?
-          </p>
-          <button
-            onClick={handleUnsubscribe}
-            className="text-sm underline hover:no-underline transition-all font-medium"
-            style={{ color: NarraColors.text.light }}
-          >
-            Desuscribirse
-          </button>
-        </div>
+        {/* Desuscripción - Solo mostrar si no es el autor */}
+        {!accessManager.getAccess()?.isAuthor && (
+          <div className="mt-16 bg-white/50 backdrop-blur rounded-3xl p-8 text-center border border-gray-100 shadow-lg">
+            <p className="text-lg mb-4" style={{ color: NarraColors.text.secondary }}>
+              ¿No deseas recibir más historias de {author?.displayName}?
+            </p>
+            <button
+              onClick={handleUnsubscribe}
+              className="text-sm underline hover:no-underline transition-all font-medium"
+              style={{ color: NarraColors.text.light }}
+            >
+              Desuscribirse
+            </button>
+          </div>
+        )}
       </main>
 
       {/* Footer */}

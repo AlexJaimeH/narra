@@ -22,6 +22,7 @@ export interface RegisterAccessResponse {
     status?: string;
   };
   unsubscribed: boolean;
+  isAuthor?: boolean;
   supabase?: {
     url: string;
     anonKey: string;
@@ -60,6 +61,7 @@ export const publicAccessService = {
         status: (data.subscriber?.status === 'unsubscribed' ? 'revoked' : 'active') as 'active' | 'revoked',
         supabaseUrl: data.supabase?.url,
         supabaseAnonKey: data.supabase?.anonKey,
+        isAuthor: data.isAuthor || false,
       };
 
       return accessRecord;

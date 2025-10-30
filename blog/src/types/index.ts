@@ -65,6 +65,7 @@ export interface StoryAccessRecord {
   status: 'active' | 'revoked';
   supabaseUrl?: string;
   supabaseAnonKey?: string;
+  isAuthor?: boolean;
 }
 
 export interface StoryFeedbackComment {

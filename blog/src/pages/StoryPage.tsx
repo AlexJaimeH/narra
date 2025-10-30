@@ -468,19 +468,21 @@ export const StoryPage: React.FC = () => {
           </section>
         )}
 
-        {/* Desuscripción */}
-        <div className="bg-white/50 backdrop-blur rounded-2xl p-6 text-center border border-gray-100">
-          <p className="mb-4" style={{ color: NarraColors.text.secondary }}>
-            ¿No deseas recibir más historias de {author?.displayName}?
-          </p>
-          <button
-            onClick={handleUnsubscribe}
-            className="text-sm underline hover:no-underline transition-all"
-            style={{ color: NarraColors.text.light }}
-          >
-            Desuscribirse
-          </button>
-        </div>
+        {/* Desuscripción - Solo mostrar si no es el autor */}
+        {!accessManager.getAccess()?.isAuthor && (
+          <div className="bg-white/50 backdrop-blur rounded-2xl p-6 text-center border border-gray-100">
+            <p className="mb-4" style={{ color: NarraColors.text.secondary }}>
+              ¿No deseas recibir más historias de {author?.displayName}?
+            </p>
+            <button
+              onClick={handleUnsubscribe}
+              className="text-sm underline hover:no-underline transition-all"
+              style={{ color: NarraColors.text.light }}
+            >
+              Desuscribirse
+            </button>
+          </div>
+        )}
       </main>
 
       {/* Footer */}

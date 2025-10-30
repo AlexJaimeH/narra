@@ -31,6 +31,9 @@ export const StoryPage: React.FC = () => {
   const [replyText, setReplyText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isTogglingReaction, setIsTogglingReaction] = useState(false);
+  const [showUnsubscribeConfirm, setShowUnsubscribeConfirm] = useState(false);
+  const [showUnsubscribeSuccess, setShowUnsubscribeSuccess] = useState(false);
+  const [isUnsubscribing, setIsUnsubscribing] = useState(false);
 
   const loadStory = async () => {
     if (!storyId) {
@@ -239,7 +242,41 @@ export const StoryPage: React.FC = () => {
   };
 
   const handleUnsubscribe = () => {
-    alert('Funcionalidad de desuscripción próximamente');
+    setShowUnsubscribeConfirm(true);
+  };
+
+  const confirmUnsubscribe = async () => {
+    const accessRecord = accessManager.getAccess();
+    if (!accessRecord) return;
+
+    setIsUnsubscribing(true);
+
+    try {
+      const response = await publicAccessService.registerAccess({
+        authorId: accessRecord.authorId,
+        subscriberId: accessRecord.subscriberId,
+        token: accessRecord.accessToken,
+        source: accessRecord.source,
+        eventType: 'unsubscribe' as any,
+      });
+
+      setIsUnsubscribing(false);
+      setShowUnsubscribeConfirm(false);
+
+      if (response === null) {
+        // Successfully unsubscribed
+        setShowUnsubscribeSuccess(true);
+        accessManager.revokeAccess();
+      }
+    } catch (error) {
+      setIsUnsubscribing(false);
+      alert('Hubo un error al desuscribirte. Por favor, intenta de nuevo.');
+    }
+  };
+
+  const handleCloseSuccessDialog = () => {
+    setShowUnsubscribeSuccess(false);
+    navigate('/');
   };
 
   if (isLoading) return <Loading />;
@@ -500,6 +537,66 @@ export const StoryPage: React.FC = () => {
           </p>
         </div>
       </footer>
+
+      {/* Diálogo de confirmación de desuscripción */}
+      {showUnsubscribeConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl">
+            <h3 className="text-2xl font-bold mb-4" style={{ color: NarraColors.text.primary }}>
+              ¿Estás seguro/a?
+            </h3>
+            <p className="mb-6" style={{ color: NarraColors.text.secondary }}>
+              Si te desuscribes, ya no recibirás más historias de {author?.displayName}.
+              Tus enlaces mágicos dejarán de funcionar.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowUnsubscribeConfirm(false)}
+                disabled={isUnsubscribing}
+                className="flex-1 px-6 py-3 rounded-xl font-medium transition-all border-2"
+                style={{
+                  borderColor: NarraColors.brand.primary,
+                  color: NarraColors.brand.primary,
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmUnsubscribe}
+                disabled={isUnsubscribing}
+                className="flex-1 px-6 py-3 rounded-xl font-medium transition-all text-white"
+                style={{
+                  backgroundColor: isUnsubscribing ? NarraColors.text.light : NarraColors.brand.primary,
+                }}
+              >
+                {isUnsubscribing ? 'Procesando...' : 'Sí, desuscribirme'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Diálogo de éxito de desuscripción */}
+      {showUnsubscribeSuccess && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl">
+            <h3 className="text-2xl font-bold mb-4" style={{ color: NarraColors.text.primary }}>
+              Te has desuscrito
+            </h3>
+            <p className="mb-6" style={{ color: NarraColors.text.secondary }}>
+              Ya no recibirás más historias de {author?.displayName}.
+              {' '}Si deseas volver a suscribirte en el futuro, por favor contacta directamente al autor.
+            </p>
+            <button
+              onClick={handleCloseSuccessDialog}
+              className="w-full px-6 py-3 rounded-xl font-medium transition-all text-white"
+              style={{ backgroundColor: NarraColors.brand.primary }}
+            >
+              Entendido
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

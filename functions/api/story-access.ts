@@ -129,6 +129,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         source: resolvedSource,
         subscriber,
         unsubscribed: subscriberStatusRaw === 'unsubscribed',
+        isAuthor: data.isAuthor === true,
       };
       if (publicSupabase) {
         responseBody.supabase = publicSupabase;
@@ -143,6 +144,146 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         unsubscribed: responseBody.unsubscribed,
         rpcUsedServiceKey: Boolean(credentials?.serviceKey),
       });
+
+      // Send unsubscribe email notification if this was an unsubscribe event
+      if (eventType === 'unsubscribe' && subscriberStatusRaw === 'unsubscribed') {
+        const subscriberEmail = subscriber.email;
+        const subscriberName = subscriber.name || 'Suscriptor';
+
+        if (subscriberEmail && typeof subscriberEmail === 'string') {
+          // Fetch author name from user_settings
+          let authorName = 'el autor';
+          try {
+            const settingsUrl = new URL(`${rpcUrl}/rest/v1/user_settings`);
+            settingsUrl.searchParams.set('user_id', `eq.${authorId}`);
+            settingsUrl.searchParams.set('select', 'public_author_name');
+            settingsUrl.searchParams.set('limit', '1');
+
+            const settingsResponse = await fetch(settingsUrl.toString(), {
+              headers: {
+                'Content-Type': 'application/json',
+                apikey: apiKey,
+                Authorization: `Bearer ${apiKey}`,
+              },
+            });
+
+            if (settingsResponse.ok) {
+              const settingsData = await parseJson(settingsResponse);
+              if (Array.isArray(settingsData) && settingsData.length > 0) {
+                authorName = (settingsData[0] as any).public_author_name || 'el autor';
+              }
+            }
+          } catch (err) {
+            console.warn('[story-access] Failed to fetch author name for email', err);
+          }
+
+          // Send email notification
+          const emailHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #F0FAF9;">
+  <table role="presentation" style="width: 100%; border-collapse: collapse; background-color: #F0FAF9;" cellpadding="0" cellspacing="0">
+    <tr>
+      <td style="padding: 40px 20px;" align="center">
+        <table role="presentation" style="max-width: 600px; width: 100%; border-collapse: collapse; background-color: #FFFFFF; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);" cellpadding="0" cellspacing="0">
+          <!-- Header -->
+          <tr>
+            <td style="background: linear-gradient(135deg, #4DB3A8 0%, #38827A 100%); padding: 40px 30px; text-align: center;">
+              <h1 style="margin: 0; font-size: 32px; font-weight: bold; color: #FFFFFF;">Narra</h1>
+              <p style="margin: 10px 0 0 0; font-size: 14px; color: #E0F5F3;">Historias que perduran para siempre</p>
+            </td>
+          </tr>
+
+          <!-- Content -->
+          <tr>
+            <td style="padding: 40px 30px;">
+              <h2 style="margin: 0 0 20px 0; font-size: 24px; font-weight: bold; color: #1F2937;">Te has desuscrito</h2>
+
+              <p style="margin: 0 0 16px 0; font-size: 16px; line-height: 1.6; color: #6B7280;">
+                Hola ${subscriberName},
+              </p>
+
+              <p style="margin: 0 0 16px 0; font-size: 16px; line-height: 1.6; color: #6B7280;">
+                Confirmamos que te has desuscrito exitosamente y ya no recibirás más historias de ${authorName}.
+              </p>
+
+              <p style="margin: 0 0 16px 0; font-size: 16px; line-height: 1.6; color: #6B7280;">
+                Tus enlaces mágicos han dejado de funcionar y ya no podrás acceder al contenido compartido.
+              </p>
+
+              <div style="background-color: #F0FAF9; border-left: 4px solid #4DB3A8; padding: 16px; margin: 24px 0; border-radius: 8px;">
+                <p style="margin: 0; font-size: 14px; line-height: 1.6; color: #38827A;">
+                  <strong>¿Cambias de opinión?</strong><br>
+                  Si deseas volver a suscribirte en el futuro, por favor contacta directamente a ${authorName}.
+                </p>
+              </div>
+
+              <p style="margin: 24px 0 0 0; font-size: 14px; line-height: 1.6; color: #9CA3AF;">
+                Gracias por haber sido parte de esta comunidad de historias.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background-color: #F3F4F6; padding: 30px; text-align: center; border-top: 1px solid #E5E7EB;">
+              <p style="margin: 0 0 8px 0; font-size: 14px; color: #6B7280;">
+                Creado con <span style="color: #4DB3A8; font-weight: bold;">Narra</span>
+              </p>
+              <p style="margin: 0; font-size: 12px; color: #9CA3AF;">
+                Historias que perduran para siempre
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+          `.trim();
+
+          try {
+            // Call the email API
+            const emailApiUrl = new URL('/api/email', new URL(request.url).origin);
+            const emailResponse = await fetch(emailApiUrl.toString(), {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                to: subscriberEmail,
+                subject: `Te has desuscrito de las historias de ${authorName}`,
+                html: emailHtml,
+                tags: [
+                  { name: 'type', value: 'unsubscribe' },
+                  { name: 'author_id', value: authorId },
+                  { name: 'subscriber_id', value: subscriberId },
+                ],
+              }),
+            });
+
+            if (emailResponse.ok) {
+              console.log('[story-access] Unsubscribe email sent successfully', {
+                subscriberEmail,
+                authorId,
+                subscriberId,
+              });
+            } else {
+              console.error('[story-access] Failed to send unsubscribe email', {
+                status: emailResponse.status,
+                body: await emailResponse.text(),
+              });
+            }
+          } catch (emailError) {
+            console.error('[story-access] Error sending unsubscribe email', emailError);
+          }
+        }
+      }
 
       return json(responseBody);
     }

@@ -670,24 +670,6 @@ class _SubscribersPageState extends State<SubscribersPage>
                   ),
                 ),
               ),
-              actions: [
-                IconButton(
-                  tooltip: 'Actualizar',
-                  onPressed:
-                      _isRefreshing ? null : () => _loadDashboard(silent: true),
-                  icon: _isRefreshing
-                      ? SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: colorScheme.onSurface,
-                          ),
-                        )
-                      : const Icon(Icons.refresh_rounded),
-                ),
-                const SizedBox(width: 8),
-              ],
             ),
             SliverToBoxAdapter(
               child: Padding(

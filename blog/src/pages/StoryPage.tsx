@@ -126,6 +126,7 @@ export const StoryPage: React.FC = () => {
         subscriberId: accessRecord.subscriberId,
         token: accessRecord.accessToken,
         source: accessRecord.source,
+        active: !feedback.hasReacted,
       });
 
       if (success) {

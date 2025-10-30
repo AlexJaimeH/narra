@@ -324,6 +324,23 @@ async function fetchSubscriber(
 
   // If not found in subscribers and subscriberId equals authorId, check if it's the author
   if (subscriberId === authorId) {
+    // First get user_settings for the author name
+    const settingsUrl = new URL("/rest/v1/user_settings", config.url);
+    settingsUrl.searchParams.set("user_id", `eq.${authorId}`);
+    settingsUrl.searchParams.set("select", "public_author_name");
+    settingsUrl.searchParams.set("limit", "1");
+
+    const settingsResponse = await supabaseFetch(config, settingsUrl.toString());
+    let authorName = 'Autor';
+
+    if (settingsResponse.ok) {
+      const settingsData = await settingsResponse.json();
+      if (Array.isArray(settingsData) && settingsData.length > 0) {
+        authorName = settingsData[0].public_author_name || 'Autor';
+      }
+    }
+
+    // Then get auth user for email
     const userUrl = new URL("/auth/v1/admin/users/" + authorId, config.url);
     const userResponse = await supabaseFetch(config, userUrl.toString());
 
@@ -332,7 +349,7 @@ async function fetchSubscriber(
       // Return a subscriber-like object for the author
       return {
         id: userData.id,
-        name: userData.user_metadata?.full_name || userData.email || 'Autor',
+        name: authorName,
         email: userData.email,
         status: 'author', // Special status for authors
         access_token: authorId, // For authors, token is their ID

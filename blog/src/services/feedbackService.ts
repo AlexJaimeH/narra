@@ -17,6 +17,7 @@ interface SubmitCommentParams extends FetchStateParams {
 
 interface ToggleReactionParams extends FetchStateParams {
   reactionType?: string;
+  active?: boolean;
 }
 
 export const feedbackService = {
@@ -112,6 +113,7 @@ export const feedbackService = {
           subscriberId: params.subscriberId,
           token: params.token,
           reactionType: params.reactionType || 'heart',
+          active: params.active,
           source: params.source,
         }),
       });

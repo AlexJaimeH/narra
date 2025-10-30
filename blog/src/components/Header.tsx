@@ -26,7 +26,7 @@ export const Header: React.FC<HeaderProps> = ({ author, subscriberName }) => {
 
           <div className="flex-1">
             <h1 className="text-2xl font-bold text-text-primary">
-              {author?.displayName || 'Blog del Autor'}
+              {author?.displayName || 'Mi Blog'}
             </h1>
             {author?.tagline && (
               <p className="text-text-secondary mt-1">{author.tagline}</p>

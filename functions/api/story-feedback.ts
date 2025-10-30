@@ -599,20 +599,20 @@ function buildCommentTree(rows: any[], authorId: string) {
 
     const node = {
       id: row.id,
-      authorName: displayName,
+      subscriberName: displayName,
       content: row.content ?? "",
       createdAt: row.created_at,
       subscriberId: row.subscriber_id ?? null,
       source: row.source ?? null,
-      parentId: row.parent_id ?? null,
+      parentCommentId: row.parent_id ?? null,
       replies: [] as any[],
     };
     map.set(node.id, node);
   }
 
   for (const node of map.values()) {
-    if (node.parentId && map.has(node.parentId)) {
-      map.get(node.parentId).replies.push(node);
+    if (node.parentCommentId && map.has(node.parentCommentId)) {
+      map.get(node.parentCommentId).replies.push(node);
     } else {
       roots.push(node);
     }

@@ -132,7 +132,7 @@ export const feedbackService = {
         id: comment.id,
         storyId: comment.storyId || comment.story_id,
         subscriberId: comment.subscriberId || comment.subscriber_id,
-        subscriberName: comment.subscriberName || comment.subscriber_name || 'Lector',
+        subscriberName: comment.subscriberName || comment.subscriber_name || 'Suscriptor',
         content: comment.content,
         parentCommentId: comment.parentCommentId || comment.parent_comment_id,
         createdAt: comment.createdAt || comment.created_at,

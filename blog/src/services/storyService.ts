@@ -88,8 +88,8 @@ export const storyService = {
 
       return {
         userId: data.user_id,
-        displayName: data.display_name || data.name || 'Autor',
-        name: data.name || data.display_name || 'Autor',
+        displayName: data.display_name || data.name || data.public_author_name || 'Escritor',
+        name: data.name || data.display_name || data.public_author_name || 'Escritor',
         avatarUrl: data.avatar_url,
         tagline: data.tagline,
         summary: data.summary,

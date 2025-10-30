@@ -1642,13 +1642,14 @@ Future<void> _openStoryPublicPage(BuildContext context, Story story) async {
   }
 
   // Build author magic link
+  // The token must be the author ID as string (validated in the backend)
   final link = StoryShareLinkBuilder.buildAuthorStoryLink(
     story: story,
     authorId: currentUser.id,
     authorName: currentUser.userMetadata?['full_name']?.toString() ??
         currentUser.email ??
         'Autor',
-    authorToken: currentUser.id, // Using user ID as token for author
+    authorToken: currentUser.id, // Token must match author_id for validation
   );
 
   final routeName = '/story/${story.id}';

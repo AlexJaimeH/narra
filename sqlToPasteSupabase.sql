@@ -1215,3 +1215,204 @@ commit;
 --    - Valores antiguos migrados automáticamente
 --
 -- ============================================================
+
+-- ============================================================
+-- Magic Links para Autores (Fecha: 2025-10-29)
+-- ============================================================
+-- Permite que los autores accedan a sus propias historias publicadas
+-- mediante un magic link especial sin necesidad de estar en la tabla
+-- de suscriptores.
+-- ============================================================
+
+begin;
+
+-- Recrear la función para soportar acceso de autores
+drop function if exists public.register_subscriber_access(
+  uuid,
+  uuid,
+  text,
+  uuid,
+  text,
+  text,
+  inet,
+  text
+);
+
+create or replace function public.register_subscriber_access(
+  author_id uuid,
+  subscriber_id uuid,
+  token text,
+  story_id uuid default null,
+  source text default null,
+  event_type text default 'access_granted',
+  request_ip inet default null,
+  user_agent text default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_subscriber public.subscribers%rowtype;
+  v_now timestamptz := timezone('utc', now());
+  v_event_type text := lower(coalesce(nullif(event_type, ''), 'access_granted'));
+  v_source text := nullif(trim(coalesce(source, '')), '');
+  v_user_agent text := nullif(trim(coalesce(user_agent, '')), '');
+  v_is_author_access boolean := false;
+  v_author_name text;
+  v_author_email text;
+begin
+  -- Caso especial: El autor accediendo a su propia historia
+  -- Identificamos esto cuando subscriber_id = author_id y source = 'author_preview'
+  if subscriber_id = author_id and (v_source = 'author_preview' or v_source like 'author%') then
+    v_is_author_access := true;
+
+    -- Validar que el token sea el mismo que el author_id (o cualquier validación que decidamos)
+    if trim(coalesce(token, '')) = '' or trim(token) <> trim(author_id::text) then
+      return jsonb_build_object(
+        'status', 'forbidden',
+        'message', 'Token de autor inválido.'
+      );
+    end if;
+
+    -- Obtener información del autor desde auth.users
+    select
+      coalesce(raw_user_meta_data->>'full_name', email, id::text),
+      email
+    into v_author_name, v_author_email
+    from auth.users
+    where id = author_id;
+
+    if not found then
+      return jsonb_build_object(
+        'status', 'forbidden',
+        'message', 'Autor no encontrado.'
+      );
+    end if;
+
+    -- Retornar acceso concedido para el autor
+    return jsonb_build_object(
+      'status', 'ok',
+      'data', jsonb_build_object(
+        'grantedAt', v_now,
+        'token', token,
+        'source', v_source,
+        'isAuthor', true,
+        'subscriber', jsonb_build_object(
+          'id', author_id,
+          'name', v_author_name,
+          'email', v_author_email,
+          'status', 'author'
+        )
+      )
+    );
+  end if;
+
+  -- Flujo normal para suscriptores
+  select *
+    into v_subscriber
+    from public.subscribers
+   where id = subscriber_id
+     and user_id = author_id;
+
+  if not found then
+    return jsonb_build_object(
+      'status', 'not_found',
+      'message', 'No encontramos este suscriptor.'
+    );
+  end if;
+
+  if v_subscriber.status = 'unsubscribed' then
+    if v_event_type <> 'unsubscribe' then
+      return jsonb_build_object(
+        'status', 'forbidden',
+        'message', 'Este suscriptor canceló su acceso.'
+      );
+    end if;
+  end if;
+
+  if v_subscriber.access_token is null
+     or trim(v_subscriber.access_token) = ''
+     or trim(v_subscriber.access_token) <> trim(coalesce(token, '')) then
+    return jsonb_build_object(
+      'status', 'forbidden',
+      'message', 'El enlace ya caducó o no es válido.'
+    );
+  end if;
+
+  if v_event_type = 'unsubscribe' then
+    update public.subscribers
+       set status = 'unsubscribed',
+           last_access_at = v_now,
+           last_access_ip = coalesce(request_ip, last_access_ip),
+           last_access_user_agent = coalesce(substring(v_user_agent from 1 for 512), last_access_user_agent),
+           last_access_source = coalesce(v_source, last_access_source)
+     where id = v_subscriber.id;
+  else
+    update public.subscribers
+       set status = case when status <> 'confirmed' then 'confirmed' else status end,
+           last_access_at = v_now,
+           last_access_ip = coalesce(request_ip, last_access_ip),
+           last_access_user_agent = coalesce(substring(v_user_agent from 1 for 512), last_access_user_agent),
+           last_access_source = coalesce(v_source, last_access_source)
+     where id = v_subscriber.id;
+  end if;
+
+  insert into public.subscriber_access_events (
+    user_id,
+    subscriber_id,
+    story_id,
+    access_token,
+    event_type,
+    metadata
+  ) values (
+    author_id,
+    v_subscriber.id,
+    story_id,
+    v_subscriber.access_token,
+    case
+      when v_event_type = 'link_sent' then 'link_sent'
+      when v_event_type = 'link_opened' then 'link_opened'
+      when v_event_type = 'invite_opened' then 'invite_opened'
+      else 'access_granted'
+    end,
+    jsonb_build_object(
+      'source', coalesce(v_source, null),
+      'ip', case when request_ip is null then null else request_ip::text end,
+      'userAgent', v_user_agent
+    )
+  );
+
+  return jsonb_build_object(
+    'status', 'ok',
+    'data', jsonb_build_object(
+      'grantedAt', v_now,
+      'token', v_subscriber.access_token,
+      'source', coalesce(v_source, v_subscriber.last_access_source),
+      'subscriber', jsonb_build_object(
+        'id', v_subscriber.id,
+        'name', v_subscriber.name,
+        'email', v_subscriber.email,
+        'status', case
+          when v_event_type = 'unsubscribe' then 'unsubscribed'
+          else 'confirmed'
+        end
+      )
+    )
+  );
+end;
+$$;
+
+grant execute on function public.register_subscriber_access(
+  uuid,
+  uuid,
+  text,
+  uuid,
+  text,
+  text,
+  inet,
+  text
+) to anon, authenticated;
+
+commit;

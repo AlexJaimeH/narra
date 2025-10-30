@@ -278,6 +278,7 @@ class SubscriberDashboardData {
 
   int get totalSubscribers =>
       subscribers.where((s) => s.status != 'unsubscribed').length;
+  int get totalSubscribersIncludingUnsubscribed => subscribers.length;
   int get confirmedSubscribers =>
       subscribers.where((s) => s.status == 'confirmed').length;
   int get pendingSubscribers =>

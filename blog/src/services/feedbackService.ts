@@ -22,15 +22,20 @@ interface ToggleReactionParams extends FetchStateParams {
 export const feedbackService = {
   async fetchState(params: FetchStateParams): Promise<StoryFeedbackState> {
     try {
-      const queryParams = new URLSearchParams({
-        authorId: params.authorId,
-        storyId: params.storyId,
-        subscriberId: params.subscriberId,
-        token: params.token,
-        ...(params.source && { source: params.source }),
+      const response = await fetch(`${API_BASE}/story-feedback`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'fetch',
+          authorId: params.authorId,
+          storyId: params.storyId,
+          subscriberId: params.subscriberId,
+          token: params.token,
+          source: params.source,
+        }),
       });
-
-      const response = await fetch(`${API_BASE}/story-feedback?${queryParams}`);
 
       if (!response.ok) {
         return {
@@ -53,8 +58,8 @@ export const feedbackService = {
 
       const data = await response.json();
       return {
-        hasReacted: data.hasReacted || false,
-        reactionCount: data.reactionCount || 0,
+        hasReacted: data.reaction?.active || false,
+        reactionCount: data.reaction?.count || 0,
         commentCount: data.commentCount || 0,
         comments: this.buildCommentTree(data.comments || []),
       };

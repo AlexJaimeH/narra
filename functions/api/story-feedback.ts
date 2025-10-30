@@ -76,11 +76,19 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       return json({ error: "subscriber_not_found" }, 404);
     }
 
+    // Token validation
     const storedToken =
       typeof subscriber.access_token === "string"
         ? subscriber.access_token.trim()
         : "";
-    if (!storedToken || storedToken !== token) {
+
+    // For authors accessing their own content, token should be authorId
+    const isAuthor = subscriber.is_author === true || subscriberId === authorId;
+    const isValidToken = isAuthor
+      ? (token.trim() === authorId.trim())
+      : (storedToken && storedToken === token);
+
+    if (!isValidToken) {
       return json({ error: "invalid_token" }, 403);
     }
 
@@ -107,10 +115,18 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
           storyId,
           subscriberId,
         );
-        const tree = buildCommentTree(comments);
+        const reactionCount = await fetchReactionCount(
+          credentials,
+          authorId,
+          storyId,
+        );
+        const tree = buildCommentTree(comments, authorId);
         return json({
           comments: tree.roots,
-          reaction,
+          reaction: {
+            ...reaction,
+            count: reactionCount,
+          },
           commentCount: tree.count,
         });
       }
@@ -267,6 +283,7 @@ async function fetchSubscriber(
   authorId: string,
   subscriberId: string,
 ) {
+  // First, try to fetch from subscribers table
   const url = new URL("/rest/v1/subscribers", config.url);
   url.searchParams.set("id", `eq.${subscriberId}`);
   url.searchParams.set("user_id", `eq.${authorId}`);
@@ -288,7 +305,31 @@ async function fetchSubscriber(
   }
 
   const data = await response.json();
-  return Array.isArray(data) && data.length > 0 ? data[0] : null;
+  if (Array.isArray(data) && data.length > 0) {
+    return data[0];
+  }
+
+  // If not found in subscribers and subscriberId equals authorId, check if it's the author
+  if (subscriberId === authorId) {
+    const userUrl = new URL("/auth/v1/admin/users/" + authorId, config.url);
+    const userResponse = await supabaseFetch(config, userUrl.toString());
+
+    if (userResponse.ok) {
+      const userData = await userResponse.json();
+      // Return a subscriber-like object for the author
+      return {
+        id: userData.id,
+        name: userData.user_metadata?.full_name || userData.email || 'Autor',
+        email: userData.email,
+        status: 'author', // Special status for authors
+        access_token: authorId, // For authors, token is their ID
+        last_access_source: 'author_preview',
+        is_author: true,
+      };
+    }
+  }
+
+  return null;
 }
 
 async function fetchComments(
@@ -349,6 +390,30 @@ async function fetchReaction(
     return { reactionType: data[0].reaction_type ?? "heart", active: true };
   }
   return { reactionType: "heart", active: false };
+}
+
+async function fetchReactionCount(
+  config: SupabaseCredentials,
+  authorId: string,
+  storyId: string,
+) {
+  const url = new URL("/rest/v1/story_reactions", config.url);
+  url.searchParams.set("user_id", `eq.${authorId}`);
+  url.searchParams.set("story_id", `eq.${storyId}`);
+  url.searchParams.set("reaction_type", "eq.heart");
+  url.searchParams.set("select", "id");
+
+  const response = await supabaseFetch(config, url.toString());
+  if (!response.ok) {
+    console.error("[story-feedback] Failed to fetch reaction count", {
+      status: response.status,
+      body: await response.text(),
+    });
+    return 0;
+  }
+
+  const data = await response.json();
+  return Array.isArray(data) ? data.length : 0;
 }
 
 async function ensureCommentBelongsToStory(
@@ -523,14 +588,18 @@ async function toggleReaction(
   return false;
 }
 
-function buildCommentTree(rows: any[]) {
+function buildCommentTree(rows: any[], authorId: string) {
   const map = new Map<string, any>();
   const roots: any[] = [];
 
   for (const row of rows) {
+    const isAuthorComment = row.subscriber_id === authorId;
+    const authorName = row.author_name ?? "Suscriptor";
+    const displayName = isAuthorComment ? `${authorName} - Autor` : authorName;
+
     const node = {
       id: row.id,
-      authorName: row.author_name ?? "Suscriptor",
+      authorName: displayName,
       content: row.content ?? "",
       createdAt: row.created_at,
       subscriberId: row.subscriber_id ?? null,

@@ -589,46 +589,87 @@ class _SubscribersPageState extends State<SubscribersPage>
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
-            SliverAppBar.large(
-              floating: false,
-              pinned: true,
-              expandedHeight: 160,
-              flexibleSpace: FlexibleSpaceBar(
-                title: const Text(
-                  'Suscriptores',
-                  style: TextStyle(fontWeight: FontWeight.w700),
-                ),
-                background: Container(
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+                child: DecoratedBox(
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        colorScheme.primaryContainer,
-                        colorScheme.secondaryContainer.withValues(alpha: 0.7),
+                    color: colorScheme.surface,
+                    borderRadius: BorderRadius.circular(28),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: colorScheme.primary.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(18),
+                              ),
+                              child: Icon(
+                                Icons.people_alt_rounded,
+                                color: colorScheme.primary,
+                                size: 28,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Suscriptores',
+                                    style: theme.textTheme.headlineSmall?.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                      letterSpacing: -0.2,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Gestiona tu audiencia, envía invitaciones y mantén el contacto con quienes siguen tus historias.',
+                                    style: theme.textTheme.bodyMedium?.copyWith(
+                                      color: colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            IconButton(
+                              onPressed: _isRefreshing ? null : () => _loadDashboard(silent: true),
+                              tooltip: 'Actualizar suscriptores',
+                              icon: _isRefreshing
+                                  ? SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: colorScheme.primary,
+                                      ),
+                                    )
+                                  : const Icon(Icons.refresh_rounded),
+                              style: IconButton.styleFrom(
+                                backgroundColor:
+                                    colorScheme.primary.withValues(alpha: 0.08),
+                                foregroundColor: colorScheme.primary,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                padding: const EdgeInsets.all(9),
+                              ),
+                            ),
+                          ],
+                        ),
                       ],
                     ),
                   ),
                 ),
               ),
-              actions: [
-                IconButton(
-                  tooltip: 'Actualizar',
-                  onPressed:
-                      _isRefreshing ? null : () => _loadDashboard(silent: true),
-                  icon: _isRefreshing
-                      ? SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: colorScheme.onSurface,
-                          ),
-                        )
-                      : const Icon(Icons.refresh_rounded),
-                ),
-                const SizedBox(width: 8),
-              ],
             ),
             SliverToBoxAdapter(
               child: Padding(
@@ -762,12 +803,66 @@ class _StatsOverview extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 600;
 
     final total = dashboard?.totalSubscribers ?? 0;
     final confirmed = dashboard?.confirmedSubscribers ?? 0;
     final hearts = dashboard?.totalReactions ?? 0;
     final comments = dashboard?.totalComments ?? 0;
 
+    if (isMobile) {
+      // En móvil: dos filas de dos cards cada una
+      return Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: _StatCard(
+                  icon: Icons.people_alt_outlined,
+                  label: 'Total',
+                  value: '$total',
+                  color: colorScheme.primary,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _StatCard(
+                  icon: Icons.check_circle_outline,
+                  label: 'Activos',
+                  value: '$confirmed',
+                  color: colorScheme.tertiary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _StatCard(
+                  icon: Icons.favorite,
+                  label: 'Corazones',
+                  value: '$hearts',
+                  color: colorScheme.secondary,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _StatCard(
+                  icon: Icons.chat_bubble,
+                  label: 'Comentarios',
+                  value: '$comments',
+                  color: colorScheme.tertiary,
+                ),
+              ),
+            ],
+          ),
+        ],
+      );
+    }
+
+    // En desktop: una fila de cuatro cards
     return Row(
       children: [
         Expanded(

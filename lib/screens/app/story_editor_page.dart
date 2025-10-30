@@ -587,6 +587,10 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   static const String _suggestionsFriendlyErrorMessage =
       'Estamos teniendo dificultades para generar nuevas sugerencias en este momento. Intenta nuevamente dentro de unos segundos.';
 
+  // Suggestions UI state
+  bool _showAllWarmups = false;
+  final Map<String, bool> _expandedSections = {};
+
   // Ghost Writer configuration (synced with user settings)
   String _ghostWriterTone = 'warm';
   String _ghostWriterEditingStyle = 'balanced';
@@ -1453,6 +1457,9 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         _lastSuggestionsSource = sourceKey;
         _suggestionsGeneratedAt = DateTime.now();
         _isSuggestionsLoading = false;
+        // Reset UI state for new suggestions
+        _showAllWarmups = false;
+        _expandedSections.clear();
       });
     } on OpenAIProxyException catch (error) {
       debugPrint('Story coach suggestions error: ${error.message}');
@@ -1637,92 +1644,367 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   ) {
     final statusColor = _suggestionsStatusColor(plan.status, colorScheme)
         .withValues(alpha: 0.85);
-    final statusLabel = _suggestionsStatusLabel(plan.status);
 
-    return DecoratedBox(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Compact summary card - always visible
+        _buildCompactSummaryCard(theme, colorScheme, plan, statusColor),
+
+        const SizedBox(height: 16),
+
+        // Quick inspiration chips - easy to scan
+        if (plan.warmups.isNotEmpty)
+          _buildQuickInspirationChips(theme, colorScheme, plan),
+
+        if (plan.warmups.isNotEmpty)
+          const SizedBox(height: 16),
+
+        // Expandable sections for details
+        if (plan.sections.isNotEmpty)
+          _buildExpandableSections(theme, colorScheme, plan),
+
+        if (plan.missingPieces.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          _buildMissingPiecesChips(theme, colorScheme, plan),
+        ],
+
+        if (plan.nextSteps.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          _buildNextStepsChips(theme, colorScheme, plan, statusColor),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildCompactSummaryCard(
+    ThemeData theme,
+    ColorScheme colorScheme,
+    StoryCoachPlan plan,
+    Color statusColor,
+  ) {
+    return Container(
       decoration: BoxDecoration(
-        color: colorScheme.surfaceVariant.withValues(alpha: 0.24),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: colorScheme.outlineVariant),
+        gradient: LinearGradient(
+          colors: [
+            statusColor.withValues(alpha: 0.15),
+            statusColor.withValues(alpha: 0.08),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: statusColor.withValues(alpha: 0.3),
+          width: 1.5,
+        ),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (_isSuggestionsLoading)
-              ClipRRect(
-                borderRadius: BorderRadius.circular(100),
-                child: LinearProgressIndicator(
-                  minHeight: 3,
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (_isSuggestionsLoading)
+            ClipRRect(
+              borderRadius: BorderRadius.circular(100),
+              child: LinearProgressIndicator(
+                minHeight: 2.5,
+                color: statusColor,
+                backgroundColor: colorScheme.surface.withValues(alpha: 0.3),
+              ),
+            ),
+          if (_isSuggestionsLoading) const SizedBox(height: 12),
+          Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(
+                  Icons.auto_awesome,
                   color: statusColor,
-                  backgroundColor: colorScheme.surface.withValues(alpha: 0.4),
+                  size: 24,
                 ),
               ),
-            if (_isSuggestionsLoading) const SizedBox(height: 12),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  plan.summary,
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    height: 1.4,
+                  ),
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Container(
+            decoration: BoxDecoration(
+              color: colorScheme.surface,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            child: Row(
               children: [
-                Icon(Icons.menu_book_rounded, color: statusColor),
-                const SizedBox(width: 10),
+                Icon(
+                  Icons.favorite,
+                  color: statusColor,
+                  size: 18,
+                ),
+                const SizedBox(width: 8),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        statusLabel,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        plan.summary,
-                        style:
-                            theme.textTheme.bodyMedium?.copyWith(height: 1.5),
-                      ),
-                    ],
+                  child: Text(
+                    plan.encouragement,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: colorScheme.onSurface.withValues(alpha: 0.85),
+                      height: 1.4,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
             ),
-            if (plan.missingPieces.isNotEmpty) ...[
-              const SizedBox(height: 18),
-              Container(
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickInspirationChips(
+    ThemeData theme,
+    ColorScheme colorScheme,
+    StoryCoachPlan plan,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(
+              Icons.lightbulb,
+              color: colorScheme.primary,
+              size: 20,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              plan.isStarting ? 'Ideas para comenzar' : 'Inspiración',
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: colorScheme.primary,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: plan.warmups.take(3).map((idea) {
+            return InkWell(
+              onTap: () {
+                // Copy to clipboard or insert at cursor
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Copiado: ${idea.substring(0, 30)}...'),
+                    duration: const Duration(seconds: 1),
+                  ),
+                );
+              },
+              borderRadius: BorderRadius.circular(14),
+              child: Container(
+                constraints: const BoxConstraints(maxWidth: 280),
                 decoration: BoxDecoration(
-                  color: colorScheme.errorContainer.withValues(alpha: 0.45),
-                  borderRadius: BorderRadius.circular(18),
+                  color: colorScheme.primaryContainer.withValues(alpha: 0.4),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: colorScheme.primary.withValues(alpha: 0.2),
+                  ),
                 ),
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(Icons.flag_outlined, color: colorScheme.error),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'Información que puedes detallar más',
-                            style: theme.textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w700,
-                              color: colorScheme.error,
-                            ),
-                          ),
-                        ),
-                      ],
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
+                child: Text(
+                  idea,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    height: 1.4,
+                  ),
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+        if (plan.warmups.length > 3) ...[
+          const SizedBox(height: 8),
+          TextButton.icon(
+            onPressed: () {
+              setState(() {
+                _showAllWarmups = !_showAllWarmups;
+              });
+            },
+            icon: Icon(
+              _showAllWarmups ? Icons.expand_less : Icons.expand_more,
+              size: 18,
+            ),
+            label: Text(
+              _showAllWarmups
+                  ? 'Ver menos'
+                  : 'Ver ${plan.warmups.length - 3} más',
+            ),
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            ),
+          ),
+          if (_showAllWarmups) ...[
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: plan.warmups.skip(3).map((idea) {
+                return InkWell(
+                  onTap: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Copiado: ${idea.substring(0, 30)}...'),
+                        duration: const Duration(seconds: 1),
+                      ),
+                    );
+                  },
+                  borderRadius: BorderRadius.circular(14),
+                  child: Container(
+                    constraints: const BoxConstraints(maxWidth: 280),
+                    decoration: BoxDecoration(
+                      color: colorScheme.primaryContainer.withValues(alpha: 0.4),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: colorScheme.primary.withValues(alpha: 0.2),
+                      ),
                     ),
-                    const SizedBox(height: 12),
-                    ...plan.missingPieces.map(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
+                    child: Text(
+                      idea,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        height: 1.4,
+                      ),
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
+        ],
+      ],
+    );
+  }
+
+  Widget _buildExpandableSections(
+    ThemeData theme,
+    ColorScheme colorScheme,
+    StoryCoachPlan plan,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: plan.sections.map((section) {
+        final isExpanded = _expandedSections[section.title] ?? false;
+        final backgroundColor =
+            _suggestionsSectionColor(section.purpose, colorScheme);
+        final icon = _suggestionsSectionIcon(section.purpose);
+
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: InkWell(
+            onTap: () {
+              setState(() {
+                _expandedSections[section.title] = !isExpanded;
+              });
+            },
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              decoration: BoxDecoration(
+                color: backgroundColor,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: colorScheme.primary.withValues(alpha: 0.15),
+                ),
+              ),
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: colorScheme.surface,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(
+                          icon,
+                          color: colorScheme.primary,
+                          size: 20,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              section.title,
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            if (section.description?.isNotEmpty == true)
+                              Text(
+                                section.description!,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: colorScheme.onSurface
+                                      .withValues(alpha: 0.7),
+                                ),
+                                maxLines: isExpanded ? null : 1,
+                                overflow: isExpanded
+                                    ? null
+                                    : TextOverflow.ellipsis,
+                              ),
+                          ],
+                        ),
+                      ),
+                      Icon(
+                        isExpanded
+                            ? Icons.expand_less
+                            : Icons.expand_more,
+                        color: colorScheme.primary,
+                      ),
+                    ],
+                  ),
+                  if (isExpanded) ...[
+                    const SizedBox(height: 10),
+                    ...section.items.map(
                       (item) => Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.only(bottom: 6),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Icon(
-                              Icons.radio_button_unchecked,
-                              size: 14,
-                              color: colorScheme.error,
+                              Icons.arrow_forward_ios,
+                              size: 12,
+                              color: colorScheme.primary.withValues(alpha: 0.7),
                             ),
                             const SizedBox(width: 8),
                             Expanded(
@@ -1736,120 +2018,122 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                       ),
                     ),
                   ],
-                ),
-              ),
-            ],
-            for (final section in plan.sections) ...[
-              const SizedBox(height: 18),
-              _buildStoryCoachSection(section, theme, colorScheme),
-            ],
-            if (plan.nextSteps.isNotEmpty) ...[
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Siguientes pasos sugeridos',
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
                 ],
               ),
-              const SizedBox(height: 8),
-              ...plan.nextSteps.map(
-                (step) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(
-                        Icons.check_circle_outline,
-                        size: 18,
-                        color: statusColor,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          step,
-                          style: theme.textTheme.bodyMedium,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-            if (plan.warmups.isNotEmpty) ...[
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      plan.isStarting
-                          ? 'Ideas para comenzar a escribir'
-                          : 'Preguntas extra para inspirarte',
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              ...plan.warmups.map(
-                (idea) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(
-                        Icons.lightbulb_outline,
-                        size: 18,
-                        color: colorScheme.primary,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          idea,
-                          style: theme.textTheme.bodyMedium,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-            const SizedBox(height: 20),
-            Container(
-              decoration: BoxDecoration(
-                color: statusColor.withValues(alpha: 0.14),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              padding: const EdgeInsets.all(14),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(
-                    Icons.favorite_outline,
-                    color: statusColor,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      plan.encouragement,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        height: 1.5,
-                      ),
-                    ),
-                  ),
-                ],
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildMissingPiecesChips(
+    ThemeData theme,
+    ColorScheme colorScheme,
+    StoryCoachPlan plan,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(
+              Icons.flag,
+              color: colorScheme.error,
+              size: 18,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'Puedes detallar más',
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: colorScheme.error,
               ),
             ),
           ],
         ),
-      ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: plan.missingPieces.map((item) {
+            return Container(
+              decoration: BoxDecoration(
+                color: colorScheme.errorContainer.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: colorScheme.error.withValues(alpha: 0.2),
+                ),
+              ),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 10,
+                vertical: 6,
+              ),
+              child: Text(
+                item,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colorScheme.error,
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNextStepsChips(
+    ThemeData theme,
+    ColorScheme colorScheme,
+    StoryCoachPlan plan,
+    Color statusColor,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(
+              Icons.check_circle,
+              color: statusColor,
+              size: 18,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'Siguientes pasos',
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: statusColor,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        ...plan.nextSteps.map(
+          (step) => Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.check_circle_outline,
+                  size: 16,
+                  color: statusColor.withValues(alpha: 0.8),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    step,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 

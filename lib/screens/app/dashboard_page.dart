@@ -4,10 +4,13 @@ import 'package:narra/repositories/user_repository.dart';
 import 'package:narra/repositories/story_repository.dart';
 import 'package:narra/services/story_service_new.dart';
 import 'package:narra/services/subscriber_service.dart';
+import 'package:narra/services/story_share_link_builder.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'dart:math' as math;
 import 'story_editor_page.dart';
 import 'app_navigation.dart';
 import 'stories_list_page.dart';
+import 'subscribers_page.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -214,6 +217,7 @@ class _DashboardPageState extends State<DashboardPage> {
                 child: _RecentActivitiesSection(
                   activity: _dashboardStats?['recent_activity'] ?? [],
                   subscriberDashboard: _subscriberDashboard,
+                  userProfile: _userProfile,
                 ),
               ),
 
@@ -255,6 +259,19 @@ class _WelcomeSection extends StatelessWidget {
       'recuperacion',
       'recuperación',
       'cultura',
+      'hogar',
+      'amistad',
+      'graduación',
+      'graduacion',
+      'mentoría laboral',
+      'mentoria laboral',
+      'fe y esperanza',
+      'recetas favoritas',
+      'música',
+      'musica',
+      'tecnología',
+      'tecnologia',
+      'conversaciones especiales',
     };
 
     // Lista de temas sugeridos comunes
@@ -372,7 +389,7 @@ class _WelcomeSection extends StatelessWidget {
             if (suggestedTopics.isNotEmpty) ...[
               const SizedBox(height: 20),
               Text(
-                '💡 Temas que podrías explorar:',
+                '✨ Inspírate y crea:',
                 style: theme.textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.w600,
                   color: colorScheme.onSurface,
@@ -419,7 +436,7 @@ class _WelcomeSection extends StatelessWidget {
                       ),
                     ),
                     icon: const Icon(Icons.add, size: 20),
-                    label: const Text('Nueva historia'),
+                    label: const Text('Empezar nueva historia'),
                     style: FilledButton.styleFrom(
                       backgroundColor: colorScheme.primary,
                       foregroundColor: colorScheme.onPrimary,
@@ -835,10 +852,12 @@ class _BookProgressSection extends StatelessWidget {
 class _RecentActivitiesSection extends StatelessWidget {
   final List<dynamic> activity;
   final SubscriberDashboardData? subscriberDashboard;
+  final Map<String, dynamic>? userProfile;
 
   const _RecentActivitiesSection({
     required this.activity,
     required this.subscriberDashboard,
+    required this.userProfile,
   });
 
   @override
@@ -848,40 +867,125 @@ class _RecentActivitiesSection extends StatelessWidget {
 
     // Combinar todas las actividades
     final activities = <_ActivityItem>[];
+    final authorId = userProfile?['id'] as String?;
 
     // Agregar actividades del autor
     for (final act in activity.take(5)) {
       if (act is UserActivity) {
+        VoidCallback? onTap;
+        // Si la actividad tiene un entityId (ID de historia), navegar a esa historia
+        if (act.entityId != null) {
+          onTap = () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => StoryEditorPage(storyId: act.entityId!),
+              ),
+            );
+          };
+        }
+
         activities.add(_ActivityItem(
           icon: _getActivityIcon(act.activityType.name),
           title: act.displayMessage,
           subtitle: _formatTimeAgo(act.createdAt),
           color: colorScheme.primary,
           date: act.createdAt,
+          onTap: onTap,
         ));
       }
     }
 
     // Agregar comentarios de suscriptores
-    if (subscriberDashboard != null) {
+    if (subscriberDashboard != null && authorId != null) {
       for (final comment in subscriberDashboard!.recentComments.take(3)) {
+        VoidCallback? onTap;
+        // Generar magic link para el comentario
+        if (comment.subscriberId != null && comment.storyId.isNotEmpty) {
+          final subscriber = subscriberDashboard!.subscribers
+              .where((s) => s.id == comment.subscriberId)
+              .firstOrNull;
+
+          if (subscriber != null && subscriber.magicKey.isNotEmpty) {
+            onTap = () async {
+              final magicLink = StoryShareLinkBuilder.buildStoryLink(
+                story: Story(
+                  id: comment.storyId,
+                  userId: authorId,
+                  title: comment.storyTitle,
+                  content: '',
+                  status: StoryStatus.published,
+                  createdAt: DateTime.now(),
+                  updatedAt: DateTime.now(),
+                ),
+                subscriber: StoryShareTarget(
+                  id: subscriber.id,
+                  name: subscriber.name,
+                  token: subscriber.magicKey,
+                  source: comment.source ?? 'dashboard',
+                ),
+              );
+
+              if (await canLaunchUrl(magicLink)) {
+                await launchUrl(magicLink, mode: LaunchMode.externalApplication);
+              }
+            };
+          }
+        }
+
         activities.add(_ActivityItem(
           icon: Icons.chat_bubble,
           title: '${comment.subscriberName ?? 'Suscriptor'} comentó',
           subtitle: _truncate(comment.content, maxLength: 60),
           color: colorScheme.secondary,
           date: comment.createdAt,
+          onTap: onTap,
         ));
       }
 
       // Agregar reacciones de suscriptores
       for (final reaction in subscriberDashboard!.recentReactions.take(3)) {
+        VoidCallback? onTap;
+        // Generar magic link para la reacción
+        if (reaction.subscriberId != null && reaction.storyId.isNotEmpty) {
+          final subscriber = subscriberDashboard!.subscribers
+              .where((s) => s.id == reaction.subscriberId)
+              .firstOrNull;
+
+          if (subscriber != null && subscriber.magicKey.isNotEmpty) {
+            onTap = () async {
+              final magicLink = StoryShareLinkBuilder.buildStoryLink(
+                story: Story(
+                  id: reaction.storyId,
+                  userId: authorId,
+                  title: reaction.storyTitle,
+                  content: '',
+                  status: StoryStatus.published,
+                  createdAt: DateTime.now(),
+                  updatedAt: DateTime.now(),
+                ),
+                subscriber: StoryShareTarget(
+                  id: subscriber.id,
+                  name: subscriber.name,
+                  token: subscriber.magicKey,
+                  source: reaction.source ?? 'dashboard',
+                ),
+              );
+
+              if (await canLaunchUrl(magicLink)) {
+                await launchUrl(magicLink, mode: LaunchMode.externalApplication);
+              }
+            };
+          }
+        }
+
         activities.add(_ActivityItem(
           icon: Icons.favorite,
           title: '${reaction.subscriberName ?? 'Suscriptor'} dio corazón',
           subtitle: 'En "${reaction.storyTitle}"',
           color: Colors.red,
           date: reaction.createdAt,
+          onTap: onTap,
         ));
       }
 
@@ -898,6 +1002,14 @@ class _RecentActivitiesSection extends StatelessWidget {
           subtitle: 'Nuevo suscriptor confirmado',
           color: colorScheme.tertiary,
           date: subscriber.lastAccessAt!,
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const SubscribersPage(),
+              ),
+            );
+          },
         ));
       }
     }
@@ -979,46 +1091,62 @@ class _RecentActivitiesSection extends StatelessWidget {
             ...displayActivities.map((activity) {
               return Padding(
                 padding: const EdgeInsets.only(bottom: 12),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: activity.color.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(
-                        activity.icon,
-                        size: 20,
-                        color: activity.color,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: activity.onTap,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                      child: Row(
                         children: [
-                          Text(
-                            activity.title,
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w600,
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: activity.color.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(12),
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                            child: Icon(
+                              activity.icon,
+                              size: 20,
+                              color: activity.color,
+                            ),
                           ),
-                          if (activity.subtitle.isNotEmpty)
-                            Text(
-                              activity.subtitle,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: colorScheme.onSurfaceVariant,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  activity.title,
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                if (activity.subtitle.isNotEmpty)
+                                  Text(
+                                    activity.subtitle,
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: colorScheme.onSurfaceVariant,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                              ],
+                            ),
+                          ),
+                          if (activity.onTap != null)
+                            Icon(
+                              Icons.chevron_right,
+                              size: 20,
+                              color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
                             ),
                         ],
                       ),
                     ),
-                  ],
+                  ),
                 ),
               );
             }),
@@ -1077,6 +1205,7 @@ class _ActivityItem {
   final String subtitle;
   final Color color;
   final DateTime date;
+  final VoidCallback? onTap;
 
   _ActivityItem({
     required this.icon,
@@ -1084,6 +1213,7 @@ class _ActivityItem {
     required this.subtitle,
     required this.color,
     required this.date,
+    this.onTap,
   });
 }
 

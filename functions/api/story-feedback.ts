@@ -122,17 +122,22 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         );
 
         // Transform comments to have the correct field names for frontend
-        const transformedComments = comments.map(row => ({
-          id: row.id,
-          subscriberId: row.subscriber_id,
-          subscriberName: row.subscriber_id === authorId
-            ? `${row.author_name || 'Suscriptor'} - Autor`
-            : (row.author_name || 'Suscriptor'),
-          content: row.content || "",
-          createdAt: row.created_at,
-          parentCommentId: row.parent_id,
-          source: row.source,
-        }));
+        const transformedComments = comments.map(row => {
+          // Check if comment is from author (subscriber_id is null or equals authorId)
+          const isAuthorComment = !row.subscriber_id || row.subscriber_id === authorId;
+
+          return {
+            id: row.id,
+            subscriberId: row.subscriber_id,
+            subscriberName: isAuthorComment
+              ? `${row.author_name || 'Suscriptor'} - Autor`
+              : (row.author_name || 'Suscriptor'),
+            content: row.content || "",
+            createdAt: row.created_at,
+            parentCommentId: row.parent_id,
+            source: row.source,
+          };
+        });
 
         return json({
           comments: transformedComments,
@@ -486,10 +491,13 @@ async function insertComment(
     token: string;
   },
 ) {
+  // If subscriber is the author, set subscriber_id to null to avoid FK constraint issues
+  const isAuthor = options.subscriberId === options.authorId || options.subscriber?.is_author === true;
+
   const payload = {
     user_id: options.authorId,
     story_id: options.storyId,
-    subscriber_id: options.subscriberId,
+    subscriber_id: isAuthor ? null : options.subscriberId,
     parent_id: options.parentCommentId ?? null,
     author_name: normalizeDisplayName(options.subscriber?.name),
     author_email: normalizeOptional(options.subscriber?.email, 320) ?? null,
@@ -500,6 +508,7 @@ async function insertComment(
       ip: options.ip,
       userAgent: options.userAgent?.substring(0, 512) ?? null,
       tokenHash: hashToken(options.token),
+      is_author: isAuthor,
     },
   };
 
@@ -615,7 +624,7 @@ async function toggleReaction(
     return false;
   }
 
-  return false;
+  return true;
 }
 
 function buildCommentTree(rows: any[], authorId: string) {

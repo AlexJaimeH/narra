@@ -1442,7 +1442,7 @@ create table if not exists public.author_magic_links (
 -- Índices para búsqueda eficiente
 create index if not exists author_magic_links_token_idx
   on public.author_magic_links (token)
-  where used_at is null and expires_at > timezone('utc', now());
+  where used_at is null;
 
 create index if not exists author_magic_links_email_idx
   on public.author_magic_links (email, created_at desc);

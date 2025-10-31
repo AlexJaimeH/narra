@@ -47,12 +47,10 @@ class _MagicLinkCallbackPageState extends State<MagicLinkCallbackPage> {
             // Usar Supabase para establecer la sesión con los tokens
             final supabase = SupabaseConfig.client;
 
-            final authResponse = await supabase.auth.setSession(
-              accessToken,
-              refreshToken,
-            );
+            // Intentar recuperar la sesión con el refresh token
+            final authResponse = await supabase.auth.recoverSession(refreshToken);
 
-            if (authResponse.session != null) {
+            if (authResponse?.session != null) {
               if (mounted) {
                 setState(() {
                   _success = true;

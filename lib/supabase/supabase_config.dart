@@ -29,7 +29,6 @@ class SupabaseConfig {
         authFlowType: AuthFlowType.pkce,
         // Para web, Supabase detectará automáticamente tokens en el hash fragment
         autoRefreshToken: true,
-        persistSession: true,
       ),
     );
   }

@@ -20,6 +20,7 @@ class _AppNavigationState extends State<AppNavigation> {
   late int _currentIndex;
   bool _isMenuOpen = false;
   bool _isScrolled = false;
+  bool _isCheckingAuth = true;
 
   final List<_NavigationItem> _items = const [
     _NavigationItem(
@@ -62,18 +63,64 @@ class _AppNavigationState extends State<AppNavigation> {
     _checkAuthentication();
   }
 
-  void _checkAuthentication() {
-    if (!SupabaseAuth.isAuthenticated) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          Navigator.pushReplacementNamed(context, '/app/login');
-        }
+  void _checkAuthentication() async {
+    // Dar tiempo a Supabase para procesar tokens del magic link en la URL
+    // Cuando un usuario hace clic en el magic link, Supabase redirige con tokens
+    // en el hash fragment que necesitan ser procesados
+
+    // Intentar obtener la sesión múltiples veces con delays entre intentos
+    var session = SupabaseConfig.client.auth.currentSession;
+
+    // Si no hay sesión inmediata, esperar y reintentar
+    if (session == null) {
+      await Future.delayed(const Duration(milliseconds: 500));
+      session = SupabaseConfig.client.auth.currentSession;
+    }
+
+    // Segundo intento si aún no hay sesión
+    if (session == null) {
+      await Future.delayed(const Duration(milliseconds: 500));
+      session = SupabaseConfig.client.auth.currentSession;
+    }
+
+    if (mounted) {
+      setState(() {
+        _isCheckingAuth = false;
       });
+
+      if (session == null) {
+        // No hay sesión después de esperar, redirigir a login
+        Navigator.pushReplacementNamed(context, '/app/login');
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    // Mostrar pantalla de carga mientras se verifica la autenticación
+    if (_isCheckingAuth) {
+      return Scaffold(
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  Theme.of(context).primaryColor,
+                ),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'Verificando autenticación...',
+                style: Theme.of(context).textTheme.bodyLarge,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final isCompact = constraints.maxWidth < 840;

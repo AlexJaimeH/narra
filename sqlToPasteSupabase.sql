@@ -1417,3 +1417,139 @@ grant execute on function public.register_subscriber_access(
 ) to anon, authenticated;
 
 commit;
+
+-- ============================================================
+-- Author Magic Links for Passwordless Authentication (Fecha: 2025-10-31)
+-- ============================================================
+-- Sistema de autenticación sin contraseña para autores usando magic links
+-- por correo electrónico. Similar al sistema de suscriptores pero para autores.
+
+begin;
+
+-- Tabla para almacenar magic links temporales de autores
+create table if not exists public.author_magic_links (
+  id uuid primary key default gen_random_uuid(),
+  email text not null,
+  token text not null unique,
+  user_id uuid references auth.users(id) on delete cascade,
+  created_at timestamptz not null default timezone('utc', now()),
+  expires_at timestamptz not null default (timezone('utc', now()) + interval '15 minutes'),
+  used_at timestamptz,
+  ip_address inet,
+  user_agent text
+);
+
+-- Índices para búsqueda eficiente
+create index if not exists author_magic_links_token_idx
+  on public.author_magic_links (token)
+  where used_at is null and expires_at > timezone('utc', now());
+
+create index if not exists author_magic_links_email_idx
+  on public.author_magic_links (email, created_at desc);
+
+-- RLS: Solo funciones del servidor pueden acceder a esta tabla
+alter table public.author_magic_links enable row level security;
+
+-- Política para servicio (Cloudflare Functions necesitan acceso)
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'author_magic_links'
+      and policyname = 'Service role can manage author magic links'
+  ) then
+    create policy "Service role can manage author magic links"
+      on public.author_magic_links
+      for all
+      using (true)
+      with check (true);
+  end if;
+end
+$$;
+
+-- Función para limpiar magic links expirados (ejecutar periódicamente)
+create or replace function public.cleanup_expired_author_magic_links()
+returns void
+language plpgsql
+security definer
+as $$
+begin
+  delete from public.author_magic_links
+  where expires_at < timezone('utc', now()) - interval '1 day';
+end;
+$$;
+
+-- Función para validar un magic link y retornar info del usuario
+create or replace function public.validate_author_magic_link(
+  p_token text,
+  p_ip_address inet default null,
+  p_user_agent text default null
+)
+returns jsonb
+language plpgsql
+security definer
+as $$
+declare
+  v_link record;
+  v_user record;
+  v_now timestamptz;
+begin
+  v_now := timezone('utc', now());
+
+  -- Buscar el magic link
+  select * into v_link
+  from public.author_magic_links
+  where token = p_token
+    and used_at is null
+    and expires_at > v_now
+  limit 1;
+
+  -- Si no existe o ya fue usado o expiró
+  if not found then
+    return jsonb_build_object(
+      'status', 'error',
+      'message', 'Magic link inválido, expirado o ya usado'
+    );
+  end if;
+
+  -- Marcar como usado
+  update public.author_magic_links
+  set used_at = v_now,
+      ip_address = coalesce(p_ip_address, ip_address),
+      user_agent = coalesce(p_user_agent, user_agent)
+  where id = v_link.id;
+
+  -- Si ya existe el usuario, retornar su info
+  if v_link.user_id is not null then
+    select id, email, raw_user_meta_data
+    into v_user
+    from auth.users
+    where id = v_link.user_id;
+
+    if found then
+      return jsonb_build_object(
+        'status', 'success',
+        'action', 'login',
+        'user', jsonb_build_object(
+          'id', v_user.id,
+          'email', v_user.email,
+          'name', coalesce(v_user.raw_user_meta_data->>'full_name', v_user.raw_user_meta_data->>'name', split_part(v_user.email, '@', 1))
+        )
+      );
+    end if;
+  end if;
+
+  -- Si no existe el usuario, indicar que debe crearse
+  return jsonb_build_object(
+    'status', 'success',
+    'action', 'register',
+    'email', v_link.email
+  );
+end;
+$$;
+
+grant execute on function public.cleanup_expired_author_magic_links() to service_role;
+grant execute on function public.validate_author_magic_link(text, inet, text) to anon, authenticated, service_role;
+
+commit;

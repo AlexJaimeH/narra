@@ -6,6 +6,8 @@ import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:narra/screens/app/app_navigation.dart';
 import 'package:narra/screens/auth/login_page.dart';
 import 'package:narra/screens/auth/register_page.dart';
+import 'package:narra/screens/auth/magic_link_login_page.dart';
+import 'package:narra/screens/auth/magic_link_callback_page.dart';
 import 'package:narra/supabase/supabase_config.dart';
 import 'package:narra/theme_controller.dart';
 
@@ -75,7 +77,7 @@ class NarraApp extends StatelessWidget {
                   );
                 case '/app/login':
                   return MaterialPageRoute(
-                    builder: (_) => const LoginPage(),
+                    builder: (_) => const MagicLinkLoginPage(),
                     settings: settings,
                   );
                 case '/app/register':
@@ -83,6 +85,18 @@ class NarraApp extends StatelessWidget {
                     builder: (_) => const RegisterPage(),
                     settings: settings,
                   );
+              }
+
+              // Handle magic link callback with token parameter
+              if (routeName.startsWith('/app/auth/magic')) {
+                final uri = Uri.parse(routeName);
+                final token = uri.queryParameters['token'];
+                if (token != null && token.isNotEmpty) {
+                  return MaterialPageRoute(
+                    builder: (_) => MagicLinkCallbackPage(token: token),
+                    settings: settings,
+                  );
+                }
               }
 
               // Default to app navigation (will redirect to login if not authenticated)

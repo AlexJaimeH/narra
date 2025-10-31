@@ -17,12 +17,6 @@ export const onRequestOptions: PagesFunction<Env> = async () => {
   return new Response(null, { status: 204, headers: CORS_HEADERS });
 };
 
-function generateSecureToken(): string {
-  const array = new Uint8Array(32);
-  crypto.getRandomValues(array);
-  return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
-}
-
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -79,41 +73,75 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       existingUser = users.find((u: any) => u.email?.toLowerCase() === email);
     }
 
-    // Generar token único
-    const token = generateSecureToken();
-    const now = new Date().toISOString();
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString(); // 15 minutos
+    // Si el usuario no existe, crearlo primero
+    if (!existingUser) {
+      console.log('[author-magic-link] Creating new user:', email);
+      const createUserResponse = await fetch(
+        `${env.SUPABASE_URL}/auth/v1/admin/users`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+            'apikey': env.SUPABASE_SERVICE_ROLE_KEY,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            email: email,
+            email_confirm: true,
+            user_metadata: {
+              name: email.split('@')[0],
+            },
+          }),
+        }
+      );
 
-    // Insertar magic link en la base de datos
-    const insertResponse = await fetch(
-      `${env.SUPABASE_URL}/rest/v1/author_magic_links`,
+      if (!createUserResponse.ok) {
+        const errorText = await createUserResponse.text();
+        console.error('[author-magic-link] Failed to create user:', errorText);
+        // Continuar de todos modos, puede que el usuario ya exista
+      }
+    }
+
+    // Generar magic link usando Supabase Admin API
+    const appUrl = env.APP_URL || 'https://narra-8m1.pages.dev';
+
+    const generateLinkResponse = await fetch(
+      `${env.SUPABASE_URL}/auth/v1/admin/generate_link`,
       {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
           'apikey': env.SUPABASE_SERVICE_ROLE_KEY,
           'Content-Type': 'application/json',
-          'Prefer': 'return=representation',
         },
         body: JSON.stringify({
+          type: 'magiclink',
           email: email,
-          token: token,
-          user_id: existingUser?.id || null,
-          created_at: now,
-          expires_at: expiresAt,
+          options: {
+            redirect_to: `${appUrl}/app`,
+          },
         }),
       }
     );
 
-    if (!insertResponse.ok) {
-      const errorText = await insertResponse.text();
-      console.error('[author-magic-link] Failed to insert magic link:', errorText);
+    if (!generateLinkResponse.ok) {
+      const errorText = await generateLinkResponse.text();
+      console.error('[author-magic-link] Failed to generate magic link:', errorText);
       return json({ error: 'Failed to generate magic link' }, 500);
     }
 
-    // Construir el link de magic login
-    const appUrl = env.APP_URL || 'https://narra-8m1.pages.dev';
-    const magicLink = `${appUrl}/app/auth/magic?token=${token}`;
+    const linkData = await generateLinkResponse.json();
+    console.log('[author-magic-link] Generated link data keys:', Object.keys(linkData));
+
+    // Extraer el action_link completo que es el que hay que enviar
+    const magicLink = linkData.properties?.action_link || linkData.action_link;
+
+    if (!magicLink) {
+      console.error('[author-magic-link] No action_link found in response');
+      return json({ error: 'Failed to generate magic link' }, 500);
+    }
+
+    console.log('[author-magic-link] Magic link generated successfully');
 
     // Enviar email
     const emailHtml = buildMagicLinkEmail(email, magicLink, !!existingUser);
@@ -203,7 +231,7 @@ function buildMagicLinkEmail(email: string, magicLink: string, isExistingUser: b
                       🔒 Tu enlace es seguro y personal
                     </p>
                     <p style="margin:0;font-size:16px;line-height:1.65;color:#92400e;">
-                      Este enlace es único para <strong>${email}</strong> y expira en <strong>15 minutos</strong> por tu seguridad.
+                      Este enlace es único para <strong>${email}</strong> y expira en <strong>1 hora</strong> por tu seguridad.
                     </p>
                   </div>
 
@@ -277,7 +305,7 @@ function buildMagicLinkPlainText(email: string, magicLink: string, isExistingUse
     'Haz clic en el siguiente enlace para continuar:',
     magicLink,
     '',
-    `Este enlace es único para ${email} y expira en 15 minutos por tu seguridad.`,
+    `Este enlace es único para ${email} y expira en 1 hora por tu seguridad.`,
     '',
     isExistingUser
       ? '¿No solicitaste este enlace? Puedes ignorar este correo de forma segura.'

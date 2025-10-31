@@ -25,6 +25,12 @@ class SupabaseConfig {
     _instance = await Supabase.initialize(
       url: supabaseUrl,
       anonKey: supabaseAnonKey,
+      authOptions: const FlutterAuthClientOptions(
+        authFlowType: AuthFlowType.pkce,
+        // Para web, Supabase detectará automáticamente tokens en el hash fragment
+        autoRefreshToken: true,
+        persistSession: true,
+      ),
     );
   }
 }

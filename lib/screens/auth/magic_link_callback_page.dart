@@ -40,17 +40,16 @@ class _MagicLinkCallbackPageState extends State<MagicLinkCallbackPage> {
 
         if (data['success'] == true && data['auth'] != null) {
           final auth = data['auth'];
-          final tokenHash = auth['token_hash'];
-          final email = data['email'];
+          final accessToken = auth['access_token'];
+          final refreshToken = auth['refresh_token'];
 
-          if (tokenHash != null && email != null) {
-            // Usar Supabase para verificar el OTP con el token_hash
+          if (accessToken != null && refreshToken != null) {
+            // Usar Supabase para establecer la sesión con los tokens
             final supabase = SupabaseConfig.client;
 
-            final authResponse = await supabase.auth.verifyOtp(
-              type: OtpType.magiclink,
-              token: tokenHash,
-              email: email,
+            final authResponse = await supabase.auth.setSession(
+              accessToken,
+              refreshToken,
             );
 
             if (authResponse.session != null) {
@@ -72,7 +71,7 @@ class _MagicLinkCallbackPageState extends State<MagicLinkCallbackPage> {
               throw Exception('No se pudo establecer la sesión');
             }
           } else {
-            throw Exception('No se recibió token de autenticación');
+            throw Exception('No se recibieron tokens de autenticación');
           }
         } else {
           throw Exception(data['error'] ?? 'Error al validar el enlace');

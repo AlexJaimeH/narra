@@ -121,25 +121,27 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     const linkData = await generateLinkResponse.json();
     console.log('[author-magic-validate] Generated link data:', linkData);
 
-    // Extraer el token_hash del action_link
-    let tokenHash = null;
+    // Extraer access_token y refresh_token de la respuesta
+    let accessToken = null;
+    let refreshToken = null;
+    let expiresIn = 3600;
+
     try {
-      if (linkData.properties && linkData.properties.hashed_token) {
-        tokenHash = linkData.properties.hashed_token;
-      } else if (linkData.action_link) {
-        const actionUrl = new URL(linkData.properties?.action_link || linkData.action_link);
-        tokenHash = actionUrl.searchParams.get('token_hash');
+      if (linkData.properties) {
+        accessToken = linkData.properties.access_token;
+        refreshToken = linkData.properties.refresh_token;
+        expiresIn = linkData.properties.expires_in || 3600;
       }
     } catch (e) {
       console.error('[author-magic-validate] Error parsing link data:', e);
     }
 
-    if (!tokenHash) {
-      console.error('[author-magic-validate] No token_hash found in response');
-      return json({ error: 'Failed to generate authentication token' }, 500);
+    if (!accessToken || !refreshToken) {
+      console.error('[author-magic-validate] No tokens found in response');
+      return json({ error: 'Failed to generate authentication tokens' }, 500);
     }
 
-    console.log('[author-magic-validate] Successfully generated token_hash');
+    console.log('[author-magic-validate] Successfully generated session tokens');
 
     // Si es registro, crear el usuario primero
     if (validationResult.action === 'register') {
@@ -171,7 +173,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       }
     }
 
-    // Devolver el token_hash para que Flutter lo use con verifyOtp
+    // Devolver los tokens de sesión para que Flutter los use con setSession
     return json({
       success: true,
       action: validationResult.action,
@@ -181,8 +183,10 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         name: email.split('@')[0],
       },
       auth: {
-        token_hash: tokenHash,
-        type: 'magiclink',
+        access_token: accessToken,
+        refresh_token: refreshToken,
+        expires_in: expiresIn,
+        token_type: 'bearer',
       },
     });
 

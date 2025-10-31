@@ -85,11 +85,66 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       }, 400);
     }
 
-    // Si necesitamos crear un nuevo usuario (registro)
-    if (validationResult.action === 'register') {
-      console.log('[author-magic-validate] Creating new user:', validationResult.email);
+    const email = validationResult.action === 'register'
+      ? validationResult.email
+      : validationResult.user?.email;
 
-      // Crear usuario con Supabase Auth
+    if (!email) {
+      return json({ error: 'No email found in validation result' }, 500);
+    }
+
+    // Generar link de magic link de Supabase para obtener el token_hash
+    console.log('[author-magic-validate] Generating Supabase magic link for:', email);
+
+    const generateLinkResponse = await fetch(
+      `${env.SUPABASE_URL}/auth/v1/admin/generate_link`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+          'apikey': env.SUPABASE_SERVICE_ROLE_KEY,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          type: 'magiclink',
+          email: email,
+        }),
+      }
+    );
+
+    if (!generateLinkResponse.ok) {
+      const errorText = await generateLinkResponse.text();
+      console.error('[author-magic-validate] Failed to generate Supabase link:', errorText);
+      return json({ error: 'Failed to generate authentication link' }, 500);
+    }
+
+    const linkData = await generateLinkResponse.json();
+    console.log('[author-magic-validate] Generated link data:', linkData);
+
+    // Extraer el token_hash del action_link
+    let tokenHash = null;
+    try {
+      if (linkData.properties && linkData.properties.hashed_token) {
+        tokenHash = linkData.properties.hashed_token;
+      } else if (linkData.action_link) {
+        const actionUrl = new URL(linkData.properties?.action_link || linkData.action_link);
+        tokenHash = actionUrl.searchParams.get('token_hash');
+      }
+    } catch (e) {
+      console.error('[author-magic-validate] Error parsing link data:', e);
+    }
+
+    if (!tokenHash) {
+      console.error('[author-magic-validate] No token_hash found in response');
+      return json({ error: 'Failed to generate authentication token' }, 500);
+    }
+
+    console.log('[author-magic-validate] Successfully generated token_hash');
+
+    // Si es registro, crear el usuario primero
+    if (validationResult.action === 'register') {
+      console.log('[author-magic-validate] Creating new user account');
+
       const createUserResponse = await fetch(
         `${env.SUPABASE_URL}/auth/v1/admin/users`,
         {
@@ -100,10 +155,10 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            email: validationResult.email,
+            email: email,
             email_confirm: true,
             user_metadata: {
-              name: validationResult.email.split('@')[0],
+              name: email.split('@')[0],
             },
           }),
         }
@@ -112,107 +167,27 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       if (!createUserResponse.ok) {
         const errorText = await createUserResponse.text();
         console.error('[author-magic-validate] Failed to create user:', errorText);
-        return json({ error: 'Failed to create user account' }, 500);
+        // No fallar si el usuario ya existe
       }
-
-      const newUser = await createUserResponse.json();
-
-      // Generar sesión para el nuevo usuario
-      const sessionResponse = await fetch(
-        `${env.SUPABASE_URL}/auth/v1/token?grant_type=password`,
-        {
-          method: 'POST',
-          headers: {
-            'apikey': env.SUPABASE_SERVICE_ROLE_KEY,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            email: validationResult.email,
-            password: token, // Usar el token temporalmente, luego lo cambiaremos
-          }),
-        }
-      );
-
-      // En caso de que falle la generación de sesión automática,
-      // generar un link de sesión manual
-      const generateLinkResponse = await fetch(
-        `${env.SUPABASE_URL}/auth/v1/admin/generate_link`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
-            'apikey': env.SUPABASE_SERVICE_ROLE_KEY,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            type: 'magiclink',
-            email: validationResult.email,
-          }),
-        }
-      );
-
-      if (!generateLinkResponse.ok) {
-        console.error('[author-magic-validate] Failed to generate session link');
-        return json({ error: 'Failed to generate session' }, 500);
-      }
-
-      const linkData = await generateLinkResponse.json();
-
-      return json({
-        success: true,
-        action: 'register',
-        user: {
-          id: newUser.id,
-          email: newUser.email,
-          name: newUser.user_metadata?.name || newUser.email.split('@')[0],
-        },
-        session: linkData,
-      });
     }
 
-    // Si es un usuario existente (login)
-    if (validationResult.action === 'login' && validationResult.user) {
-      console.log('[author-magic-validate] Logging in user:', validationResult.user.email);
-
-      // Generar un link de sesión para el usuario existente
-      const generateLinkResponse = await fetch(
-        `${env.SUPABASE_URL}/auth/v1/admin/generate_link`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
-            'apikey': env.SUPABASE_SERVICE_ROLE_KEY,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            type: 'magiclink',
-            email: validationResult.user.email,
-          }),
-        }
-      );
-
-      if (!generateLinkResponse.ok) {
-        const errorText = await generateLinkResponse.text();
-        console.error('[author-magic-validate] Failed to generate session link:', errorText);
-        return json({ error: 'Failed to generate session' }, 500);
-      }
-
-      const linkData = await generateLinkResponse.json();
-
-      return json({
-        success: true,
-        action: 'login',
-        user: validationResult.user,
-        session: linkData,
-      });
-    }
-
-    // Caso inesperado
-    console.error('[author-magic-validate] Unexpected validation result:', validationResult);
-    return json({ error: 'Unexpected validation result' }, 500);
+    // Devolver el token_hash para que Flutter lo use con verifyOtp
+    return json({
+      success: true,
+      action: validationResult.action,
+      email: email,
+      user: validationResult.user || {
+        email: email,
+        name: email.split('@')[0],
+      },
+      auth: {
+        token_hash: tokenHash,
+        type: 'magiclink',
+      },
+    });
 
   } catch (error) {
     console.error('[author-magic-validate] Unexpected error:', error);
-    return json({ error: 'Internal server error' }, 500);
+    return json({ error: 'Internal server error', details: String(error) }, 500);
   }
 };

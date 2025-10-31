@@ -90,11 +90,28 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     console.log('[author-magic-link] Link data keys:', Object.keys(linkData));
 
     // Extraer el action_link completo
-    const magicLink = linkData.properties?.action_link || linkData.action_link;
+    let magicLink = linkData.properties?.action_link || linkData.action_link;
 
     if (!magicLink) {
       console.error('[author-magic-link] No action_link found');
       return json({ error: 'Failed to generate magic link' }, 500);
+    }
+
+    console.log('[author-magic-link] Original magic link:', magicLink);
+
+    // IMPORTANTE: Reemplazar localhost si aparece en el link
+    // Esto sucede cuando el Site URL en Supabase está configurado como localhost
+    if (magicLink.includes('localhost')) {
+      console.log('[author-magic-link] Detected localhost in magic link, replacing with production URL');
+      magicLink = magicLink.replace(
+        /redirect_to=http:\/\/localhost:\d+/g,
+        `redirect_to=${encodeURIComponent(redirectTo)}`
+      );
+      magicLink = magicLink.replace(
+        /redirect_to=https:\/\/localhost:\d+/g,
+        `redirect_to=${encodeURIComponent(redirectTo)}`
+      );
+      console.log('[author-magic-link] Modified magic link:', magicLink);
     }
 
     console.log('[author-magic-link] Magic link generated successfully');

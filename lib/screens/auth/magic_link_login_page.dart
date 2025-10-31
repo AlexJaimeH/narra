@@ -70,21 +70,40 @@ class _MagicLinkLoginPageState extends State<MagicLinkLoginPage> {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isDesktop = screenWidth > 900;
+    final isTablet = screenWidth > 600 && screenWidth <= 900;
+
+    // Ajustar el ancho máximo según el dispositivo
+    final maxWidth = isDesktop ? 720.0 : (isTablet ? 600.0 : 520.0);
+    final horizontalPadding = isDesktop ? 48.0 : (isTablet ? 40.0 : 24.0);
+    final verticalPadding = isDesktop ? 64.0 : (isTablet ? 48.0 : 32.0);
+
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
       body: Center(
         child: SingleChildScrollView(
+          padding: EdgeInsets.symmetric(
+            horizontal: horizontalPadding,
+            vertical: verticalPadding,
+          ),
           child: Container(
-            constraints: const BoxConstraints(maxWidth: 520),
-            padding: const EdgeInsets.all(32.0),
-            child: _emailSent ? _buildSuccessView() : _buildLoginForm(),
+            constraints: BoxConstraints(maxWidth: maxWidth),
+            child: _emailSent
+              ? _buildSuccessView(isDesktop: isDesktop)
+              : _buildLoginForm(isDesktop: isDesktop),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildLoginForm() {
+  Widget _buildLoginForm({required bool isDesktop}) {
+    final logoSize = isDesktop ? 140.0 : 120.0;
+    final iconSize = isDesktop ? 64.0 : 56.0;
+    final titleSize = isDesktop ? 40.0 : 32.0;
+    final bodySize = isDesktop ? 19.0 : 17.0;
+
     return Form(
       key: _formKey,
       child: Column(
@@ -94,8 +113,8 @@ class _MagicLinkLoginPageState extends State<MagicLinkLoginPage> {
           // Logo con animación sutil
           Center(
             child: Container(
-              width: 120,
-              height: 120,
+              width: logoSize,
+              height: logoSize,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
@@ -114,9 +133,9 @@ class _MagicLinkLoginPageState extends State<MagicLinkLoginPage> {
                   ),
                 ],
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.auto_stories_rounded,
-                size: 56,
+                size: iconSize,
                 color: Colors.white,
               ),
             ),
@@ -128,7 +147,7 @@ class _MagicLinkLoginPageState extends State<MagicLinkLoginPage> {
             'Bienvenido a Narra',
             style: Theme.of(context).textTheme.headlineMedium?.copyWith(
               fontWeight: FontWeight.bold,
-              fontSize: 32,
+              fontSize: titleSize,
               letterSpacing: -0.5,
             ),
             textAlign: TextAlign.center,
@@ -170,7 +189,7 @@ class _MagicLinkLoginPageState extends State<MagicLinkLoginPage> {
                   '4. Abre el correo y haz clic en el enlace',
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                     height: 1.8,
-                    fontSize: 17,
+                    fontSize: bodySize,
                   ),
                   textAlign: TextAlign.center,
                 ),
@@ -313,15 +332,19 @@ class _MagicLinkLoginPageState extends State<MagicLinkLoginPage> {
     );
   }
 
-  Widget _buildSuccessView() {
+  Widget _buildSuccessView({required bool isDesktop}) {
+    final iconContainerSize = isDesktop ? 160.0 : 140.0;
+    final iconSize = isDesktop ? 80.0 : 70.0;
+    final titleSize = isDesktop ? 40.0 : 32.0;
+
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         // Ícono de éxito
         Container(
-          width: 140,
-          height: 140,
+          width: iconContainerSize,
+          height: iconContainerSize,
           decoration: BoxDecoration(
             color: Colors.green,
             shape: BoxShape.circle,
@@ -333,9 +356,9 @@ class _MagicLinkLoginPageState extends State<MagicLinkLoginPage> {
               ),
             ],
           ),
-          child: const Icon(
+          child: Icon(
             Icons.mark_email_read_rounded,
-            size: 70,
+            size: iconSize,
             color: Colors.white,
           ),
         ),
@@ -345,7 +368,7 @@ class _MagicLinkLoginPageState extends State<MagicLinkLoginPage> {
           '¡Correo enviado!',
           style: Theme.of(context).textTheme.headlineMedium?.copyWith(
             fontWeight: FontWeight.bold,
-            fontSize: 32,
+            fontSize: titleSize,
             color: Colors.green.shade700,
           ),
           textAlign: TextAlign.center,

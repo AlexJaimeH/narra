@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:narra/repositories/auth_repository.dart';
+import 'package:narra/supabase/supabase_config.dart';
 
 class MagicLinkCallbackPage extends StatefulWidget {
   final String token;
@@ -38,35 +38,38 @@ class _MagicLinkCallbackPageState extends State<MagicLinkCallbackPage> {
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
 
-        if (data['success'] == true && data['session'] != null) {
-          // Obtener los tokens de sesión de Supabase
-          final sessionData = data['session'];
+        if (data['success'] == true && data['auth'] != null) {
+          final auth = data['auth'];
+          final accessToken = auth['access_token'];
+          final refreshToken = auth['refresh_token'];
 
-          // Aquí necesitamos usar Supabase para establecer la sesión
-          // Por ahora, vamos a usar el access_token y refresh_token
-          if (sessionData['access_token'] != null) {
-            // Usar Supabase Auth para establecer la sesión
-            await _setSupabaseSession(
-              sessionData['access_token'],
-              sessionData['refresh_token'],
-            );
+          if (accessToken != null && refreshToken != null) {
+            // Usar Supabase para establecer la sesión con los tokens
+            final supabase = SupabaseConfig.client;
 
-            if (mounted) {
-              setState(() {
-                _success = true;
-                _isLoading = false;
-              });
+            // Intentar recuperar la sesión con el refresh token
+            final authResponse = await supabase.auth.recoverSession(refreshToken);
 
-              // Esperar un momento para mostrar el mensaje de éxito
-              await Future.delayed(const Duration(seconds: 2));
-
-              // Navegar a la app
+            if (authResponse?.session != null) {
               if (mounted) {
-                Navigator.of(context).pushReplacementNamed('/app');
+                setState(() {
+                  _success = true;
+                  _isLoading = false;
+                });
+
+                // Esperar un momento para mostrar el mensaje de éxito
+                await Future.delayed(const Duration(seconds: 2));
+
+                // Navegar a la app
+                if (mounted) {
+                  Navigator.of(context).pushReplacementNamed('/app');
+                }
               }
+            } else {
+              throw Exception('No se pudo establecer la sesión');
             }
           } else {
-            throw Exception('No se recibió token de sesión');
+            throw Exception('No se recibieron tokens de autenticación');
           }
         } else {
           throw Exception(data['error'] ?? 'Error al validar el enlace');
@@ -78,18 +81,11 @@ class _MagicLinkCallbackPageState extends State<MagicLinkCallbackPage> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _errorMessage = e.toString();
+          _errorMessage = e.toString().replaceAll('Exception: ', '');
           _isLoading = false;
         });
       }
     }
-  }
-
-  Future<void> _setSupabaseSession(String accessToken, String refreshToken) async {
-    // Aquí deberíamos usar el método de Supabase para establecer la sesión
-    // Por ahora, vamos a confiar en que el token sea válido y continuar
-    // En una implementación real, usarías:
-    // await Supabase.instance.client.auth.setSession(accessToken: accessToken, refreshToken: refreshToken);
   }
 
   @override
@@ -294,7 +290,7 @@ class _MagicLinkCallbackPageState extends State<MagicLinkCallbackPage> {
           height: 64,
           child: ElevatedButton(
             onPressed: () {
-              Navigator.of(context).pushReplacementNamed('/login');
+              Navigator.of(context).pushReplacementNamed('/app/login');
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Theme.of(context).primaryColor,

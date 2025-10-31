@@ -99,8 +99,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
     console.log('[author-magic-link] Original magic link:', magicLink);
 
-    // IMPORTANTE: Reemplazar localhost si aparece en el link
-    // Esto sucede cuando el Site URL en Supabase está configurado como localhost
+    // IMPORTANTE: Corregir problemas comunes en el redirect_to
+
+    // 1. Reemplazar localhost si aparece
     if (magicLink.includes('localhost')) {
       console.log('[author-magic-link] Detected localhost in magic link, replacing with production URL');
       magicLink = magicLink.replace(
@@ -111,10 +112,28 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         /redirect_to=https:\/\/localhost:\d+/g,
         `redirect_to=${encodeURIComponent(redirectTo)}`
       );
-      console.log('[author-magic-link] Modified magic link:', magicLink);
+      console.log('[author-magic-link] Fixed localhost in magic link');
     }
 
-    console.log('[author-magic-link] Magic link generated successfully');
+    // 2. Detectar y corregir doble /app/app en el redirect_to
+    // Esto sucede cuando Site URL en Supabase incluye /app y nosotros agregamos otro /app
+    if (magicLink.includes('/app/app')) {
+      console.log('[author-magic-link] Detected double /app in redirect_to, fixing...');
+      magicLink = magicLink.replace(
+        /redirect_to=([^&]+)\/app\/app/g,
+        'redirect_to=$1/app'
+      );
+      // También decodificar y recodificar para asegurar formato correcto
+      const urlObj = new URL(magicLink);
+      const redirectParam = urlObj.searchParams.get('redirect_to');
+      if (redirectParam && redirectParam.includes('/app/app')) {
+        urlObj.searchParams.set('redirect_to', redirectParam.replace('/app/app', '/app'));
+        magicLink = urlObj.toString();
+      }
+      console.log('[author-magic-link] Fixed double /app in magic link');
+    }
+
+    console.log('[author-magic-link] Final magic link:', magicLink);
 
     // Enviar email personalizado
     const emailHtml = buildMagicLinkEmail(email, magicLink, false);

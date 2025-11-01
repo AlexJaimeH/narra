@@ -61,13 +61,17 @@ class NarraApp extends StatelessWidget {
             themeMode: ThemeMode.system,
             initialRoute: _resolveInitialRoute(),
             onGenerateRoute: (settings) {
-              final routeName = settings.name ?? '/app';
+              final routeName = settings.name ?? '/';
 
               // Flutter handles /app/* routes and auth routes (/login, /register)
               // All other routes (/, /blog/*) are handled by React
+              // IMPORTANTE: Como Flutter está montado con base-href=/app/,
+              // las rutas aquí son RELATIVAS a /app/
+              // Entonces '/' = /app, '/login' = /app/login, etc.
 
               switch (routeName) {
-                case '/app':
+                case '/':
+                case '/app':  // Por compatibilidad con código existente
                 case '/app/':
                   final initialIndex =
                       settings.arguments is int ? settings.arguments as int : 0;
@@ -75,12 +79,14 @@ class NarraApp extends StatelessWidget {
                     builder: (_) => AppNavigation(initialIndex: initialIndex),
                     settings: settings,
                   );
-                case '/app/login':
+                case '/login':
+                case '/app/login':  // Por compatibilidad
                   return MaterialPageRoute(
                     builder: (_) => const MagicLinkLoginPage(),
                     settings: settings,
                   );
-                case '/app/register':
+                case '/register':
+                case '/app/register':  // Por compatibilidad
                   return MaterialPageRoute(
                     builder: (_) => const RegisterPage(),
                     settings: settings,
@@ -114,9 +120,9 @@ class NarraApp extends StatelessWidget {
 
 String _resolveInitialRoute() {
   // Flutter only handles /app/* routes
-  // This function should always return '/app' since we've already
-  // filtered out non-app routes in main()
-  return '/app';
+  // Como Flutter está montado con base-href=/app/, las rutas son relativas
+  // Entonces '/' aquí = /app en la URL del navegador
+  return '/';
 }
 
 /// Lightweight widget shown when accessing non-/app routes (/, /blog/*)

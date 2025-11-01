@@ -108,9 +108,10 @@ class _AppNavigationState extends State<AppNavigation> {
 
       if (session == null && !sessionDetected) {
         // No hay sesión después de esperar, redirigir a login
-        // Usar ruta absoluta y limpiar stack para evitar /app/app/login
+        // Usar ruta relativa (Flutter está montado con base-href=/app/)
+        // Entonces '/login' = /app/login en la URL del navegador
         Navigator.of(context).pushNamedAndRemoveUntil(
-          '/app/login',
+          '/login',
           (route) => false,
         );
       }

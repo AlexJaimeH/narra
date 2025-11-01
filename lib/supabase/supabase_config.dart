@@ -26,8 +26,9 @@ class SupabaseConfig {
       url: supabaseUrl,
       anonKey: supabaseAnonKey,
       authOptions: const FlutterAuthClientOptions(
-        authFlowType: AuthFlowType.pkce,
-        // Para web, Supabase detectará automáticamente tokens en el hash fragment
+        authFlowType: AuthFlowType.implicit,
+        // Magic links usan implicit flow (tokens en hash fragment)
+        // PKCE es para password-based auth con código de verificación
         autoRefreshToken: true,
       ),
     );

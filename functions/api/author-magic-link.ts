@@ -57,7 +57,19 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     const appUrl = env.APP_URL || 'https://narra-8m1.pages.dev';
     const redirectTo = `${appUrl}/app`;
 
-    console.log('[author-magic-link] Redirect URL:', redirectTo);
+    console.log('[author-magic-link] APP_URL from env:', env.APP_URL);
+    console.log('[author-magic-link] Final appUrl:', appUrl);
+    console.log('[author-magic-link] Final redirectTo:', redirectTo);
+
+    const requestBody = {
+      type: 'magiclink',
+      email: email,
+      options: {
+        redirect_to: redirectTo,
+      },
+    };
+
+    console.log('[author-magic-link] Request body:', JSON.stringify(requestBody, null, 2));
 
     // Usar Supabase Admin API para generar el magic link
     // Esto nos permite obtener el action_link y enviar nuestro propio email
@@ -70,13 +82,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
           'apikey': env.SUPABASE_SERVICE_ROLE_KEY,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          type: 'magiclink',
-          email: email,
-          options: {
-            redirect_to: redirectTo,
-          },
-        }),
+        body: JSON.stringify(requestBody),
       }
     );
 
@@ -100,39 +106,41 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     console.log('[author-magic-link] Original magic link:', magicLink);
 
     // IMPORTANTE: Corregir problemas comunes en el redirect_to
+    const urlObj = new URL(magicLink);
+    let redirectParam = urlObj.searchParams.get('redirect_to');
+
+    console.log('[author-magic-link] Original redirect_to param:', redirectParam);
 
     // 1. Reemplazar localhost si aparece
-    if (magicLink.includes('localhost')) {
-      console.log('[author-magic-link] Detected localhost in magic link, replacing with production URL');
-      magicLink = magicLink.replace(
-        /redirect_to=http:\/\/localhost:\d+/g,
-        `redirect_to=${encodeURIComponent(redirectTo)}`
-      );
-      magicLink = magicLink.replace(
-        /redirect_to=https:\/\/localhost:\d+/g,
-        `redirect_to=${encodeURIComponent(redirectTo)}`
-      );
-      console.log('[author-magic-link] Fixed localhost in magic link');
+    if (redirectParam && redirectParam.includes('localhost')) {
+      console.log('[author-magic-link] Detected localhost in redirect_to');
+      redirectParam = redirectParam.replace(/http:\/\/localhost:\d+/g, appUrl);
+      redirectParam = redirectParam.replace(/https:\/\/localhost:\d+/g, appUrl);
     }
 
-    // 2. Detectar y corregir doble /app/app en el redirect_to
-    // Esto sucede cuando Site URL en Supabase incluye /app y nosotros agregamos otro /app
-    if (magicLink.includes('/app/app')) {
-      console.log('[author-magic-link] Detected double /app in redirect_to, fixing...');
-      magicLink = magicLink.replace(
-        /redirect_to=([^&]+)\/app\/app/g,
-        'redirect_to=$1/app'
-      );
-      // También decodificar y recodificar para asegurar formato correcto
-      const urlObj = new URL(magicLink);
-      const redirectParam = urlObj.searchParams.get('redirect_to');
-      if (redirectParam && redirectParam.includes('/app/app')) {
-        urlObj.searchParams.set('redirect_to', redirectParam.replace('/app/app', '/app'));
-        magicLink = urlObj.toString();
+    // 2. Asegurarse de que termine en /app
+    if (redirectParam) {
+      const redirectUrl = new URL(redirectParam);
+
+      // Si termina en /app/app, quitar uno
+      if (redirectUrl.pathname.endsWith('/app/app')) {
+        console.log('[author-magic-link] Detected /app/app, fixing to /app');
+        redirectUrl.pathname = redirectUrl.pathname.replace(/\/app\/app$/, '/app');
+        redirectParam = redirectUrl.toString();
       }
-      console.log('[author-magic-link] Fixed double /app in magic link');
+      // Si NO termina en /app, agregar /app
+      else if (!redirectUrl.pathname.endsWith('/app')) {
+        console.log('[author-magic-link] redirect_to missing /app, adding it');
+        redirectUrl.pathname = redirectUrl.pathname.replace(/\/$/, '') + '/app';
+        redirectParam = redirectUrl.toString();
+      }
+
+      // Actualizar el magic link con el redirect_to corregido
+      urlObj.searchParams.set('redirect_to', redirectParam);
+      magicLink = urlObj.toString();
     }
 
+    console.log('[author-magic-link] Fixed redirect_to param:', redirectParam);
     console.log('[author-magic-link] Final magic link:', magicLink);
 
     // Enviar email personalizado

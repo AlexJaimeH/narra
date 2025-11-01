@@ -64,40 +64,55 @@ class _AppNavigationState extends State<AppNavigation> {
   }
 
   void _checkAuthentication() async {
-    // Dar tiempo a Supabase para procesar tokens del magic link en la URL
-    // Cuando un usuario hace clic en el magic link, Supabase redirige con tokens
-    // en el hash fragment (#access_token=...) que necesitan ser procesados
+    // Estrategia mejorada: Escuchar eventos de autenticación de Supabase
+    // en lugar de solo hacer polling de la sesión
 
-    // Estrategia: Intentar múltiples veces con delays incrementales
-    // Total: hasta 3 segundos de espera
+    // Primero, verificar si ya hay una sesión
     var session = SupabaseConfig.client.auth.currentSession;
 
-    if (session == null) {
-      // Intento 1: Esperar 800ms
-      await Future.delayed(const Duration(milliseconds: 800));
-      session = SupabaseConfig.client.auth.currentSession;
+    if (session != null) {
+      // Ya hay sesión activa, continuar normalmente
+      if (mounted) {
+        setState(() {
+          _isCheckingAuth = false;
+        });
+      }
+      return;
     }
 
-    if (session == null) {
-      // Intento 2: Esperar otros 1000ms
-      await Future.delayed(const Duration(milliseconds: 1000));
-      session = SupabaseConfig.client.auth.currentSession;
-    }
+    // Si no hay sesión, suscribirse a cambios de auth por un tiempo limitado
+    bool sessionDetected = false;
+    var authSubscription = SupabaseConfig.client.auth.onAuthStateChange.listen((data) {
+      final authSession = data.session;
+      if (authSession != null && mounted && !sessionDetected) {
+        sessionDetected = true;
+        setState(() {
+          _isCheckingAuth = false;
+        });
+      }
+    });
 
-    if (session == null) {
-      // Intento 3: Esperar otros 1200ms (último intento)
-      await Future.delayed(const Duration(milliseconds: 1200));
-      session = SupabaseConfig.client.auth.currentSession;
-    }
+    // Esperar hasta 3 segundos máximo
+    await Future.delayed(const Duration(milliseconds: 3000));
+
+    // Cancelar suscripción
+    await authSubscription.cancel();
+
+    // Verificar resultado final
+    session = SupabaseConfig.client.auth.currentSession;
 
     if (mounted) {
       setState(() {
         _isCheckingAuth = false;
       });
 
-      if (session == null) {
-        // No hay sesión después de ~3 segundos, redirigir a login
-        Navigator.pushReplacementNamed(context, '/app/login');
+      if (session == null && !sessionDetected) {
+        // No hay sesión después de esperar, redirigir a login
+        // Usar ruta absoluta y limpiar stack para evitar /app/app/login
+        Navigator.of(context).pushNamedAndRemoveUntil(
+          '/app/login',
+          (route) => false,
+        );
       }
     }
   }

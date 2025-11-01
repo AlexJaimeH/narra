@@ -1654,218 +1654,226 @@ class _SubscriberDetailSheetState extends State<_SubscriberDetailSheet>
             color: colorScheme.surface,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
           ),
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-                child: Column(
-                  children: [
-                    Container(
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: colorScheme.onSurfaceVariant.withValues(alpha: 0.3),
-                        borderRadius: BorderRadius.circular(2),
+          child: SingleChildScrollView(
+            controller: controller,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: colorScheme.onSurfaceVariant.withValues(alpha: 0.3),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 20),
-                    Row(
-                      children: [
-                        Hero(
-                          tag: 'subscriber-${subscriber.id}',
-                          child: CircleAvatar(
-                            radius: 32,
-                            backgroundColor: statusColor.withValues(alpha: 0.15),
-                            child: Text(
-                              initials.isEmpty ? '?' : initials,
-                              style: theme.textTheme.headlineSmall?.copyWith(
-                                color: statusColor,
-                                fontWeight: FontWeight.bold,
+                      const SizedBox(height: 20),
+                      Row(
+                        children: [
+                          Hero(
+                            tag: 'subscriber-${subscriber.id}',
+                            child: CircleAvatar(
+                              radius: 32,
+                              backgroundColor: statusColor.withValues(alpha: 0.15),
+                              child: Text(
+                                initials.isEmpty ? '?' : initials,
+                                style: theme.textTheme.headlineSmall?.copyWith(
+                                  color: statusColor,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                subscriber.name,
-                                style: theme.textTheme.headlineSmall?.copyWith(
-                                  fontWeight: FontWeight.w700,
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  subscriber.name,
+                                  style: theme.textTheme.headlineSmall?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                subscriber.email,
-                                style: theme.textTheme.bodyMedium?.copyWith(
-                                  color: colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                              if (subscriber.relationship?.isNotEmpty == true) ...[
                                 const SizedBox(height: 4),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 4,
+                                Text(
+                                  subscriber.email,
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    color: colorScheme.onSurfaceVariant,
                                   ),
-                                  decoration: BoxDecoration(
-                                    color: colorScheme.secondaryContainer
-                                        .withValues(alpha: 0.5),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Text(
-                                    subscriber.relationship!,
-                                    style: theme.textTheme.labelMedium?.copyWith(
-                                      color: colorScheme.onSecondaryContainer,
+                                ),
+                                if (subscriber.relationship?.isNotEmpty == true) ...[
+                                  const SizedBox(height: 4),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: colorScheme.secondaryContainer
+                                          .withValues(alpha: 0.5),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      subscriber.relationship!,
+                                      style: theme.textTheme.labelMedium?.copyWith(
+                                        color: colorScheme.onSecondaryContainer,
+                                      ),
                                     ),
                                   ),
-                                ),
+                                ],
                               ],
-                            ],
+                            ),
                           ),
-                        ),
-                        IconButton(
-                          onPressed: widget.onRemove,
-                          icon: const Icon(Icons.delete_outline),
-                          style: IconButton.styleFrom(
-                            backgroundColor: colorScheme.errorContainer
-                                .withValues(alpha: 0.5),
-                            foregroundColor: colorScheme.error,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: statusColor.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(statusIcon, size: 20, color: statusColor),
-                          const SizedBox(width: 8),
-                          Text(
-                            statusLabel,
-                            style: theme.textTheme.titleSmall?.copyWith(
-                              color: statusColor,
-                              fontWeight: FontWeight.w600,
+                          IconButton(
+                            onPressed: widget.onRemove,
+                            icon: const Icon(Icons.delete_outline),
+                            style: IconButton.styleFrom(
+                              backgroundColor: colorScheme.errorContainer
+                                  .withValues(alpha: 0.5),
+                              foregroundColor: colorScheme.error,
                             ),
                           ),
                         ],
                       ),
-                    ),
-                    const SizedBox(height: 20),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _DetailMetric(
-                            icon: Icons.favorite,
-                            label: 'Corazones',
-                            value: '${engagement?.totalReactions ?? 0}',
-                            color: colorScheme.secondary,
-                          ),
+                      const SizedBox(height: 20),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _DetailMetric(
-                            icon: Icons.chat_bubble,
-                            label: 'Comentarios',
-                            value: '${engagement?.totalComments ?? 0}',
-                            color: colorScheme.tertiary,
-                          ),
+                        decoration: BoxDecoration(
+                          color: statusColor.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(16),
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton.icon(
-                        onPressed: sendingInvite
-                            ? null
-                            : () async {
-                                setState(() => _localSendingInvite = true);
-                                try {
-                                  await widget.onSendInvite();
-                                  if (mounted) {
-                                    final refreshed = await SubscriberService
-                                        .getSubscriberById(subscriber.id);
-                                    setState(() {
-                                      _subscriber = refreshed;
-                                      _detailFuture = _loadDetail();
-                                    });
-                                  }
-                                } finally {
-                                  if (mounted) {
-                                    setState(() => _localSendingInvite = false);
-                                  }
-                                }
-                              },
-                        icon: sendingInvite
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : const Icon(Icons.send),
-                        label: Text(
-                          sendingInvite
-                              ? 'Enviando…'
-                              : 'Reenviar enlace mágico',
-                        ),
-                        style: FilledButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(statusIcon, size: 20, color: statusColor),
+                            const SizedBox(width: 8),
+                            Text(
+                              statusLabel,
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                color: statusColor,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 20),
-                    TabBar(
-                      controller: _tabController,
-                      tabs: const [
-                        Tab(text: 'Comentarios'),
-                        Tab(text: 'Reacciones'),
-                      ],
-                    ),
-                  ],
+                      const SizedBox(height: 20),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _DetailMetric(
+                              icon: Icons.favorite,
+                              label: 'Corazones',
+                              value: '${engagement?.totalReactions ?? 0}',
+                              color: colorScheme.secondary,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _DetailMetric(
+                              icon: Icons.chat_bubble,
+                              label: 'Comentarios',
+                              value: '${engagement?.totalComments ?? 0}',
+                              color: colorScheme.tertiary,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.icon(
+                          onPressed: sendingInvite
+                              ? null
+                              : () async {
+                                  setState(() => _localSendingInvite = true);
+                                  try {
+                                    await widget.onSendInvite();
+                                    if (mounted) {
+                                      final refreshed = await SubscriberService
+                                          .getSubscriberById(subscriber.id);
+                                      setState(() {
+                                        _subscriber = refreshed;
+                                        _detailFuture = _loadDetail();
+                                      });
+                                    }
+                                  } finally {
+                                    if (mounted) {
+                                      setState(() => _localSendingInvite = false);
+                                    }
+                                  }
+                                },
+                          icon: sendingInvite
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Icon(Icons.send),
+                          label: Text(
+                            sendingInvite
+                                ? 'Enviando…'
+                                : 'Reenviar enlace mágico',
+                          ),
+                          style: FilledButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      TabBar(
+                        controller: _tabController,
+                        tabs: const [
+                          Tab(text: 'Comentarios'),
+                          Tab(text: 'Reacciones'),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              Expanded(
-                child: FutureBuilder<_SubscriberDetailData>(
+                FutureBuilder<_SubscriberDetailData>(
                   future: _detailFuture,
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
+                      return const SizedBox(
+                        height: 200,
+                        child: Center(child: CircularProgressIndicator()),
+                      );
                     }
 
                     final comments = snapshot.data?.comments ?? [];
                     final reactions = snapshot.data?.reactions ?? [];
 
-                    return TabBarView(
-                      controller: _tabController,
-                      children: [
-                        _CommentsTab(
-                          comments: comments,
-                          subscriber: subscriber,
-                          controller: controller,
-                        ),
-                        _ReactionsTab(
-                          reactions: reactions,
-                          subscriber: subscriber,
-                          controller: controller,
-                        ),
-                      ],
+                    // Determine which tab is active and show its content
+                    return AnimatedBuilder(
+                      animation: _tabController,
+                      builder: (context, child) {
+                        final isCommentsTab = _tabController.index == 0;
+                        if (isCommentsTab) {
+                          return _CommentsTabContent(
+                            comments: comments,
+                            subscriber: subscriber,
+                          );
+                        } else {
+                          return _ReactionsTabContent(
+                            reactions: reactions,
+                            subscriber: subscriber,
+                          );
+                        }
+                      },
                     );
                   },
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         );
       },
@@ -1981,6 +1989,63 @@ class _CommentsTab extends StatelessWidget {
   }
 }
 
+class _CommentsTabContent extends StatelessWidget {
+  const _CommentsTabContent({
+    required this.comments,
+    required this.subscriber,
+  });
+
+  final List<SubscriberCommentRecord> comments;
+  final Subscriber subscriber;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    if (comments.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.chat_bubble_outline,
+              size: 64,
+              color: theme.colorScheme.outline,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Sin comentarios aún',
+              style: theme.textTheme.titleMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ...comments.map((comment) {
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+            child: _FeedbackCard(
+              icon: Icons.chat_bubble,
+              color: theme.colorScheme.secondary,
+              title: comment.subscriberName ?? subscriber.name,
+              content: comment.content,
+              metadata: '${comment.storyTitle} • ${_formatRelativeDate(comment.createdAt)}',
+            ),
+          );
+        }),
+        const SizedBox(height: 20),
+      ],
+    );
+  }
+}
+
 class _ReactionsTab extends StatelessWidget {
   const _ReactionsTab({
     required this.reactions,
@@ -2036,6 +2101,63 @@ class _ReactionsTab extends StatelessWidget {
           metadata: _formatRelativeDate(reaction.createdAt),
         );
       },
+    );
+  }
+}
+
+class _ReactionsTabContent extends StatelessWidget {
+  const _ReactionsTabContent({
+    required this.reactions,
+    required this.subscriber,
+  });
+
+  final List<SubscriberReactionRecord> reactions;
+  final Subscriber subscriber;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    if (reactions.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.favorite_outline,
+              size: 64,
+              color: theme.colorScheme.outline,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Sin reacciones aún',
+              style: theme.textTheme.titleMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ...reactions.map((reaction) {
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+            child: _FeedbackCard(
+              icon: Icons.favorite,
+              color: theme.colorScheme.secondary,
+              title: reaction.storyTitle,
+              content: null,
+              metadata: _formatRelativeDate(reaction.createdAt),
+            ),
+          );
+        }),
+        const SizedBox(height: 20),
+      ],
     );
   }
 }

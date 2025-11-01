@@ -41,7 +41,7 @@ Narra está compuesto por **3 aplicaciones separadas** que conviven en el mismo 
   - Administrar etiquetas
   - Ajustes de perfil
 - **URL en producción**: `https://narra-8m1.pages.dev/app/`
-- **Autenticación**: Supabase Auth (email/password, Google, etc.)
+- **Autenticación**: Supabase Auth con Magic Links (sin contraseña)
 
 ### 3. **Blog de Suscriptor** (React) → `/blog/*`
 - **Ubicación**: `blog/src/` (componentes de blog)
@@ -55,6 +55,86 @@ Narra está compuesto por **3 aplicaciones separadas** que conviven en el mismo 
   - Ver historias relacionadas
 - **URL en producción**: `https://narra-8m1.pages.dev/blog/`
 - **Autenticación**: Magic links (enlaces únicos por email, sin contraseña)
+
+---
+
+## 🔐 Sistema de Autenticación
+
+Narra tiene **dos sistemas de autenticación separados** para diferentes tipos de usuarios:
+
+### 1. **Autores** → Supabase Auth con Magic Links
+
+**Ubicación**: `/app/login`
+
+**Características**:
+- ✅ Sin contraseña (passwordless)
+- ✅ Diseñado para personas mayores (60-90 años)
+- ✅ Interfaz simple y clara con instrucciones paso a paso
+- ✅ Usa Supabase Admin API para generar magic links
+- ✅ **Solo usuarios existentes** pueden iniciar sesión (no auto-registro)
+- ✅ Enlaces válidos por 15 minutos
+- ✅ Email personalizado via Resend API
+
+**Flujo de autenticación**:
+1. Usuario ingresa su email en `/app/login`
+2. API verifica que el usuario existe en `auth.users`
+3. Si existe, genera magic link usando Supabase Admin API
+4. Envía email con enlace personalizado via Resend
+5. Usuario hace clic en el enlace del correo
+6. Supabase procesa los tokens del hash fragment (#access_token=...)
+7. Flutter detecta la sesión y redirige al Dashboard
+8. Sesión persiste en localStorage
+
+**Archivos clave**:
+- `lib/screens/auth/magic_link_login_page.dart` - UI de login
+- `functions/api/author-magic-link.ts` - API que genera y envía magic links
+- `lib/screens/app/app_navigation.dart` - Detecta sesión y maneja errores
+- `lib/supabase/supabase_config.dart` - Configuración con implicit flow
+
+**Mensajes de error amigables**:
+- Link expirado → "El enlace ya expiró. Solicita uno nuevo. Los enlaces duran 15 minutos."
+- Link inválido → "El enlace no es válido. Asegúrate de copiar el enlace completo."
+- Usuario no existe → "Este correo no está registrado. Contacta al administrador."
+
+**Variables de entorno requeridas**:
+```bash
+SUPABASE_URL=https://xxx.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=eyJ...  # Para Admin API
+SUPABASE_ANON_KEY=eyJ...          # Para cliente Flutter
+RESEND_API_KEY=re_...
+RESEND_FROM_EMAIL=noreply@narra.com
+APP_URL=https://narra-8m1.pages.dev  # Opcional, usa default
+```
+
+**Configuración en Supabase Dashboard**:
+```
+Authentication → URL Configuration:
+- Site URL: https://narra-8m1.pages.dev
+- Redirect URLs:
+  * https://narra-8m1.pages.dev/app
+  * https://narra-8m1.pages.dev/app/*
+  * https://narra-8m1.pages.dev/app/**
+```
+
+### 2. **Suscriptores** → Magic Links Personalizados
+
+**Ubicación**: `/blog/story/{id}` (cuando no está autenticado)
+
+**Características**:
+- ✅ Links únicos generados por el autor
+- ✅ Tokens personalizados (no usa Supabase Auth)
+- ✅ Acceso solo a historias específicas del autor
+- ✅ Sin registro, sin contraseña
+- ✅ Links pueden ser revocados por el autor
+
+**Diferencias clave con autores**:
+| Autores | Suscriptores |
+|---------|--------------|
+| Supabase Auth native | Tokens custom |
+| Admin API (SERVICE_ROLE_KEY) | Tabla `subscribers` |
+| Persiste en auth.users | No crea usuario en auth |
+| Dashboard completo | Solo lectura de historias |
+| Solo usuarios registrados | Auto-registro con magic link |
 
 ---
 

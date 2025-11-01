@@ -43,14 +43,48 @@ class _MagicLinkLoginPageState extends State<MagicLinkLoginPage> {
         }
       } else {
         final errorData = json.decode(response.body);
-        throw Exception(errorData['error'] ?? 'Error al enviar el correo');
+        final errorMessage = errorData['error'] ?? 'Error al enviar el correo';
+
+        if (mounted) {
+          setState(() => _isLoading = false);
+
+          // Mostrar mensaje de error amigable
+          Color snackBarColor = Colors.red.shade700;
+          int duration = 6;
+
+          // Si es 404 (usuario no existe), usar color naranja y duración más larga
+          if (response.statusCode == 404) {
+            snackBarColor = Colors.orange.shade700;
+            duration = 10;
+          }
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(errorMessage),
+              backgroundColor: snackBarColor,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              duration: Duration(seconds: duration),
+              action: response.statusCode == 404
+                  ? SnackBarAction(
+                      label: 'Entendido',
+                      textColor: Colors.white,
+                      onPressed: () {},
+                    )
+                  : null,
+            ),
+          );
+        }
+        return; // Salir sin lanzar excepción
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
+        // Extraer mensaje limpio (remover "Exception: " si existe)
+        String cleanMessage = e.toString().replaceFirst('Exception: ', '');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error: ${e.toString()}'),
+            content: Text(cleanMessage),
             backgroundColor: Colors.red.shade700,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

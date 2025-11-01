@@ -67,7 +67,15 @@ class _AppNavigationState extends State<AppNavigation> {
     // Estrategia mejorada: Escuchar eventos de autenticación de Supabase
     // en lugar de solo hacer polling de la sesión
 
-    // Primero, verificar si ya hay una sesión
+    // Primero, verificar si hay un error en la URL (magic link inválido/expirado)
+    final uri = Uri.base;
+    final errorInFragment = uri.fragment.contains('error=');
+    final errorDescription = uri.fragment.contains('error_description=')
+        ? Uri.decodeComponent(
+            uri.fragment.split('error_description=')[1].split('&')[0].replaceAll('+', ' '))
+        : null;
+
+    // Verificar si ya hay una sesión
     var session = SupabaseConfig.client.auth.currentSession;
 
     if (session != null) {
@@ -77,6 +85,52 @@ class _AppNavigationState extends State<AppNavigation> {
           _isCheckingAuth = false;
         });
       }
+      return;
+    }
+
+    // Si hay un error en el fragment, mostrar mensaje amigable
+    if (errorInFragment && mounted) {
+      setState(() {
+        _isCheckingAuth = false;
+      });
+
+      // Mostrar mensaje amigable según el tipo de error
+      String friendlyMessage = 'El enlace de inicio de sesión no es válido o ya expiró. '
+          'Por favor, solicita un nuevo correo de inicio de sesión.';
+
+      if (errorDescription != null) {
+        if (errorDescription.toLowerCase().contains('expired')) {
+          friendlyMessage = 'El enlace de inicio de sesión ya expiró. '
+              'Por favor, solicita un nuevo correo. Los enlaces duran 15 minutos.';
+        } else if (errorDescription.toLowerCase().contains('invalid')) {
+          friendlyMessage = 'El enlace de inicio de sesión no es válido. '
+              'Asegúrate de copiar el enlace completo del correo o solicita uno nuevo.';
+        }
+      }
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(friendlyMessage),
+              backgroundColor: Colors.orange.shade700,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              duration: const Duration(seconds: 8),
+              action: SnackBarAction(
+                label: 'Entendido',
+                textColor: Colors.white,
+                onPressed: () {},
+              ),
+            ),
+          );
+
+          Navigator.of(context).pushNamedAndRemoveUntil(
+            '/login',
+            (route) => false,
+          );
+        }
+      });
       return;
     }
 

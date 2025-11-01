@@ -53,6 +53,40 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
     console.log('[author-magic-link] Generating magic link for:', email);
 
+    // IMPORTANTE: Verificar que el usuario existe ANTES de enviar el magic link
+    // No queremos auto-registrar usuarios, solo permitir login de usuarios existentes
+    console.log('[author-magic-link] Checking if user exists...');
+
+    const checkUserResponse = await fetch(
+      `${env.SUPABASE_URL}/auth/v1/admin/users`,
+      {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+          'apikey': env.SUPABASE_SERVICE_ROLE_KEY,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    if (!checkUserResponse.ok) {
+      console.error('[author-magic-link] Failed to check users');
+      return json({ error: 'Error al verificar usuario' }, 500);
+    }
+
+    const usersData = await checkUserResponse.json();
+    const users = usersData.users || [];
+    const userExists = users.some((user: any) => user.email?.toLowerCase() === email);
+
+    if (!userExists) {
+      console.log('[author-magic-link] User does not exist:', email);
+      return json({
+        error: 'Este correo no está registrado. Por favor, contacta al administrador para crear tu cuenta.'
+      }, 404);
+    }
+
+    console.log('[author-magic-link] User exists, generating magic link');
+
     // Determinar la URL de redirección correcta
     const appUrl = env.APP_URL || 'https://narra-8m1.pages.dev';
     const redirectTo = `${appUrl}/app`;

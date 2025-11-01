@@ -2,6 +2,7 @@ import 'dart:html' as html;
 
 import 'package:flutter/material.dart';
 import 'package:narra/supabase/supabase_config.dart';
+import 'package:narra/supabase/narra_client.dart';
 import 'package:narra/services/user_service.dart';
 import 'package:narra/theme_controller.dart';
 
@@ -882,7 +883,7 @@ class _SettingsPageState extends State<SettingsPage> {
     }
 
     try {
-      await SupabaseClient.client.from('user_feedback').insert({
+      await NarraSupabaseClient.client.from('user_feedback').insert({
         'user_id': userId,
         'message': message,
         'category': category,

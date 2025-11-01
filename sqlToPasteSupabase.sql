@@ -1553,3 +1553,236 @@ grant execute on function public.cleanup_expired_author_magic_links() to service
 grant execute on function public.validate_author_magic_link(text, inet, text) to anon, authenticated, service_role;
 
 commit;
+
+-- ============================================================
+-- Configuración de CASCADE DELETE para todas las tablas (Fecha: 2025-11-01)
+-- ============================================================
+-- Esta migración asegura que al eliminar un usuario de auth.users,
+-- todos sus datos relacionados se eliminen en cascada automáticamente.
+-- Esto permite eliminar usuarios desde el dashboard de Supabase sin errores.
+
+begin;
+
+-- ====================
+-- 1. Tabla public.users
+-- ====================
+-- Esta tabla almacena el perfil del usuario y debe tener id = auth.users.id
+-- Primero, verificamos si existe la tabla y su constraint
+
+do $$
+begin
+  -- Si la tabla users existe, asegurar que su FK a auth.users tenga CASCADE
+  if exists (select 1 from information_schema.tables where table_schema = 'public' and table_name = 'users') then
+    -- Eliminar constraint existente si no tiene CASCADE
+    alter table public.users drop constraint if exists users_id_fkey;
+
+    -- Agregar constraint con CASCADE
+    alter table public.users
+      add constraint users_id_fkey
+        foreign key (id)
+        references auth.users(id)
+        on delete cascade;
+
+    raise notice 'Configurado CASCADE DELETE en public.users -> auth.users';
+  end if;
+end
+$$;
+
+-- ====================
+-- 2. Tabla public.stories
+-- ====================
+
+do $$
+begin
+  if exists (select 1 from information_schema.tables where table_schema = 'public' and table_name = 'stories') then
+    -- user_id -> public.users
+    alter table public.stories drop constraint if exists stories_user_id_fkey;
+    alter table public.stories
+      add constraint stories_user_id_fkey
+        foreign key (user_id)
+        references public.users(id)
+        on delete cascade;
+
+    raise notice 'Configurado CASCADE DELETE en public.stories -> public.users';
+  end if;
+end
+$$;
+
+-- ====================
+-- 3. Tabla public.subscribers
+-- ====================
+
+do $$
+begin
+  if exists (select 1 from information_schema.tables where table_schema = 'public' and table_name = 'subscribers') then
+    -- user_id -> public.users
+    alter table public.subscribers drop constraint if exists subscribers_user_id_fkey;
+    alter table public.subscribers
+      add constraint subscribers_user_id_fkey
+        foreign key (user_id)
+        references public.users(id)
+        on delete cascade;
+
+    raise notice 'Configurado CASCADE DELETE en public.subscribers -> public.users';
+  end if;
+end
+$$;
+
+-- ====================
+-- 4. Tabla public.tags
+-- ====================
+
+do $$
+begin
+  if exists (select 1 from information_schema.tables where table_schema = 'public' and table_name = 'tags') then
+    -- user_id -> public.users
+    alter table public.tags drop constraint if exists tags_user_id_fkey;
+    alter table public.tags
+      add constraint tags_user_id_fkey
+        foreign key (user_id)
+        references public.users(id)
+        on delete cascade;
+
+    raise notice 'Configurado CASCADE DELETE en public.tags -> public.users';
+  end if;
+end
+$$;
+
+-- ====================
+-- 5. Tabla public.story_tags
+-- ====================
+
+do $$
+begin
+  if exists (select 1 from information_schema.tables where table_schema = 'public' and table_name = 'story_tags') then
+    -- story_id -> stories
+    alter table public.story_tags drop constraint if exists story_tags_story_id_fkey;
+    alter table public.story_tags
+      add constraint story_tags_story_id_fkey
+        foreign key (story_id)
+        references public.stories(id)
+        on delete cascade;
+
+    -- tag_id -> tags
+    alter table public.story_tags drop constraint if exists story_tags_tag_id_fkey;
+    alter table public.story_tags
+      add constraint story_tags_tag_id_fkey
+        foreign key (tag_id)
+        references public.tags(id)
+        on delete cascade;
+
+    raise notice 'Configurado CASCADE DELETE en public.story_tags';
+  end if;
+end
+$$;
+
+-- ====================
+-- 6. Tabla public.story_photos
+-- ====================
+
+do $$
+begin
+  if exists (select 1 from information_schema.tables where table_schema = 'public' and table_name = 'story_photos') then
+    -- story_id -> stories
+    alter table public.story_photos drop constraint if exists story_photos_story_id_fkey;
+    alter table public.story_photos
+      add constraint story_photos_story_id_fkey
+        foreign key (story_id)
+        references public.stories(id)
+        on delete cascade;
+
+    -- user_id -> public.users (si existe la columna)
+    if exists (
+      select 1 from information_schema.columns
+      where table_schema = 'public'
+        and table_name = 'story_photos'
+        and column_name = 'user_id'
+    ) then
+      alter table public.story_photos drop constraint if exists story_photos_user_id_fkey;
+      alter table public.story_photos
+        add constraint story_photos_user_id_fkey
+          foreign key (user_id)
+          references public.users(id)
+          on delete cascade;
+    end if;
+
+    raise notice 'Configurado CASCADE DELETE en public.story_photos';
+  end if;
+end
+$$;
+
+-- ====================
+-- 7. Tabla public.user_settings
+-- ====================
+
+do $$
+begin
+  if exists (select 1 from information_schema.tables where table_schema = 'public' and table_name = 'user_settings') then
+    -- user_id -> public.users
+    alter table public.user_settings drop constraint if exists user_settings_user_id_fkey;
+    alter table public.user_settings
+      add constraint user_settings_user_id_fkey
+        foreign key (user_id)
+        references public.users(id)
+        on delete cascade;
+
+    raise notice 'Configurado CASCADE DELETE en public.user_settings -> public.users';
+  end if;
+end
+$$;
+
+-- ====================
+-- VERIFICACIÓN FINAL
+-- ====================
+-- Mostrar todas las foreign keys que ahora tienen CASCADE
+
+do $$
+declare
+  fk_record record;
+begin
+  raise notice '';
+  raise notice '========================================';
+  raise notice 'FOREIGN KEYS CON CASCADE DELETE:';
+  raise notice '========================================';
+
+  for fk_record in
+    select
+      tc.table_schema,
+      tc.table_name,
+      kcu.column_name,
+      ccu.table_name as foreign_table_name,
+      ccu.column_name as foreign_column_name,
+      rc.delete_rule
+    from information_schema.table_constraints as tc
+    join information_schema.key_column_usage as kcu
+      on tc.constraint_name = kcu.constraint_name
+      and tc.table_schema = kcu.table_schema
+    join information_schema.constraint_column_usage as ccu
+      on ccu.constraint_name = tc.constraint_name
+      and ccu.table_schema = tc.table_schema
+    join information_schema.referential_constraints as rc
+      on rc.constraint_name = tc.constraint_name
+    where tc.constraint_type = 'FOREIGN KEY'
+      and tc.table_schema = 'public'
+      and rc.delete_rule = 'CASCADE'
+      and (
+        ccu.table_name in ('users', 'stories', 'subscribers', 'tags')
+        or tc.table_name in ('users', 'stories', 'subscribers', 'tags', 'story_tags', 'story_photos', 'user_settings', 'story_versions', 'voice_recordings', 'subscriber_access_events', 'story_comments', 'story_reactions', 'author_magic_links')
+      )
+    order by tc.table_name, kcu.column_name
+  loop
+    raise notice '% . % ( % ) -> % . % [CASCADE]',
+      fk_record.table_schema,
+      fk_record.table_name,
+      fk_record.column_name,
+      fk_record.foreign_table_name,
+      fk_record.foreign_column_name;
+  end loop;
+
+  raise notice '';
+  raise notice '✅ Configuración completada. Ahora puedes eliminar usuarios desde Supabase Dashboard.';
+  raise notice '';
+end
+$$;
+
+commit;

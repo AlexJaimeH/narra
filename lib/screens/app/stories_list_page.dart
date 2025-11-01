@@ -189,140 +189,145 @@ class _StoriesListPageState extends State<StoriesListPage>
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: colorScheme.surface,
-              borderRadius: BorderRadius.circular(28),
-            ),
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return NestedScrollView(
+      headerSliverBuilder: (context, innerBoxIsScrolled) {
+        return [
+          SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+              padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: colorScheme.surface,
+                  borderRadius: BorderRadius.circular(28),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: colorScheme.primary.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(18),
-                        ),
-                        child: Icon(
-                          Icons.menu_book_rounded,
-                          color: colorScheme.primary,
-                          size: 28,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Mis historias',
-                              style: theme.textTheme.headlineSmall?.copyWith(
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: -0.2,
-                              ),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: colorScheme.primary.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(18),
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Administra, busca y publica tus recuerdos con un espacio pensado para ti.',
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: colorScheme.onSurfaceVariant,
-                              ),
+                            child: Icon(
+                              Icons.menu_book_rounded,
+                              color: colorScheme.primary,
+                              size: 28,
                             ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      IconButton(
-                        onPressed: () => _loadStories(silent: true),
-                        tooltip: 'Actualizar historias',
-                        icon: const Icon(Icons.refresh_rounded),
-                        style: IconButton.styleFrom(
-                          backgroundColor:
-                              colorScheme.primary.withValues(alpha: 0.08),
-                          foregroundColor: colorScheme.primary,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
                           ),
-                          padding: const EdgeInsets.all(9),
-                        ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Mis historias',
+                                  style: theme.textTheme.headlineSmall?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: -0.2,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Administra, busca y publica tus recuerdos con un espacio pensado para ti.',
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          IconButton(
+                            onPressed: () => _loadStories(silent: true),
+                            tooltip: 'Actualizar historias',
+                            icon: const Icon(Icons.refresh_rounded),
+                            style: IconButton.styleFrom(
+                              backgroundColor:
+                                  colorScheme.primary.withValues(alpha: 0.08),
+                              foregroundColor: colorScheme.primary,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              padding: const EdgeInsets.all(9),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      _SearchField(
+                        controller: _searchController,
+                        hintText:
+                            'Buscar por título, contenido, etiquetas o personas...',
+                        onChanged: (value) {
+                          setState(() => _searchQuery = value);
+                        },
+                        onClear: () {
+                          _searchController.clear();
+                          setState(() => _searchQuery = '');
+                        },
+                        isQueryEmpty: _searchQuery.isEmpty,
+                      ),
+                      const SizedBox(height: 10),
+                      _StoriesSegmentedControl(
+                        controller: _tabController,
+                        theme: theme,
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
-                  _SearchField(
-                    controller: _searchController,
-                    hintText:
-                        'Buscar por título, contenido, etiquetas o personas...',
-                    onChanged: (value) {
-                      setState(() => _searchQuery = value);
-                    },
-                    onClear: () {
-                      _searchController.clear();
-                      setState(() => _searchQuery = '');
-                    },
-                    isQueryEmpty: _searchQuery.isEmpty,
-                  ),
-                  const SizedBox(height: 10),
-                  _StoriesSegmentedControl(
-                    controller: _tabController,
-                    theme: theme,
-                  ),
-                ],
+                ),
               ),
             ),
           ),
-        ),
-        const SizedBox(height: 8),
-        Expanded(
-          child: _isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : TabBarView(
-                  controller: _tabController,
-                  children: [
-                    StoriesTab(
-                      stories: _allStories,
-                      filterStatus: null,
-                      searchQuery: _searchQuery,
-                      onRefresh: () => _loadStories(silent: true),
-                      onStoriesChanged: () => _loadStories(silent: true),
-                      onCreateStory: _openStoryCreator,
-                      sendingStoryEmails: _sendingStoryEmails,
-                      onSendStoryToSubscribers: _sendStoryToSubscribers,
-                    ),
-                    StoriesTab(
-                      stories: _allStories,
-                      filterStatus: StoryStatus.draft,
-                      searchQuery: _searchQuery,
-                      onRefresh: () => _loadStories(silent: true),
-                      onStoriesChanged: () => _loadStories(silent: true),
-                      onCreateStory: _openStoryCreator,
-                      sendingStoryEmails: _sendingStoryEmails,
-                      onSendStoryToSubscribers: _sendStoryToSubscribers,
-                    ),
-                    StoriesTab(
-                      stories: _allStories,
-                      filterStatus: StoryStatus.published,
-                      searchQuery: _searchQuery,
-                      onRefresh: () => _loadStories(silent: true),
-                      onStoriesChanged: () => _loadStories(silent: true),
-                      onCreateStory: _openStoryCreator,
-                      sendingStoryEmails: _sendingStoryEmails,
-                      onSendStoryToSubscribers: _sendStoryToSubscribers,
-                    ),
-                  ],
-                ),
-        ),
-      ],
+          const SliverToBoxAdapter(
+            child: SizedBox(height: 8),
+          ),
+        ];
+      },
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          StoriesTab(
+            stories: _allStories,
+            filterStatus: null,
+            searchQuery: _searchQuery,
+            onRefresh: () => _loadStories(silent: true),
+            onStoriesChanged: () => _loadStories(silent: true),
+            onCreateStory: _openStoryCreator,
+            sendingStoryEmails: _sendingStoryEmails,
+            onSendStoryToSubscribers: _sendStoryToSubscribers,
+          ),
+          StoriesTab(
+            stories: _allStories,
+            filterStatus: StoryStatus.draft,
+            searchQuery: _searchQuery,
+            onRefresh: () => _loadStories(silent: true),
+            onStoriesChanged: () => _loadStories(silent: true),
+            onCreateStory: _openStoryCreator,
+            sendingStoryEmails: _sendingStoryEmails,
+            onSendStoryToSubscribers: _sendStoryToSubscribers,
+          ),
+          StoriesTab(
+            stories: _allStories,
+            filterStatus: StoryStatus.published,
+            searchQuery: _searchQuery,
+            onRefresh: () => _loadStories(silent: true),
+            onStoriesChanged: () => _loadStories(silent: true),
+            onCreateStory: _openStoryCreator,
+            sendingStoryEmails: _sendingStoryEmails,
+            onSendStoryToSubscribers: _sendStoryToSubscribers,
+          ),
+        ],
+      ),
     );
   }
 }

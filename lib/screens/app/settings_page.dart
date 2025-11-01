@@ -2,6 +2,7 @@ import 'dart:html' as html;
 
 import 'package:flutter/material.dart';
 import 'package:narra/supabase/supabase_config.dart';
+import 'package:narra/supabase/narra_client.dart';
 import 'package:narra/services/user_service.dart';
 import 'package:narra/theme_controller.dart';
 
@@ -149,6 +150,9 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     if (_isLoading) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator()),
@@ -156,14 +160,85 @@ class _SettingsPageState extends State<SettingsPage> {
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Ajustes'),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+      body: RefreshIndicator(
+        onRefresh: _loadUserData,
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: colorScheme.surface,
+                    borderRadius: BorderRadius.circular(28),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: colorScheme.primary.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                          child: Icon(
+                            Icons.settings_rounded,
+                            color: colorScheme.primary,
+                            size: 28,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Ajustes',
+                                style: theme.textTheme.headlineSmall?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: -0.2,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Personaliza tu experiencia y gestiona tu cuenta.',
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        IconButton(
+                          onPressed: _loadUserData,
+                          tooltip: 'Actualizar',
+                          icon: const Icon(Icons.refresh_rounded),
+                          style: IconButton.styleFrom(
+                            backgroundColor:
+                                colorScheme.primary.withValues(alpha: 0.08),
+                            foregroundColor: colorScheme.primary,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            padding: const EdgeInsets.all(9),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
             // Profile Section
             _buildSectionHeader('Perfil'),
             Card(
@@ -177,7 +252,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         color: Theme.of(context).colorScheme.primary,
                       ),
                     ),
-                    title: Text(_userProfile?['name'] ?? 'Usuario'),
+                    title: Text(_publicAuthorName.isNotEmpty ? _publicAuthorName : (_userProfile?['name'] ?? 'Usuario')),
                     subtitle: Text(_userProfile?['email'] ?? ''),
                     trailing: _isPremium
                         ? Container(
@@ -474,32 +549,19 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             
             const SizedBox(height: 24),
-            
+
             // Data & Privacy Section
             _buildSectionHeader('Datos y privacidad'),
             Card(
-              child: Column(
-                children: [
-                  ListTile(
-                    leading: const Icon(Icons.download),
-                    title: const Text('Descargar mis datos'),
-                    subtitle: const Text('Obtén una copia de todas tus historias'),
-                    trailing: const Icon(Icons.arrow_forward_ios),
-                    onTap: () {},
-                  ),
-                  const Divider(),
-                  ListTile(
-                    leading: const Icon(Icons.history),
-                    title: const Text('Ver originales'),
-                    subtitle: const Text('Accede a textos y audios sin procesar'),
-                    trailing: const Icon(Icons.arrow_forward_ios),
-                    onTap: () => _showOriginalsDialog(),
-                  ),
-                  // Backup removed
-                ],
+              child: ListTile(
+                leading: const Icon(Icons.download),
+                title: const Text('Descargar mis datos'),
+                subtitle: const Text('Obtén una copia de todas tus historias'),
+                trailing: const Icon(Icons.arrow_forward_ios),
+                onTap: () {},
               ),
             ),
-            
+
             const SizedBox(height: 24),
             
             // Account Section
@@ -508,18 +570,18 @@ class _SettingsPageState extends State<SettingsPage> {
               child: Column(
                 children: [
                   ListTile(
-                    leading: const Icon(Icons.help_outline),
-                    title: const Text('Ayuda y soporte'),
+                    leading: Icon(Icons.feedback_outlined, color: colorScheme.primary),
+                    title: const Text('Enviar feedback'),
+                    subtitle: const Text('Comparte tus ideas y sugerencias'),
                     trailing: const Icon(Icons.arrow_forward_ios),
-                    onTap: () {},
+                    onTap: () => _showFeedbackDialog(),
                   ),
                   const Divider(),
                   ListTile(
                     leading: const Icon(Icons.info_outline),
                     title: const Text('Acerca de'),
                     subtitle: const Text('Versión 1.0.0'),
-                    trailing: const Icon(Icons.arrow_forward_ios),
-                    onTap: () {},
+                    enabled: false,
                   ),
                   const Divider(),
                   ListTile(
@@ -565,7 +627,11 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
             ),
             
-            const SizedBox(height: 24),
+            const SizedBox(height: 80),
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -620,33 +686,215 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  void _showOriginalsDialog() {
-    showDialog(
+  void _showFeedbackDialog() async {
+    final messageController = TextEditingController();
+    String? selectedCategory;
+    int? selectedRating;
+    bool isSending = false;
+
+    await showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Ver originales'),
-        content: const Text(
-          'Puedes acceder a:\n\n'
-          '• Audio original de dictados\n'
-          '• Transcripciones sin procesar\n'
-          '• Texto antes de edición de IA\n\n'
-          'Esta función garantiza que siempre puedas recuperar tu versión original.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Entendido'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              // Navigate to originals page
-            },
-            child: const Text('Ver mis originales'),
-          ),
-        ],
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setState) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(28),
+            ),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    Icons.feedback_outlined,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(child: Text('Tu feedback nos ayuda')),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Comparte tus ideas, sugerencias o reporta problemas. Tu opinión es valiosa para mejorar Narra.',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    'Categoría',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _CategoryChip(
+                        label: 'Problema',
+                        icon: Icons.bug_report_outlined,
+                        value: 'bug',
+                        groupValue: selectedCategory,
+                        onSelected: (value) {
+                          setState(() => selectedCategory = value);
+                        },
+                      ),
+                      _CategoryChip(
+                        label: 'Función nueva',
+                        icon: Icons.lightbulb_outline,
+                        value: 'feature',
+                        groupValue: selectedCategory,
+                        onSelected: (value) {
+                          setState(() => selectedCategory = value);
+                        },
+                      ),
+                      _CategoryChip(
+                        label: 'Mejora',
+                        icon: Icons.trending_up,
+                        value: 'improvement',
+                        groupValue: selectedCategory,
+                        onSelected: (value) {
+                          setState(() => selectedCategory = value);
+                        },
+                      ),
+                      _CategoryChip(
+                        label: 'Otro',
+                        icon: Icons.more_horiz,
+                        value: 'other',
+                        groupValue: selectedCategory,
+                        onSelected: (value) {
+                          setState(() => selectedCategory = value);
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    '¿Qué tan satisfecho estás con Narra?',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: List.generate(5, (index) {
+                      final rating = index + 1;
+                      final isSelected = selectedRating == rating;
+                      return IconButton(
+                        onPressed: () {
+                          setState(() => selectedRating = rating);
+                        },
+                        icon: Icon(
+                          isSelected ? Icons.star : Icons.star_border,
+                          color: isSelected
+                              ? Colors.amber
+                              : Theme.of(context).colorScheme.outline,
+                        ),
+                      );
+                    }),
+                  ),
+                  const SizedBox(height: 20),
+                  TextField(
+                    controller: messageController,
+                    maxLines: 5,
+                    maxLength: 1000,
+                    decoration: InputDecoration(
+                      labelText: 'Tu mensaje',
+                      hintText: 'Cuéntanos qué piensas...',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      alignLabelWithHint: true,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: isSending ? null : () => Navigator.of(context).pop(),
+                child: const Text('Cancelar'),
+              ),
+              FilledButton.icon(
+                onPressed: isSending || messageController.text.trim().isEmpty
+                    ? null
+                    : () async {
+                        setState(() => isSending = true);
+                        try {
+                          await _sendFeedback(
+                            message: messageController.text.trim(),
+                            category: selectedCategory,
+                            rating: selectedRating,
+                          );
+                          if (!mounted) return;
+                          Navigator.of(dialogContext).pop();
+                          ScaffoldMessenger.of(this.context).showSnackBar(
+                            const SnackBar(
+                              content: Text('¡Gracias por tu feedback! 🎉'),
+                              backgroundColor: Colors.green,
+                            ),
+                          );
+                        } catch (e) {
+                          setState(() => isSending = false);
+                          if (!mounted) return;
+                          ScaffoldMessenger.of(this.context).showSnackBar(
+                            SnackBar(
+                              content: Text('Error al enviar feedback: $e'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      },
+                icon: isSending
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.send),
+                label: Text(isSending ? 'Enviando…' : 'Enviar feedback'),
+              ),
+            ],
+          );
+        },
       ),
     );
+  }
+
+  Future<void> _sendFeedback({
+    required String message,
+    String? category,
+    int? rating,
+  }) async {
+    final userId = SupabaseAuth.currentUser?.id;
+    if (userId == null) {
+      throw Exception('Usuario no autenticado');
+    }
+
+    try {
+      await NarraSupabaseClient.client.from('user_feedback').insert({
+        'user_id': userId,
+        'message': message,
+        'category': category,
+        'rating': rating,
+        'user_email': _userProfile?['email'],
+        'user_name': _userProfile?['name'],
+        'created_at': DateTime.now().toIso8601String(),
+      });
+    } catch (e) {
+      throw Exception('No se pudo guardar el feedback: $e');
+    }
   }
 
   void _showLogoutDialog() {
@@ -789,6 +1037,51 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _CategoryChip extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final String value;
+  final String? groupValue;
+  final ValueChanged<String> onSelected;
+
+  const _CategoryChip({
+    required this.label,
+    required this.icon,
+    required this.value,
+    required this.groupValue,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isSelected = value == groupValue;
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return FilterChip(
+      label: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16),
+          const SizedBox(width: 4),
+          Text(label),
+        ],
+      ),
+      selected: isSelected,
+      onSelected: (_) => onSelected(value),
+      selectedColor: colorScheme.primaryContainer,
+      checkmarkColor: colorScheme.primary,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: isSelected
+              ? colorScheme.primary
+              : colorScheme.outline.withValues(alpha: 0.3),
+        ),
       ),
     );
   }

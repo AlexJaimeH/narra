@@ -1786,3 +1786,60 @@ end
 $$;
 
 commit;
+
+-- ============================================================
+-- Tabla de Feedback de Usuarios (Fecha: 2025-11-01)
+-- ============================================================
+-- Esta tabla almacena el feedback y comentarios que los usuarios
+-- envían desde la página de ajustes de la aplicación.
+-- ============================================================
+
+begin;
+
+-- Crear tabla user_feedback si no existe
+create table if not exists public.user_feedback (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.users(id) on delete cascade,
+  message text not null,
+  rating integer check (rating >= 1 and rating <= 5),
+  category text check (category in ('bug', 'feature', 'improvement', 'other')),
+  created_at timestamptz not null default now(),
+  user_email text,
+  user_name text
+);
+
+-- Índice para búsquedas por usuario
+create index if not exists idx_user_feedback_user_id on public.user_feedback(user_id);
+
+-- Índice para búsquedas por fecha
+create index if not exists idx_user_feedback_created_at on public.user_feedback(created_at desc);
+
+-- RLS policies para la tabla user_feedback
+alter table public.user_feedback enable row level security;
+
+-- Política: Los usuarios solo pueden ver su propio feedback
+create policy "Users can view their own feedback"
+  on public.user_feedback
+  for select
+  using (auth.uid() = user_id);
+
+-- Política: Los usuarios pueden insertar su propio feedback
+create policy "Users can insert their own feedback"
+  on public.user_feedback
+  for insert
+  with check (auth.uid() = user_id);
+
+-- Comentarios en la tabla
+comment on table public.user_feedback is 'Almacena el feedback y comentarios de los usuarios desde la página de ajustes';
+comment on column public.user_feedback.id is 'ID único del feedback';
+comment on column public.user_feedback.user_id is 'ID del usuario que envió el feedback';
+comment on column public.user_feedback.message is 'Contenido del mensaje de feedback';
+comment on column public.user_feedback.rating is 'Calificación opcional del usuario (1-5 estrellas)';
+comment on column public.user_feedback.category is 'Categoría del feedback (bug, feature, improvement, other)';
+comment on column public.user_feedback.created_at is 'Fecha y hora de creación del feedback';
+comment on column public.user_feedback.user_email is 'Email del usuario (copia para referencia)';
+comment on column public.user_feedback.user_name is 'Nombre del usuario (copia para referencia)';
+
+commit;
+
+-- Fin de la migración de user_feedback

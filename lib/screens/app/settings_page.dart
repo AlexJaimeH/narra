@@ -1,6 +1,7 @@
 import 'dart:html' as html;
 
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:narra/supabase/supabase_config.dart';
 import 'package:narra/supabase/narra_client.dart';
 import 'package:narra/services/user_service.dart';
@@ -18,6 +19,7 @@ class _SettingsPageState extends State<SettingsPage> {
   Map<String, dynamic>? _userSettings;
   bool _isLoading = true;
   bool _isPremium = true; // Todos pagados por requerimiento
+  bool _isDownloadingData = false;
 
   final TextEditingController _authorNameController = TextEditingController();
   String _publicAuthorName = '';
@@ -148,6 +150,70 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
+  Future<void> _downloadUserData() async {
+    setState(() {
+      _isDownloadingData = true;
+    });
+
+    try {
+      final session = SupabaseConfig.client.auth.currentSession;
+      if (session == null) {
+        throw Exception('No hay sesión activa');
+      }
+
+      final currentUrl = html.window.location.href;
+      final uri = Uri.parse(currentUrl);
+      final apiUrl = '${uri.scheme}://${uri.host}/api/download-user-data';
+
+      final response = await http.post(
+        Uri.parse(apiUrl),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${session.accessToken}',
+        },
+      );
+
+      if (response.statusCode != 200) {
+        throw Exception('Error al descargar datos: ${response.statusCode}');
+      }
+
+      // Create a blob and download it
+      final blob = html.Blob([response.bodyBytes], 'application/json');
+      final url = html.Url.createObjectUrlFromBlob(blob);
+      final anchor = html.AnchorElement(href: url)
+        ..setAttribute('download', 'narra-mis-datos-${DateTime.now().millisecondsSinceEpoch}.json')
+        ..style.display = 'none';
+
+      html.document.body?.append(anchor);
+      anchor.click();
+      anchor.remove();
+      html.Url.revokeObjectUrl(url);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Datos descargados exitosamente'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al descargar datos: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isDownloadingData = false;
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -242,96 +308,159 @@ class _SettingsPageState extends State<SettingsPage> {
             // Profile Section
             _buildSectionHeader('Perfil'),
             Card(
-              child: Column(
-                children: [
-                  ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                      child: Icon(
-                        Icons.person,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                    ),
-                    title: Text(_publicAuthorName.isNotEmpty ? _publicAuthorName : (_userProfile?['name'] ?? 'Usuario')),
-                    subtitle: Text(_userProfile?['email'] ?? ''),
-                    trailing: _isPremium
-                        ? Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Colors.amber,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: const Text(
-                              '⭐ Premium',
-                              style: TextStyle(
-                                color: Colors.black87,
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          )
-                        : const SizedBox.shrink(),
-                  ),
-                  const Divider(height: 0),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Email (read-only)
+                    Row(
                       children: [
-                        Text(
-                          'Nombre público del autor',
-                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                fontWeight: FontWeight.w600,
-                              ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          'Así verán tu nombre quienes reciban tus historias publicadas.',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                              ),
-                        ),
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: _authorNameController,
-                          decoration: const InputDecoration(
-                            labelText: 'Nombre público',
-                            hintText: 'Ej. Familia García',
-                            border: OutlineInputBorder(),
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: colorScheme.primaryContainer.withValues(alpha: 0.5),
+                            borderRadius: BorderRadius.circular(12),
                           ),
-                          textInputAction: TextInputAction.done,
-                          onSubmitted: (_) => _saveAuthorName(),
-                        ),
-                        const SizedBox(height: 12),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: FilledButton.tonal(
-                            onPressed:
-                                _isSavingAuthorName ? null : () => _saveAuthorName(),
-                            child: _isSavingAuthorName
-                                ? const SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(strokeWidth: 2),
-                                  )
-                                : const Text('Guardar nombre público'),
+                          child: Icon(
+                            Icons.email_outlined,
+                            color: colorScheme.primary,
+                            size: 20,
                           ),
                         ),
-                        if (_publicAuthorName.isNotEmpty) ...[
-                          const SizedBox(height: 8),
-                          Text(
-                            'Vista previa: $_publicAuthorName',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onSurfaceVariant,
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Correo electrónico',
+                                style: theme.textTheme.labelMedium?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                  fontWeight: FontWeight.w500,
                                 ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                _userProfile?['email'] ?? '',
+                                style: theme.textTheme.bodyLarge?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
+                        ),
+                        if (_isPremium)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: Colors.amber.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: Colors.amber,
+                                width: 1.5,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.star,
+                                  color: Colors.amber,
+                                  size: 16,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'Premium',
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                    color: Colors.amber.shade900,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                       ],
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 24),
+                    Divider(
+                      height: 1,
+                      color: colorScheme.outlineVariant.withValues(alpha: 0.24),
+                    ),
+                    const SizedBox(height: 24),
+                    // Public author name (editable)
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: colorScheme.secondaryContainer.withValues(alpha: 0.5),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(
+                            Icons.person_outline,
+                            color: colorScheme.secondary,
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Nombre público',
+                                style: theme.textTheme.labelMedium?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Así verán tu nombre quienes reciban tus historias',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: colorScheme.onSurfaceVariant.withValues(alpha: 0.8),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: _authorNameController,
+                      decoration: InputDecoration(
+                        labelText: 'Nombre público',
+                        hintText: 'Ej. Familia García',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        prefixIcon: const Icon(Icons.edit_outlined),
+                      ),
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => _saveAuthorName(),
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: _isSavingAuthorName ? null : () => _saveAuthorName(),
+                        icon: _isSavingAuthorName
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                ),
+                              )
+                            : const Icon(Icons.check),
+                        label: Text(_isSavingAuthorName ? 'Guardando...' : 'Guardar cambios'),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
             
@@ -365,8 +494,11 @@ class _SettingsPageState extends State<SettingsPage> {
                       ],
                     ),
                   ),
-                  const Divider(),
-                  
+                  Divider(
+                    height: 1,
+                    color: colorScheme.outlineVariant.withValues(alpha: 0.24),
+                  ),
+
                   // Text Scale
                   ListTile(
                     leading: const Icon(Icons.text_fields),
@@ -395,8 +527,11 @@ class _SettingsPageState extends State<SettingsPage> {
                       ],
                     ),
                   ),
-                  const Divider(),
-                  
+                  Divider(
+                    height: 1,
+                    color: colorScheme.outlineVariant.withValues(alpha: 0.24),
+                  ),
+
                   // High Contrast (global)
                   SwitchListTile(
                     secondary: const Icon(Icons.contrast),
@@ -409,8 +544,11 @@ class _SettingsPageState extends State<SettingsPage> {
                       await _updateUserSettings();
                     },
                   ),
-                  const Divider(),
-                  
+                  Divider(
+                    height: 1,
+                    color: colorScheme.outlineVariant.withValues(alpha: 0.24),
+                  ),
+
                   // Reduced Motion (global)
                   SwitchListTile(
                     secondary: const Icon(Icons.motion_photos_off),
@@ -457,8 +595,11 @@ class _SettingsPageState extends State<SettingsPage> {
                       ],
                     ),
                   ),
-                  const Divider(),
-                  
+                  Divider(
+                    height: 1,
+                    color: colorScheme.outlineVariant.withValues(alpha: 0.24),
+                  ),
+
                   // Ghost Person
                   ListTile(
                     leading: const Icon(Icons.person_outline),
@@ -482,8 +623,11 @@ class _SettingsPageState extends State<SettingsPage> {
                       ],
                     ),
                   ),
-                  const Divider(),
-                  
+                  Divider(
+                    height: 1,
+                    color: colorScheme.outlineVariant.withValues(alpha: 0.24),
+                  ),
+
                   // No Bad Words
                   SwitchListTile(
                     secondary: const Icon(Icons.block),
@@ -496,8 +640,11 @@ class _SettingsPageState extends State<SettingsPage> {
                       await _updateUserSettings();
                     },
                   ),
-                  const Divider(),
-                  
+                  Divider(
+                    height: 1,
+                    color: colorScheme.outlineVariant.withValues(alpha: 0.24),
+                  ),
+
                   // Additional AI instructions
                   ListTile(
                     leading: const Icon(Icons.notes),
@@ -554,11 +701,22 @@ class _SettingsPageState extends State<SettingsPage> {
             _buildSectionHeader('Datos y privacidad'),
             Card(
               child: ListTile(
-                leading: const Icon(Icons.download),
+                enabled: !_isDownloadingData,
+                leading: _isDownloadingData
+                    ? const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.download),
                 title: const Text('Descargar mis datos'),
-                subtitle: const Text('Obtén una copia de todas tus historias'),
-                trailing: const Icon(Icons.arrow_forward_ios),
-                onTap: () {},
+                subtitle: Text(_isDownloadingData
+                    ? 'Preparando tu archivo...'
+                    : 'Obtén una copia completa de todas tus historias'),
+                trailing: _isDownloadingData
+                    ? null
+                    : const Icon(Icons.arrow_forward_ios),
+                onTap: _isDownloadingData ? null : _downloadUserData,
               ),
             ),
 
@@ -576,14 +734,20 @@ class _SettingsPageState extends State<SettingsPage> {
                     trailing: const Icon(Icons.arrow_forward_ios),
                     onTap: () => _showFeedbackDialog(),
                   ),
-                  const Divider(),
+                  Divider(
+                    height: 1,
+                    color: colorScheme.outlineVariant.withValues(alpha: 0.24),
+                  ),
                   ListTile(
                     leading: const Icon(Icons.info_outline),
                     title: const Text('Acerca de'),
                     subtitle: const Text('Versión 1.0.0'),
                     enabled: false,
                   ),
-                  const Divider(),
+                  Divider(
+                    height: 1,
+                    color: colorScheme.outlineVariant.withValues(alpha: 0.24),
+                  ),
                   ListTile(
                     leading: const Icon(Icons.logout, color: Colors.red),
                     title: const Text('Cerrar sesión', style: TextStyle(color: Colors.red)),

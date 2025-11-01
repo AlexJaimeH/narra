@@ -156,7 +156,7 @@ class _SettingsPageState extends State<SettingsPage> {
     });
 
     try {
-      final session = SupabaseAuth.currentSession;
+      final session = SupabaseConfig.client.auth.currentSession;
       if (session == null) {
         throw Exception('No hay sesión activa');
       }

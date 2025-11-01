@@ -178,10 +178,10 @@ class _SettingsPageState extends State<SettingsPage> {
       }
 
       // Create a blob and download it
-      final blob = html.Blob([response.bodyBytes], 'application/json');
+      final blob = html.Blob([response.bodyBytes], 'application/zip');
       final url = html.Url.createObjectUrlFromBlob(blob);
       final anchor = html.AnchorElement(href: url)
-        ..setAttribute('download', 'narra-mis-datos-${DateTime.now().millisecondsSinceEpoch}.json')
+        ..setAttribute('download', 'narra-mis-datos-${DateTime.now().millisecondsSinceEpoch}.zip')
         ..style.display = 'none';
 
       html.document.body?.append(anchor);
@@ -711,8 +711,8 @@ class _SettingsPageState extends State<SettingsPage> {
                     : const Icon(Icons.download),
                 title: const Text('Descargar mis datos'),
                 subtitle: Text(_isDownloadingData
-                    ? 'Preparando tu archivo...'
-                    : 'Obtén una copia completa de todas tus historias'),
+                    ? 'Preparando archivo ZIP con todas tus historias...'
+                    : 'Descarga un ZIP con todas tus historias, imágenes, audios y más'),
                 trailing: _isDownloadingData
                     ? null
                     : const Icon(Icons.arrow_forward_ios),

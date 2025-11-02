@@ -34,6 +34,22 @@ export const StoryPage: React.FC = () => {
   const [showUnsubscribeConfirm, setShowUnsubscribeConfirm] = useState(false);
   const [showUnsubscribeSuccess, setShowUnsubscribeSuccess] = useState(false);
   const [isUnsubscribing, setIsUnsubscribing] = useState(false);
+  const [readingProgress, setReadingProgress] = useState(0);
+
+  // Reading progress tracking
+  useEffect(() => {
+    const handleScroll = () => {
+      const windowHeight = window.innerHeight;
+      const documentHeight = document.documentElement.scrollHeight;
+      const scrollTop = window.scrollY;
+      const trackLength = documentHeight - windowHeight;
+      const progress = (scrollTop / trackLength) * 100;
+      setReadingProgress(Math.min(progress, 100));
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   const loadStory = async () => {
     if (!storyId) {
@@ -324,20 +340,26 @@ export const StoryPage: React.FC = () => {
   if (!story) return <ErrorMessage message="Historia no encontrada" />;
 
   return (
-    <div className="min-h-screen" style={{ background: `linear-gradient(to bottom, ${NarraColors.brand.primaryPale}, ${NarraColors.surface.white})` }}>
+    <div className="min-h-screen smooth-scroll" style={{ background: `linear-gradient(to bottom, ${NarraColors.brand.primaryPale}, ${NarraColors.surface.white})` }}>
+      {/* Reading progress bar */}
+      <div
+        className="reading-progress"
+        style={{ width: `${readingProgress}%` }}
+      />
+
       {/* Header mejorado */}
-      <header className="sticky top-0 z-50 backdrop-blur-md bg-white/90 border-b border-gray-100 shadow-sm">
+      <header className="sticky top-0 z-40 glass shadow-sm animate-fade-in">
         <div className="max-w-5xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4 animate-slide-in-left">
               {author?.avatarUrl && (
                 <div className="relative">
                   <img
                     src={author.avatarUrl}
                     alt={author.displayName}
-                    className="w-14 h-14 rounded-full object-cover ring-4 ring-white shadow-lg"
+                    className="w-14 h-14 rounded-full object-cover ring-4 ring-white shadow-lg transform hover:scale-105 transition-transform"
                   />
-                  <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center shadow-md" style={{ backgroundColor: NarraColors.brand.primary }}>
+                  <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center shadow-md animate-float" style={{ backgroundColor: NarraColors.brand.primary }}>
                     <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
                       <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                     </svg>
@@ -345,7 +367,7 @@ export const StoryPage: React.FC = () => {
                 </div>
               )}
               <div>
-                <h2 className="text-xl font-bold" style={{ color: NarraColors.text.primary }}>
+                <h2 className="text-xl font-bold" style={{ color: NarraColors.text.primary, fontFamily: "'Playfair Display', serif" }}>
                   {author?.displayName}
                 </h2>
                 {author?.tagline && (
@@ -355,7 +377,7 @@ export const StoryPage: React.FC = () => {
             </div>
             <button
               onClick={handleViewAllStories}
-              className="px-5 py-2.5 rounded-xl font-semibold transition-all transform hover:scale-105 active:scale-95 shadow-md hover:shadow-lg"
+              className="px-5 py-2.5 rounded-xl font-semibold transition-all transform hover:scale-105 active:scale-95 shadow-md hover:shadow-lg animate-slide-in-right"
               style={{
                 backgroundColor: NarraColors.brand.primary,
                 color: 'white',
@@ -370,16 +392,23 @@ export const StoryPage: React.FC = () => {
       {/* Contenido principal */}
       <main className="max-w-4xl mx-auto px-4 py-8">
         {/* Historia */}
-        <article className="bg-white rounded-3xl shadow-xl p-8 md:p-12 mb-8 transform transition-all hover:shadow-2xl">
-          <header className="mb-8">
-            <h1 className="text-4xl md:text-5xl font-bold mb-6 leading-tight bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent">
+        <article className="bg-white rounded-3xl shadow-soft-hover p-8 md:p-12 mb-8 animate-fade-in">
+          <header className="mb-10">
+            <h1 className="text-4xl md:text-6xl font-bold mb-6 leading-tight animate-fade-in" style={{
+              fontFamily: "'Playfair Display', serif",
+              background: 'linear-gradient(135deg, #1F2937 0%, #4B5563 50%, #1F2937 100%)',
+              WebkitBackgroundClip: 'text',
+              backgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              letterSpacing: '-0.02em'
+            }}>
               {story.title}
             </h1>
 
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-3 animate-fade-in stagger-1">
               <div className="flex flex-wrap items-center gap-3">
                 {formatStoryDate(story) && (
-                  <div className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold shadow-sm" style={{ backgroundColor: NarraColors.brand.primaryLight, color: NarraColors.brand.primarySolid }}>
+                  <div className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold shadow-sm transform hover:scale-105 transition-all" style={{ backgroundColor: NarraColors.brand.primaryLight, color: NarraColors.brand.primarySolid }}>
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
@@ -389,13 +418,14 @@ export const StoryPage: React.FC = () => {
 
                 {story.tags && story.tags.length > 0 && (
                   <div className="flex flex-wrap gap-2">
-                    {story.tags.map(tag => (
+                    {story.tags.map((tag, idx) => (
                       <span
                         key={tag.id}
-                        className="px-4 py-2 text-sm rounded-full font-semibold shadow-sm"
+                        className="px-4 py-2 text-sm rounded-full font-semibold shadow-sm transform hover:scale-105 transition-all"
                         style={{
                           backgroundColor: NarraColors.brand.primaryLight,
                           color: NarraColors.brand.primarySolid,
+                          transitionDelay: `${idx * 50}ms`
                         }}
                       >
                         #{tag.name || tag.tag}
@@ -405,7 +435,10 @@ export const StoryPage: React.FC = () => {
                 )}
               </div>
               {story.publishedAt && (
-                <p className="text-sm italic" style={{ color: NarraColors.text.light }}>
+                <p className="text-sm italic flex items-center gap-2" style={{ color: NarraColors.text.light }}>
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
                   Publicado el {formatDate(story.publishedAt)}
                 </p>
               )}
@@ -413,35 +446,40 @@ export const StoryPage: React.FC = () => {
           </header>
 
           <div
-            className="prose prose-lg max-w-none leading-relaxed"
-            style={{ color: NarraColors.text.primary }}
+            className="prose prose-lg max-w-none leading-relaxed animate-fade-in stagger-2"
+            style={{
+              color: NarraColors.text.primary,
+              fontFamily: "'Inter', sans-serif",
+              fontSize: '1.125rem',
+              lineHeight: '1.9'
+            }}
             dangerouslySetInnerHTML={{ __html: processStoryContent(story.content, story.photos, story.title) }}
           />
 
           {/* Reacciones */}
-          <div className="mt-12 pt-8 border-t border-gray-100">
+          <div className="mt-12 pt-8 border-t border-gray-100 animate-fade-in stagger-3">
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
               <button
                 onClick={handleToggleReaction}
                 disabled={isTogglingReaction}
-                className="group flex items-center justify-center gap-2 sm:gap-3 px-4 sm:px-6 py-3 rounded-2xl font-semibold transition-all transform hover:scale-105 active:scale-95 shadow-md hover:shadow-lg"
+                className="group flex items-center justify-center gap-2 sm:gap-3 px-4 sm:px-6 py-3 rounded-2xl font-semibold transition-all duration-300 transform hover:scale-105 active:scale-95 shadow-md hover:shadow-xl"
                 style={{
                   backgroundColor: feedback.hasReacted ? NarraColors.interactive.heartLight : NarraColors.brand.primaryLight,
                   color: feedback.hasReacted ? NarraColors.interactive.heart : NarraColors.brand.primarySolid,
                 }}
               >
-                <svg className={`w-5 sm:w-6 h-5 sm:h-6 flex-shrink-0 transition-transform ${feedback.hasReacted ? 'scale-110' : 'group-hover:scale-110'}`} fill={feedback.hasReacted ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor">
+                <svg className={`w-5 sm:w-6 h-5 sm:h-6 flex-shrink-0 transition-all duration-300 ${feedback.hasReacted ? 'scale-110 animate-pulse-soft' : 'group-hover:scale-110'}`} fill={feedback.hasReacted ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                 </svg>
                 <span className="text-sm sm:text-base">{feedback.hasReacted ? 'Te gusta' : 'Me gusta'}</span>
                 {feedback.reactionCount > 0 && (
-                  <span className="px-2 sm:px-2.5 py-1 rounded-full text-xs sm:text-sm font-bold" style={{ backgroundColor: 'white' }}>
+                  <span className="px-2 sm:px-2.5 py-1 rounded-full text-xs sm:text-sm font-bold transform group-hover:scale-110 transition-transform" style={{ backgroundColor: 'white' }}>
                     {feedback.reactionCount}
                   </span>
                 )}
               </button>
 
-              <div className="flex items-center justify-center gap-2 px-4 py-2 rounded-full" style={{ backgroundColor: NarraColors.brand.primaryPale, color: NarraColors.text.secondary }}>
+              <div className="flex items-center justify-center gap-2 px-4 py-2 rounded-full transform hover:scale-105 transition-all" style={{ backgroundColor: NarraColors.brand.primaryPale, color: NarraColors.text.secondary }}>
                 <svg className="w-4 sm:w-5 h-4 sm:h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
                 </svg>
@@ -452,8 +490,8 @@ export const StoryPage: React.FC = () => {
         </article>
 
         {/* Comentarios */}
-        <section className="bg-white rounded-3xl shadow-xl p-8 mb-8">
-          <h2 className="text-2xl font-bold mb-6" style={{ color: NarraColors.text.primary }}>
+        <section className="bg-white rounded-3xl shadow-soft-hover p-8 mb-8 animate-fade-in stagger-4">
+          <h2 className="text-2xl font-bold mb-6" style={{ color: NarraColors.text.primary, fontFamily: "'Playfair Display', serif" }}>
             Comentarios ({feedback.commentCount})
           </h2>
 
@@ -463,17 +501,18 @@ export const StoryPage: React.FC = () => {
               value={newComment}
               onChange={(e) => setNewComment(e.target.value)}
               placeholder={`${subscriberName ? subscriberName + ', d' : 'D'}éjanos saber qué te pareció esta historia...`}
-              className="w-full px-4 py-3 rounded-xl border-2 focus:outline-none focus:ring-2 transition-all"
+              className="w-full px-5 py-4 rounded-xl border-2 focus:outline-none focus:ring-2 transition-all duration-300 shadow-sm focus:shadow-md"
               style={{
                 borderColor: NarraColors.border.light,
+                fontFamily: "'Inter', sans-serif"
               }}
-              rows={3}
+              rows={4}
             />
             <div className="flex justify-end mt-3">
               <button
                 onClick={() => handleSubmitComment(newComment)}
                 disabled={isSubmitting || !newComment.trim()}
-                className="px-6 py-2.5 rounded-xl font-semibold transition-all transform hover:scale-105 active:scale-95 shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-6 py-3 rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 active:scale-95 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
                 style={{
                   backgroundColor: NarraColors.brand.primary,
                   color: 'white',
@@ -513,13 +552,15 @@ export const StoryPage: React.FC = () => {
 
         {/* Historias relacionadas mejoradas */}
         {relatedStories.length > 0 && (
-          <section className="mb-8">
-            <h2 className="text-3xl font-bold mb-6" style={{ color: NarraColors.text.primary }}>
+          <section className="mb-8 animate-fade-in">
+            <h2 className="text-3xl font-bold mb-6" style={{ color: NarraColors.text.primary, fontFamily: "'Playfair Display', serif" }}>
               Más historias de {author?.displayName}
             </h2>
             <div className="grid gap-6 md:grid-cols-2">
-              {relatedStories.map(relatedStory => (
-                <RelatedStoryCard key={relatedStory.id} story={relatedStory} formatDate={formatDate} />
+              {relatedStories.map((relatedStory, idx) => (
+                <div key={relatedStory.id} className="animate-fade-in" style={{ animationDelay: `${idx * 0.1}s` }}>
+                  <RelatedStoryCard story={relatedStory} formatDate={formatDate} />
+                </div>
               ))}
             </div>
           </section>
@@ -668,19 +709,19 @@ const CommentThread: React.FC<{
   const { name, isAuthor } = parseNameAndRole(comment.subscriberName || 'Suscriptor');
 
   return (
-    <div className="group">
+    <div className="group animate-fade-in">
       <div className="flex gap-4">
-        <div className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center font-bold text-white shadow-md" style={{ backgroundColor: NarraColors.brand.primary }}>
+        <div className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center font-bold text-white shadow-md transform group-hover:scale-110 transition-transform" style={{ backgroundColor: NarraColors.brand.primary }}>
           {name[0]?.toUpperCase() || 'S'}
         </div>
         <div className="flex-1">
-          <div className="bg-gray-50 rounded-2xl p-4 group-hover:bg-gray-100 transition-colors">
+          <div className="bg-gray-50 rounded-2xl p-4 group-hover:bg-gray-100 transition-all duration-300 shadow-sm group-hover:shadow-md">
             <div className="flex items-center gap-2 mb-2 flex-wrap">
               <span className="font-semibold" style={{ color: NarraColors.text.primary }}>
                 {name}
               </span>
               {isAuthor && (
-                <span className="px-2 py-0.5 text-xs font-bold rounded" style={{ backgroundColor: NarraColors.brand.primary, color: 'white' }}>
+                <span className="px-2 py-0.5 text-xs font-bold rounded transform group-hover:scale-105 transition-transform" style={{ backgroundColor: NarraColors.brand.primary, color: 'white' }}>
                   Autor
                 </span>
               )}
@@ -688,11 +729,11 @@ const CommentThread: React.FC<{
                 {formatRelativeDate(comment.createdAt)}
               </span>
             </div>
-            <p style={{ color: NarraColors.text.secondary }}>{comment.content}</p>
+            <p style={{ color: NarraColors.text.secondary, lineHeight: '1.6' }}>{comment.content}</p>
           </div>
           <button
             onClick={() => setReplyingTo(replyingTo === comment.id ? null : comment.id)}
-            className="text-sm font-medium mt-2 hover:underline"
+            className="text-sm font-medium mt-2 hover:underline transition-all transform hover:translate-x-1"
             style={{ color: NarraColors.brand.primary }}
           >
             Responder
@@ -814,32 +855,33 @@ const RelatedStoryCard: React.FC<{
   return (
     <a
       href={`/blog/story/${story.id}${window.location.search}`}
-      className="block bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-2xl transition-all transform hover:-translate-y-1"
+      className="block bg-white rounded-2xl shadow-soft-hover overflow-hidden hover:shadow-2xl transition-all duration-500 transform hover:-translate-y-2 group"
     >
       {story.photos && story.photos.length > 0 && (
-        <div className="h-48 overflow-hidden">
+        <div className="h-48 overflow-hidden relative">
           <img
             src={story.photos[0].photoUrl}
             alt={story.title}
-            className="w-full h-full object-cover transform hover:scale-110 transition-transform duration-500"
+            className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700"
           />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
         </div>
       )}
       <div className="p-6" style={{ borderTop: `4px solid ${NarraColors.brand.primary}` }}>
-        <h3 className="text-xl font-bold mb-3 line-clamp-2" style={{ color: NarraColors.text.primary }}>
+        <h3 className="text-xl font-bold mb-3 line-clamp-2 transition-colors duration-300" style={{ color: NarraColors.text.primary, fontFamily: "'Playfair Display', serif" }}>
           {story.title}
         </h3>
 
         {excerpt && (
-          <p className="text-sm mb-3 line-clamp-2" style={{ color: NarraColors.text.secondary }}>
+          <p className="text-sm mb-4 line-clamp-2 leading-relaxed" style={{ color: NarraColors.text.secondary, lineHeight: '1.6' }}>
             {excerpt}
           </p>
         )}
 
-        <div className="flex flex-col gap-2 mb-3">
+        <div className="flex flex-col gap-2 mb-4">
           <div className="flex flex-wrap items-center gap-2">
             {storyDateFormatted && (
-              <div className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold" style={{ backgroundColor: NarraColors.brand.primaryLight, color: NarraColors.brand.primarySolid }}>
+              <div className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold transform group-hover:scale-105 transition-transform" style={{ backgroundColor: NarraColors.brand.primaryLight, color: NarraColors.brand.primarySolid }}>
                 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
@@ -849,13 +891,14 @@ const RelatedStoryCard: React.FC<{
 
             {story.tags && story.tags.length > 0 && (
               <>
-                {story.tags.slice(0, 2).map(tag => (
+                {story.tags.slice(0, 2).map((tag, idx) => (
                   <span
                     key={tag.id}
-                    className="px-3 py-1 text-xs rounded-full font-semibold"
+                    className="px-3 py-1 text-xs rounded-full font-semibold transform group-hover:scale-105 transition-all"
                     style={{
                       backgroundColor: NarraColors.brand.primaryLight,
                       color: NarraColors.brand.primarySolid,
+                      transitionDelay: `${idx * 50}ms`
                     }}
                   >
                     #{tag.name || tag.tag}
@@ -865,18 +908,21 @@ const RelatedStoryCard: React.FC<{
             )}
           </div>
           {story.publishedAt && (
-            <p className="text-xs italic" style={{ color: NarraColors.text.light }}>
+            <p className="text-xs italic flex items-center gap-1" style={{ color: NarraColors.text.light }}>
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
               Publicado el {formatDate(story.publishedAt)}
             </p>
           )}
         </div>
 
         <div
-          className="text-sm font-semibold flex items-center gap-1"
+          className="text-sm font-semibold flex items-center gap-2 transform group-hover:gap-3 transition-all duration-300"
           style={{ color: NarraColors.brand.primary }}
         >
           Leer historia
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg className="w-4 h-4 transform group-hover:translate-x-1 transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
         </div>

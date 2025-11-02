@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:html' as html;
 
 import 'package:flutter/material.dart';
@@ -1106,31 +1107,153 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   void _showDeleteAccountDialog() {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Eliminar cuenta'),
-        content: const Text(
-          '⚠️ ATENCIÓN: Esta acción es irreversible.\n\n'
-          'Se eliminarán permanentemente:\n'
-          '• Todas tus historias\n'
-          '• Fotos y audios\n'
-          '• Lista de suscriptores\n'
-          '• Configuraciones\n\n'
-          '¿Estás completamente seguro?',
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(28),
+        ),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.red.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.warning_rounded,
+                color: Colors.red,
+                size: 28,
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text('Eliminar cuenta'),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.red.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: Colors.red.withValues(alpha: 0.3),
+                    width: 2,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.error_outline, color: Colors.red),
+                        const SizedBox(width: 8),
+                        Text(
+                          'ATENCIÓN',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            color: Colors.red,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Esta acción es permanente e irreversible.',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: Colors.red.shade900,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'Se eliminará todo para siempre:',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 12),
+              _DeleteListItem(
+                icon: Icons.auto_stories,
+                text: 'Todas tus historias (borradores y publicadas)',
+              ),
+              _DeleteListItem(
+                icon: Icons.image,
+                text: 'Todas tus fotos',
+              ),
+              _DeleteListItem(
+                icon: Icons.mic,
+                text: 'Todas tus grabaciones de voz',
+              ),
+              _DeleteListItem(
+                icon: Icons.people,
+                text: 'Lista completa de suscriptores',
+              ),
+              _DeleteListItem(
+                icon: Icons.history,
+                text: 'Historial de versiones',
+              ),
+              _DeleteListItem(
+                icon: Icons.settings,
+                text: 'Todas tus configuraciones',
+              ),
+              const SizedBox(height: 20),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.info_outline,
+                      size: 20,
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'No podrás recuperar nada después de eliminar tu cuenta.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Cancelar'),
           ),
-          ElevatedButton(
+          FilledButton(
             onPressed: () {
-              Navigator.pop(context);
+              Navigator.pop(dialogContext);
               _showFinalDeleteConfirmation();
             },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Sí, eliminar'),
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Continuar con eliminación'),
           ),
         ],
       ),
@@ -1138,71 +1261,245 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   void _showFinalDeleteConfirmation() {
-    final TextEditingController confirmController = TextEditingController();
-    
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final TextEditingController emailController = TextEditingController();
+    final userEmail = _userProfile?['email'] ?? '';
+
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Text('Confirmación final'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Para confirmar la eliminación, escribe exactamente:\n\n'
-              '"ELIMINAR CUENTA"\n',
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setState) {
+          final emailMatches = emailController.text.trim().toLowerCase() ==
+                                userEmail.toLowerCase();
+
+          return AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(28),
             ),
-            TextField(
-              controller: confirmController,
-              decoration: const InputDecoration(
-                hintText: 'Escribe aquí...',
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.shield_outlined,
+                    color: Colors.red,
+                    size: 28,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Text('Confirmación de seguridad'),
+                ),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Por tu seguridad, confirma que realmente quieres eliminar tu cuenta.',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    'Escribe tu correo electrónico para confirmar:',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: colorScheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.email_outlined,
+                          size: 20,
+                          color: colorScheme.primary,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            userEmail,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              color: colorScheme.primary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: emailController,
+                    decoration: InputDecoration(
+                      labelText: 'Tu correo electrónico',
+                      hintText: 'Escribe tu correo aquí',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      prefixIcon: const Icon(Icons.edit_outlined),
+                      errorText: emailController.text.isNotEmpty && !emailMatches
+                          ? 'El correo no coincide'
+                          : null,
+                    ),
+                    keyboardType: TextInputType.emailAddress,
+                    autocorrect: false,
+                    onChanged: (value) => setState(() {}),
+                  ),
+                  const SizedBox(height: 20),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Colors.red.withValues(alpha: 0.3),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.warning_rounded,
+                          color: Colors.red,
+                          size: 24,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'Una vez confirmado, no hay vuelta atrás.',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: Colors.red.shade900,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
+            actions: [
+              TextButton(
+                onPressed: () {
+                  emailController.dispose();
+                  Navigator.pop(dialogContext);
+                },
+                child: const Text('Cancelar'),
+              ),
+              FilledButton.icon(
+                onPressed: !emailMatches
+                    ? null
+                    : () => _executeAccountDeletion(dialogContext),
+                icon: const Icon(Icons.delete_forever),
+                label: const Text('Eliminar mi cuenta'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                  disabledBackgroundColor: Colors.grey.shade300,
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    ).then((_) {
+      emailController.dispose();
+    });
+  }
+
+  Future<void> _executeAccountDeletion(BuildContext dialogContext) async {
+    Navigator.pop(dialogContext);
+
+    // Show loading indicator
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => WillPopScope(
+        onWillPop: () async => false,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(28),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(height: 24),
+              Text(
+                'Eliminando tu cuenta...',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Por favor espera, esto puede tomar unos momentos.',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
-          ),
-          ValueListenableBuilder(
-            valueListenable: confirmController,
-            builder: (context, value, child) => ElevatedButton(
-              onPressed: value.text == 'ELIMINAR CUENTA'
-                  ? () async {
-                      Navigator.pop(context);
-
-                      // Show loading indicator
-                      showDialog(
-                        context: context,
-                        barrierDismissible: false,
-                        builder: (context) => const Center(
-                          child: CircularProgressIndicator(),
-                        ),
-                      );
-
-                      try {
-                        await UserService.deleteUserAccount();
-                        // Redirect to React landing page (Flutter only handles /app/*)
-                        html.window.location.href = '/';
-                      } catch (e) {
-                        if (mounted) {
-                          Navigator.pop(context); // Close loading dialog
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Error al eliminar cuenta: $e')),
-                          );
-                        }
-                      }
-                    }
-                  : null,
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-              child: const Text('Eliminar permanentemente'),
-            ),
-          ),
-        ],
       ),
     );
+
+    try {
+      final session = SupabaseConfig.client.auth.currentSession;
+      if (session == null) {
+        throw Exception('No hay sesión activa');
+      }
+
+      final currentUrl = html.window.location.href;
+      final uri = Uri.parse(currentUrl);
+      final apiUrl = '${uri.scheme}://${uri.host}/api/delete-account';
+
+      final response = await http.post(
+        Uri.parse(apiUrl),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${session.accessToken}',
+        },
+        body: json.encode({
+          'email': _userProfile?['email'],
+        }),
+      );
+
+      if (response.statusCode != 200) {
+        throw Exception('Error al eliminar cuenta: ${response.statusCode}');
+      }
+
+      // Account deleted successfully, redirect to landing page
+      html.window.location.href = '/';
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // Close loading dialog
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al eliminar cuenta: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    }
   }
 }
 
@@ -1246,6 +1543,46 @@ class _CategoryChip extends StatelessWidget {
               ? colorScheme.primary
               : colorScheme.outline.withValues(alpha: 0.3),
         ),
+      ),
+    );
+  }
+}
+
+class _DeleteListItem extends StatelessWidget {
+  final IconData icon;
+  final String text;
+
+  const _DeleteListItem({
+    required this.icon,
+    required this.text,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            icon,
+            size: 20,
+            color: Colors.red,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              text,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurface,
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

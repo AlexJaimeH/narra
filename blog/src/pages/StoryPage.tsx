@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { motion, useInView } from 'framer-motion';
 import { Loading } from '../components/Loading';
 import { ErrorMessage } from '../components/ErrorMessage';
 import { Story, PublicAuthorProfile, StoryFeedbackState, StoryFeedbackComment } from '../types';
@@ -392,18 +393,29 @@ export const StoryPage: React.FC = () => {
       {/* Contenido principal */}
       <main className="max-w-4xl mx-auto px-4 py-8">
         {/* Historia */}
-        <article className="bg-white rounded-3xl shadow-soft-hover p-8 md:p-12 mb-8 animate-fade-in">
+        <motion.article
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, ease: [0.21, 0.47, 0.32, 0.98] }}
+          className="bg-white rounded-3xl shadow-soft-hover p-8 md:p-12 mb-8"
+        >
           <header className="mb-10">
-            <h1 className="text-4xl md:text-6xl font-bold mb-6 leading-tight animate-fade-in" style={{
-              fontFamily: "'Playfair Display', serif",
-              background: 'linear-gradient(135deg, #1F2937 0%, #4B5563 50%, #1F2937 100%)',
-              WebkitBackgroundClip: 'text',
-              backgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              letterSpacing: '-0.02em'
-            }}>
+            <motion.h1
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.7, delay: 0.2 }}
+              className="text-4xl md:text-6xl font-bold mb-6 leading-tight"
+              style={{
+                fontFamily: "'Playfair Display', serif",
+                background: 'linear-gradient(135deg, #1F2937 0%, #4B5563 50%, #1F2937 100%)',
+                WebkitBackgroundClip: 'text',
+                backgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                letterSpacing: '-0.02em'
+              }}
+            >
               {story.title}
-            </h1>
+            </motion.h1>
 
             <div className="flex flex-col gap-3 animate-fade-in stagger-1">
               <div className="flex flex-wrap items-center gap-3">
@@ -459,25 +471,46 @@ export const StoryPage: React.FC = () => {
           {/* Reacciones */}
           <div className="mt-12 pt-8 border-t border-gray-100 animate-fade-in stagger-3">
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-              <button
+              <motion.button
                 onClick={handleToggleReaction}
                 disabled={isTogglingReaction}
-                className="group flex items-center justify-center gap-2 sm:gap-3 px-4 sm:px-6 py-3 rounded-2xl font-semibold transition-all duration-300 transform hover:scale-105 active:scale-95 shadow-md hover:shadow-xl"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                animate={feedback.hasReacted ? {
+                  scale: [1, 1.2, 1],
+                  rotate: [0, 10, -10, 0]
+                } : {}}
+                transition={{ duration: 0.5 }}
+                className="group flex items-center justify-center gap-2 sm:gap-3 px-4 sm:px-6 py-3 rounded-2xl font-semibold shadow-md hover:shadow-xl"
                 style={{
                   backgroundColor: feedback.hasReacted ? NarraColors.interactive.heartLight : NarraColors.brand.primaryLight,
                   color: feedback.hasReacted ? NarraColors.interactive.heart : NarraColors.brand.primarySolid,
                 }}
               >
-                <svg className={`w-5 sm:w-6 h-5 sm:h-6 flex-shrink-0 transition-all duration-300 ${feedback.hasReacted ? 'scale-110 animate-pulse-soft' : 'group-hover:scale-110'}`} fill={feedback.hasReacted ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor">
+                <motion.svg
+                  animate={feedback.hasReacted ? {
+                    scale: [1, 1.3, 1],
+                  } : {}}
+                  transition={{ duration: 0.3, repeat: feedback.hasReacted ? Infinity : 0, repeatDelay: 1 }}
+                  className={`w-5 sm:w-6 h-5 sm:h-6 flex-shrink-0`}
+                  fill={feedback.hasReacted ? 'currentColor' : 'none'}
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                </svg>
+                </motion.svg>
                 <span className="text-sm sm:text-base">{feedback.hasReacted ? 'Te gusta' : 'Me gusta'}</span>
                 {feedback.reactionCount > 0 && (
-                  <span className="px-2 sm:px-2.5 py-1 rounded-full text-xs sm:text-sm font-bold transform group-hover:scale-110 transition-transform" style={{ backgroundColor: 'white' }}>
+                  <motion.span
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    className="px-2 sm:px-2.5 py-1 rounded-full text-xs sm:text-sm font-bold"
+                    style={{ backgroundColor: 'white' }}
+                  >
                     {feedback.reactionCount}
-                  </span>
+                  </motion.span>
                 )}
-              </button>
+              </motion.button>
 
               <div className="flex items-center justify-center gap-2 px-4 py-2 rounded-full transform hover:scale-105 transition-all" style={{ backgroundColor: NarraColors.brand.primaryPale, color: NarraColors.text.secondary }}>
                 <svg className="w-4 sm:w-5 h-4 sm:h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -487,10 +520,15 @@ export const StoryPage: React.FC = () => {
               </div>
             </div>
           </div>
-        </article>
+        </motion.article>
 
         {/* Comentarios */}
-        <section className="bg-white rounded-3xl shadow-soft-hover p-8 mb-8 animate-fade-in stagger-4">
+        <motion.section
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.3, ease: [0.21, 0.47, 0.32, 0.98] }}
+          className="bg-white rounded-3xl shadow-soft-hover p-8 mb-8"
+        >
           <h2 className="text-2xl font-bold mb-6" style={{ color: NarraColors.text.primary, fontFamily: "'Playfair Display', serif" }}>
             Comentarios ({feedback.commentCount})
           </h2>
@@ -548,7 +586,7 @@ export const StoryPage: React.FC = () => {
               </div>
             )}
           </div>
-        </section>
+        </motion.section>
 
         {/* Historias relacionadas mejoradas */}
         {relatedStories.length > 0 && (
@@ -800,11 +838,14 @@ const CommentThread: React.FC<{
   );
 };
 
-// Componente de card de historia relacionada
+// Componente de card de historia relacionada con animaciones
 const RelatedStoryCard: React.FC<{
   story: Story;
   formatDate: (date: string | null) => string;
 }> = ({ story, formatDate }) => {
+  const ref = React.useRef(null);
+  const isInView = useInView(ref, { once: true, margin: "-50px" });
+
   // Parse date string correctly to avoid timezone issues
   const parseDate = (dateString: string): Date => {
     const [year, month, day] = dateString.split('-').map(Number);
@@ -853,10 +894,23 @@ const RelatedStoryCard: React.FC<{
   const excerpt = extractExcerpt(story.content);
 
   return (
-    <a
+    <motion.a
+      ref={ref}
       href={`/blog/story/${story.id}${window.location.search}`}
-      className="block bg-white rounded-2xl shadow-soft-hover overflow-hidden hover:shadow-2xl transition-all duration-500 transform hover:-translate-y-2 group"
+      initial={{ opacity: 0, y: 30, scale: 0.95 }}
+      animate={isInView ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 30, scale: 0.95 }}
+      transition={{
+        duration: 0.5,
+        ease: [0.21, 0.47, 0.32, 0.98]
+      }}
+      whileHover={{
+        y: -8,
+        scale: 1.03,
+        boxShadow: "0 20px 40px -12px rgba(0, 0, 0, 0.15)"
+      }}
+      className="block bg-white rounded-2xl shadow-soft-hover overflow-hidden group"
     >
+      {/* Solo mostrar imagen si existe */}
       {story.photos && story.photos.length > 0 && (
         <div className="h-48 overflow-hidden relative">
           <img
@@ -867,7 +921,7 @@ const RelatedStoryCard: React.FC<{
           <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
         </div>
       )}
-      <div className="p-6" style={{ borderTop: `4px solid ${NarraColors.brand.primary}` }}>
+      <div className="p-6" style={{ borderTop: story.photos && story.photos.length > 0 ? 'none' : `4px solid ${NarraColors.brand.primary}` }}>
         <h3 className="text-xl font-bold mb-3 line-clamp-2 transition-colors duration-300" style={{ color: NarraColors.text.primary, fontFamily: "'Playfair Display', serif" }}>
           {story.title}
         </h3>
@@ -927,6 +981,6 @@ const RelatedStoryCard: React.FC<{
           </svg>
         </div>
       </div>
-    </a>
+    </motion.a>
   );
 };

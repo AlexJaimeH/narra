@@ -178,7 +178,7 @@ export const BlogHome: React.FC = () => {
                 <img
                   src={author.avatarUrl}
                   alt={author.displayName}
-                  className="w-32 h-32 rounded-full mx-auto object-cover border-8 border-white shadow-2xl"
+                  className="w-32 h-32 rounded-full mx-auto object-cover border-8 border-white shadow-2xl transform transition-transform hover:scale-105"
                 />
                 <motion.div
                   animate={{ y: [0, -10, 0] }}

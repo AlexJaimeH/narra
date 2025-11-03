@@ -283,9 +283,21 @@
     position: fixed;
     top: 0;
     left: 0;
-    height: 3px;
-    background: linear-gradient(to right, #4DB3A8, #00EAD8);
-    transition: width 0.1s ease-out;
+    height: 4px;
+    background: linear-gradient(90deg, #4DB3A8, #00EAD8, #4DB3A8);
+    background-size: 200% 100%;
+    animation: gradient-shift-horizontal 3s ease infinite;
+    transition: width 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     z-index: 9999;
+    box-shadow: 0 2px 8px rgba(77, 179, 168, 0.3);
+  }
+
+  @keyframes gradient-shift-horizontal {
+    0%, 100% {
+      background-position: 0% 50%;
+    }
+    50% {
+      background-position: 100% 50%;
+    }
   }
 }

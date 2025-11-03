@@ -36,21 +36,40 @@ export const StoryPage: React.FC = () => {
   const [showUnsubscribeSuccess, setShowUnsubscribeSuccess] = useState(false);
   const [isUnsubscribing, setIsUnsubscribing] = useState(false);
   const [readingProgress, setReadingProgress] = useState(0);
+  const storyArticleRef = React.useRef<HTMLElement>(null);
 
-  // Reading progress tracking
+  // Reading progress tracking - basado en el artículo de la historia solamente
   useEffect(() => {
     const handleScroll = () => {
+      if (!storyArticleRef.current) return;
+
+      const article = storyArticleRef.current;
+      const articleTop = article.offsetTop;
+      const articleHeight = article.offsetHeight;
       const windowHeight = window.innerHeight;
-      const documentHeight = document.documentElement.scrollHeight;
       const scrollTop = window.scrollY;
-      const trackLength = documentHeight - windowHeight;
-      const progress = (scrollTop / trackLength) * 100;
-      setReadingProgress(Math.min(progress, 100));
+
+      // Calcular cuándo el usuario comienza a leer (cuando el artículo entra en vista)
+      const startReading = articleTop - windowHeight;
+
+      // Calcular el punto donde termina la lectura (cuando el final del artículo llega al tope)
+      const finishReading = articleTop + articleHeight - windowHeight;
+
+      // Calcular progreso
+      if (scrollTop <= startReading) {
+        setReadingProgress(0);
+      } else if (scrollTop >= finishReading) {
+        setReadingProgress(100);
+      } else {
+        const progress = ((scrollTop - startReading) / (finishReading - startReading)) * 100;
+        setReadingProgress(Math.min(Math.max(progress, 0), 100));
+      }
     };
 
     window.addEventListener('scroll', handleScroll);
+    handleScroll(); // Calcular progreso inicial
     return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+  }, [story]); // Recalcular cuando la historia cargue
 
   const loadStory = async () => {
     if (!storyId) {
@@ -394,6 +413,7 @@ export const StoryPage: React.FC = () => {
       <main className="max-w-4xl mx-auto px-4 py-8">
         {/* Historia */}
         <motion.article
+          ref={storyArticleRef}
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, ease: [0.21, 0.47, 0.32, 0.98] }}
@@ -578,12 +598,32 @@ export const StoryPage: React.FC = () => {
             ))}
 
             {feedback.comments.length === 0 && (
-              <div className="text-center py-12">
-                <svg className="w-16 h-16 mx-auto mb-4 opacity-50" style={{ color: NarraColors.brand.primary }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.5 }}
+                className="text-center py-12"
+              >
+                <motion.svg
+                  animate={{
+                    scale: [1, 1.1, 1],
+                    rotate: [0, 10, -10, 0]
+                  }}
+                  transition={{
+                    duration: 3,
+                    repeat: Infinity,
+                    ease: "easeInOut"
+                  }}
+                  className="w-16 h-16 mx-auto mb-4 opacity-50"
+                  style={{ color: NarraColors.brand.primary }}
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                </svg>
+                </motion.svg>
                 <p style={{ color: NarraColors.text.secondary }}>Sé el primero en comentar esta historia</p>
-              </div>
+              </motion.div>
             )}
           </div>
         </motion.section>

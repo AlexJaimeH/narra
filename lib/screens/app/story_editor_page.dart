@@ -2929,8 +2929,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                 runSpacing: 10,
                 children: [
                   buildInfoChip(
-                    icon: Icons.text_fields_rounded,
-                    label: 'Palabras: $wordCount',
+                    icon: Icons.info_outline_rounded,
+                    label: 'Se necesitan al menos 300 palabras para publicar',
                   ),
                   if (_showSuggestions && timestampLabel != null)
                     buildInfoChip(
@@ -9519,7 +9519,8 @@ class _EditorSegmentedControl extends StatelessWidget {
       child: TabBar(
         controller: controller,
         isScrollable: true,
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+        padding: const EdgeInsets.only(left: 4, right: 4, top: 4, bottom: 4),
+        tabAlignment: TabAlignment.start,
         dividerColor: Colors.transparent,
         indicator: BoxDecoration(
           borderRadius: BorderRadius.circular(18),

@@ -2707,37 +2707,149 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                 ),
               ),
               SizedBox(height: sectionSpacing),
-              ConstrainedBox(
-                constraints: BoxConstraints(minHeight: minBodyHeight),
-                child: TextField(
-                  controller: _contentController,
-                  decoration: buildFieldDecoration(
-                    isCompact: isCompact,
-                    hint: 'Cuenta tu historia...',
-                    hintStyle: bodyStyle?.copyWith(
-                      color:
-                          colorScheme.onSurfaceVariant.withValues(alpha: 0.55),
-                    ),
-                    padding: EdgeInsets.fromLTRB(
-                      isCompact ? 12 : 18,
-                      isCompact ? 16 : 22,
-                      isCompact ? 12 : 18,
-                      isCompact ? 20 : 26,
-                    ),
+              // Editor de contenido mejorado con mejor UX para escritura larga
+              Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(isCompact ? 20 : 24),
+                  color: colorScheme.surfaceContainerLowest,
+                  border: Border.all(
+                    color: colorScheme.outlineVariant.withValues(alpha: 0.3),
+                    width: 1,
                   ),
-                  style: bodyStyle,
-                  keyboardType: TextInputType.multiline,
-                  maxLines: null,
-                  minLines: 10,
-                  textAlignVertical: TextAlignVertical.top,
-                  enableSuggestions: false,
-                  autocorrect: false,
-                  smartDashesType: SmartDashesType.disabled,
-                  smartQuotesType: SmartQuotesType.disabled,
-                  textCapitalization: TextCapitalization.sentences,
-                  enableIMEPersonalizedLearning: false,
-                  autofillHints: null,
-                  scribbleEnabled: false,
+                  boxShadow: [
+                    BoxShadow(
+                      color: colorScheme.shadow.withValues(alpha: 0.04),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Campo de texto mejorado
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minHeight: minBodyHeight,
+                        maxHeight: isCompact ? 400 : 500,
+                      ),
+                      child: TextField(
+                        controller: _contentController,
+                        decoration: InputDecoration(
+                          hintText: 'Cuenta tu historia...\n\nEscribe libremente. Puedes usar párrafos, diálogos y descripciones.',
+                          hintStyle: bodyStyle?.copyWith(
+                            color: colorScheme.onSurfaceVariant
+                                .withValues(alpha: 0.4),
+                            height: 1.7,
+                          ),
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          contentPadding: EdgeInsets.fromLTRB(
+                            isCompact ? 18 : 24,
+                            isCompact ? 20 : 26,
+                            isCompact ? 18 : 24,
+                            isCompact ? 12 : 16,
+                          ),
+                          filled: false,
+                        ),
+                        style: bodyStyle?.copyWith(
+                          height: 1.7,
+                          letterSpacing: 0.2,
+                          fontSize: isCompact ? 16 : 17,
+                        ),
+                        keyboardType: TextInputType.multiline,
+                        maxLines: null,
+                        minLines: 12,
+                        textAlignVertical: TextAlignVertical.top,
+                        enableSuggestions: false,
+                        autocorrect: false,
+                        smartDashesType: SmartDashesType.disabled,
+                        smartQuotesType: SmartQuotesType.disabled,
+                        textCapitalization: TextCapitalization.sentences,
+                        enableIMEPersonalizedLearning: false,
+                        autofillHints: null,
+                        scribbleEnabled: false,
+                        cursorHeight: 24,
+                        cursorColor: colorScheme.primary,
+                        selectionControls: materialTextSelectionControls,
+                      ),
+                    ),
+
+                    // Barra inferior con estadísticas y consejos
+                    Container(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: isCompact ? 18 : 24,
+                        vertical: isCompact ? 12 : 14,
+                      ),
+                      decoration: BoxDecoration(
+                        color: colorScheme.surfaceContainerLow,
+                        borderRadius: BorderRadius.only(
+                          bottomLeft: Radius.circular(isCompact ? 20 : 24),
+                          bottomRight: Radius.circular(isCompact ? 20 : 24),
+                        ),
+                        border: Border(
+                          top: BorderSide(
+                            color: colorScheme.outlineVariant
+                                .withValues(alpha: 0.2),
+                            width: 1,
+                          ),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          // Icono de escritura
+                          Icon(
+                            Icons.edit_note_rounded,
+                            size: 18,
+                            color: colorScheme.onSurfaceVariant
+                                .withValues(alpha: 0.6),
+                          ),
+                          const SizedBox(width: 8),
+                          // Contador de palabras
+                          Expanded(
+                            child: Text(
+                              wordCount == 0
+                                  ? 'Empieza a escribir tu historia'
+                                  : wordCount == 1
+                                      ? '1 palabra'
+                                      : '$wordCount palabras${wordCount >= 300 ? ' ✓' : wordCount >= 200 ? ' • Casi listo para Ghost Writer (300+)' : ''}',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant
+                                    .withValues(alpha: 0.75),
+                                fontWeight: wordCount >= 300
+                                    ? FontWeight.w600
+                                    : FontWeight.w500,
+                                letterSpacing: 0.2,
+                              ),
+                            ),
+                          ),
+                          // Indicador visual de progreso para Ghost Writer
+                          if (wordCount > 0 && wordCount < 300)
+                            Container(
+                              width: isCompact ? 60 : 80,
+                              height: 4,
+                              decoration: BoxDecoration(
+                                color: colorScheme.surfaceContainerHighest,
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                              child: FractionallySizedBox(
+                                alignment: Alignment.centerLeft,
+                                widthFactor: (wordCount / 300).clamp(0.0, 1.0),
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: wordCount >= 200
+                                        ? colorScheme.primary
+                                        : colorScheme.tertiary,
+                                    borderRadius: BorderRadius.circular(2),
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
               SizedBox(height: verticalSpacing),

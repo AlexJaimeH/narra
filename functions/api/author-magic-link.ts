@@ -227,80 +227,78 @@ function buildMagicLinkEmail(email: string, magicLink: string, isExistingUser: b
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Tu enlace para iniciar sesión en Narra</title>
   </head>
-  <body style="margin:0;padding:0;background:linear-gradient(135deg, #fdfbf7 0%, #f0ebe3 100%);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;color:#2d2a26;">
+  <body style="margin:0;padding:0;background:linear-gradient(135deg, #fdfbf7 0%, #f0ebe3 100%);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;color:#1f2937;">
     <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:660px;margin:40px auto;padding:0 20px;">
       <tr>
         <td>
           <!-- Logo/Brand -->
           <div style="text-align:center;margin-bottom:32px;">
-            <div style="display:inline-block;background:linear-gradient(135deg, #4DB3A8 0%, #38827A 100%);color:#ffffff;font-weight:800;font-size:24px;padding:14px 28px;border-radius:16px;letter-spacing:-0.02em;box-shadow:0 8px 24px rgba(77,179,168,0.25);">
-              📖 Narra
-            </div>
+            <img src="https://ptlzlaacaiftusslzwhc.supabase.co/storage/v1/object/public/general/Logo%20horizontal.png" alt="Narra" style="height:36px;width:auto;" />
           </div>
 
           <!-- Main Card -->
-          <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#ffffff;border-radius:28px;box-shadow:0 20px 60px rgba(0,0,0,0.08);overflow:hidden;">
+          <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#ffffff;border-radius:24px;box-shadow:0 20px 60px rgba(77,179,168,0.12),0 8px 20px rgba(0,0,0,0.06);overflow:hidden;">
             <tr>
               <td style="padding:0;">
                 <!-- Header Section -->
                 <div style="background:linear-gradient(135deg, #4DB3A8 0%, #38827A 100%);padding:48px 36px;text-align:center;">
-                  <h1 style="font-size:36px;line-height:1.2;margin:0;font-weight:800;color:#ffffff;text-shadow:0 2px 8px rgba(0,0,0,0.15);">${greeting}</h1>
+                  <div style="display:inline-block;background:rgba(255,255,255,0.25);backdrop-filter:blur(10px);border-radius:16px;padding:12px 24px;margin-bottom:20px;">
+                    <p style="margin:0;font-size:14px;color:#ffffff;letter-spacing:0.08em;text-transform:uppercase;font-weight:600;">🔑 Acceso Seguro</p>
+                  </div>
+                  <h1 style="font-size:32px;line-height:1.2;margin:0;font-weight:800;color:#ffffff;text-shadow:0 2px 8px rgba(0,0,0,0.15);">${greeting}</h1>
                 </div>
 
                 <!-- Content Section -->
-                <div style="padding:48px 36px;">
-                  <p style="margin:0 0 28px 0;font-size:22px;line-height:1.6;color:#374151;font-weight:500;">${mainMessage}</p>
+                <div style="padding:40px 36px;">
+                  <p style="margin:0 0 28px 0;font-size:18px;line-height:1.65;color:#374151;font-weight:500;">${mainMessage}</p>
 
                   <!-- Info Box -->
-                  <div style="background:linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);border-left:6px solid #f59e0b;border-radius:20px;padding:28px;margin:32px 0;">
-                    <p style="margin:0 0 12px 0;font-size:18px;line-height:1.6;color:#78350f;font-weight:700;">
-                      🔒 Enlace seguro
+                  <div style="background:#E8F5F4;border-left:4px solid #4DB3A8;border-radius:16px;padding:24px;margin:32px 0;">
+                    <p style="margin:0 0 8px 0;font-size:15px;line-height:1.6;color:#38827A;font-weight:700;">
+                      🔒 Enlace seguro y privado
                     </p>
-                    <p style="margin:0;font-size:17px;line-height:1.65;color:#92400e;">
-                      Este enlace es solo para <strong>${email}</strong> y funciona una sola vez.
+                    <p style="margin:0;font-size:14px;line-height:1.65;color:#4b5563;">
+                      Este enlace es solo para <strong style="color:#1f2937;">${email}</strong> y funciona una sola vez por seguridad.
                     </p>
                   </div>
 
                   <!-- CTA Button -->
-                  <div style="text-align:center;margin:48px 0;">
+                  <div style="text-align:center;margin:40px 0 32px;">
                     <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;">
                       <tr>
-                        <td style="border-radius:20px;background:linear-gradient(135deg, #4DB3A8 0%, #38827A 100%);box-shadow:0 12px 32px rgba(77,179,168,0.4);">
-                          <a href="${magicLink}" style="display:inline-block;color:#ffffff;text-decoration:none;font-weight:700;font-size:22px;padding:24px 52px;border-radius:20px;letter-spacing:0.01em;">
-                            🔑 Iniciar Sesión
-                          </a>
+                        <td style="border-radius:16px;background:linear-gradient(135deg, #4DB3A8 0%, #38827A 100%);box-shadow:0 8px 24px rgba(77,179,168,0.35),0 4px 12px rgba(0,0,0,0.1);">
+                          <a href="${magicLink}" style="display:inline-block;color:#ffffff;text-decoration:none;font-weight:700;font-size:17px;padding:18px 42px;border-radius:16px;letter-spacing:0.01em;">🔑 Iniciar Sesión en Narra</a>
                         </td>
                       </tr>
                     </table>
                   </div>
 
                   <!-- Explanation -->
-                  <div style="background:#f9fafb;border-radius:20px;padding:28px;margin:32px 0;">
-                    <p style="margin:0 0 16px 0;font-size:18px;line-height:1.6;color:#374151;font-weight:600;">
+                  <div style="background:#fafaf9;border-radius:16px;padding:24px;margin:32px 0;">
+                    <p style="margin:0 0 16px 0;font-size:15px;line-height:1.6;color:#374151;font-weight:600;">
                       ¿Cómo funciona?
                     </p>
-                    <ol style="margin:0;padding-left:24px;font-size:17px;line-height:1.8;color:#4b5563;">
-                      <li style="margin-bottom:12px;">Haz clic en el botón verde de arriba</li>
-                      <li style="margin-bottom:12px;">Tu navegador abrirá Narra</li>
+                    <ol style="margin:0;padding-left:20px;font-size:14px;line-height:1.8;color:#4b5563;">
+                      <li style="margin-bottom:8px;">Haz clic en el botón verde de arriba</li>
+                      <li style="margin-bottom:8px;">Tu navegador abrirá Narra automáticamente</li>
                       <li style="margin-bottom:0;">¡Listo! Ya puedes gestionar tus historias</li>
                     </ol>
                   </div>
 
                   <!-- Alternative Link -->
-                  <div style="background:#fef2f2;border:2px solid #fee2e2;border-radius:16px;padding:24px;margin:32px 0 0 0;">
-                    <p style="margin:0 0 12px 0;font-size:15px;color:#991b1b;font-weight:600;">Si el botón no funciona:</p>
-                    <p style="margin:0 0 8px 0;font-size:14px;color:#7f1d1d;">Copia y pega este enlace en tu navegador:</p>
-                    <p style="margin:0;font-size:13px;word-break:break-all;"><a href="${magicLink}" style="color:#dc2626;text-decoration:none;">${magicLink}</a></p>
+                  <div style="background:#f9fafb;border:2px dashed #e5e7eb;border-radius:12px;padding:20px;margin:24px 0 0 0;">
+                    <p style="margin:0 0 8px 0;font-size:13px;color:#6b7280;font-weight:600;">Si el botón no funciona, usa este enlace:</p>
+                    <p style="margin:0;font-size:13px;word-break:break-all;"><a href="${magicLink}" style="color:#38827A;text-decoration:none;">${magicLink}</a></p>
                   </div>
                 </div>
 
                 <!-- Footer -->
-                <div style="background:#fafaf9;padding:36px;border-top:2px solid #e7e5e4;text-align:center;">
-                  <p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;color:#78716c;">
-                    ¿No solicitaste este enlace? Puedes ignorar este correo.
+                <div style="background:#fafaf9;padding:32px 36px;border-top:1px solid #e7e5e4;">
+                  <p style="margin:0 0 16px 0;font-size:14px;line-height:1.6;color:#78716c;text-align:center;">
+                    ¿No solicitaste este enlace? Puedes ignorar este correo de forma segura.
                   </p>
-                  <p style="margin:0;font-size:14px;color:#a8a29e;line-height:1.6;">
-                    Este correo es automático. Por favor no respondas.
+                  <p style="margin:0;font-size:12px;color:#a8a29e;line-height:1.6;text-align:center;">
+                    Correo automático de Narra • Por favor no respondas
                   </p>
                 </div>
               </td>

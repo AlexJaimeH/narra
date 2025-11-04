@@ -2,6 +2,8 @@
 
 Bienvenido al equipo de Narra! Este documento contiene todo lo que necesitas saber para empezar a trabajar en el proyecto.
 
+**IMPORTANTE PARA FUTUROS DESARROLLADORES:** Si realizas cambios significativos en la arquitectura, funcionalidades principales o mejoras importantes, documéntalos en este archivo para que otros desarrolladores estén al tanto. Esto incluye nuevas features, cambios en la BD, modificaciones al flujo de autenticación, etc.
+
 ---
 
 ## 🎯 ¿Qué es Narra?
@@ -778,6 +780,45 @@ rm -rf blog/node_modules/.vite
 ### Testing:
 - Production: https://narra-8m1.pages.dev/
 - Preview de ramas: https://{branch-name}.narra-8m1.pages.dev/
+
+---
+
+## 🤖 Ghost Writer (Asistente de IA)
+
+El Ghost Writer es el editor de historias impulsado por IA que ayuda a los usuarios a mejorar la calidad de sus relatos para que sean dignos de publicación en un libro.
+
+### Características principales:
+- **Pulido profesional**: Mejora redacción, gramática y estilo
+- **Respeta la voz del autor**: Mantiene emociones y estilo personal
+- **Configurable**: Tono, perspectiva, estilo de edición y más
+- **Tracking de uso**: Sistema para detectar primera vez y mostrar introducción
+
+### Valores por defecto (Fecha: 2025-11-04):
+```dart
+// Optimizados para historias de calidad profesional/publicable
+ai_no_bad_words: true       // Cambió de false a true
+ai_person: 'first'          // Primera persona (natural para memorias)
+ai_fidelity: 'balanced'     // Equilibrado (respeta original pero pule)
+writing_tone: 'warm'        // Cálido (apropiado para historias familiares)
+```
+
+### Columnas de tracking en `user_settings`:
+- `has_used_ghost_writer`: boolean - Indica si usó el ghost writer alguna vez
+- `has_configured_ghost_writer`: boolean - Indica si configuró las preferencias
+- `has_dismissed_ghost_writer_intro`: boolean - Indica si cerró la intro en dashboard
+
+### Introducción del Ghost Writer:
+La primera vez que un usuario ingresa al dashboard y **NO** ha usado, configurado o cerrado la introducción, se muestra una tarjeta de bienvenida emotiva que:
+- Explica qué es el Ghost Writer de forma amena y emocional
+- Presenta 3 beneficios clave con íconos
+- Ofrece botones para "Configurar" o "Entendido"
+- Se diseñó con colores violeta/morado (#7C3AED) para diferenciarlo visualmente
+
+**Ubicación del código:**
+- Widget: `_GhostWriterIntroCard` en `lib/screens/app/dashboard_page.dart`
+- Lógica de tracking: `UserService` en `lib/services/user_service.dart`
+- Configuración: `settings_page.dart` sección "Asistente de IA (Ghostwriter)"
+- Uso: `story_editor_page.dart` método `_runGhostWriter()`
 
 ---
 

@@ -27,6 +27,7 @@ class _DashboardPageState extends State<DashboardPage> {
   SubscriberDashboardData? _subscriberDashboard;
   Story? _lastPublishedStory;
   bool _isLoading = true;
+  bool _shouldShowGhostWriterIntro = false;
 
   @override
   void initState() {
@@ -54,6 +55,9 @@ class _DashboardPageState extends State<DashboardPage> {
             .compareTo(a.publishedAt ?? a.updatedAt));
       final lastPublished = publishedStories.isNotEmpty ? publishedStories.first : null;
 
+      // Check if should show ghost writer intro
+      final shouldShowIntro = await UserService.shouldShowGhostWriterIntro();
+
       if (mounted) {
         setState(() {
           _userProfile = profile?.toMap();
@@ -71,6 +75,7 @@ class _DashboardPageState extends State<DashboardPage> {
           _allTags = allTags;
           _subscriberDashboard = subscriberDashboard;
           _lastPublishedStory = lastPublished;
+          _shouldShowGhostWriterIntro = shouldShowIntro;
           _isLoading = false;
         });
       }
@@ -174,6 +179,19 @@ class _DashboardPageState extends State<DashboardPage> {
               ),
 
               const SizedBox(height: 16),
+
+              // Introducción del Ghost Writer (solo la primera vez)
+              if (_shouldShowGhostWriterIntro)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: _GhostWriterIntroCard(
+                    onDismiss: () {
+                      setState(() => _shouldShowGhostWriterIntro = false);
+                    },
+                  ),
+                ),
+
+              if (_shouldShowGhostWriterIntro) const SizedBox(height: 16),
 
               // Sección de bienvenida mejorada
               Padding(
@@ -1257,6 +1275,281 @@ class _StoriesPageNavigatorState extends State<_StoriesPageNavigator> {
       body: Center(
         child: CircularProgressIndicator(),
       ),
+    );
+  }
+}
+
+/// Widget de introducción al Ghost Writer
+class _GhostWriterIntroCard extends StatelessWidget {
+  final VoidCallback onDismiss;
+
+  const _GhostWriterIntroCard({required this.onDismiss});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    // Color especial para el ghost writer - un morado/violeta suave pero vibrante
+    final ghostWriterColor = const Color(0xFF7C3AED);
+
+    return Card(
+      elevation: 4,
+      shadowColor: ghostWriterColor.withValues(alpha: 0.3),
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(28),
+        side: BorderSide(
+          color: ghostWriterColor.withValues(alpha: 0.2),
+          width: 2,
+        ),
+      ),
+      child: Stack(
+        children: [
+          // Fondo decorativo sutil
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(28),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    ghostWriterColor.withValues(alpha: 0.05),
+                    colorScheme.primary.withValues(alpha: 0.03),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header con ícono y título
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            ghostWriterColor,
+                            ghostWriterColor.withValues(alpha: 0.8),
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: ghostWriterColor.withValues(alpha: 0.3),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.auto_awesome,
+                        color: Colors.white,
+                        size: 32,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Conoce a tu Ghost Writer',
+                            style: theme.textTheme.headlineSmall?.copyWith(
+                              fontWeight: FontWeight.w800,
+                              color: ghostWriterColor,
+                              height: 1.1,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Tu compañero de confianza',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: ghostWriterColor.withValues(alpha: 0.7),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 20),
+
+                // Mensaje emotivo principal
+                Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: ghostWriterColor.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: ghostWriterColor.withValues(alpha: 0.2),
+                      width: 1,
+                    ),
+                  ),
+                  child: Text(
+                    'Imagina tener un editor profesional a tu lado, alguien que entiende tus historias y las transforma en relatos dignos de un libro. '
+                    'Ese es tu Ghost Writer: un asistente inteligente que pulirá cada palabra, respetando tu voz y tus recuerdos.',
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      color: colorScheme.onSurface,
+                      height: 1.6,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 18),
+
+                // Características destacadas
+                _buildFeature(
+                  context,
+                  icon: Icons.brush_outlined,
+                  title: 'Pulido profesional',
+                  description: 'Mejora tu redacción manteniendo tu esencia',
+                  color: ghostWriterColor,
+                ),
+                const SizedBox(height: 12),
+                _buildFeature(
+                  context,
+                  icon: Icons.favorite_outline,
+                  title: 'Respeta tu voz',
+                  description: 'Conserva tus emociones y estilo personal',
+                  color: ghostWriterColor,
+                ),
+                const SizedBox(height: 12),
+                _buildFeature(
+                  context,
+                  icon: Icons.auto_stories_outlined,
+                  title: 'Calidad de libro',
+                  description: 'Historias listas para compartir con orgullo',
+                  color: ghostWriterColor,
+                ),
+
+                const SizedBox(height: 24),
+
+                // Botones de acción
+                Row(
+                  children: [
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: () async {
+                          // Navegar a ajustes del ghost writer
+                          await UserService.markGhostWriterAsConfigured();
+                          onDismiss();
+                          if (context.mounted) {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const AppNavigation(initialIndex: 3),
+                              ),
+                            );
+                          }
+                        },
+                        icon: const Icon(Icons.settings, size: 20),
+                        label: const Text(
+                          'Configurar',
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: ghostWriterColor,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          elevation: 3,
+                          shadowColor: ghostWriterColor.withValues(alpha: 0.4),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () async {
+                          await UserService.dismissGhostWriterIntro();
+                          onDismiss();
+                        },
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: ghostWriterColor,
+                          side: BorderSide(color: ghostWriterColor, width: 2),
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        child: const Text(
+                          'Entendido',
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFeature(
+    BuildContext context, {
+    required IconData icon,
+    required String title,
+    required String description,
+    required Color color,
+  }) {
+    final theme = Theme.of(context);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(
+            icon,
+            color: color,
+            size: 20,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: color,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                description,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

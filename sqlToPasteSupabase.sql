@@ -1842,4 +1842,104 @@ comment on column public.user_feedback.user_name is 'Nombre del usuario (copia p
 
 commit;
 
+-- ============================================================
+-- Ghost Writer Tracking y Valores por Defecto Mejorados (Fecha: 2025-11-04)
+-- ============================================================
+-- Agrega columnas para rastrear el uso e interacción con el ghost writer
+-- y optimiza los valores por defecto para historias de calidad profesional
+-- ============================================================
+
+begin;
+
+-- Agregar columnas de tracking del ghost writer a user_settings
+do $$
+begin
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'user_settings'
+      and column_name = 'has_used_ghost_writer'
+  ) then
+    alter table public.user_settings
+    add column has_used_ghost_writer boolean not null default false;
+  end if;
+
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'user_settings'
+      and column_name = 'has_configured_ghost_writer'
+  ) then
+    alter table public.user_settings
+    add column has_configured_ghost_writer boolean not null default false;
+  end if;
+
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'user_settings'
+      and column_name = 'has_dismissed_ghost_writer_intro'
+  ) then
+    alter table public.user_settings
+    add column has_dismissed_ghost_writer_intro boolean not null default false;
+  end if;
+end
+$$;
+
+-- Cambiar el valor por defecto de ai_no_bad_words a TRUE
+-- (para historias de calidad profesional/publicable)
+do $$
+begin
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'user_settings'
+      and column_name = 'ai_no_bad_words'
+  ) then
+    alter table public.user_settings
+    add column ai_no_bad_words boolean not null default true;
+  else
+    alter table public.user_settings
+    alter column ai_no_bad_words set default true;
+  end if;
+end
+$$;
+
+-- Asegurar que existen las demás columnas del ghost writer
+do $$
+begin
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'user_settings'
+      and column_name = 'ai_person'
+  ) then
+    alter table public.user_settings
+    add column ai_person text not null default 'first'
+    check (ai_person in ('first', 'third'));
+  end if;
+
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'user_settings'
+      and column_name = 'ai_fidelity'
+  ) then
+    alter table public.user_settings
+    add column ai_fidelity text not null default 'balanced'
+    check (ai_fidelity in ('faithful', 'balanced', 'polished'));
+  end if;
+end
+$$;
+
+-- Comentarios explicativos
+comment on column public.user_settings.has_used_ghost_writer is 'Indica si el usuario ha usado el ghost writer al menos una vez';
+comment on column public.user_settings.has_configured_ghost_writer is 'Indica si el usuario ha configurado las preferencias del ghost writer';
+comment on column public.user_settings.has_dismissed_ghost_writer_intro is 'Indica si el usuario cerró la introducción del ghost writer en el dashboard';
+comment on column public.user_settings.ai_no_bad_words is 'Evitar palabras fuertes en sugerencias del ghost writer (por defecto true para calidad profesional)';
+comment on column public.user_settings.ai_person is 'Perspectiva narrativa del ghost writer (first o third)';
+comment on column public.user_settings.ai_fidelity is 'Estilo de edición del ghost writer (faithful, balanced, polished)';
+
+commit;
+
 -- Fin de la migración de user_feedback

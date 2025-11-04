@@ -596,7 +596,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   String _ghostWriterEditingStyle = 'balanced';
   String _ghostWriterLanguage = 'es';
   String _ghostWriterPerspective = 'first';
-  bool _ghostWriterAvoidProfanity = false;
+  bool _ghostWriterAvoidProfanity = true; // Nuevo valor por defecto para historias de calidad profesional
   String _ghostWriterExtraInstructions = '';
   bool _isGhostWriterProcessing = false;
   Timer? _ghostWriterInstructionsDebounce;
@@ -1167,7 +1167,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         _ghostWriterEditingStyle =
             (settings?['ai_fidelity'] as String?) ?? 'balanced';
         _ghostWriterAvoidProfanity =
-            (settings?['ai_no_bad_words'] as bool?) ?? false;
+            (settings?['ai_no_bad_words'] as bool?) ?? true;
         _ghostWriterExtraInstructions =
             (settings?['ai_extra_instructions'] as String?)?.trim() ?? '';
         _ghostWriterLanguage = (settings?['language'] as String?) ?? 'es';
@@ -8404,6 +8404,10 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           _hasChanges = true;
         });
         _captureVersion(reason: 'Ghost Writer afinó tu historia');
+
+        // Marcar que el usuario usó el ghost writer
+        await UserService.markGhostWriterAsUsed();
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('✓ Texto mejorado por Ghost Writer'),

@@ -664,12 +664,15 @@ export const StoryPage: React.FC = () => {
       {/* Footer */}
       <footer className="border-t border-gray-100 mt-16 py-8 bg-white/80 backdrop-blur">
         <div className="max-w-4xl mx-auto px-4 text-center">
-          <p className="text-sm mb-2" style={{ color: NarraColors.text.secondary }}>
-            Creado con{' '}
-            <span style={{ color: NarraColors.brand.primary }} className="font-bold">
-              Narra
-            </span>
-          </p>
+          <div className="flex items-center justify-center gap-2 mb-2">
+            <img src="/icon.png" alt="Narra" className="w-5 h-5 object-contain" />
+            <p className="text-sm" style={{ color: NarraColors.text.secondary }}>
+              Creado con{' '}
+              <span style={{ color: NarraColors.brand.primary }} className="font-bold">
+                Narra
+              </span>
+            </p>
+          </div>
           <p className="text-xs" style={{ color: NarraColors.text.light }}>
             Historias que perduran para siempre
           </p>

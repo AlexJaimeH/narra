@@ -1,11 +1,11 @@
 {
-    "name": "narra",
-    "short_name": "narra",
+    "name": "Narra - Historias Familiares",
+    "short_name": "Narra",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#fdfbf7",
+    "theme_color": "#4DB3A8",
+    "description": "Escribe tu historia. Regálala para siempre a quienes amas.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

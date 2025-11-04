@@ -25,7 +25,7 @@ class StoryShareLinkBuilder {
       }
     }
 
-    final fallback = Uri.parse('https://narra-8m1.pages.dev');
+    final fallback = Uri.parse('https://narra.mx');
     return _ShareBaseConfig(
       uri: _sanitizeBaseUri(fallback),
       force: forceDefault,
@@ -232,6 +232,8 @@ class StoryShareLinkBuilder {
     if (host == 'localhost' || host == '127.0.0.1' || host == '0.0.0.0') {
       return true;
     }
+    // Preview branches de Cloudflare Pages usan subdominios .pages.dev
+    // Estos deben usar el dominio de producción (narra.mx) en links compartidos
     if (host.endsWith('.pages.dev')) {
       return true;
     }

@@ -275,10 +275,156 @@ narra-8m1.pages.dev/
 
 ---
 
+## 🎨 Branding y Diseño
+
+### Paleta de Colores de Narra
+
+**Colores Principales:**
+```css
+/* Verde/Turquesa - Color primario de marca */
+--brand-primary: #4DB3A8        /* Verde turquesa principal */
+--brand-primary-solid: #38827A  /* Verde más oscuro para hover */
+--brand-primary-light: #6BC5BC  /* Verde claro para backgrounds */
+--brand-primary-pale: #E8F5F4   /* Verde muy claro para fondos sutiles */
+--brand-accent: #38827A         /* Color de acento */
+
+/* Beige/Crema - Colores de fondo */
+--surface-white: #FDFBF7        /* Blanco cálido principal */
+--surface-cream: #F0EBE3        /* Beige claro para gradientes */
+
+/* Grises - Texto y elementos UI */
+--text-primary: #1F2937         /* Gris oscuro para texto principal */
+--text-secondary: #4B5563       /* Gris medio para texto secundario */
+--text-light: #9CA3AF           /* Gris claro para texto terciario */
+
+/* Estados y Feedback */
+--success: #10B981              /* Verde para estados exitosos */
+--error: #EF4444                /* Rojo para errores */
+--warning: #F59E0B              /* Naranja para advertencias */
+--info: #3B82F6                 /* Azul para información */
+```
+
+**Gradientes Comunes:**
+```css
+/* Fondo principal de la app */
+background: linear-gradient(135deg, #fdfbf7 0%, #f0ebe3 100%);
+
+/* Logo y elementos de marca */
+background: linear-gradient(135deg, #4DB3A8, #38827A);
+
+/* Headers y elementos destacados */
+background: linear-gradient(135deg, #4DB3A815 0%, #38827A10 100%);
+```
+
+### Logos y Assets
+
+#### 📁 Ubicación de Logos Oficiales
+
+Todos los logos están en la carpeta raíz:
+```
+/assets/
+├── icon-50.png           (50×50px)   - Ícono cuadrado para favicons
+├── logo-250.png          (250×250px) - Logo cuadrado para íconos medianos
+├── logo-500.png          (500×500px) - Logo cuadrado para íconos grandes
+└── logo-horizontal.png   (500×100px) - Logo horizontal (logo + texto "Narra")
+```
+
+**Características importantes:**
+- ✅ Todos tienen **fondo transparente**
+- ✅ Formato PNG con transparencia
+- ✅ Alta calidad para retina displays
+- ✅ Logo horizontal incluye el texto "Narra" incorporado
+
+#### 🔄 Cómo Actualizar Logos
+
+**Proceso:**
+1. Crea tus nuevos logos con **fondo transparente** en formato PNG
+2. Respeta los tamaños exactos:
+   - Ícono: 50×50px
+   - Logo cuadrado mediano: 250×250px
+   - Logo cuadrado grande: 500×500px
+   - Logo horizontal: 500×100px (o proporciones similares)
+3. Guarda los archivos en `/assets/` con los nombres exactos
+4. Haz commit y push a main
+5. Los logos se actualizarán automáticamente en el siguiente deployment
+
+**El sistema copiará automáticamente a:**
+- ✅ Flutter web: `web/favicon.png`, `web/icons/`, `web/splash-logo.png`, `web/logo-horizontal.png`
+- ✅ React: `blog/public/favicon.png`, `blog/public/icon.png`, `blog/public/logo.png`, `blog/public/logo-horizontal.png`
+
+#### 📍 Dónde Se Usan Los Logos
+
+**Flutter App (`/app`):**
+- **Favicon:** `web/favicon.png` (ícono en pestaña del navegador)
+- **Splash screen:** `web/splash-logo.png` (logo horizontal al cargar)
+- **Menú superior:** Logo horizontal en barra de navegación
+- **PWA icons:** `web/icons/Icon-192.png`, `Icon-512.png`, `Icon-maskable-*.png`
+- **Manifest:** `web/manifest.json` (para instalar como app)
+
+**React Landing (`/`):**
+- **Favicon:** `blog/public/favicon.png`
+- **Header:** Logo horizontal en barra superior
+- **Footer:** Logo horizontal con opacidad
+
+**React Blog (`/blog`):**
+- **Loading screen:** Logo cuadrado animado
+- **Footers:** Ícono pequeño + texto "Creado con Narra"
+
+#### ⚙️ Configuración Técnica
+
+**Flutter - Menú Superior:**
+```dart
+// lib/screens/app/top_navigation_bar.dart
+Image.network(
+  '/app/logo-horizontal.png',
+  height: 32,
+  fit: BoxFit.contain,
+)
+```
+
+**Flutter - Splash Screen:**
+```html
+<!-- web/index.html -->
+<div id="splash-logo">
+  <img src="splash-logo.png" alt="Narra">
+</div>
+<!-- Nota: NO incluir texto adicional, el logo horizontal ya lo tiene -->
+```
+
+**React - Header:**
+```tsx
+// blog/src/pages/LandingPage.tsx
+<img
+  src="/logo-horizontal.png"
+  alt="Narra - Historias Familiares"
+  className="h-10 w-auto object-contain"
+/>
+```
+
+**PWA Manifest:**
+```json
+// web/manifest.json
+{
+  "name": "Narra - Historias Familiares",
+  "short_name": "Narra",
+  "theme_color": "#4DB3A8",
+  "background_color": "#fdfbf7",
+  "icons": [...]
+}
+```
+
+---
+
 ## 📂 Estructura de Carpetas
 
 ```
 narra/
+├── assets/                       # ⭐ Logos y assets oficiales
+│   ├── icon-50.png               # Ícono 50×50px (favicon)
+│   ├── logo-250.png              # Logo cuadrado 250×250px
+│   ├── logo-500.png              # Logo cuadrado 500×500px
+│   └── logo-horizontal.png       # Logo horizontal 500×100px
+│
 ├── lib/                          # Código Flutter (app de autor)
 │   ├── main.dart                 # Entry point de Flutter
 │   ├── screens/                  # Pantallas de la app

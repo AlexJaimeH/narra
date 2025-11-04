@@ -1818,16 +1818,38 @@ create index if not exists idx_user_feedback_created_at on public.user_feedback(
 alter table public.user_feedback enable row level security;
 
 -- Política: Los usuarios solo pueden ver su propio feedback
-create policy "Users can view their own feedback"
-  on public.user_feedback
-  for select
-  using (auth.uid() = user_id);
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'user_feedback'
+      and policyname = 'Users can view their own feedback'
+  ) then
+    create policy "Users can view their own feedback"
+      on public.user_feedback
+      for select
+      using (auth.uid() = user_id);
+  end if;
+end
+$$;
 
 -- Política: Los usuarios pueden insertar su propio feedback
-create policy "Users can insert their own feedback"
-  on public.user_feedback
-  for insert
-  with check (auth.uid() = user_id);
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'user_feedback'
+      and policyname = 'Users can insert their own feedback'
+  ) then
+    create policy "Users can insert their own feedback"
+      on public.user_feedback
+      for insert
+      with check (auth.uid() = user_id);
+  end if;
+end
+$$;
 
 -- Comentarios en la tabla
 comment on table public.user_feedback is 'Almacena el feedback y comentarios de los usuarios desde la página de ajustes';

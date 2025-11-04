@@ -342,145 +342,247 @@ class _WelcomeSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final userName = userProfile?['name']?.split(' ').first ?? 'Usuario';
+    // Corregido: usar nombre completo en lugar de solo el primer nombre
+    final userName = userProfile?['name'] ?? 'Usuario';
     final hasDrafts = draftStories.isNotEmpty;
     final totalStories = stats?['total_stories'] ?? 0;
     final suggestedTopics = _getSuggestedTopics();
 
     return Card(
-      elevation: 0,
-      color: colorScheme.primaryContainer.withValues(alpha: 0.3),
+      elevation: 4,
+      shadowColor: colorScheme.primary.withValues(alpha: 0.2),
+      color: Colors.white,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(28),
         side: BorderSide(
-          color: colorScheme.primary.withValues(alpha: 0.2),
-          width: 1,
+          color: colorScheme.primary.withValues(alpha: 0.25),
+          width: 2,
         ),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: colorScheme.primary.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Icon(
-                    Icons.auto_awesome_rounded,
-                    color: colorScheme.primary,
-                    size: 28,
-                  ),
+      child: Stack(
+        children: [
+          // Fondo decorativo con gradiente
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(28),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    colorScheme.primary.withValues(alpha: 0.06),
+                    colorScheme.primaryContainer.withValues(alpha: 0.04),
+                  ],
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '¡Hola $userName! 👋',
-                        style: theme.textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: colorScheme.onSurface,
+              ),
+            ),
+          ),
+
+          Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header con saludo
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            colorScheme.primary,
+                            colorScheme.primary.withValues(alpha: 0.85),
+                          ],
                         ),
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: colorScheme.primary.withValues(alpha: 0.25),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        totalStories == 0
-                            ? '¡Es momento de crear tu primera historia!'
-                            : hasDrafts
-                                ? 'Tienes ${draftStories.length} borrador${draftStories.length > 1 ? 'es' : ''} esperando'
-                                : '¿Qué historia contarás hoy?',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: colorScheme.onSurface.withValues(alpha: 0.8),
+                      child: Icon(
+                        Icons.edit_note_rounded,
+                        color: Colors.white,
+                        size: 32,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '¡Hola, $userName!',
+                            style: theme.textTheme.headlineSmall?.copyWith(
+                              fontWeight: FontWeight.w800,
+                              color: colorScheme.primary,
+                              height: 1.1,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            totalStories == 0
+                                ? 'Comienza tu primera historia'
+                                : hasDrafts
+                                    ? '${draftStories.length} borrador${draftStories.length > 1 ? 'es' : ''} esperando por ti'
+                                    : '¿Qué historia compartirás hoy?',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: colorScheme.primary.withValues(alpha: 0.75),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+
+                // Mensaje inspirador
+                const SizedBox(height: 20),
+                Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: colorScheme.primary.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: colorScheme.primary.withValues(alpha: 0.15),
+                      width: 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.auto_stories,
+                        color: colorScheme.primary,
+                        size: 24,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          totalStories == 0
+                              ? 'Cada gran libro empieza con una sola palabra. Hoy es tu día para escribir la tuya.'
+                              : 'Tus recuerdos son tesoros. Cada historia que escribes es un regalo para el futuro.',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: colorScheme.onSurface,
+                            height: 1.5,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ),
                     ],
                   ),
                 ),
-              ],
-            ),
 
-            if (suggestedTopics.isNotEmpty) ...[
-              const SizedBox(height: 20),
-              Text(
-                '✨ Inspírate y crea:',
-                style: theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: colorScheme.onSurface,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: suggestedTopics.map((topic) {
-                  return Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: colorScheme.surface,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: colorScheme.primary.withValues(alpha: 0.3),
-                      ),
-                    ),
-                    child: Text(
-                      topic,
-                      style: theme.textTheme.bodyMedium?.copyWith(
+                // Sugerencias de temas
+                if (suggestedTopics.isNotEmpty) ...[
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.lightbulb_outline,
                         color: colorScheme.primary,
-                        fontWeight: FontWeight.w600,
+                        size: 20,
                       ),
-                    ),
-                  );
-                }).toList(),
-              ),
-            ],
+                      const SizedBox(width: 8),
+                      Text(
+                        'Temas para inspirarte:',
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: colorScheme.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: suggestedTopics.map((topic) {
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: colorScheme.primary.withValues(alpha: 0.3),
+                            width: 1.5,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: colorScheme.primary.withValues(alpha: 0.08),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Text(
+                          topic,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: colorScheme.primary,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
 
-            const SizedBox(height: 20),
-            Row(
-              children: [
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const StoryEditorPage(),
+                const SizedBox(height: 24),
+
+                // Botones de acción
+                Row(
+                  children: [
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const StoryEditorPage(),
+                          ),
+                        ),
+                        icon: const Icon(Icons.add_circle_outline, size: 22),
+                        label: const Text(
+                          'Crear historia',
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: colorScheme.primary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          elevation: 3,
+                          shadowColor: colorScheme.primary.withValues(alpha: 0.4),
+                        ),
                       ),
                     ),
-                    icon: const Icon(Icons.add, size: 20),
-                    label: const Text('Empezar nueva historia'),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: colorScheme.primary,
-                      foregroundColor: colorScheme.onPrimary,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
+                    const SizedBox(width: 12),
+                    FilledButton.tonal(
+                      onPressed: () => _openEditorWithSuggestions(context),
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.all(16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
                       ),
+                      child: const Icon(Icons.auto_awesome, size: 22),
                     ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                FilledButton.tonal(
-                  onPressed: () => _openEditorWithSuggestions(context),
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.all(14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                  child: const Icon(Icons.lightbulb_outline, size: 20),
+                  ],
                 ),
               ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

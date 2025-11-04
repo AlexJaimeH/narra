@@ -251,8 +251,8 @@ export const LandingPage: React.FC = () => {
             >
               <div className="rounded-3xl overflow-hidden shadow-2xl">
                 <img
-                  src="https://images.unsplash.com/photo-1469571486292-0ba58a3f068b?q=80&w=1600&auto=format&fit=crop"
-                  alt="Persona mayor escribiendo sus memorias con luz cálida"
+                  src="https://images.unsplash.com/photo-1568602471122-7832951cc4c5?q=80&w=1600&auto=format&fit=crop"
+                  alt="Hijo leyendo la historia de su padre en tablet"
                   className="w-full h-[500px] object-cover"
                 />
               </div>
@@ -382,7 +382,7 @@ export const LandingPage: React.FC = () => {
               icon="📷"
               title="Añade recuerdos visuales"
               description="Sube fotos antiguas o recientes. Cada historia puede tener múltiples imágenes"
-              image="https://images.unsplash.com/photo-1509909756405-ac7aa7e4a6b2?q=80&w=800&auto=format&fit=crop"
+              image="https://images.unsplash.com/photo-1606857521015-7f9fcf423740?q=80&w=800&auto=format&fit=crop"
             />
             <HowStepCard
               number="4"
@@ -546,19 +546,16 @@ export const LandingPage: React.FC = () => {
               quote="Nunca pensé que escribir mi historia sería tan fácil. Ahora mis nietos leen cosas que ni mis hijos sabían. Es como si les estuviera hablando directamente."
               name="Carmen González"
               role="76 años, Abuela de 5 nietos"
-              image="https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=400&auto=format&fit=crop"
             />
             <TestimonialCard
               quote="Le regalé Narra a mi mamá por su cumpleaños. Cuando recibió su libro digital, lloramos juntas. Es el regalo más valioso que le he dado."
               name="Patricia Ramírez"
               role="Hija y madre de familia"
-              image="https://images.unsplash.com/photo-1438761681033-6461ffad8d80?q=80&w=400&auto=format&fit=crop"
             />
             <TestimonialCard
               quote="Grabar mis recuerdos fue como volver a vivirlos. La IA me ayudó a recordar detalles que creí olvidados. Mis hijos ahora conocen mi historia completa."
               name="Roberto Silva"
               role="82 años, Veterano"
-              image="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=400&auto=format&fit=crop"
             />
           </motion.div>
         </div>
@@ -708,6 +705,10 @@ export const LandingPage: React.FC = () => {
             <FaqItem
               question="¿Quiénes pueden leer mis historias?"
               answer="Solo las personas que tú invites. Tú tienes control total sobre quién puede acceder a tu blog privado. Puedes agregar o quitar suscriptores cuando quieras."
+            />
+            <FaqItem
+              question="¿Cómo funciona el blog para mis suscriptores?"
+              answer="Cada vez que publicas una historia, tus suscriptores la reciben por email y pueden leerla en tu blog privado. Ahí pueden dejar comentarios, reaccionar con corazones y ver todas tus historias anteriores. Tú siempre tienes el control: puedes moderar comentarios, ver quién reaccionó, y decidir qué historias son visibles. Es como una red social privada solo para tu familia."
             />
             <FaqItem
               question="¿Puedo usar fotos antiguas?"
@@ -897,23 +898,22 @@ const FeatureCard: React.FC<{ icon: string; title: string; description: string }
   </motion.div>
 );
 
-const TestimonialCard: React.FC<{ quote: string; name: string; role: string; image: string }> =
-  ({ quote, name, role, image }) => (
+const TestimonialCard: React.FC<{ quote: string; name: string; role: string }> =
+  ({ quote, name, role }) => (
   <motion.div
     variants={scaleUp}
     whileHover={{ y: -8, boxShadow: '0 25px 50px rgba(0, 0, 0, 0.1)' }}
     className="bg-white rounded-2xl p-8 shadow-xl transition-all"
   >
-    <div className="flex items-center gap-4 mb-6">
-      <img src={image} alt={name} className="w-16 h-16 rounded-full object-cover" />
-      <div>
-        <p className="font-bold text-lg" style={{ color: '#1F2937' }}>{name}</p>
-        <p className="text-sm" style={{ color: '#6B7280' }}>{role}</p>
-      </div>
+    <div className="mb-6">
+      <p className="text-lg italic leading-relaxed mb-4" style={{ color: '#4B5563' }}>
+        "{quote}"
+      </p>
     </div>
-    <p className="text-lg italic leading-relaxed" style={{ color: '#4B5563' }}>
-      "{quote}"
-    </p>
+    <div className="border-t pt-4" style={{ borderColor: '#E8F5F4' }}>
+      <p className="font-bold text-lg" style={{ color: '#1F2937' }}>{name}</p>
+      <p className="text-sm" style={{ color: '#6B7280' }}>{role}</p>
+    </div>
   </motion.div>
 );
 

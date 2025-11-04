@@ -88,7 +88,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     console.log('[author-magic-link] User exists, generating magic link');
 
     // Determinar la URL de redirección correcta
-    const appUrl = env.APP_URL || 'https://narra-8m1.pages.dev';
+    const appUrl = env.APP_URL || 'https://narra.mx';
     const redirectTo = `${appUrl}/app`;
 
     console.log('[author-magic-link] APP_URL from env:', env.APP_URL);

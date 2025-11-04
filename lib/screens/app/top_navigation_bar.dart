@@ -225,10 +225,20 @@ class _Brand extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Image.asset(
-      'logo-horizontal.png',
+    return Image.network(
+      '/app/logo-horizontal.png',
       height: 32,
       fit: BoxFit.contain,
+      errorBuilder: (context, error, stackTrace) {
+        // Fallback si la imagen no carga
+        return const Text(
+          'Narra',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+          ),
+        );
+      },
     );
   }
 }

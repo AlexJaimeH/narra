@@ -251,8 +251,8 @@ export const LandingPage: React.FC = () => {
             >
               <div className="rounded-3xl overflow-hidden shadow-2xl">
                 <img
-                  src="https://images.unsplash.com/photo-1568602471122-7832951cc4c5?q=80&w=1600&auto=format&fit=crop"
-                  alt="Hijo leyendo la historia de su padre en tablet"
+                  src="https://images.unsplash.com/photo-1434030216411-0b793f4b4173?q=80&w=1600&auto=format&fit=crop"
+                  alt="Persona mayor escribiendo sus memorias con calidez"
                   className="w-full h-[500px] object-cover"
                 />
               </div>
@@ -368,28 +368,28 @@ export const LandingPage: React.FC = () => {
               icon="🎤"
               title="Habla o escribe"
               description="Cuenta tus recuerdos como prefieras: escribiendo o usando tu voz con transcripción automática"
-              image="https://images.unsplash.com/photo-1590602847861-f357a9332bbc?q=80&w=800&auto=format&fit=crop"
+              image="https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?q=80&w=800&auto=format&fit=crop"
             />
             <HowStepCard
               number="2"
               icon="✨"
               title="La IA te ayuda"
               description="El Ghost Writer sugiere mejoras, organiza tus ideas y te hace preguntas para enriquecer tu historia"
-              image="https://images.unsplash.com/photo-1677442136019-21780ecad995?q=80&w=800&auto=format&fit=crop"
+              image="https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?q=80&w=800&auto=format&fit=crop"
             />
             <HowStepCard
               number="3"
               icon="📷"
               title="Añade recuerdos visuales"
               description="Sube fotos antiguas o recientes. Cada historia puede tener múltiples imágenes"
-              image="https://images.unsplash.com/photo-1606857521015-7f9fcf423740?q=80&w=800&auto=format&fit=crop"
+              image="https://images.unsplash.com/photo-1533093818801-37e26055840c?q=80&w=800&auto=format&fit=crop"
             />
             <HowStepCard
               number="4"
               icon="📖"
               title="Comparte y publica"
               description="Tus suscriptores reciben cada historia. Al completar 20, recibes tu libro digital"
-              image="https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?q=80&w=800&auto=format&fit=crop"
+              image="https://images.unsplash.com/photo-1531983412531-1f49a365ffed?q=80&w=800&auto=format&fit=crop"
             />
           </motion.div>
         </div>

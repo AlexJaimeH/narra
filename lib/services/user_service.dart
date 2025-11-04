@@ -64,6 +64,7 @@ class UserService {
     bool? noBadWords,
     String? editingStyle,
     String? extraInstructions,
+    bool? markAsConfigured,
   }) async {
     final userId = SupabaseAuth.currentUser?.id;
     if (userId == null) return;
@@ -75,11 +76,60 @@ class UserService {
     final settings = <String, dynamic>{};
     if (extraInstructions != null) settings['ai_extra_instructions'] = extraInstructions;
     if (noBadWords != null) settings['ai_no_bad_words'] = noBadWords;
-    if (narrativePerson != null) settings['ai_person'] = narrativePerson; // opcional si creas la columna
-    if (editingStyle != null) settings['ai_fidelity'] = editingStyle; // opcional si creas la columna
+    if (narrativePerson != null) settings['ai_person'] = narrativePerson;
+    if (editingStyle != null) settings['ai_fidelity'] = editingStyle;
+
+    // Marcar como configurado si se especifica
+    if (markAsConfigured == true) {
+      settings['has_configured_ghost_writer'] = true;
+    }
+
     if (settings.isNotEmpty) {
       await updateUserSettings(settings);
     }
+  }
+
+  // Marcar que el usuario usó el ghost writer
+  static Future<void> markGhostWriterAsUsed() async {
+    final userId = SupabaseAuth.currentUser?.id;
+    if (userId == null) return;
+
+    await updateUserSettings({
+      'has_used_ghost_writer': true,
+    });
+  }
+
+  // Marcar que el usuario configuró el ghost writer
+  static Future<void> markGhostWriterAsConfigured() async {
+    final userId = SupabaseAuth.currentUser?.id;
+    if (userId == null) return;
+
+    await updateUserSettings({
+      'has_configured_ghost_writer': true,
+    });
+  }
+
+  // Marcar que el usuario cerró la introducción del ghost writer
+  static Future<void> dismissGhostWriterIntro() async {
+    final userId = SupabaseAuth.currentUser?.id;
+    if (userId == null) return;
+
+    await updateUserSettings({
+      'has_dismissed_ghost_writer_intro': true,
+    });
+  }
+
+  // Verificar si debe mostrar la introducción del ghost writer
+  static Future<bool> shouldShowGhostWriterIntro() async {
+    final settings = await getUserSettings();
+    if (settings == null) return true;
+
+    final hasUsed = settings['has_used_ghost_writer'] as bool? ?? false;
+    final hasConfigured = settings['has_configured_ghost_writer'] as bool? ?? false;
+    final hasDismissed = settings['has_dismissed_ghost_writer_intro'] as bool? ?? false;
+
+    // Mostrar solo si NO ha usado, NO ha configurado y NO ha cerrado la intro
+    return !hasUsed && !hasConfigured && !hasDismissed;
   }
 
   // Obtener configuraciones del usuario
@@ -240,10 +290,14 @@ class UserService {
       'text_scale': 1.0,
       'high_contrast': false,
       'reduce_motion': false,
-      // Defaults para asistente IA
-      'ai_no_bad_words': false,
+      // Defaults para asistente IA (optimizados para calidad profesional)
+      'ai_no_bad_words': true, // Cambiado a true para historias de calidad publicable
       'ai_person': 'first',
       'ai_fidelity': 'balanced',
+      // Tracking de uso del ghost writer
+      'has_used_ghost_writer': false,
+      'has_configured_ghost_writer': false,
+      'has_dismissed_ghost_writer_intro': false,
     });
   }
 

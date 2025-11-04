@@ -33,7 +33,7 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _reducedMotion = false;
   String _ghostTone = 'warm';
   String _ghostPerson = 'first';
-  bool _noBadWords = false;
+  bool _noBadWords = true; // Nuevo valor por defecto para historias de calidad profesional
   String _ghostFidelity = 'balanced';
 
   @override
@@ -70,7 +70,7 @@ class _SettingsPageState extends State<SettingsPage> {
             _ghostTone = profile?['writing_tone'] ?? 'warm';
             // Preferencias AI adicionales
             _ghostPerson = (settings['ai_person'] as String?) ?? 'first';
-            _noBadWords = (settings['ai_no_bad_words'] as bool?) ?? false;
+            _noBadWords = (settings['ai_no_bad_words'] as bool?) ?? true;
             _ghostFidelity = (settings['ai_fidelity'] as String?) ?? 'balanced';
           }
 
@@ -581,12 +581,13 @@ class _SettingsPageState extends State<SettingsPage> {
                     trailing: DropdownButton<String>(
                       value: _ghostTone,
                       underline: const SizedBox(),
-                      onChanged: (value) {
+                      onChanged: (value) async {
                         if (value != null) {
                           setState(() {
                             _ghostTone = value;
                           });
-                          _updateUserSettings();
+                          await UserService.markGhostWriterAsConfigured();
+                          await _updateUserSettings();
                         }
                       },
                       items: const [
@@ -614,7 +615,10 @@ class _SettingsPageState extends State<SettingsPage> {
                           setState(() {
                             _ghostPerson = value;
                           });
-                          await UserService.updateAiPreferences(narrativePerson: value);
+                          await UserService.updateAiPreferences(
+                            narrativePerson: value,
+                            markAsConfigured: true,
+                          );
                           await _updateUserSettings();
                         }
                       },
@@ -637,7 +641,10 @@ class _SettingsPageState extends State<SettingsPage> {
                     value: _noBadWords,
                     onChanged: (value) async {
                       setState(() { _noBadWords = value; });
-                      await UserService.updateAiPreferences(noBadWords: value);
+                      await UserService.updateAiPreferences(
+                        noBadWords: value,
+                        markAsConfigured: true,
+                      );
                       await _updateUserSettings();
                     },
                   ),
@@ -662,7 +669,10 @@ class _SettingsPageState extends State<SettingsPage> {
                       ),
                       onChanged: (val) async {
                         _userSettings = {...?_userSettings, 'ai_extra_instructions': val};
-                        await UserService.updateAiPreferences(extraInstructions: val);
+                        await UserService.updateAiPreferences(
+                          extraInstructions: val,
+                          markAsConfigured: true,
+                        );
                         await _updateUserSettings();
                       },
                     ),
@@ -681,7 +691,10 @@ class _SettingsPageState extends State<SettingsPage> {
                           setState(() {
                             _ghostFidelity = value;
                           });
-                          await UserService.updateAiPreferences(editingStyle: value);
+                          await UserService.updateAiPreferences(
+                            editingStyle: value,
+                            markAsConfigured: true,
+                          );
                           await _updateUserSettings();
                         }
                       },

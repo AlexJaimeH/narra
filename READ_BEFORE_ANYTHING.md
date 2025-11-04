@@ -845,6 +845,46 @@ La primera vez que un usuario ingresa al dashboard y **NO** ha usado, configurad
 ❌ **NO uses emojis en commits que van a deploy**
    → Cloudflare Pages falla con emojis en algunos casos
 
+❌ **NO olvides agregar imports cuando uses servicios/clases en archivos nuevos**
+   → SIEMPRE ejecuta `dart analyze` localmente antes de hacer push
+   → Imports comunes que puedes necesitar:
+   ```dart
+   // Servicios principales
+   import 'package:narra/services/user_service.dart';
+   import 'package:narra/services/story_service_new.dart';
+   import 'package:narra/services/subscriber_service.dart';
+
+   // Repositories
+   import 'package:narra/repositories/user_repository.dart';
+   import 'package:narra/repositories/story_repository.dart';
+
+   // API
+   import 'package:narra/api/narra_api.dart';
+   ```
+
+---
+
+## ✅ Checklist Antes de Hacer Push
+
+Antes de hacer `git push`, SIEMPRE ejecuta estos comandos:
+
+```bash
+# 1. Analizar código Dart (detecta imports faltantes, errores de sintaxis)
+dart analyze --no-fatal-warnings
+
+# 2. Si hay errores, corrígelos antes de hacer push
+
+# 3. Commit y push solo cuando dart analyze esté limpio
+git add -A
+git commit -m "Tu mensaje"
+git push -u origin tu-rama
+```
+
+**Por qué es importante:**
+- El workflow de GitHub Actions ejecuta `dart analyze` automáticamente
+- Si hay errores, el deploy falla
+- Es más rápido detectar errores localmente que esperar al CI/CD
+
 ---
 
 ## 🆘 ¿Necesitas Ayuda?

@@ -1965,3 +1965,105 @@ comment on column public.user_settings.ai_fidelity is 'Estilo de edición del gh
 commit;
 
 -- Fin de la migración de user_feedback
+
+-- ============================================================
+-- Sistema de cambio de email (Fecha: 2025-11-05)
+-- ============================================================
+-- Permite a los usuarios cambiar su email de registro de forma segura
+-- con confirmación por email y opción de revertir en cualquier momento.
+-- ============================================================
+
+begin;
+
+-- Crear tabla para solicitudes de cambio de email
+create table if not exists public.email_change_requests (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  old_email text not null,
+  new_email text not null,
+  confirmation_token text not null unique,
+  revert_token text not null unique,
+  status text not null default 'pending' check (status in ('pending', 'confirmed', 'reverted', 'cancelled')),
+  created_at timestamptz not null default timezone('utc', now()),
+  confirmed_at timestamptz,
+  reverted_at timestamptz,
+  cancelled_at timestamptz
+);
+
+-- Índices para búsquedas rápidas
+create index if not exists email_change_requests_user_id_idx
+  on public.email_change_requests (user_id);
+
+create index if not exists email_change_requests_confirmation_token_idx
+  on public.email_change_requests (confirmation_token);
+
+create index if not exists email_change_requests_revert_token_idx
+  on public.email_change_requests (revert_token);
+
+create index if not exists email_change_requests_status_idx
+  on public.email_change_requests (status);
+
+-- Habilitar RLS
+alter table public.email_change_requests enable row level security;
+
+-- Políticas RLS: Los usuarios solo pueden ver sus propias solicitudes
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'email_change_requests'
+      and policyname = 'Users can view their own email change requests'
+  ) then
+    create policy "Users can view their own email change requests"
+      on public.email_change_requests
+      for select
+      using (auth.uid() = user_id);
+  end if;
+end
+$$;
+
+-- Los usuarios pueden insertar sus propias solicitudes
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'email_change_requests'
+      and policyname = 'Users can create their own email change requests'
+  ) then
+    create policy "Users can create their own email change requests"
+      on public.email_change_requests
+      for insert
+      with check (auth.uid() = user_id);
+  end if;
+end
+$$;
+
+-- Los usuarios pueden actualizar sus propias solicitudes (para cambiar status)
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'email_change_requests'
+      and policyname = 'Users can update their own email change requests'
+  ) then
+    create policy "Users can update their own email change requests"
+      on public.email_change_requests
+      for update
+      using (auth.uid() = user_id)
+      with check (auth.uid() = user_id);
+  end if;
+end
+$$;
+
+-- Comentarios explicativos
+comment on table public.email_change_requests is 'Solicitudes de cambio de email con confirmación bidireccional y opción de revertir';
+comment on column public.email_change_requests.confirmation_token is 'Token único para confirmar el cambio desde el nuevo email';
+comment on column public.email_change_requests.revert_token is 'Token único para revertir el cambio desde el email viejo (nunca expira)';
+comment on column public.email_change_requests.status is 'Estado: pending, confirmed, reverted, cancelled';
+
+commit;
+
+-- Fin de la migración de email_change_requests

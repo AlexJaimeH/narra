@@ -955,6 +955,109 @@ git push -u origin tu-rama
 
 ---
 
+## 📧 Sistema de Cambio de Email (Fecha: 2025-11-05)
+
+Narra incluye un sistema completo y seguro para que los usuarios cambien su email de registro en cualquier momento.
+
+### Características principales:
+- **Doble confirmación**: Emails a ambas direcciones (vieja y nueva)
+- **Reversible**: El usuario puede revertir el cambio en cualquier momento
+- **Sin expiración del revert**: El enlace de reversión nunca expira
+- **Validación**: Verifica que el nuevo email no esté registrado
+- **Seguro**: Usa tokens únicos y requiere confirmación explícita
+
+### Flujo completo:
+
+**1. Usuario solicita cambio**
+- Va a Ajustes → "Cambiar email"
+- Ingresa su nuevo email
+- Confirma la acción en un diálogo
+
+**2. Sistema envía 2 emails**
+- **Email al correo viejo**:
+  - Notifica del cambio solicitado
+  - Incluye enlace para CANCELAR/REVERTIR (nunca expira)
+  - Badge: "🔄 Cambio de Email"
+- **Email al correo nuevo**:
+  - Pide confirmación para completar el cambio
+  - Incluye enlace para CONFIRMAR
+  - Badge: "✅ Confirmación Requerida"
+
+**3. Usuario confirma desde nuevo email**
+- Hace clic en el enlace del email nuevo
+- El sistema actualiza el email en `auth.users`
+- Estado cambia a 'confirmed'
+
+**4. Usuario puede revertir en cualquier momento**
+- Hace clic en el enlace del email viejo (incluso después de confirmado)
+- El sistema restaura el email anterior
+- Estado cambia a 'reverted'
+
+### Estructura técnica:
+
+**Base de datos** (`sqlToPasteSupabase.sql`):
+```sql
+create table email_change_requests (
+  id uuid primary key,
+  user_id uuid references auth.users(id),
+  old_email text not null,
+  new_email text not null,
+  confirmation_token text not null unique,
+  revert_token text not null unique,
+  status text check (status in ('pending', 'confirmed', 'reverted', 'cancelled')),
+  created_at timestamptz,
+  confirmed_at timestamptz,
+  reverted_at timestamptz,
+  cancelled_at timestamptz
+);
+```
+
+**APIs** (`functions/api/`):
+- `email-change-request.ts`: Solicita cambio, genera tokens, envía emails
+- `email-change-confirm.ts`: Confirma cambio desde nuevo email
+- `email-change-revert.ts`: Revierte cambio desde email viejo
+
+**UI Flutter** (`lib/screens/app/`):
+- `change_email_page.dart`: Formulario para solicitar cambio
+- `email_change_confirm_page.dart`: Página de confirmación
+- `email_change_revert_page.dart`: Página de reversión
+- `settings_page.dart`: Botón "Cambiar email" en sección de perfil
+
+**Rutas** (`lib/main.dart`):
+- `/app/email-change-confirm?token=xxx` → Confirmar cambio
+- `/app/email-change-revert?token=xxx` → Revertir cambio
+
+**Templates de email**:
+- Siguen el estándar de diseño de Narra
+- Usan gradiente verde turquesa (#4DB3A8)
+- Incluyen logo horizontal
+- Dark mode compatible
+
+### Validaciones de seguridad:
+- ✅ Verifica que el nuevo email no esté registrado (al solicitar Y al confirmar)
+- ✅ Solo permite un cambio pendiente por usuario a la vez
+- ✅ Cancela automáticamente cambios pendientes anteriores
+- ✅ Tokens únicos y aleatorios de 64 caracteres
+- ✅ Requiere sesión activa para solicitar cambio
+- ✅ No requiere sesión para confirmar/revertir (solo token)
+
+### Variables de entorno requeridas:
+```bash
+SUPABASE_URL=https://xxx.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=eyJ...  # Necesario para Admin API
+RESEND_API_KEY=re_...
+RESEND_FROM_EMAIL=noreply@narra.com
+APP_URL=https://narra.mx  # Opcional
+```
+
+### Notas importantes:
+- El enlace de reversión **NUNCA expira** (diferente al magic link que dura 15 min)
+- El usuario puede revertir incluso después de que el cambio fue confirmado
+- Si el email nuevo ya está registrado, rechaza el cambio inmediatamente
+- Los emails siguen el estándar de diseño de Narra (ver sección "Estándares de Email")
+
+---
+
 ## 🎉 ¡Listo para Empezar!
 
 Ahora tienes todo lo necesario para trabajar en Narra. Si tienes dudas:

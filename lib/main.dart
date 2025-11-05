@@ -8,6 +8,8 @@ import 'package:narra/screens/auth/login_page.dart';
 import 'package:narra/screens/auth/register_page.dart';
 import 'package:narra/screens/auth/magic_link_login_page.dart';
 import 'package:narra/screens/auth/magic_link_callback_page.dart';
+import 'package:narra/screens/app/email_change_confirm_page.dart';
+import 'package:narra/screens/app/email_change_revert_page.dart';
 import 'package:narra/supabase/supabase_config.dart';
 import 'package:narra/theme_controller.dart';
 
@@ -100,6 +102,30 @@ class NarraApp extends StatelessWidget {
                 if (token != null && token.isNotEmpty) {
                   return MaterialPageRoute(
                     builder: (_) => MagicLinkCallbackPage(token: token),
+                    settings: settings,
+                  );
+                }
+              }
+
+              // Handle email change confirmation with token parameter
+              if (routeName.startsWith('/app/email-change-confirm')) {
+                final uri = Uri.parse(routeName);
+                final token = uri.queryParameters['token'];
+                if (token != null && token.isNotEmpty) {
+                  return MaterialPageRoute(
+                    builder: (_) => EmailChangeConfirmPage(token: token),
+                    settings: settings,
+                  );
+                }
+              }
+
+              // Handle email change revert with token parameter
+              if (routeName.startsWith('/app/email-change-revert')) {
+                final uri = Uri.parse(routeName);
+                final token = uri.queryParameters['token'];
+                if (token != null && token.isNotEmpty) {
+                  return MaterialPageRoute(
+                    builder: (_) => EmailChangeRevertPage(token: token),
                     settings: settings,
                   );
                 }

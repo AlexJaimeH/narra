@@ -225,7 +225,18 @@ function buildMagicLinkEmail(email: string, magicLink: string, isExistingUser: b
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light only" />
+    <meta name="supported-color-schemes" content="light" />
     <title>Tu enlace para iniciar sesión en Narra</title>
+    <style>
+      /* Forzar modo claro en clientes de email */
+      :root { color-scheme: light only; }
+      @media (prefers-color-scheme: dark) {
+        body { background: #fdfbf7 !important; color: #1f2937 !important; }
+        .email-card { background: #ffffff !important; }
+        .email-header { background: linear-gradient(135deg, #4DB3A8 0%, #38827A 100%) !important; }
+      }
+    </style>
   </head>
   <body style="margin:0;padding:0;background:linear-gradient(135deg, #fdfbf7 0%, #f0ebe3 100%);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;color:#1f2937;">
     <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:660px;margin:40px auto;padding:0 20px;">
@@ -237,11 +248,11 @@ function buildMagicLinkEmail(email: string, magicLink: string, isExistingUser: b
           </div>
 
           <!-- Main Card -->
-          <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#ffffff;border-radius:24px;box-shadow:0 20px 60px rgba(77,179,168,0.12),0 8px 20px rgba(0,0,0,0.06);overflow:hidden;">
+          <table role="presentation" cellpadding="0" cellspacing="0" width="100%" class="email-card" style="background:#ffffff;border-radius:24px;box-shadow:0 20px 60px rgba(77,179,168,0.12),0 8px 20px rgba(0,0,0,0.06);overflow:hidden;">
             <tr>
               <td style="padding:0;">
                 <!-- Header Section -->
-                <div style="background:linear-gradient(135deg, #4DB3A8 0%, #38827A 100%);padding:48px 36px;text-align:center;">
+                <div class="email-header" style="background:linear-gradient(135deg, #4DB3A8 0%, #38827A 100%);padding:48px 36px;text-align:center;">
                   <div style="display:inline-block;background:rgba(255,255,255,0.25);backdrop-filter:blur(10px);border-radius:16px;padding:12px 24px;margin-bottom:20px;">
                     <p style="margin:0;font-size:14px;color:#ffffff;letter-spacing:0.08em;text-transform:uppercase;font-weight:600;">🔑 Acceso Seguro</p>
                   </div>

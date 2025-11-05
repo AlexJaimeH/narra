@@ -351,7 +351,7 @@ class _WelcomeSection extends StatelessWidget {
     return Card(
       elevation: 4,
       shadowColor: colorScheme.primary.withValues(alpha: 0.2),
-      color: Colors.white,
+      color: colorScheme.surface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(28),
         side: BorderSide(
@@ -510,7 +510,7 @@ class _WelcomeSection extends StatelessWidget {
                           vertical: 10,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: colorScheme.surfaceContainerHighest,
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
                             color: colorScheme.primary.withValues(alpha: 0.3),
@@ -1399,7 +1399,7 @@ class _GhostWriterIntroCard extends StatelessWidget {
     return Card(
       elevation: 4,
       shadowColor: ghostWriterColor.withValues(alpha: 0.3),
-      color: Colors.white,
+      color: colorScheme.surface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(28),
         side: BorderSide(

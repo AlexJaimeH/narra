@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:narra/supabase/narra_client.dart';
+import 'package:narra/supabase/supabase_config.dart';
 
 class ChangeEmailPage extends StatefulWidget {
   final String currentEmail;
@@ -139,7 +139,7 @@ class _ChangeEmailPageState extends State<ChangeEmailPage> {
     });
 
     try {
-      final session = NarraClient.currentSession;
+      final session = SupabaseConfig.client.auth.currentSession;
       if (session == null) {
         throw Exception('No hay sesión activa');
       }

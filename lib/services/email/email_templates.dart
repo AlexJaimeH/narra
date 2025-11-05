@@ -49,7 +49,7 @@ class EmailTemplates {
         <td>
           <!-- Logo/Brand -->
           <div style="text-align:center;margin-bottom:32px;">
-            <img src="https://ptlzlaacaiftusslzwhc.supabase.co/storage/v1/object/public/general/Logo%20horizontal.png" alt="Narra" style="height:36px;width:auto;" />
+            <img src="https://narra.mx/logo-horizontal.png" alt="Narra" style="height:36px;width:auto;" />
           </div>
 
           <!-- Main Card -->
@@ -185,7 +185,7 @@ class EmailTemplates {
         <td>
           <!-- Logo/Brand -->
           <div style="text-align:center;margin-bottom:32px;">
-            <img src="https://ptlzlaacaiftusslzwhc.supabase.co/storage/v1/object/public/general/Logo%20horizontal.png" alt="Narra" style="height:36px;width:auto;" />
+            <img src="https://narra.mx/logo-horizontal.png" alt="Narra" style="height:36px;width:auto;" />
           </div>
 
           <!-- Main Card -->

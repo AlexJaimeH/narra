@@ -181,19 +181,6 @@ class _DashboardPageState extends State<DashboardPage> {
 
               const SizedBox(height: 16),
 
-              // Introducción del Ghost Writer (solo la primera vez)
-              if (_shouldShowGhostWriterIntro)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: _GhostWriterIntroCard(
-                    onDismiss: () {
-                      setState(() => _shouldShowGhostWriterIntro = false);
-                    },
-                  ),
-                ),
-
-              if (_shouldShowGhostWriterIntro) const SizedBox(height: 16),
-
               // Sección de bienvenida mejorada
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -206,6 +193,19 @@ class _DashboardPageState extends State<DashboardPage> {
               ),
 
               const SizedBox(height: 16),
+
+              // Introducción del Ghost Writer (solo la primera vez)
+              if (_shouldShowGhostWriterIntro)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: _GhostWriterIntroCard(
+                    onDismiss: () {
+                      setState(() => _shouldShowGhostWriterIntro = false);
+                    },
+                  ),
+                ),
+
+              if (_shouldShowGhostWriterIntro) const SizedBox(height: 16),
 
               // Sección de borradores (si hay)
               if (_draftStories.isNotEmpty)

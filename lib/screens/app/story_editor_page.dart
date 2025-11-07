@@ -2498,11 +2498,15 @@ class _StoryEditorPageState extends State<StoryEditorPage>
             children: [
               Icon(icon, size: 16, color: colorScheme.onSurfaceVariant),
               const SizedBox(width: 6),
-              Text(
-                label,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: colorScheme.onSurfaceVariant,
+              Flexible(
+                child: Text(
+                  label,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
                 ),
               ),
             ],
@@ -2736,7 +2740,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                       child: TextField(
                         controller: _contentController,
                         decoration: InputDecoration(
-                          hintText: 'Escribe tu historia con tus propias palabras. El asistente AI la pulirá de forma profesional.\n\nUsa las sugerencias para empezar o el botón de micrófono para dictar.',
+                          hintText: 'Escribe tu historia con tus propias palabras. El asistente AI (Ghost Writer) la pulirá de forma profesional.\n\nUsa las sugerencias para empezar o el botón de micrófono para dictar.',
                           hintStyle: bodyStyle?.copyWith(
                             color: colorScheme.onSurfaceVariant
                                 .withValues(alpha: 0.4),
@@ -2930,7 +2934,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                 children: [
                   buildInfoChip(
                     icon: Icons.info_outline_rounded,
-                    label: 'Se necesitan al menos 300 palabras para publicar',
+                    label: 'Mínimo 300 palabras para publicar',
                   ),
                   if (_showSuggestions && timestampLabel != null)
                     buildInfoChip(

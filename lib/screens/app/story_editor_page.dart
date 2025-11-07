@@ -6617,12 +6617,12 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         SnackBar(
           content: Text(
             audioUploaded
-                ? 'Borrador guardado'
-                : 'Borrador guardado. Audio pendiente por subir',
+                ? 'Se guardó en borradores'
+                : 'Se guardó en borradores. Audio pendiente por subir',
           ),
         ),
       );
-      _captureVersion(reason: 'Borrador guardado');
+      _captureVersion(reason: 'Se guardó en borradores');
       return true;
     } catch (e) {
       setState(() => _isSaving = false);
@@ -9672,7 +9672,7 @@ class _EditorBottomBar extends StatelessWidget {
                   SizedBox(width: compactSpacing),
                   Flexible(
                     child: Text(
-                      isSaving ? 'Guardando...' : 'Borrador',
+                      isSaving ? 'Guardando...' : 'Guardar',
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),

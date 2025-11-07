@@ -15,6 +15,37 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'story_editor_page.dart';
 
+/// Tipos de ordenamiento para las historias
+enum StorySortType {
+  modifiedDate,  // Por fecha de modificación (más reciente primero)
+  storyDate,     // Por fecha de la historia (si no tiene fecha, al final)
+  title,         // Por título alfabético
+}
+
+extension StorySortTypeExtension on StorySortType {
+  String get label {
+    switch (this) {
+      case StorySortType.modifiedDate:
+        return 'Fecha de modificación';
+      case StorySortType.storyDate:
+        return 'Fecha de la historia';
+      case StorySortType.title:
+        return 'Título';
+    }
+  }
+
+  IconData get icon {
+    switch (this) {
+      case StorySortType.modifiedDate:
+        return Icons.update;
+      case StorySortType.storyDate:
+        return Icons.event;
+      case StorySortType.title:
+        return Icons.sort_by_alpha;
+    }
+  }
+}
+
 class StoriesListPage extends StatefulWidget {
   const StoriesListPage({super.key});
 
@@ -500,7 +531,7 @@ class _StoriesSegmentedControl extends StatelessWidget {
   }
 }
 
-class StoriesTab extends StatelessWidget {
+class StoriesTab extends StatefulWidget {
   const StoriesTab({
     super.key,
     required this.stories,
@@ -525,35 +556,82 @@ class StoriesTab extends StatelessWidget {
       onSendStoryToSubscribers;
 
   @override
+  State<StoriesTab> createState() => _StoriesTabState();
+}
+
+class _StoriesTabState extends State<StoriesTab> {
+  StorySortType _sortType = StorySortType.modifiedDate;
+
+  List<Story> _sortStories(List<Story> stories) {
+    final sorted = List<Story>.from(stories);
+
+    switch (_sortType) {
+      case StorySortType.modifiedDate:
+        sorted.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+        break;
+
+      case StorySortType.storyDate:
+        sorted.sort((a, b) {
+          // Las historias sin fecha van al final
+          if (a.startDate == null && b.startDate == null) {
+            return b.updatedAt.compareTo(a.updatedAt);
+          }
+          if (a.startDate == null) return 1;
+          if (b.startDate == null) return -1;
+
+          // Ordenar por fecha de historia (más reciente primero)
+          return b.startDate!.compareTo(a.startDate!);
+        });
+        break;
+
+      case StorySortType.title:
+        sorted.sort((a, b) {
+          final titleA = a.title.toLowerCase().trim();
+          final titleB = b.title.toLowerCase().trim();
+          if (titleA.isEmpty && titleB.isEmpty) return 0;
+          if (titleA.isEmpty) return 1;
+          if (titleB.isEmpty) return -1;
+          return titleA.compareTo(titleB);
+        });
+        break;
+    }
+
+    return sorted;
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final filteredStories = stories.where((story) {
-      final matchesFilter = switch (filterStatus) {
+    final filteredStories = widget.stories.where((story) {
+      final matchesFilter = switch (widget.filterStatus) {
         null => true,
         StoryStatus.published => story.isPublished,
         StoryStatus.draft =>
           !story.isPublished && story.status == StoryStatus.draft,
         StoryStatus.archived => story.status == StoryStatus.archived,
       };
-      final matchesSearch = _matchesSearch(story, searchQuery);
+      final matchesSearch = _matchesSearch(story, widget.searchQuery);
       return matchesFilter && matchesSearch;
     }).toList();
+
+    // Aplicar ordenamiento
+    final sortedStories = _sortStories(filteredStories);
 
     final mediaQuery = MediaQuery.of(context);
     final isCompact = mediaQuery.size.width < 640;
     final horizontalPadding = isCompact ? 10.0 : 16.0;
 
-    if (filteredStories.isEmpty) {
+    if (sortedStories.isEmpty) {
       return RefreshIndicator(
-        onRefresh: onRefresh,
+        onRefresh: widget.onRefresh,
         displacement: 80,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 48),
           children: [
             _EmptyStoriesState(
-              isSearching: searchQuery.trim().isNotEmpty,
-              filterStatus: filterStatus,
-              onCreateStory: onCreateStory,
+              isSearching: widget.searchQuery.trim().isNotEmpty,
+              filterStatus: widget.filterStatus,
+              onCreateStory: widget.onCreateStory,
             ),
           ],
         ),
@@ -561,44 +639,67 @@ class StoriesTab extends StatelessWidget {
     }
 
     return RefreshIndicator(
-      onRefresh: onRefresh,
+      onRefresh: widget.onRefresh,
       displacement: 80,
-      child: ListView.separated(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: EdgeInsets.fromLTRB(
-          horizontalPadding,
-          8,
-          horizontalPadding,
-          16,
-        ),
-        itemCount: filteredStories.length,
-        separatorBuilder: (context, index) => Padding(
-          padding: EdgeInsets.fromLTRB(
-            horizontalPadding + (isCompact ? 2 : 10),
-            isCompact ? 6 : 10,
-            horizontalPadding + (isCompact ? 2 : 10),
-            isCompact ? 2 : 6,
+      child: Column(
+        children: [
+          // Selector de ordenamiento
+          Padding(
+            padding: EdgeInsets.fromLTRB(
+              horizontalPadding,
+              8,
+              horizontalPadding,
+              4,
+            ),
+            child: _SortSelector(
+              currentSort: _sortType,
+              onSortChanged: (newSort) {
+                setState(() => _sortType = newSort);
+              },
+            ),
           ),
-          child: _StoriesSeparator(
-            color: Theme.of(context)
-                .colorScheme
-                .outlineVariant
-                .withValues(alpha: 0.24),
+
+          // Lista de historias
+          Expanded(
+            child: ListView.separated(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: EdgeInsets.fromLTRB(
+                horizontalPadding,
+                4,
+                horizontalPadding,
+                16,
+              ),
+              itemCount: sortedStories.length,
+              separatorBuilder: (context, index) => Padding(
+                padding: EdgeInsets.fromLTRB(
+                  horizontalPadding + (isCompact ? 2 : 10),
+                  isCompact ? 6 : 10,
+                  horizontalPadding + (isCompact ? 2 : 10),
+                  isCompact ? 2 : 6,
+                ),
+                child: _StoriesSeparator(
+                  color: Theme.of(context)
+                      .colorScheme
+                      .outlineVariant
+                      .withValues(alpha: 0.24),
+                ),
+              ),
+              itemBuilder: (context, index) {
+                final story = sortedStories[index];
+                return StoryListCard(
+                  story: story,
+                  onActionComplete: widget.onStoriesChanged,
+                  accentColor: _cardAccentColor(context, index),
+                  onSendToSubscribers: widget.onSendStoryToSubscribers == null
+                      ? null
+                      : (selectedSubscribers) => widget.onSendStoryToSubscribers!(
+                          context, story, selectedSubscribers),
+                  isSendingToSubscribers: widget.sendingStoryEmails.contains(story.id),
+                );
+              },
+            ),
           ),
-        ),
-        itemBuilder: (context, index) {
-          final story = filteredStories[index];
-          return StoryListCard(
-            story: story,
-            onActionComplete: onStoriesChanged,
-            accentColor: _cardAccentColor(context, index),
-            onSendToSubscribers: onSendStoryToSubscribers == null
-                ? null
-                : (selectedSubscribers) => onSendStoryToSubscribers!(
-                    context, story, selectedSubscribers),
-            isSendingToSubscribers: sendingStoryEmails.contains(story.id),
-          );
-        },
+        ],
       ),
     );
   }
@@ -717,6 +818,134 @@ class StoriesTab extends StatelessWidget {
     }
 
     return distance[m][n];
+  }
+}
+
+/// Widget selector de ordenamiento
+class _SortSelector extends StatelessWidget {
+  const _SortSelector({
+    required this.currentSort,
+    required this.onSortChanged,
+  });
+
+  final StorySortType currentSort;
+  final ValueChanged<StorySortType> onSortChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHigh.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.sort_rounded,
+            size: 18,
+            color: colorScheme.primary,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            'Ordenar:',
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            child: PopupMenuButton<StorySortType>(
+              initialValue: currentSort,
+              onSelected: onSortChanged,
+              offset: const Offset(0, 40),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              itemBuilder: (context) => [
+                for (final sortType in StorySortType.values)
+                  PopupMenuItem<StorySortType>(
+                    value: sortType,
+                    child: Row(
+                      children: [
+                        Icon(
+                          sortType.icon,
+                          size: 20,
+                          color: sortType == currentSort
+                              ? colorScheme.primary
+                              : colorScheme.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            sortType.label,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: sortType == currentSort
+                                  ? colorScheme.primary
+                                  : colorScheme.onSurface,
+                              fontWeight: sortType == currentSort
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                        if (sortType == currentSort)
+                          Icon(
+                            Icons.check,
+                            size: 20,
+                            color: colorScheme.primary,
+                          ),
+                      ],
+                    ),
+                  ),
+              ],
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: colorScheme.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      currentSort.icon,
+                      size: 16,
+                      color: colorScheme.primary,
+                    ),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        currentSort.label,
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: colorScheme.primary,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      Icons.arrow_drop_down,
+                      size: 18,
+                      color: colorScheme.primary,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

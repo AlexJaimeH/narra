@@ -1177,160 +1177,180 @@ class StoryListCard extends StatelessWidget {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    Container(
+                      width: 5,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(999),
+                        color: accentColor,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          IntrinsicHeight(
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                Container(
-                                  width: 5,
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(999),
-                                    color: accentColor,
-                                  ),
+                          // Imágenes en scroll horizontal (si existen)
+                          if (story.photos.isNotEmpty) ...[
+                            SizedBox(
+                              height: coverSize,
+                              child: ListView.separated(
+                                scrollDirection: Axis.horizontal,
+                                itemCount: story.photos.length,
+                                separatorBuilder: (_, __) =>
+                                    const SizedBox(width: 8),
+                                itemBuilder: (context, index) {
+                                  return _StoryCoverThumbnail(
+                                    url: story.photos[index].photoUrl,
+                                    size: coverSize,
+                                  );
+                                },
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                          ],
+
+                          // Título y acciones
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  story.title.isEmpty
+                                      ? 'Sin título'
+                                      : story.title,
+                                  style: titleStyle,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
-                                const SizedBox(width: 10),
-                                if (coverUrl != null) ...[
-                                  Align(
-                                    alignment: Alignment.topLeft,
-                                    child: _StoryCoverThumbnail(
-                                      url: coverUrl,
-                                      size: coverSize,
+                              ),
+                              const SizedBox(width: 12),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  _StatusPill(
+                                    label: statusForDisplay.displayName,
+                                    color: statusColors.foreground,
+                                    background: statusColors.background,
+                                    icon: switch (statusForDisplay) {
+                                      StoryStatus.published =>
+                                        Icons.check_circle,
+                                      StoryStatus.archived =>
+                                        Icons.inventory_2_outlined,
+                                      _ => Icons.edit_note,
+                                    },
+                                  ),
+                                  const SizedBox(width: 8),
+                                  _StoryActionsButton(
+                                    onSelected: (action) =>
+                                        _handleStoryAction(
+                                      context,
+                                      story: story,
+                                      onActionComplete: onActionComplete,
+                                      action: action,
+                                    ),
+                                    itemBuilder: (menuContext) =>
+                                        _buildStoryMenuItems(
+                                      story,
                                     ),
                                   ),
-                                  const SizedBox(width: 12),
                                 ],
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.center,
-                                        children: [
-                                          Expanded(
-                                            child: Text(
-                                              story.title.isEmpty
-                                                  ? 'Sin título'
-                                                  : story.title,
-                                              style: titleStyle,
-                                            ),
-                                          ),
-                                          const SizedBox(width: 12),
-                                          Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              _StatusPill(
-                                                label: statusForDisplay
-                                                    .displayName,
-                                                color: statusColors.foreground,
-                                                background:
-                                                    statusColors.background,
-                                                icon: switch (
-                                                    statusForDisplay) {
-                                                  StoryStatus.published =>
-                                                    Icons.check_circle,
-                                                  StoryStatus.archived =>
-                                                    Icons.inventory_2_outlined,
-                                                  _ => Icons.edit_note,
-                                                },
-                                              ),
-                                              const SizedBox(width: 8),
-                                              _StoryActionsButton(
-                                                onSelected: (action) =>
-                                                    _handleStoryAction(
-                                                  context,
-                                                  story: story,
-                                                  onActionComplete:
-                                                      onActionComplete,
-                                                  action: action,
-                                                ),
-                                                itemBuilder: (menuContext) =>
-                                                    _buildStoryMenuItems(
-                                                  story,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ],
-                                      ),
-                                      if (story.isPublished) ...[
-                                        const SizedBox(height: 8),
-                                        Row(
-                                          children: [
-                                            Icon(
-                                              Icons.public,
-                                              size: 18,
-                                              color: colorScheme.primary,
-                                            ),
-                                            const SizedBox(width: 6),
-                                            Text(
-                                              'Publicado el '
-                                              '${_formatFullDate(publishedDisplayDate)}',
-                                              style: theme.textTheme.bodySmall
-                                                  ?.copyWith(
-                                                color: colorScheme
-                                                    .onSurfaceVariant,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ],
-                                      if (excerpt.isNotEmpty) ...[
-                                        const SizedBox(height: 6),
-                                        Text(
-                                          excerpt,
-                                          style: theme.textTheme.bodyMedium
-                                              ?.copyWith(
-                                            height: 1.45,
-                                          ),
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ],
-                                      if (tags.isNotEmpty) ...[
-                                        const SizedBox(height: 12),
-                                        Wrap(
-                                          spacing: 8,
-                                          runSpacing: 8,
-                                          children: tags
-                                              .map(
-                                                  (tag) => _TagChip(label: tag))
-                                              .toList(),
-                                        ),
-                                      ],
-                                      if (metadataChips.isNotEmpty) ...[
-                                        const SizedBox(height: 12),
-                                        Wrap(
-                                          spacing: 8,
-                                          runSpacing: 6,
-                                          children: metadataChips,
-                                        ),
-                                      ],
-                                      if (story.isPublished) ...[
-                                        const SizedBox(height: 20),
-                                        _PublicStoryPreview(
-                                          story: story,
-                                          onViewPage: () =>
-                                              _openStoryPublicPage(
-                                                  context, story),
-                                          onSendToSubscribers:
-                                              onSendToSubscribers,
-                                          isSendingToSubscribers:
-                                              isSendingToSubscribers,
-                                        ),
-                                      ],
-                                    ],
+                              ),
+                            ],
+                          ),
+
+                          // Fecha de la historia y etiquetas
+                          const SizedBox(height: 12),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              // Fecha de la historia (si existe)
+                              if (_formatHistoryDate(story) != null)
+                                _HistoryDateBadge(
+                                  date: _formatHistoryDate(story)!,
+                                  colorScheme: colorScheme,
+                                ),
+
+                              // Etiquetas
+                              ...tags.map((tag) => _TagChip(label: tag)),
+                            ],
+                          ),
+
+                          // Fecha de publicación (si aplica)
+                          if (story.isPublished) ...[
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.public,
+                                  size: 16,
+                                  color: colorScheme.primary,
+                                ),
+                                const SizedBox(width: 6),
+                                Flexible(
+                                  child: Text(
+                                    'Publicado el '
+                                    '${_formatFullDate(publishedDisplayDate)}',
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: colorScheme.onSurfaceVariant,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
                               ],
                             ),
+                          ],
+
+                          // Fecha de última modificación (en itálica)
+                          const SizedBox(height: 6),
+                          Text(
+                            'Última modificación: ${_formatStoryDate(story.updatedAt)}',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant
+                                  .withValues(alpha: 0.8),
+                              fontStyle: FontStyle.italic,
+                              fontSize: 12,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
+
+                          // Extracto
+                          if (excerpt.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              excerpt,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                height: 1.45,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+
+                          // Metadata chips
+                          if (metadataChips.isNotEmpty) ...[
+                            const SizedBox(height: 12),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 6,
+                              children: metadataChips,
+                            ),
+                          ],
+
+                          // Vista previa pública
+                          if (story.isPublished) ...[
+                            const SizedBox(height: 20),
+                            _PublicStoryPreview(
+                              story: story,
+                              onViewPage: () =>
+                                  _openStoryPublicPage(context, story),
+                              onSendToSubscribers: onSendToSubscribers,
+                              isSendingToSubscribers: isSendingToSubscribers,
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -2108,6 +2128,56 @@ String _formatFullDate(DateTime date) {
   return '${date.day} de $month de ${date.year}';
 }
 
+/// Formatea la fecha de la historia según su precisión
+String? _formatHistoryDate(Story story) {
+  final startDate = story.startDate;
+  if (startDate == null) return null;
+
+  final precision = story.datesPrecision ?? 'day';
+
+  try {
+    switch (precision) {
+      case 'year':
+        return startDate.year.toString();
+      case 'month':
+        const months = [
+          'Enero',
+          'Febrero',
+          'Marzo',
+          'Abril',
+          'Mayo',
+          'Junio',
+          'Julio',
+          'Agosto',
+          'Septiembre',
+          'Octubre',
+          'Noviembre',
+          'Diciembre',
+        ];
+        return '${months[startDate.month - 1]} ${startDate.year}';
+      case 'day':
+      default:
+        const months = [
+          'enero',
+          'febrero',
+          'marzo',
+          'abril',
+          'mayo',
+          'junio',
+          'julio',
+          'agosto',
+          'septiembre',
+          'octubre',
+          'noviembre',
+          'diciembre',
+        ];
+        return '${startDate.day} de ${months[startDate.month - 1]} de ${startDate.year}';
+    }
+  } catch (e) {
+    return null;
+  }
+}
+
 String _fallbackStoryExcerpt(String? content) {
   if (content == null || content.isEmpty) {
     return '';
@@ -2292,6 +2362,52 @@ class _StoryActionsButtonState extends State<_StoryActionsButton> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Badge para mostrar la fecha de la historia (como en el blog de React)
+class _HistoryDateBadge extends StatelessWidget {
+  const _HistoryDateBadge({
+    required this.date,
+    required this.colorScheme,
+  });
+
+  final String date;
+  final ColorScheme colorScheme;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: colorScheme.primary.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.event,
+            size: 14,
+            color: colorScheme.primary,
+          ),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              date,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: colorScheme.primary,
+                fontWeight: FontWeight.w700,
+              ),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+            ),
+          ),
+        ],
       ),
     );
   }

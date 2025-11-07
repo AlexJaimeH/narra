@@ -2736,7 +2736,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                       child: TextField(
                         controller: _contentController,
                         decoration: InputDecoration(
-                          hintText: 'Cuenta tu historia...\n\nEscribe libremente. Puedes usar párrafos, diálogos y descripciones.',
+                          hintText: 'Escribe tu historia con tus propias palabras. El asistente AI la pulirá de forma profesional.\n\nUsa las sugerencias para empezar o el botón de micrófono para dictar.',
                           hintStyle: bodyStyle?.copyWith(
                             color: colorScheme.onSurfaceVariant
                                 .withValues(alpha: 0.4),

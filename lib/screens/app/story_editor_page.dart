@@ -2731,53 +2731,47 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Campo de texto mejorado
-                    ConstrainedBox(
-                      constraints: BoxConstraints(
-                        minHeight: minBodyHeight,
-                        maxHeight: isCompact ? 400 : 500,
-                      ),
-                      child: TextField(
-                        controller: _contentController,
-                        decoration: InputDecoration(
-                          hintText: 'Escribe tu historia con tus propias palabras. El asistente AI (Ghost Writer) la pulirá de forma profesional.\n\nUsa las sugerencias para empezar o el botón de micrófono para dictar.',
-                          hintStyle: bodyStyle?.copyWith(
-                            color: colorScheme.onSurfaceVariant
-                                .withValues(alpha: 0.4),
-                            height: 1.7,
-                          ),
-                          border: InputBorder.none,
-                          enabledBorder: InputBorder.none,
-                          focusedBorder: InputBorder.none,
-                          contentPadding: EdgeInsets.fromLTRB(
-                            isCompact ? 18 : 24,
-                            isCompact ? 20 : 26,
-                            isCompact ? 18 : 24,
-                            isCompact ? 12 : 16,
-                          ),
-                          filled: false,
-                        ),
-                        style: bodyStyle?.copyWith(
+                    // Campo de texto mejorado - crece con el contenido
+                    TextField(
+                      controller: _contentController,
+                      decoration: InputDecoration(
+                        hintText: 'Escribe tu historia con tus propias palabras. El asistente AI (Ghost Writer) la pulirá de forma profesional.\n\nUsa las sugerencias para empezar o el botón de micrófono para dictar.',
+                        hintStyle: bodyStyle?.copyWith(
+                          color: colorScheme.onSurfaceVariant
+                              .withValues(alpha: 0.4),
                           height: 1.7,
-                          letterSpacing: 0.2,
-                          fontSize: isCompact ? 16 : 17,
                         ),
-                        keyboardType: TextInputType.multiline,
-                        maxLines: null,
-                        minLines: 12,
-                        textAlignVertical: TextAlignVertical.top,
-                        enableSuggestions: false,
-                        autocorrect: false,
-                        smartDashesType: SmartDashesType.disabled,
-                        smartQuotesType: SmartQuotesType.disabled,
-                        textCapitalization: TextCapitalization.sentences,
-                        enableIMEPersonalizedLearning: false,
-                        autofillHints: null,
-                        scribbleEnabled: false,
-                        cursorHeight: 24,
-                        cursorColor: colorScheme.primary,
-                        selectionControls: materialTextSelectionControls,
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        contentPadding: EdgeInsets.fromLTRB(
+                          isCompact ? 18 : 24,
+                          isCompact ? 20 : 26,
+                          isCompact ? 18 : 24,
+                          isCompact ? 12 : 16,
+                        ),
+                        filled: false,
                       ),
+                      style: bodyStyle?.copyWith(
+                        height: 1.7,
+                        letterSpacing: 0.2,
+                        fontSize: isCompact ? 16 : 17,
+                      ),
+                      keyboardType: TextInputType.multiline,
+                      maxLines: null,
+                      minLines: 12,
+                      textAlignVertical: TextAlignVertical.top,
+                      enableSuggestions: false,
+                      autocorrect: false,
+                      smartDashesType: SmartDashesType.disabled,
+                      smartQuotesType: SmartQuotesType.disabled,
+                      textCapitalization: TextCapitalization.sentences,
+                      enableIMEPersonalizedLearning: false,
+                      autofillHints: null,
+                      scribbleEnabled: false,
+                      cursorHeight: 24,
+                      cursorColor: colorScheme.primary,
+                      selectionControls: materialTextSelectionControls,
                     ),
 
                     // Barra inferior con estadísticas y consejos
@@ -2884,7 +2878,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                           ),
                     label: _isGhostWriterProcessing
                         ? 'Trabajando...'
-                        : 'Ghost Writer',
+                        : 'Ghost Writer (AI)',
                   ),
                   buildActionButton(
                     isCompact: isCompact,

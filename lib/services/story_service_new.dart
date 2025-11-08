@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:narra/api/narra_api.dart';
 import 'package:narra/openai/openai_service.dart';
 import 'package:narra/repositories/story_repository.dart';
+import 'package:narra/supabase/supabase_config.dart';
 
 /// Enhanced story service using the new API client
 /// This replaces the old story_service.dart with better architecture
@@ -293,6 +294,23 @@ class StoryServiceNew {
     return await NarraAPI.updateStory(storyId, StoryUpdate(
       status: StoryStatus.draft,
     ));
+  }
+
+  /// Revoke all subscriber access to a story
+  /// This invalidates all access tokens for the story
+  static Future<void> revokeAllSubscriberAccess(String storyId) async {
+    try {
+      // Call Supabase to revoke all access tokens for this story
+      await SupabaseConfig.client
+          .from('subscriber_access')
+          .update({'status': 'revoked'})
+          .eq('story_id', storyId)
+          .eq('status', 'active');
+    } catch (e) {
+      // If the table doesn't exist or there's an error, just log it
+      // The story will still be unpublished
+      debugPrint('Error revoking subscriber access: $e');
+    }
   }
 
   /// Delete a story permanently

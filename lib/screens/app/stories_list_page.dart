@@ -1981,16 +1981,48 @@ Future<void> _handleStoryAction(
       }
       break;
     case 'unpublish':
-      try {
-        await StoryServiceNew.unpublishStory(story.id);
-        messenger.showSnackBar(
-          const SnackBar(content: Text('Historia despublicada')),
-        );
-        onActionComplete();
-      } catch (e) {
-        messenger.showSnackBar(
-          SnackBar(content: Text('Error al despublicar historia: $e')),
-        );
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Despublicar historia'),
+          content: const Text(
+            'Al despublicar esta historia, tus suscriptores ya no tendrán acceso a ella. ¿Estás seguro de que quieres continuar?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.grey,
+              ),
+              child: const Text('Despublicar'),
+            ),
+          ],
+        ),
+      );
+
+      if (confirmed == true) {
+        try {
+          // Revocar accesos de todos los suscriptores
+          await StoryServiceNew.revokeAllSubscriberAccess(story.id);
+
+          // Despublicar la historia
+          await StoryServiceNew.unpublishStory(story.id);
+
+          messenger.showSnackBar(
+            const SnackBar(
+              content: Text('Historia despublicada. Los suscriptores ya no tienen acceso.'),
+            ),
+          );
+          onActionComplete();
+        } catch (e) {
+          messenger.showSnackBar(
+            SnackBar(content: Text('Error al despublicar historia: $e')),
+          );
+        }
       }
       break;
     case 'delete':

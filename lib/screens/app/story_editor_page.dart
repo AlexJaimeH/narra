@@ -6982,7 +6982,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       await StoryServiceNew.unpublishStory(_currentStory!.id);
 
       // Recargar la historia actualizada
-      final updatedStory = await StoryServiceNew.getStory(_currentStory!.id);
+      final updatedStory = await StoryServiceNew.getStoryById(_currentStory!.id);
       if (updatedStory != null) {
         setState(() {
           _currentStory = updatedStory;

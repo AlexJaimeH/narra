@@ -572,14 +572,26 @@ class _StoriesTabState extends State<StoriesTab> {
 
       case StorySortType.storyDate:
         sorted.sort((a, b) {
+          final aHasDate = a.startDate != null;
+          final bHasDate = b.startDate != null;
+
           // Las historias sin fecha van al final
-          if (a.startDate == null && b.startDate == null) {
+          if (!aHasDate && !bHasDate) {
+            // Ambas sin fecha: ordenar por fecha de modificación
             return b.updatedAt.compareTo(a.updatedAt);
           }
-          if (a.startDate == null) return 1;
-          if (b.startDate == null) return -1;
 
-          // Ordenar por fecha de historia (más reciente primero)
+          if (!aHasDate) {
+            // 'a' sin fecha va al final (después de 'b')
+            return 1;
+          }
+
+          if (!bHasDate) {
+            // 'b' sin fecha va al final (antes de 'a')
+            return -1;
+          }
+
+          // Ambas tienen fecha: ordenar por fecha de historia (más reciente primero)
           return b.startDate!.compareTo(a.startDate!);
         });
         break;
@@ -1123,10 +1135,6 @@ class StoryListCard extends StatelessWidget {
     final statusColors = _statusColors(statusForDisplay, colorScheme);
     final publishedDisplayDate = story.publishedAt ?? story.updatedAt;
     final metadataChips = <Widget>[
-      _MetadataBadge(
-        icon: Icons.calendar_today,
-        label: _formatDate(story.createdAt),
-      ),
       if (story.wordCount > 0)
         _MetadataBadge(
           icon: Icons.text_snippet_outlined,

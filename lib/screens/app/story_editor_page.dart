@@ -2426,8 +2426,11 @@ class _StoryEditorPageState extends State<StoryEditorPage>
               unawaited(_saveDraft());
             },
             onPublish: _showPublishDialog,
+            onUnpublish: _showUnpublishDialog,
             onOpenDictation: _openDictationPanel,
             canPublish: _canPublish(),
+            isPublished: _currentStory?.isPublished ?? false,
+            hasChanges: _hasChanges,
           ),
         ),
       ),
@@ -6935,6 +6938,74 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     );
   }
 
+  void _showUnpublishDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Despublicar historia'),
+        content: const Text(
+          'Al despublicar esta historia, tus suscriptores ya no tendrán acceso a ella. ¿Estás seguro de que quieres continuar?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await _unpublishStory();
+            },
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.grey,
+            ),
+            child: const Text('Despublicar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _unpublishStory() async {
+    try {
+      if (_currentStory == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error: Historia no encontrada')),
+        );
+        return;
+      }
+
+      // Revocar accesos de todos los suscriptores
+      await StoryServiceNew.revokeAllSubscriberAccess(_currentStory!.id);
+
+      // Despublicar la historia
+      await StoryServiceNew.unpublishStory(_currentStory!.id);
+
+      // Recargar la historia actualizada
+      final updatedStory = await StoryServiceNew.getStory(_currentStory!.id);
+      if (updatedStory != null) {
+        setState(() {
+          _currentStory = updatedStory;
+          _status = updatedStory.status.name;
+        });
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Historia despublicada. Los suscriptores ya no tienen acceso.'),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al despublicar: $e')),
+        );
+      }
+    }
+  }
+
   bool _hasUsedGhostWriter() {
     return _versionHistory.any(
       (version) => version.reason.contains('Ghost Writer afinó tu historia'),
@@ -7035,12 +7106,17 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   }
 
   void _showDiscardChangesDialog() {
+    final isPublished = _currentStory?.isPublished ?? false;
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('¿Descartar cambios?'),
-        content:
-            const Text('Tienes cambios sin guardar. ¿Quieres descartarlos?'),
+        content: Text(
+          isPublished
+              ? 'Tienes cambios sin guardar en esta historia publicada. Si los descartas, la historia se mantendrá como está publicada actualmente. ¿Quieres descartarlos?'
+              : 'Tienes cambios sin guardar. ¿Quieres descartarlos?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -9561,15 +9637,21 @@ class _EditorBottomBar extends StatelessWidget {
     required this.isSaving,
     required this.onSaveDraft,
     required this.onPublish,
+    required this.onUnpublish,
     required this.onOpenDictation,
     required this.canPublish,
+    required this.isPublished,
+    required this.hasChanges,
   });
 
   final bool isSaving;
   final VoidCallback onSaveDraft;
   final VoidCallback onPublish;
+  final VoidCallback onUnpublish;
   final VoidCallback onOpenDictation;
   final bool canPublish;
+  final bool isPublished;
+  final bool hasChanges;
 
   @override
   Widget build(BuildContext context) {
@@ -9639,6 +9721,11 @@ class _EditorBottomBar extends StatelessWidget {
           }
 
           Widget draftButton(bool compact) {
+            // Si está publicada y hay cambios, mostrar "Modificar", sino "Guardar"
+            final label = isPublished && hasChanges
+                ? 'Modificar'
+                : (isSaving ? 'Guardando...' : 'Guardar');
+
             final button = FilledButton.tonal(
               onPressed: isSaving ? null : onSaveDraft,
               style: buildButtonStyle(compact: compact).copyWith(
@@ -9666,7 +9753,7 @@ class _EditorBottomBar extends StatelessWidget {
                   SizedBox(width: compactSpacing),
                   Flexible(
                     child: Text(
-                      isSaving ? 'Guardando...' : 'Guardar',
+                      label,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -9682,6 +9769,45 @@ class _EditorBottomBar extends StatelessWidget {
           }
 
           Widget publishButton(bool compact) {
+            // Si está publicada, mostrar botón de despublicar en gris
+            if (isPublished) {
+              final button = FilledButton(
+                onPressed: onUnpublish,
+                style: buildButtonStyle(compact: compact).copyWith(
+                  padding: WidgetStatePropertyAll(
+                    compact
+                        ? EdgeInsets.symmetric(horizontal: 12, vertical: 10)
+                        : const EdgeInsets.symmetric(
+                            horizontal: 22, vertical: 14),
+                  ),
+                  backgroundColor: WidgetStateProperty.all(Colors.grey),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.visibility_off_outlined,
+                      size: compactIconSize,
+                    ),
+                    SizedBox(width: compactSpacing),
+                    Flexible(
+                      child: const Text(
+                        'Despublicar',
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+
+              if (!compact) {
+                return button;
+              }
+
+              return SizedBox(height: buttonHeight, child: button);
+            }
+
+            // Si no está publicada, mostrar botón normal de publicar
             final button = FilledButton(
               onPressed: canPublish ? onPublish : null,
               style: buildButtonStyle(compact: compact).copyWith(

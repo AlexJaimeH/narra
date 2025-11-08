@@ -6,114 +6,87 @@ export const Loading: React.FC = () => {
   return (
     <div className="flex items-center justify-center min-h-screen" style={{ background: `linear-gradient(to bottom, ${NarraColors.brand.primaryPale}, ${NarraColors.surface.white})` }}>
       <motion.div
-        initial={{ opacity: 0, scale: 0.8 }}
-        animate={{ opacity: 1, scale: 1 }}
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
         className="text-center"
       >
-        {/* Animated book icon */}
-        <div className="relative mb-6">
-          {/* Outer circle with pulse */}
-          <div className="absolute inset-0 flex items-center justify-center">
-            <motion.div
-              animate={{
-                scale: [1, 1.2, 1],
-                opacity: [0.5, 0.8, 0.5]
-              }}
-              transition={{
-                duration: 2,
-                repeat: Infinity,
-                ease: "easeInOut"
-              }}
-              className="w-24 h-24 rounded-full"
-              style={{ backgroundColor: `${NarraColors.brand.primaryLight}` }}
-            />
-          </div>
-
-          {/* Inner spinning circle */}
-          <div className="relative flex items-center justify-center">
-            <motion.div
-              animate={{ rotate: 360 }}
-              transition={{
-                duration: 3,
-                repeat: Infinity,
-                ease: "linear"
-              }}
-              className="w-20 h-20 rounded-full flex items-center justify-center"
-              style={{
-                background: `linear-gradient(135deg, ${NarraColors.brand.primary}, ${NarraColors.brand.accent})`,
-                boxShadow: '0 10px 40px rgba(77, 179, 168, 0.3)'
-              }}
-            >
-              {/* Narra Logo */}
-              <motion.img
-                animate={{
-                  y: [0, -5, 0]
-                }}
-                transition={{
-                  duration: 2,
-                  repeat: Infinity,
-                  ease: "easeInOut"
-                }}
-                src="/logo.png"
-                alt="Narra"
-                className="w-12 h-12 object-contain"
-              />
-            </motion.div>
-          </div>
-        </div>
-
-        {/* Loading text with shimmer effect */}
-        <div className="space-y-2">
-          <motion.p
+        {/* Logo con animación suave y brillo */}
+        <div className="relative mb-8 flex items-center justify-center">
+          {/* Glow effect detrás del logo */}
+          <motion.div
             animate={{
-              opacity: [1, 0.7, 1]
+              scale: [1, 1.15, 1],
+              opacity: [0.2, 0.4, 0.2]
             }}
             transition={{
-              duration: 1.5,
+              duration: 2.5,
               repeat: Infinity,
               ease: "easeInOut"
             }}
-            className="text-xl font-semibold"
-            style={{ color: NarraColors.text.primary }}
+            className="absolute w-32 h-32 rounded-full blur-2xl"
+            style={{ backgroundColor: NarraColors.brand.primaryLight }}
+          />
+
+          {/* Logo con animación de respiración */}
+          <motion.div
+            animate={{
+              scale: [1, 1.05, 1],
+              opacity: [0.95, 1, 0.95]
+            }}
+            transition={{
+              duration: 2,
+              repeat: Infinity,
+              ease: "easeInOut"
+            }}
+            className="relative z-10"
+            style={{
+              filter: `drop-shadow(0 10px 30px ${NarraColors.brand.primary}40)`
+            }}
           >
-            Cargando historias
-          </motion.p>
-          <div className="flex items-center justify-center gap-1">
+            <img
+              src="/logo.png"
+              alt="Narra"
+              className="w-20 h-20 object-contain"
+            />
+          </motion.div>
+        </div>
+
+        {/* Loading text */}
+        <motion.p
+          animate={{
+            opacity: [0.7, 1, 0.7]
+          }}
+          transition={{
+            duration: 2,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+          className="text-xl font-semibold mb-4"
+          style={{ color: NarraColors.text.primary }}
+        >
+          Cargando historias
+        </motion.p>
+
+        {/* Puntos animados más elegantes */}
+        <div className="flex items-center justify-center gap-2">
+          {[0, 1, 2].map((index) => (
             <motion.div
-              animate={{ y: [0, -10, 0] }}
+              key={index}
+              animate={{
+                scale: [1, 1.3, 1],
+                opacity: [0.5, 1, 0.5]
+              }}
               transition={{
-                duration: 0.6,
+                duration: 1.2,
                 repeat: Infinity,
                 ease: "easeInOut",
-                delay: 0
+                delay: index * 0.2
               }}
-              className="w-2 h-2 rounded-full"
+              className="w-2.5 h-2.5 rounded-full"
               style={{ backgroundColor: NarraColors.brand.primary }}
             />
-            <motion.div
-              animate={{ y: [0, -10, 0] }}
-              transition={{
-                duration: 0.6,
-                repeat: Infinity,
-                ease: "easeInOut",
-                delay: 0.15
-              }}
-              className="w-2 h-2 rounded-full"
-              style={{ backgroundColor: NarraColors.brand.primary }}
-            />
-            <motion.div
-              animate={{ y: [0, -10, 0] }}
-              transition={{
-                duration: 0.6,
-                repeat: Infinity,
-                ease: "easeInOut",
-                delay: 0.3
-              }}
-              className="w-2 h-2 rounded-full"
-              style={{ backgroundColor: NarraColors.brand.primary }}
-            />
-          </div>
+          ))}
         </div>
       </motion.div>
     </div>

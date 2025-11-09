@@ -1330,10 +1330,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           }
           _isLoading = false;
         });
-        debugPrint('📖 Historia cargada: ${story.title}');
-        debugPrint('   Status: ${story.status.name}');
-        debugPrint('   isPublished: ${story.isPublished}');
-        debugPrint('   publishedAt: ${story.publishedAt}');
         if (_versionHistory.isEmpty) {
           _captureVersion(
             reason: 'Versión original',
@@ -6614,16 +6610,21 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         _isSaving = false;
       });
 
+      final isPublished = _currentStory?.isPublished ?? false;
+      final message = isPublished
+          ? (audioUploaded
+              ? 'Historia modificada. Los cambios ya están disponibles para los suscriptores'
+              : 'Historia modificada. Audio pendiente por subir')
+          : (audioUploaded
+              ? 'Se guardó en borradores'
+              : 'Se guardó en borradores. Audio pendiente por subir');
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            audioUploaded
-                ? 'Se guardó en borradores'
-                : 'Se guardó en borradores. Audio pendiente por subir',
-          ),
-        ),
+        SnackBar(content: Text(message)),
       );
-      _captureVersion(reason: 'Se guardó en borradores');
+      _captureVersion(
+        reason: isPublished ? 'Historia modificada' : 'Se guardó en borradores',
+      );
       return true;
     } catch (e) {
       setState(() => _isSaving = false);
@@ -9661,11 +9662,6 @@ class _EditorBottomBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-
-    debugPrint('🔘 _EditorBottomBar build:');
-    debugPrint('   isPublished: $isPublished');
-    debugPrint('   hasChanges: $hasChanges');
-    debugPrint('   canPublish: $canPublish');
 
     return DecoratedBox(
       decoration: BoxDecoration(

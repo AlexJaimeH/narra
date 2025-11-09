@@ -2186,9 +2186,11 @@ String? _formatHistoryDate(Story story) {
   final precision = story.datesPrecision ?? 'day';
 
   try {
+    String formattedStart;
     switch (precision) {
       case 'year':
-        return startDate.year.toString();
+        formattedStart = startDate.year.toString();
+        break;
       case 'month':
         const months = [
           'Enero',
@@ -2204,7 +2206,8 @@ String? _formatHistoryDate(Story story) {
           'Noviembre',
           'Diciembre',
         ];
-        return '${months[startDate.month - 1]} ${startDate.year}';
+        formattedStart = '${months[startDate.month - 1]} ${startDate.year}';
+        break;
       case 'day':
       default:
         const months = [
@@ -2221,8 +2224,58 @@ String? _formatHistoryDate(Story story) {
           'noviembre',
           'diciembre',
         ];
-        return '${startDate.day} de ${months[startDate.month - 1]} de ${startDate.year}';
+        formattedStart = '${startDate.day} de ${months[startDate.month - 1]} de ${startDate.year}';
+        break;
     }
+
+    // Si hay fecha de fin, formatearla y mostrar rango
+    final endDate = story.endDate;
+    if (endDate != null) {
+      String formattedEnd;
+      switch (precision) {
+        case 'year':
+          formattedEnd = endDate.year.toString();
+          break;
+        case 'month':
+          const months = [
+            'Enero',
+            'Febrero',
+            'Marzo',
+            'Abril',
+            'Mayo',
+            'Junio',
+            'Julio',
+            'Agosto',
+            'Septiembre',
+            'Octubre',
+            'Noviembre',
+            'Diciembre',
+          ];
+          formattedEnd = '${months[endDate.month - 1]} ${endDate.year}';
+          break;
+        case 'day':
+        default:
+          const months = [
+            'enero',
+            'febrero',
+            'marzo',
+            'abril',
+            'mayo',
+            'junio',
+            'julio',
+            'agosto',
+            'septiembre',
+            'octubre',
+            'noviembre',
+            'diciembre',
+          ];
+          formattedEnd = '${endDate.day} de ${months[endDate.month - 1]} de ${endDate.year}';
+          break;
+      }
+      return '$formattedStart - $formattedEnd';
+    }
+
+    return formattedStart;
   } catch (e) {
     return null;
   }

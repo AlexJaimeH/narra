@@ -593,8 +593,8 @@ class _StoriesTabState extends State<StoriesTab> {
             return -1;
           }
 
-          // Ambas tienen fecha: ordenar por fecha de historia (más reciente primero)
-          return b.startDate!.compareTo(a.startDate!);
+          // Ambas tienen fecha: ordenar por fecha de historia (más antigua primero)
+          return a.startDate!.compareTo(b.startDate!);
         });
         break;
 
@@ -1998,26 +1998,6 @@ Future<void> _handleStoryAction(
       );
       onActionComplete();
       break;
-    case 'publish':
-      try {
-        // Publish the story
-        final publishedStory = await StoryServiceNew.publishStory(story.id);
-
-        // Send emails to subscribers in background
-        _sendPublishedStoryEmails(publishedStory);
-
-        messenger.showSnackBar(
-          const SnackBar(
-            content: Text('Historia publicada y enviada a suscriptores'),
-          ),
-        );
-        onActionComplete();
-      } catch (e) {
-        messenger.showSnackBar(
-          SnackBar(content: Text('Error al publicar historia: $e')),
-        );
-      }
-      break;
     case 'unpublish':
       final confirmed = await showDialog<bool>(
         context: context,
@@ -2110,14 +2090,6 @@ List<PopupMenuEntry<String>> _buildStoryMenuItems(Story story) {
         label: 'Editar',
       ),
     ),
-    if (story.isDraft)
-      const PopupMenuItem(
-        value: 'publish',
-        child: _PopupMenuRow(
-          icon: Icons.publish_outlined,
-          label: 'Publicar',
-        ),
-      ),
     if (story.isPublished)
       const PopupMenuItem(
         value: 'unpublish',

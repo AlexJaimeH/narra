@@ -10,8 +10,6 @@ import 'package:narra/services/email/subscriber_email_service.dart';
 import 'package:narra/services/story_service_new.dart';
 import 'package:narra/services/story_share_link_builder.dart';
 import 'package:narra/services/subscriber_service.dart';
-import 'package:narra/services/user_service.dart';
-import 'package:narra/supabase/narra_client.dart';
 import 'package:narra/supabase/supabase_config.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -593,8 +591,8 @@ class _StoriesTabState extends State<StoriesTab> {
             return -1;
           }
 
-          // Ambas tienen fecha: ordenar por fecha de historia (más reciente primero)
-          return b.startDate!.compareTo(a.startDate!);
+          // Ambas tienen fecha: ordenar por fecha de historia (más antigua primero)
+          return a.startDate!.compareTo(b.startDate!);
         });
         break;
 
@@ -1949,37 +1947,6 @@ Future<void> _openStoryPublicPage(BuildContext context, Story story) async {
   );
 }
 
-/// Send email notifications to subscribers when a story is published
-Future<void> _sendPublishedStoryEmails(Story story) async {
-  try {
-    // Get current user
-    final user = NarraSupabaseClient.currentUser;
-    if (user == null) return;
-
-    // Get confirmed subscribers only
-    final subscribers = await SubscriberService.getConfirmedSubscribers();
-    if (subscribers.isEmpty) return;
-
-    // Get user profile for display name
-    final profile = await UserService.getCurrentUserProfile();
-    final authorName = profile?['display_name'] as String? ??
-                      profile?['name'] as String? ??
-                      user.email?.split('@').first ??
-                      'Tu autor en Narra';
-
-    // Send emails
-    await SubscriberEmailService.sendStoryPublished(
-      story: story,
-      subscribers: subscribers,
-      authorDisplayName: authorName,
-    );
-  } catch (e) {
-    // Don't show error to user - emails are sent in background
-    // Just log the error for debugging
-    debugPrint('Error sending story published emails: $e');
-  }
-}
-
 Future<void> _handleStoryAction(
   BuildContext context, {
   required Story story,
@@ -1997,26 +1964,6 @@ Future<void> _handleStoryAction(
         ),
       );
       onActionComplete();
-      break;
-    case 'publish':
-      try {
-        // Publish the story
-        final publishedStory = await StoryServiceNew.publishStory(story.id);
-
-        // Send emails to subscribers in background
-        _sendPublishedStoryEmails(publishedStory);
-
-        messenger.showSnackBar(
-          const SnackBar(
-            content: Text('Historia publicada y enviada a suscriptores'),
-          ),
-        );
-        onActionComplete();
-      } catch (e) {
-        messenger.showSnackBar(
-          SnackBar(content: Text('Error al publicar historia: $e')),
-        );
-      }
       break;
     case 'unpublish':
       final confirmed = await showDialog<bool>(
@@ -2110,14 +2057,6 @@ List<PopupMenuEntry<String>> _buildStoryMenuItems(Story story) {
         label: 'Editar',
       ),
     ),
-    if (story.isDraft)
-      const PopupMenuItem(
-        value: 'publish',
-        child: _PopupMenuRow(
-          icon: Icons.publish_outlined,
-          label: 'Publicar',
-        ),
-      ),
     if (story.isPublished)
       const PopupMenuItem(
         value: 'unpublish',

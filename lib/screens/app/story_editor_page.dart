@@ -1330,10 +1330,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           }
           _isLoading = false;
         });
-        debugPrint('📖 Historia cargada: ${story.title}');
-        debugPrint('   Status: ${story.status.name}');
-        debugPrint('   isPublished: ${story.isPublished}');
-        debugPrint('   publishedAt: ${story.publishedAt}');
         if (_versionHistory.isEmpty) {
           _captureVersion(
             reason: 'Versión original',
@@ -9666,11 +9662,6 @@ class _EditorBottomBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-
-    debugPrint('🔘 _EditorBottomBar build:');
-    debugPrint('   isPublished: $isPublished');
-    debugPrint('   hasChanges: $hasChanges');
-    debugPrint('   canPublish: $canPublish');
 
     return DecoratedBox(
       decoration: BoxDecoration(

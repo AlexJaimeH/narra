@@ -290,10 +290,9 @@ class StoryServiceNew {
   }
 
   /// Unpublish a story (convert back to draft)
+  /// Sets status to 'draft' and clears published_at timestamp
   static Future<Story> unpublishStory(String storyId) async {
-    return await NarraAPI.updateStory(storyId, StoryUpdate(
-      status: StoryStatus.draft,
-    ));
+    return await NarraAPI.unpublishStory(storyId);
   }
 
   /// Revoke all subscriber access to a story

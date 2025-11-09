@@ -104,7 +104,7 @@ SUPABASE_URL=https://xxx.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=eyJ...  # Para Admin API
 SUPABASE_ANON_KEY=eyJ...          # Para cliente Flutter
 RESEND_API_KEY=re_...
-RESEND_FROM_EMAIL=noreply@narra.com
+RESEND_FROM_EMAIL=Narra <hola@narra.mx>  # IMPORTANTE: Incluir nombre y email con este formato
 APP_URL=https://narra.mx  # Opcional, usa default
 ```
 
@@ -1046,7 +1046,7 @@ create table email_change_requests (
 SUPABASE_URL=https://xxx.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=eyJ...  # Necesario para Admin API
 RESEND_API_KEY=re_...
-RESEND_FROM_EMAIL=noreply@narra.com
+RESEND_FROM_EMAIL=Narra <hola@narra.mx>  # IMPORTANTE: Incluir nombre y email
 APP_URL=https://narra.mx  # Opcional
 ```
 

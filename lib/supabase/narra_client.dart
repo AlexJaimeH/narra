@@ -587,6 +587,54 @@ class NarraSupabaseClient {
     }
   }
 
+  /// Unpublish story (convert back to draft)
+  static Future<Map<String, dynamic>> unpublishStory(String storyId) async {
+    final userId = currentUser?.id;
+    if (userId == null) throw Exception('User not authenticated');
+
+    final now = DateTime.now().toIso8601String();
+    final baseUpdate = {
+      'status': 'draft',
+      'updated_at': now,
+    };
+
+    try {
+      final result = await _client
+          .from('stories')
+          .update({
+            ...baseUpdate,
+            'published_at': null,
+          })
+          .eq('id', storyId)
+          .eq('user_id', userId)
+          .select()
+          .single();
+
+      return result;
+    } on PostgrestException catch (error) {
+      final message = error.message ?? '';
+      if (message.contains('published_at') ||
+          message.contains('column') && message.contains('published')) {
+        // Fallback for databases that don't yet have the published_at column.
+        print(
+          'unpublishStory: published_at column missing, proceeding without clearing publish timestamp. Error: ${error.message}',
+        );
+
+        final fallbackResult = await _client
+            .from('stories')
+            .update(baseUpdate)
+            .eq('id', storyId)
+            .eq('user_id', userId)
+            .select()
+            .single();
+
+        return fallbackResult;
+      }
+
+      rethrow;
+    }
+  }
+
   // ================================
   // TAG METHODS
   // ================================

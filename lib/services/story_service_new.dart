@@ -297,20 +297,12 @@ class StoryServiceNew {
   }
 
   /// Revoke all subscriber access to a story
-  /// This invalidates all access tokens for the story
+  /// NOTE: This function intentionally does nothing.
+  /// When a story is unpublished (status changed to 'draft'), the blog automatically
+  /// filters out draft stories, so subscribers won't be able to see it.
+  /// No need to invalidate access tokens.
   static Future<void> revokeAllSubscriberAccess(String storyId) async {
-    try {
-      // Call Supabase to revoke all access tokens for this story
-      await SupabaseConfig.client
-          .from('subscriber_access_events')
-          .update({'status': 'revoked'})
-          .eq('story_id', storyId)
-          .eq('status', 'active');
-    } catch (e) {
-      // If the table doesn't exist or there's an error, just log it
-      // The story will still be unpublished
-      debugPrint('Error revoking subscriber access: $e');
-    }
+    // No operation needed - unpublishing the story is sufficient
   }
 
   /// Delete a story permanently

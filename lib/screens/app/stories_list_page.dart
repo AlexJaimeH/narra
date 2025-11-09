@@ -1981,12 +1981,6 @@ Future<void> _handleStoryAction(
       }
       break;
     case 'unpublish':
-      debugPrint('🔄 Acción: Despublicar historia');
-      debugPrint('   Historia: ${story.title}');
-      debugPrint('   ID: ${story.id}');
-      debugPrint('   isPublished: ${story.isPublished}');
-      debugPrint('   status: ${story.status.name}');
-
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (dialogContext) => AlertDialog(
@@ -2010,21 +2004,13 @@ Future<void> _handleStoryAction(
         ),
       );
 
-      debugPrint('   Confirmado: $confirmed');
-
       if (confirmed == true) {
         try {
-          debugPrint('   ✅ Usuario confirmó, despublicando...');
-
-          // Revocar accesos de todos los suscriptores
-          debugPrint('   Revocando accesos de suscriptores...');
+          // Revocar accesos de todos los suscriptores (no hace nada, solo por compatibilidad)
           await StoryServiceNew.revokeAllSubscriberAccess(story.id);
 
           // Despublicar la historia
-          debugPrint('   Despublicando historia...');
           await StoryServiceNew.unpublishStory(story.id);
-
-          debugPrint('   ✅ Historia despublicada exitosamente');
 
           messenger.showSnackBar(
             const SnackBar(

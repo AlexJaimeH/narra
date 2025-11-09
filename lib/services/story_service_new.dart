@@ -302,7 +302,7 @@ class StoryServiceNew {
     try {
       // Call Supabase to revoke all access tokens for this story
       await SupabaseConfig.client
-          .from('subscriber_access')
+          .from('subscriber_access_events')
           .update({'status': 'revoked'})
           .eq('story_id', storyId)
           .eq('status', 'active');

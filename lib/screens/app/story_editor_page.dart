@@ -6614,16 +6614,21 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         _isSaving = false;
       });
 
+      final isPublished = _currentStory?.isPublished ?? false;
+      final message = isPublished
+          ? (audioUploaded
+              ? 'Historia modificada. Los cambios ya están disponibles para los suscriptores'
+              : 'Historia modificada. Audio pendiente por subir')
+          : (audioUploaded
+              ? 'Se guardó en borradores'
+              : 'Se guardó en borradores. Audio pendiente por subir');
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            audioUploaded
-                ? 'Se guardó en borradores'
-                : 'Se guardó en borradores. Audio pendiente por subir',
-          ),
-        ),
+        SnackBar(content: Text(message)),
       );
-      _captureVersion(reason: 'Se guardó en borradores');
+      _captureVersion(
+        reason: isPublished ? 'Historia modificada' : 'Se guardó en borradores',
+      );
       return true;
     } catch (e) {
       setState(() => _isSaving = false);

@@ -57,7 +57,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     const userProfile = await fetchFromSupabase(supabaseUrl, serviceKey, 'users', `id=eq.${userId}`);
     const userName = (userProfile[0]?.name || 'Usuario').trim();
 
-    // CORREGIDO: usar user_id en lugar de author_id
+    // Fetch stories with user_id
     const stories = await fetchFromSupabase(
       supabaseUrl,
       serviceKey,
@@ -65,31 +65,22 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       `user_id=eq.${userId}&order=created_at.desc`
     );
 
-    // Import fflate (más ligero que JSZip)
-    const { strToU8, zipSync } = await import('https://esm.sh/fflate@0.8.2');
-
-    // Create files structure for ZIP
-    const files: Record<string, Uint8Array> = {};
-
-    // Add metadata
-    const metadata = {
-      exportado: new Date().toISOString(),
-      usuario: user.email,
-      nombre: userName,
-      total_historias: stories.length,
-      borradores: stories.filter((s: any) => !s.is_published).length,
-      publicadas: stories.filter((s: any) => s.is_published).length,
+    // Build complete data structure for client-side ZIP generation
+    const completeData: any = {
+      metadata: {
+        exportado: new Date().toISOString(),
+        usuario: user.email,
+        nombre: userName,
+        total_historias: stories.length,
+        borradores: stories.filter((s: any) => !s.is_published).length,
+        publicadas: stories.filter((s: any) => s.is_published).length,
+      },
+      historias: []
     };
-    files['info.txt'] = strToU8(JSON.stringify(metadata, null, 2));
 
     // Process each story
     for (let i = 0; i < stories.length; i++) {
       const story = stories[i];
-      const isPublished = story.is_published;
-      const folderPrefix = isPublished ? 'publicadas/' : 'borradores/';
-
-      const storyTitle = sanitizeFileName(story.title || 'Sin título');
-      const storyPath = folderPrefix + storyTitle + '/';
 
       // Fetch related data
       const [photos, recordings, versions] = await Promise.all([
@@ -98,61 +89,38 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         fetchFromSupabase(supabaseUrl, serviceKey, 'story_versions', `story_id=eq.${story.id}&order=version_number.asc`),
       ]);
 
-      // Add main story file
-      const storyText = createStoryText(story);
-      files[storyPath + 'historia.txt'] = strToU8(storyText);
-
-      // Add image references
-      if (photos.length > 0) {
-        for (let j = 0; j < photos.length; j++) {
-          const photo = photos[j];
-          const extension = getFileExtension(photo.photo_url) || 'jpg';
-          const imageText = `URL de la imagen:\n${photo.photo_url}\n\nDescarga este archivo manualmente desde la URL.`;
-          files[storyPath + `imagenes/imagen-${j + 1}-${extension}.txt`] = strToU8(imageText);
-        }
-      }
-
-      // Add recording references
-      if (recordings.length > 0) {
-        for (let j = 0; j < recordings.length; j++) {
-          const recording = recordings[j];
-          if (recording.audio_url) {
-            const extension = getFileExtension(recording.audio_url) || 'mp3';
-            const audioText = `URL de la grabación:\n${recording.audio_url}\n\nDescarga este archivo manualmente desde la URL.`;
-            files[storyPath + `grabaciones/grabacion-${j + 1}-${extension}.txt`] = strToU8(audioText);
-          }
-        }
-      }
-
-      // Add versions
-      if (versions.length > 0) {
-        for (let j = 0; j < versions.length; j++) {
-          const version = versions[j];
-          const versionText = createVersionText(version, j + 1);
-          files[storyPath + `versiones/version-${version.version_number || (j + 1)}.txt`] = strToU8(versionText);
-        }
-      }
+      completeData.historias.push({
+        titulo: story.title || 'Sin título',
+        contenido: story.content || '',
+        extracto: story.excerpt || '',
+        transcripcion_voz: story.voice_transcript || '',
+        fecha_historia: story.story_date || '',
+        fecha_creacion: story.created_at,
+        fecha_actualizacion: story.updated_at,
+        fecha_publicacion: story.published_at || '',
+        numero_palabras: story.word_count || 0,
+        is_published: story.is_published || false,
+        imagenes: photos.map((p: any) => ({
+          url: p.photo_url,
+          posicion: p.position
+        })),
+        grabaciones: recordings.map((r: any) => ({
+          url: r.audio_url,
+          fecha: r.created_at
+        })),
+        versiones: versions.map((v: any) => ({
+          numero: v.version_number,
+          contenido: v.content || '',
+          fecha: v.created_at
+        }))
+      });
     }
 
-    // Generate ZIP
-    const zipData = zipSync(files, { level: 6 });
-
-    // Generate filename
-    const now = new Date();
-    const yy = String(now.getFullYear()).slice(-2);
-    const mm = now.getMonth() + 1;
-    const dd = now.getDate();
-    const mmStr = mm < 10 ? '0' + mm : String(mm);
-    const ddStr = dd < 10 ? '0' + dd : String(dd);
-    const sanitizedName = sanitizeFileName(userName);
-    const filename = `${yy}${mmStr}${ddStr} Narra - ${sanitizedName}.zip`;
-
-    // Return as ZIP download
-    return new Response(zipData, {
+    // Return as JSON (client will generate ZIP)
+    return new Response(JSON.stringify(completeData), {
       status: 200,
       headers: {
-        'Content-Type': 'application/zip',
-        'Content-Disposition': `attachment; filename="${filename}"`,
+        'Content-Type': 'application/json',
         ...CORS_HEADERS,
       },
     });
@@ -164,122 +132,6 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     }, 500);
   }
 };
-
-function sanitizeFileName(name: string): string {
-  return name
-    .replace(/[<>:"/\\|?*]/g, '-')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .substring(0, 200);
-}
-
-function createStoryText(story: any): string {
-  const lines = [];
-
-  lines.push('═'.repeat(80));
-  lines.push(`  ${story.title || 'Sin título'}`);
-  lines.push('═'.repeat(80));
-  lines.push('');
-
-  if (story.story_date) {
-    lines.push(`📅 Fecha de la historia: ${formatDate(story.story_date)}`);
-  }
-
-  lines.push(`📝 Creada: ${formatDate(story.created_at)}`);
-  lines.push(`✏️  Última edición: ${formatDate(story.updated_at)}`);
-
-  if (story.is_published && story.published_at) {
-    lines.push(`🌐 Publicada: ${formatDate(story.published_at)}`);
-  }
-
-  if (story.word_count) {
-    lines.push(`📊 Palabras: ${story.word_count}`);
-  }
-
-  lines.push('');
-  lines.push('─'.repeat(80));
-  lines.push('');
-
-  if (story.excerpt) {
-    lines.push('EXTRACTO:');
-    lines.push(story.excerpt);
-    lines.push('');
-    lines.push('─'.repeat(80));
-    lines.push('');
-  }
-
-  lines.push('CONTENIDO:');
-  lines.push('');
-  const content = stripHtml(story.content || '');
-  lines.push(content);
-
-  if (story.voice_transcript) {
-    lines.push('');
-    lines.push('');
-    lines.push('─'.repeat(80));
-    lines.push('TRANSCRIPCIÓN DE VOZ:');
-    lines.push('');
-    lines.push(stripHtml(story.voice_transcript));
-  }
-
-  lines.push('');
-  lines.push('');
-  lines.push('═'.repeat(80));
-
-  return lines.join('\n');
-}
-
-function createVersionText(version: any, versionNum: number): string {
-  const lines = [];
-
-  lines.push(`VERSIÓN ${versionNum}`);
-  lines.push('─'.repeat(60));
-  lines.push(`Fecha: ${formatDate(version.created_at)}`);
-  if (version.version_number) {
-    lines.push(`Número de versión: ${version.version_number}`);
-  }
-  lines.push('');
-  lines.push('CONTENIDO:');
-  lines.push('');
-  lines.push(stripHtml(version.content || ''));
-
-  return lines.join('\n');
-}
-
-function formatDate(dateString: string): string {
-  const date = new Date(dateString);
-  return date.toLocaleString('es-ES', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
-}
-
-function stripHtml(html: string): string {
-  return html
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/p>/gi, '\n\n')
-    .replace(/<[^>]+>/g, '')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .trim();
-}
-
-function getFileExtension(url: string): string | null {
-  try {
-    const urlObj = new URL(url);
-    const pathname = urlObj.pathname;
-    const match = pathname.match(/\.([a-zA-Z0-9]+)$/);
-    return match ? match[1] : null;
-  } catch {
-    return null;
-  }
-}
 
 async function fetchFromSupabase(
   supabaseUrl: string,

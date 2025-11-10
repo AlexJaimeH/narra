@@ -111,7 +111,7 @@ export const PurchasePage: React.FC = () => {
               boxShadow: selectedType === 'self'
                 ? `0 20px 60px rgba(77,179,168,0.3)`
                 : '0 10px 30px rgba(0,0,0,0.1)',
-              ringColor: NarraColors.brand.primary,
+              ['--tw-ring-color' as any]: NarraColors.brand.primary,
             }}
           >
             {selectedType === 'self' && (
@@ -144,7 +144,7 @@ export const PurchasePage: React.FC = () => {
               boxShadow: selectedType === 'gift'
                 ? `0 20px 60px rgba(77,179,168,0.3)`
                 : '0 10px 30px rgba(0,0,0,0.1)',
-              ringColor: NarraColors.brand.primary,
+              ['--tw-ring-color' as any]: NarraColors.brand.primary,
             }}
           >
             {selectedType === 'gift' && (

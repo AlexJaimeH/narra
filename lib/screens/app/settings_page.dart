@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:html' as html;
+import 'dart:js' as js;
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -179,27 +180,11 @@ class _SettingsPageState extends State<SettingsPage> {
         throw Exception('Error al descargar datos: ${response.statusCode}');
       }
 
-      // Extract filename from Content-Disposition header
-      String filename = 'narra-mis-datos.json';
-      final contentDisposition = response.headers['content-disposition'];
-      if (contentDisposition != null) {
-        final filenameMatch = RegExp(r'filename="?([^"]+)"?').firstMatch(contentDisposition);
-        if (filenameMatch != null) {
-          filename = filenameMatch.group(1) ?? filename;
-        }
-      }
+      // Get JSON data from server
+      final jsonData = utf8.decode(response.bodyBytes);
 
-      // Create a blob and download it
-      final blob = html.Blob([response.bodyBytes], 'application/json');
-      final url = html.Url.createObjectUrlFromBlob(blob);
-      final anchor = html.AnchorElement(href: url)
-        ..setAttribute('download', filename)
-        ..style.display = 'none';
-
-      html.document.body?.append(anchor);
-      anchor.click();
-      anchor.remove();
-      html.Url.revokeObjectUrl(url);
+      // Call JavaScript function to generate ZIP in browser
+      js.context.callMethod('generateZipFromData', [jsonData]);
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

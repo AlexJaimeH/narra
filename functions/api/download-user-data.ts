@@ -18,27 +18,23 @@ export const onRequestOptions: PagesFunction<Env> = async () => {
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   try {
-    console.log('[download-user-data] Step 1: Checking authorization');
+    // Get authorization header
     const authHeader = request.headers.get('Authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      console.log('[download-user-data] ERROR: No authorization header');
       return json({ error: 'No autorizado' }, 401);
     }
 
     const token = authHeader.substring(7);
-    console.log('[download-user-data] Step 2: Getting Supabase config');
 
     const { credentials } = resolveSupabaseConfig(env);
     const supabaseUrl = credentials?.url;
     const serviceKey = credentials?.serviceKey;
 
     if (!supabaseUrl || !serviceKey) {
-      console.log('[download-user-data] ERROR: Missing Supabase credentials');
       return json({ error: 'Configuración de servidor incorrecta' }, 500);
     }
-    console.log('[download-user-data] Supabase URL:', supabaseUrl);
 
-    console.log('[download-user-data] Step 3: Verifying user token');
+    // Verify token and get user
     const userResponse = await fetch(`${supabaseUrl}/auth/v1/user`, {
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -47,7 +43,6 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     });
 
     if (!userResponse.ok) {
-      console.log('[download-user-data] ERROR: Invalid token, status:', userResponse.status);
       return json({ error: 'Token inválido o expirado' }, 401);
     }
 
@@ -55,15 +50,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     const userId = user.id;
 
     if (!userId) {
-      console.log('[download-user-data] ERROR: User ID not found in response');
       return json({ error: 'Usuario no encontrado' }, 404);
     }
-    console.log('[download-user-data] User verified:', userId);
 
     // Fetch user profile
     const userProfile = await fetchFromSupabase(supabaseUrl, serviceKey, 'users', `id=eq.${userId}`);
     const userName = (userProfile[0]?.name || 'Usuario').trim();
-    console.log('[download-user-data] User name:', userName);
 
     // Fetch stories
     const stories = await fetchFromSupabase(
@@ -126,27 +118,6 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       } else {
         completeData.borradores.push(storyData);
       }
-
-      console.log('[download-user-data] Step 10: Adding metadata file');
-      const metadata = {
-        exportado: new Date().toISOString(),
-        usuario: user.email,
-        nombre: userName,
-        total_historias: stories.length,
-        borradores: stories.filter((s: any) => !s.is_published).length,
-        publicadas: stories.filter((s: any) => s.is_published).length,
-      };
-      zip.file('info.txt', JSON.stringify(metadata, null, 2));
-      console.log('[download-user-data] Metadata file added');
-
-    } catch (processingError: any) {
-      console.error('[download-user-data] ERROR during processing:', processingError);
-      console.error('[download-user-data] Processing error details:', {
-        message: processingError?.message,
-        stack: processingError?.stack,
-        name: processingError?.name
-      });
-      return json({ error: 'Error al procesar datos', detail: String(processingError) }, 500);
     }
 
     // Generate filename
@@ -167,19 +138,6 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         'Content-Disposition': `attachment; filename="${filename}"`,
         ...CORS_HEADERS,
       },
-    });
-    console.log('[download-user-data] ===== REQUEST COMPLETED SUCCESSFULLY =====');
-    return response;
-
-  } catch (error: any) {
-    console.error('[download-user-data] ===== UNEXPECTED ERROR =====');
-    console.error('[download-user-data] Error type:', typeof error);
-    console.error('[download-user-data] Error:', error);
-    console.error('[download-user-data] Error details:', {
-      message: error?.message,
-      stack: error?.stack,
-      name: error?.name,
-      cause: error?.cause
     });
 
   } catch (error: any) {
@@ -228,15 +186,11 @@ async function fetchFromSupabase(
     });
 
     if (!response.ok) {
-      console.log(`[download-user-data] fetchFromSupabase: ${table} returned status ${response.status}`);
       return [];
     }
 
-    const data = await response.json();
-    console.log(`[download-user-data] fetchFromSupabase: ${table} returned ${Array.isArray(data) ? data.length : 'non-array'} results`);
-    return data;
+    return await response.json();
   } catch (error) {
-    console.error(`[download-user-data] fetchFromSupabase ERROR for ${table}:`, error);
     return [];
   }
 }

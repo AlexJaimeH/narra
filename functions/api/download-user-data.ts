@@ -57,29 +57,39 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     const userProfile = await fetchFromSupabase(supabaseUrl, serviceKey, 'users', `id=eq.${userId}`);
     const userName = (userProfile[0]?.name || 'Usuario').trim();
 
-    // Fetch stories
+    // CORREGIDO: usar user_id en lugar de author_id
     const stories = await fetchFromSupabase(
       supabaseUrl,
       serviceKey,
       'stories',
-      `author_id=eq.${userId}&order=created_at.desc`
+      `user_id=eq.${userId}&order=created_at.desc`
     );
 
-    // Build complete data structure
-    const completeData: any = {
-      metadata: {
-        exportado: new Date().toISOString(),
-        usuario: user.email,
-        nombre: userName,
-        total_historias: stories.length,
-      },
-      borradores: [],
-      publicadas: []
+    // Import fflate (más ligero que JSZip)
+    const { strToU8, zipSync } = await import('https://esm.sh/fflate@0.8.2');
+
+    // Create files structure for ZIP
+    const files: Record<string, Uint8Array> = {};
+
+    // Add metadata
+    const metadata = {
+      exportado: new Date().toISOString(),
+      usuario: user.email,
+      nombre: userName,
+      total_historias: stories.length,
+      borradores: stories.filter((s: any) => !s.is_published).length,
+      publicadas: stories.filter((s: any) => s.is_published).length,
     };
+    files['info.txt'] = strToU8(JSON.stringify(metadata, null, 2));
 
     // Process each story
     for (let i = 0; i < stories.length; i++) {
       const story = stories[i];
+      const isPublished = story.is_published;
+      const folderPrefix = isPublished ? 'publicadas/' : 'borradores/';
+
+      const storyTitle = sanitizeFileName(story.title || 'Sin título');
+      const storyPath = folderPrefix + storyTitle + '/';
 
       // Fetch related data
       const [photos, recordings, versions] = await Promise.all([
@@ -88,37 +98,44 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         fetchFromSupabase(supabaseUrl, serviceKey, 'story_versions', `story_id=eq.${story.id}&order=version_number.asc`),
       ]);
 
-      const storyData = {
-        titulo: story.title || 'Sin título',
-        contenido: stripHtml(story.content || ''),
-        extracto: story.excerpt || '',
-        transcripcion_voz: story.voice_transcript ? stripHtml(story.voice_transcript) : '',
-        fecha_historia: story.story_date || '',
-        fecha_creacion: story.created_at,
-        fecha_actualizacion: story.updated_at,
-        fecha_publicacion: story.published_at || '',
-        numero_palabras: story.word_count || 0,
-        imagenes: photos.map((p: any) => ({
-          url: p.photo_url,
-          posicion: p.position
-        })),
-        grabaciones: recordings.map((r: any) => ({
-          url: r.audio_url,
-          fecha: r.created_at
-        })),
-        versiones: versions.map((v: any) => ({
-          numero: v.version_number,
-          contenido: stripHtml(v.content || ''),
-          fecha: v.created_at
-        }))
-      };
+      // Add main story file
+      const storyText = createStoryText(story);
+      files[storyPath + 'historia.txt'] = strToU8(storyText);
 
-      if (story.is_published) {
-        completeData.publicadas.push(storyData);
-      } else {
-        completeData.borradores.push(storyData);
+      // Add image references
+      if (photos.length > 0) {
+        for (let j = 0; j < photos.length; j++) {
+          const photo = photos[j];
+          const extension = getFileExtension(photo.photo_url) || 'jpg';
+          const imageText = `URL de la imagen:\n${photo.photo_url}\n\nDescarga este archivo manualmente desde la URL.`;
+          files[storyPath + `imagenes/imagen-${j + 1}-${extension}.txt`] = strToU8(imageText);
+        }
+      }
+
+      // Add recording references
+      if (recordings.length > 0) {
+        for (let j = 0; j < recordings.length; j++) {
+          const recording = recordings[j];
+          if (recording.audio_url) {
+            const extension = getFileExtension(recording.audio_url) || 'mp3';
+            const audioText = `URL de la grabación:\n${recording.audio_url}\n\nDescarga este archivo manualmente desde la URL.`;
+            files[storyPath + `grabaciones/grabacion-${j + 1}-${extension}.txt`] = strToU8(audioText);
+          }
+        }
+      }
+
+      // Add versions
+      if (versions.length > 0) {
+        for (let j = 0; j < versions.length; j++) {
+          const version = versions[j];
+          const versionText = createVersionText(version, j + 1);
+          files[storyPath + `versiones/version-${version.version_number || (j + 1)}.txt`] = strToU8(versionText);
+        }
       }
     }
+
+    // Generate ZIP
+    const zipData = zipSync(files, { level: 6 });
 
     // Generate filename
     const now = new Date();
@@ -128,10 +145,10 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     const mmStr = mm < 10 ? '0' + mm : String(mm);
     const ddStr = dd < 10 ? '0' + dd : String(dd);
     const sanitizedName = sanitizeFileName(userName);
-    const filename = `${yy}${mmStr}${ddStr} Narra - ${sanitizedName}.json`;
+    const filename = `${yy}${mmStr}${ddStr} Narra - ${sanitizedName}.zip`;
 
-    // Return as JSON download
-    return new Response(JSON.stringify(completeData, null, 2), {
+    // Return as ZIP download
+    return new Response(zipData, {
       status: 200,
       headers: {
         'Content-Type': 'application/json',

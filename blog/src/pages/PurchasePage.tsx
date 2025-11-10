@@ -52,7 +52,7 @@ export const PurchasePage: React.FC = () => {
     },
   ];
 
-  const price = 990; // MXN
+  const price = 300; // MXN
 
   return (
     <div

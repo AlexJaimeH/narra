@@ -108,6 +108,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         body: JSON.stringify({
           type: 'magiclink',
           email: authorEmail,
+          options: {
+            redirect_to: `${(env as any).APP_URL || 'https://narra.mx'}/app`,
+          },
         }),
       }
     );

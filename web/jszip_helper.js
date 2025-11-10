@@ -52,6 +52,10 @@ window.generateZipFromData = async function(jsonData) {
 
             storyText += `📝 Creada: ${formatDate(historia.fecha_creacion)}\n`;
             storyText += `✏️  Última edición: ${formatDate(historia.fecha_actualizacion)}\n`;
+            if (historia.is_published && historia.fecha_publicacion) {
+                storyText += `📤 Publicada: ${formatDate(historia.fecha_publicacion)}\n`;
+            }
+            storyText += `📊 Estado: ${historia.is_published ? 'Publicada' : 'Borrador'}\n`;
 
             storyText += '\n' + '─'.repeat(80) + '\n\n';
 
@@ -66,6 +70,88 @@ window.generateZipFromData = async function(jsonData) {
             storyText += '\n\n' + '═'.repeat(80);
 
             zip.file(storyPath + 'historia.txt', storyText);
+
+            // Download and add photos
+            if (historia.fotos && historia.fotos.length > 0) {
+                const photosFolder = storyPath + 'imagenes/';
+                for (let i = 0; i < historia.fotos.length; i++) {
+                    const foto = historia.fotos[i];
+                    try {
+                        const response = await fetch(foto.url);
+                        if (response.ok) {
+                            const blob = await response.blob();
+                            const extension = foto.url.split('.').pop().split('?')[0] || 'jpg';
+                            const photoName = `foto_${i + 1}.${extension}`;
+                            zip.file(photosFolder + photoName, blob);
+
+                            if (foto.caption) {
+                                const captionName = `foto_${i + 1}_caption.txt`;
+                                zip.file(photosFolder + captionName, foto.caption);
+                            }
+                        }
+                    } catch (e) {
+                        console.warn('Error downloading photo:', foto.url, e);
+                    }
+                }
+            }
+
+            // Download and add voice recordings
+            if (historia.grabaciones && historia.grabaciones.length > 0) {
+                const recordingsFolder = storyPath + 'grabaciones/';
+                for (let i = 0; i < historia.grabaciones.length; i++) {
+                    const grabacion = historia.grabaciones[i];
+                    try {
+                        const response = await fetch(grabacion.url);
+                        if (response.ok) {
+                            const blob = await response.blob();
+                            const extension = grabacion.url.split('.').pop().split('?')[0] || 'mp3';
+                            const recordingName = `grabacion_${i + 1}.${extension}`;
+                            zip.file(recordingsFolder + recordingName, blob);
+
+                            if (grabacion.transcripcion) {
+                                const transcriptName = `grabacion_${i + 1}_transcripcion.txt`;
+                                let transcriptText = `Grabación: ${grabacion.titulo || 'Sin título'}\n`;
+                                transcriptText += `Fecha: ${formatDate(grabacion.fecha)}\n`;
+                                if (grabacion.duracion) {
+                                    const minutos = Math.floor(grabacion.duracion / 60);
+                                    const segundos = Math.floor(grabacion.duracion % 60);
+                                    const seg = segundos < 10 ? '0' + segundos : String(segundos);
+                                    transcriptText += `Duración: ${minutos}:${seg}\n`;
+                                }
+                                transcriptText += `\n${'─'.repeat(40)}\n\n`;
+                                transcriptText += grabacion.transcripcion;
+                                zip.file(recordingsFolder + transcriptName, transcriptText);
+                            }
+                        }
+                    } catch (e) {
+                        console.warn('Error downloading recording:', grabacion.url, e);
+                    }
+                }
+            }
+
+            // Add version history
+            if (historia.versiones && historia.versiones.length > 0) {
+                const versionsFolder = storyPath + 'versiones/';
+                for (let i = 0; i < historia.versiones.length; i++) {
+                    const version = historia.versiones[i];
+                    let versionText = `Versión ${i + 1}\n`;
+                    versionText += '═'.repeat(80) + '\n\n';
+                    versionText += `Guardada: ${formatDate(version.fecha)}\n`;
+                    if (version.razon) {
+                        versionText += `Razón: ${version.razon}\n`;
+                    }
+                    versionText += '\n' + '─'.repeat(80) + '\n\n';
+                    versionText += `TÍTULO: ${version.titulo}\n\n`;
+                    versionText += '─'.repeat(80) + '\n\n';
+                    versionText += stripHtml(version.contenido);
+                    versionText += '\n\n' + '═'.repeat(80);
+
+                    const num = i + 1;
+                    const numStr = num < 10 ? '00' + num : (num < 100 ? '0' + num : String(num));
+                    const versionName = `version_${numStr}.txt`;
+                    zip.file(versionsFolder + versionName, versionText);
+                }
+            }
         }
 
         // Generate ZIP

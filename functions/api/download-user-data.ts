@@ -53,9 +53,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       return json({ error: 'Usuario no encontrado' }, 404);
     }
 
-    // Fetch user profile
-    const userProfileUrl = `${supabaseUrl}/rest/v1/users?id=eq.${userId}`;
-    const userProfileRes = await fetch(userProfileUrl, {
+    // Fetch user profile from user_settings
+    const userSettingsUrl = `${supabaseUrl}/rest/v1/user_settings?user_id=eq.${userId}`;
+    const userSettingsRes = await fetch(userSettingsUrl, {
       headers: {
         'Content-Type': 'application/json',
         'apikey': serviceKey,
@@ -64,14 +64,17 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     });
 
     let userName = 'Usuario';
-    if (userProfileRes.ok) {
-      const profiles = await userProfileRes.json();
-      if (profiles && profiles.length > 0) {
-        userName = profiles[0].name || 'Usuario';
+    if (userSettingsRes.ok) {
+      const settings = await userSettingsRes.json();
+      if (settings && settings.length > 0) {
+        userName = settings[0].public_author_name || user.user_metadata?.full_name || user.email || 'Usuario';
       }
+    } else {
+      // Fallback to user metadata
+      userName = user.user_metadata?.full_name || user.email || 'Usuario';
     }
 
-    // Fetch stories - SIMPLE, no relacionados
+    // Fetch stories with all related data
     const storiesUrl = `${supabaseUrl}/rest/v1/stories?user_id=eq.${userId}&order=created_at.desc`;
     const storiesRes = await fetch(storiesUrl, {
       headers: {
@@ -86,24 +89,88 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       stories = await storiesRes.json();
     }
 
-    // Build MINIMAL data structure
+    // Fetch all related data for stories
+    const storyIds = stories.map((s: any) => s.id);
+
+    // Fetch photos
+    const photosUrl = `${supabaseUrl}/rest/v1/story_photos?story_id=in.(${storyIds.join(',')})&order=position.asc`;
+    const photosRes = await fetch(photosUrl, {
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': serviceKey,
+        'Authorization': `Bearer ${serviceKey}`,
+      },
+    });
+    const allPhotos = photosRes.ok ? await photosRes.json() : [];
+
+    // Fetch recordings
+    const recordingsUrl = `${supabaseUrl}/rest/v1/voice_recordings?story_id=in.(${storyIds.join(',')})&order=created_at.asc`;
+    const recordingsRes = await fetch(recordingsUrl, {
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': serviceKey,
+        'Authorization': `Bearer ${serviceKey}`,
+      },
+    });
+    const allRecordings = recordingsRes.ok ? await recordingsRes.json() : [];
+
+    // Fetch versions
+    const versionsUrl = `${supabaseUrl}/rest/v1/story_versions?story_id=in.(${storyIds.join(',')})&order=saved_at.asc`;
+    const versionsRes = await fetch(versionsUrl, {
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': serviceKey,
+        'Authorization': `Bearer ${serviceKey}`,
+      },
+    });
+    const allVersions = versionsRes.ok ? await versionsRes.json() : [];
+
+    // Build complete data structure
     const completeData: any = {
       metadata: {
         exportado: new Date().toISOString(),
         usuario: user.email,
         nombre: userName,
         total_historias: stories.length,
-        borradores: stories.filter((s: any) => !s.is_published).length,
-        publicadas: stories.filter((s: any) => s.is_published).length,
+        borradores: stories.filter((s: any) => s.status !== 'published').length,
+        publicadas: stories.filter((s: any) => s.status === 'published').length,
       },
-      historias: stories.map((story: any) => ({
-        titulo: story.title || 'Sin título',
-        contenido: story.content || '',
-        extracto: story.excerpt || '',
-        fecha_creacion: story.created_at,
-        fecha_actualizacion: story.updated_at,
-        is_published: story.is_published || false,
-      }))
+      historias: stories.map((story: any) => {
+        const photos = allPhotos.filter((p: any) => p.story_id === story.id);
+        const recordings = allRecordings.filter((r: any) => r.story_id === story.id);
+        const versions = allVersions.filter((v: any) => v.story_id === story.id);
+
+        return {
+          titulo: story.title || 'Sin título',
+          contenido: story.content || '',
+          extracto: story.excerpt || '',
+          fecha_creacion: story.created_at,
+          fecha_actualizacion: story.updated_at,
+          fecha_publicacion: story.published_at,
+          is_published: story.status === 'published',
+          status: story.status || 'draft',
+          fotos: photos.map((p: any) => ({
+            url: p.url,
+            path: p.path,
+            caption: p.caption || '',
+            position: p.position,
+          })),
+          grabaciones: recordings.map((r: any) => ({
+            url: r.audio_url,
+            path: r.audio_path,
+            titulo: r.story_title || '',
+            transcripcion: r.transcript || '',
+            duracion: r.duration_seconds,
+            fecha: r.created_at,
+          })),
+          versiones: versions.map((v: any) => ({
+            titulo: v.title || '',
+            contenido: v.content || '',
+            razon: v.reason || '',
+            fecha: v.saved_at,
+          })),
+        };
+      })
     };
 
     // Return as JSON

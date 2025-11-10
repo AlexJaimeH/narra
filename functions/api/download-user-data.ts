@@ -77,10 +77,16 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       },
       historias: []
     };
+    files['info.txt'] = strToU8(JSON.stringify(metadata, null, 2));
 
     // Process each story
     for (let i = 0; i < stories.length; i++) {
       const story = stories[i];
+      const isPublished = story.is_published;
+      const folderPrefix = isPublished ? 'publicadas/' : 'borradores/';
+
+      const storyTitle = sanitizeFileName(story.title || 'Sin título');
+      const storyPath = folderPrefix + storyTitle + '/';
 
       // Fetch related data
       const [photos, recordings, versions] = await Promise.all([

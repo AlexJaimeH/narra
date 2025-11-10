@@ -17,6 +17,7 @@ export const onRequestOptions: PagesFunction<Env> = async () => {
 };
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
+  // ULTRA SIMPLIFIED VERSION FOR DEBUGGING
   try {
     // Get authorization header
     const authHeader = request.headers.get('Authorization');
@@ -360,11 +361,4 @@ async function fetchFromSupabase(
   } catch (error) {
     return [];
   }
-}
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
-  });
-}
+};

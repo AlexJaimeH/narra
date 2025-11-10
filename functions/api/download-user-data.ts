@@ -54,18 +54,39 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     }
 
     // Fetch user profile
-    const userProfile = await fetchFromSupabase(supabaseUrl, serviceKey, 'users', `id=eq.${userId}`);
-    const userName = (userProfile[0]?.name || 'Usuario').trim();
+    const userProfileUrl = `${supabaseUrl}/rest/v1/users?id=eq.${userId}`;
+    const userProfileRes = await fetch(userProfileUrl, {
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': serviceKey,
+        'Authorization': `Bearer ${serviceKey}`,
+      },
+    });
 
-    // Fetch stories with user_id
-    const stories = await fetchFromSupabase(
-      supabaseUrl,
-      serviceKey,
-      'stories',
-      `user_id=eq.${userId}&order=created_at.desc`
-    );
+    let userName = 'Usuario';
+    if (userProfileRes.ok) {
+      const profiles = await userProfileRes.json();
+      if (profiles && profiles.length > 0) {
+        userName = profiles[0].name || 'Usuario';
+      }
+    }
 
-    // Build complete data structure for client-side ZIP generation
+    // Fetch stories - SIMPLE, no relacionados
+    const storiesUrl = `${supabaseUrl}/rest/v1/stories?user_id=eq.${userId}&order=created_at.desc`;
+    const storiesRes = await fetch(storiesUrl, {
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': serviceKey,
+        'Authorization': `Bearer ${serviceKey}`,
+      },
+    });
+
+    let stories = [];
+    if (storiesRes.ok) {
+      stories = await storiesRes.json();
+    }
+
+    // Build MINIMAL data structure
     const completeData: any = {
       metadata: {
         exportado: new Date().toISOString(),
@@ -75,48 +96,17 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         borradores: stories.filter((s: any) => !s.is_published).length,
         publicadas: stories.filter((s: any) => s.is_published).length,
       },
-      historias: []
-    };
-
-    // Process each story
-    for (let i = 0; i < stories.length; i++) {
-      const story = stories[i];
-
-      // Fetch related data
-      const [photos, recordings, versions] = await Promise.all([
-        fetchFromSupabase(supabaseUrl, serviceKey, 'story_photos', `story_id=eq.${story.id}&order=position.asc`),
-        fetchFromSupabase(supabaseUrl, serviceKey, 'voice_recordings', `story_id=eq.${story.id}&order=created_at.asc`),
-        fetchFromSupabase(supabaseUrl, serviceKey, 'story_versions', `story_id=eq.${story.id}&order=version_number.asc`),
-      ]);
-
-      completeData.historias.push({
+      historias: stories.map((story: any) => ({
         titulo: story.title || 'Sin título',
         contenido: story.content || '',
         extracto: story.excerpt || '',
-        transcripcion_voz: story.voice_transcript || '',
-        fecha_historia: story.story_date || '',
         fecha_creacion: story.created_at,
         fecha_actualizacion: story.updated_at,
-        fecha_publicacion: story.published_at || '',
-        numero_palabras: story.word_count || 0,
         is_published: story.is_published || false,
-        imagenes: photos.map((p: any) => ({
-          url: p.photo_url,
-          posicion: p.position
-        })),
-        grabaciones: recordings.map((r: any) => ({
-          url: r.audio_url,
-          fecha: r.created_at
-        })),
-        versiones: versions.map((v: any) => ({
-          numero: v.version_number,
-          contenido: v.content || '',
-          fecha: v.created_at
-        }))
-      });
-    }
+      }))
+    };
 
-    // Return as JSON (client will generate ZIP)
+    // Return as JSON
     return new Response(JSON.stringify(completeData), {
       status: 200,
       headers: {
@@ -128,36 +118,11 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   } catch (error: any) {
     return json({
       error: 'Error al generar descarga de datos',
-      detail: error?.message || String(error)
+      detail: error?.message || String(error),
+      stack: error?.stack || ''
     }, 500);
   }
 };
-
-async function fetchFromSupabase(
-  supabaseUrl: string,
-  serviceKey: string,
-  table: string,
-  query: string
-): Promise<any[]> {
-  try {
-    const url = `${supabaseUrl}/rest/v1/${table}?${query}`;
-    const response = await fetch(url, {
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': serviceKey,
-        'Authorization': `Bearer ${serviceKey}`,
-      },
-    });
-
-    if (!response.ok) {
-      return [];
-    }
-
-    return await response.json();
-  } catch (error) {
-    return [];
-  }
-}
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {

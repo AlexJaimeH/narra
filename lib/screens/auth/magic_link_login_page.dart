@@ -114,17 +114,23 @@ class _MagicLinkLoginPageState extends State<MagicLinkLoginPage> {
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
-      body: Center(
-        child: SingleChildScrollView(
-          padding: EdgeInsets.symmetric(
-            horizontal: isDesktop ? 48.0 : (isTablet ? 40.0 : 24.0),
-            vertical: isDesktop ? 64.0 : (isTablet ? 48.0 : 32.0),
-          ),
-          child: Container(
-            constraints: BoxConstraints(maxWidth: maxWidth),
-            child: _emailSent
-                ? _buildSuccessView(theme, colorScheme, isDesktop)
-                : _buildLoginForm(theme, colorScheme, isDesktop),
+      resizeToAvoidBottomInset: true,
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            physics: const ClampingScrollPhysics(),
+            padding: EdgeInsets.only(
+              left: isDesktop ? 48.0 : (isTablet ? 40.0 : 24.0),
+              right: isDesktop ? 48.0 : (isTablet ? 40.0 : 24.0),
+              top: isDesktop ? 64.0 : (isTablet ? 48.0 : 32.0),
+              bottom: MediaQuery.of(context).viewInsets.bottom + (isDesktop ? 64.0 : (isTablet ? 48.0 : 32.0)),
+            ),
+            child: Container(
+              constraints: BoxConstraints(maxWidth: maxWidth),
+              child: _emailSent
+                  ? _buildSuccessView(theme, colorScheme, isDesktop)
+                  : _buildLoginForm(theme, colorScheme, isDesktop),
+            ),
           ),
         ),
       ),

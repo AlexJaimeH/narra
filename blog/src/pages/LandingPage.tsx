@@ -96,13 +96,9 @@ export const LandingPage: React.FC = () => {
                 Iniciar sesión
               </a>
               <motion.a
-                href="#comprar"
+                href="/purchase?type=gift"
                 className="px-6 py-2.5 text-white rounded-xl font-semibold shadow-lg"
                 style={{ background: 'linear-gradient(135deg, #4DB3A8 0%, #38827A 100%)' }}
-                onClick={(e) => {
-                  e.preventDefault();
-                  scrollToSection(pricingRef);
-                }}
                 whileHover={{ scale: 1.05, boxShadow: '0 20px 40px rgba(77, 179, 168, 0.3)' }}
                 whileTap={{ scale: 0.95 }}
               >
@@ -149,13 +145,9 @@ export const LandingPage: React.FC = () => {
                 Iniciar sesión
               </a>
               <a
-                href="#comprar"
+                href="/purchase?type=gift"
                 className="px-6 py-3 text-white rounded-xl text-center font-semibold"
                 style={{ background: 'linear-gradient(135deg, #4DB3A8 0%, #38827A 100%)' }}
-                onClick={(e) => {
-                  e.preventDefault();
-                  scrollToSection(pricingRef);
-                }}
               >
                 Comprar
               </a>

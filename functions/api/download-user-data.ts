@@ -151,7 +151,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     return new Response(zipData, {
       status: 200,
       headers: {
-        'Content-Type': 'application/zip',
+        'Content-Type': 'application/json',
         'Content-Disposition': `attachment; filename="${filename}"`,
         ...CORS_HEADERS,
       },
@@ -173,90 +173,6 @@ function sanitizeFileName(name: string): string {
     .substring(0, 200);
 }
 
-function createStoryText(story: any): string {
-  const lines = [];
-
-  lines.push('═'.repeat(80));
-  lines.push(`  ${story.title || 'Sin título'}`);
-  lines.push('═'.repeat(80));
-  lines.push('');
-
-  if (story.story_date) {
-    lines.push(`📅 Fecha de la historia: ${formatDate(story.story_date)}`);
-  }
-
-  lines.push(`📝 Creada: ${formatDate(story.created_at)}`);
-  lines.push(`✏️  Última edición: ${formatDate(story.updated_at)}`);
-
-  if (story.is_published && story.published_at) {
-    lines.push(`🌐 Publicada: ${formatDate(story.published_at)}`);
-  }
-
-  if (story.word_count) {
-    lines.push(`📊 Palabras: ${story.word_count}`);
-  }
-
-  lines.push('');
-  lines.push('─'.repeat(80));
-  lines.push('');
-
-  if (story.excerpt) {
-    lines.push('EXTRACTO:');
-    lines.push(story.excerpt);
-    lines.push('');
-    lines.push('─'.repeat(80));
-    lines.push('');
-  }
-
-  lines.push('CONTENIDO:');
-  lines.push('');
-  const content = stripHtml(story.content || '');
-  lines.push(content);
-
-  if (story.voice_transcript) {
-    lines.push('');
-    lines.push('');
-    lines.push('─'.repeat(80));
-    lines.push('TRANSCRIPCIÓN DE VOZ:');
-    lines.push('');
-    lines.push(stripHtml(story.voice_transcript));
-  }
-
-  lines.push('');
-  lines.push('');
-  lines.push('═'.repeat(80));
-
-  return lines.join('\n');
-}
-
-function createVersionText(version: any, versionNum: number): string {
-  const lines = [];
-
-  lines.push(`VERSIÓN ${versionNum}`);
-  lines.push('─'.repeat(60));
-  lines.push(`Fecha: ${formatDate(version.created_at)}`);
-  if (version.version_number) {
-    lines.push(`Número de versión: ${version.version_number}`);
-  }
-  lines.push('');
-  lines.push('CONTENIDO:');
-  lines.push('');
-  lines.push(stripHtml(version.content || ''));
-
-  return lines.join('\n');
-}
-
-function formatDate(dateString: string): string {
-  const date = new Date(dateString);
-  return date.toLocaleString('es-ES', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
-}
-
 function stripHtml(html: string): string {
   return html
     .replace(/<br\s*\/?>/gi, '\n')
@@ -268,17 +184,6 @@ function stripHtml(html: string): string {
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .trim();
-}
-
-function getFileExtension(url: string): string | null {
-  try {
-    const urlObj = new URL(url);
-    const pathname = urlObj.pathname;
-    const match = pathname.match(/\.([a-zA-Z0-9]+)$/);
-    return match ? match[1] : null;
-  } catch {
-    return null;
-  }
 }
 
 async function fetchFromSupabase(

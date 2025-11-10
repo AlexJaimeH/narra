@@ -150,13 +150,13 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
           is_published: story.status === 'published',
           status: story.status || 'draft',
           fotos: photos.map((p: any) => ({
-            url: p.url,
+            url: p.path ? `${supabaseUrl}/storage/v1/object/public/story-photos/${p.path}` : null,
             path: p.path,
             caption: p.caption || '',
             position: p.position,
           })),
           grabaciones: recordings.map((r: any) => ({
-            url: r.audio_url,
+            url: r.audio_path ? `${supabaseUrl}/storage/v1/object/public/voice-recordings/${r.audio_path}` : null,
             path: r.audio_path,
             titulo: r.story_title || '',
             transcripcion: r.transcript || '',

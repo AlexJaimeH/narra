@@ -77,6 +77,10 @@ window.generateZipFromData = async function(jsonData) {
                 for (let i = 0; i < historia.fotos.length; i++) {
                     const foto = historia.fotos[i];
                     try {
+                        if (!foto.url) {
+                            console.warn('Foto sin URL:', foto);
+                            continue;
+                        }
                         const response = await fetch(foto.url);
                         if (response.ok) {
                             const blob = await response.blob();
@@ -101,6 +105,10 @@ window.generateZipFromData = async function(jsonData) {
                 for (let i = 0; i < historia.grabaciones.length; i++) {
                     const grabacion = historia.grabaciones[i];
                     try {
+                        if (!grabacion.url) {
+                            console.warn('Grabación sin URL:', grabacion);
+                            continue;
+                        }
                         const response = await fetch(grabacion.url);
                         if (response.ok) {
                             const blob = await response.blob();

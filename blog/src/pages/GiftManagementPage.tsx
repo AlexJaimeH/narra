@@ -40,6 +40,7 @@ export const GiftManagementPage: React.FC = () => {
   // Other states
   const [downloading, setDownloading] = useState(false);
   const [sendingLink, setSendingLink] = useState(false);
+  const [resendingSubLink, setResendingSubLink] = useState<string | null>(null);
 
   useEffect(() => {
     const tokenParam = searchParams.get('token');
@@ -214,6 +215,33 @@ export const GiftManagementPage: React.FC = () => {
       alert('Error de conexión');
     } finally {
       setSendingLink(false);
+    }
+  };
+
+  const handleResendSubscriberLink = async (subscriberId: string, subscriberName: string) => {
+    if (!confirm(`¿Reenviar enlace de acceso a ${subscriberName}?`)) {
+      return;
+    }
+
+    setResendingSubLink(subscriberId);
+    try {
+      const response = await fetch('/api/gift-management-resend-subscriber-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, subscriberId }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        alert('✅ Enlace reenviado exitosamente');
+      } else {
+        alert(data.error || 'Error al reenviar enlace');
+      }
+    } catch (err) {
+      alert('Error de conexión');
+    } finally {
+      setResendingSubLink(null);
     }
   };
 
@@ -450,20 +478,46 @@ export const GiftManagementPage: React.FC = () => {
                       {subscribers.map((sub) => (
                         <div
                           key={sub.id}
-                          className="flex items-center justify-between p-4 rounded-xl"
+                          className="p-4 rounded-xl"
                           style={{ background: '#f9fafb', border: `1px solid ${NarraColors.border.light}` }}
                         >
-                          <div>
-                            <p className="font-semibold">{sub.name}</p>
-                            <p className="text-sm" style={{ color: NarraColors.text.light }}>{sub.email}</p>
+                          <div className="flex items-start justify-between mb-3">
+                            <div className="flex-1">
+                              <p className="font-semibold text-lg">{sub.name}</p>
+                              <p className="text-sm mb-2" style={{ color: NarraColors.text.light }}>{sub.email}</p>
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className="inline-block px-2 py-1 rounded-md text-xs font-semibold"
+                                  style={{
+                                    background: sub.status === 'active' ? '#D1FAE5' : '#FEE2E2',
+                                    color: sub.status === 'active' ? '#065F46' : '#991B1B',
+                                  }}
+                                >
+                                  {sub.status === 'active' ? '✓ Activo' : '✗ Inactivo'}
+                                </span>
+                                <span className="text-xs" style={{ color: NarraColors.text.light }}>
+                                  Agregado: {new Date(sub.added_at).toLocaleDateString()}
+                                </span>
+                              </div>
+                            </div>
                           </div>
-                          <button
-                            onClick={() => handleRemoveSubscriber(sub.id)}
-                            className="px-4 py-2 rounded-lg font-semibold text-sm"
-                            style={{ background: '#FEE2E2', color: NarraColors.status.error }}
-                          >
-                            Eliminar
-                          </button>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleResendSubscriberLink(sub.id, sub.name)}
+                              disabled={resendingSubLink === sub.id}
+                              className="flex-1 px-4 py-2 rounded-lg font-semibold text-sm disabled:opacity-50"
+                              style={{ background: '#E8F5F4', color: NarraColors.brand.primary }}
+                            >
+                              {resendingSubLink === sub.id ? 'Enviando...' : '📧 Reenviar Enlace'}
+                            </button>
+                            <button
+                              onClick={() => handleRemoveSubscriber(sub.id)}
+                              className="px-4 py-2 rounded-lg font-semibold text-sm"
+                              style={{ background: '#FEE2E2', color: NarraColors.status.error }}
+                            >
+                              🗑️ Eliminar
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>

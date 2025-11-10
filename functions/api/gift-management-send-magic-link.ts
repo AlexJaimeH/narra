@@ -129,9 +129,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     }
 
     // Ensure magic link redirects to /app
-    // Transform: https://narra.mx/#access_token=... → https://narra.mx/app#access_token=...
+    // Transform: https://narra.mx/#access_token=... → https://narra.mx/app/#access_token=...
     const appUrl = (env as any).APP_URL || 'https://narra.mx';
-    magicLink = magicLink.replace(appUrl + '/#', appUrl + '/app#');
+    magicLink = magicLink.replace(appUrl + '/#', appUrl + '/app/#');
 
     // Send email
     console.log('[gift-management-send-magic-link] Sending magic link email...');

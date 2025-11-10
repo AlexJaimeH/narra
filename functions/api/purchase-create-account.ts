@@ -205,9 +205,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     const appUrl = env.APP_URL || 'https://narra.mx';
 
     // Ensure magic link redirects to /app
-    // Transform: https://narra.mx/#access_token=... → https://narra.mx/app#access_token=...
+    // Transform: https://narra.mx/#access_token=... → https://narra.mx/app/#access_token=...
     if (magicLink) {
-      magicLink = magicLink.replace(appUrl + '/#', appUrl + '/app#');
+      magicLink = magicLink.replace(appUrl + '/#', appUrl + '/app/#');
     }
 
     // Send emails

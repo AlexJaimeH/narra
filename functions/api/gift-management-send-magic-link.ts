@@ -122,16 +122,14 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     }
 
     const magicLinkData = await magicLinkResponse.json();
-    let magicLink = magicLinkData.action_link || '';
+    const magicLink = magicLinkData.action_link || '';
 
     if (!magicLink) {
       return json({ error: 'Error al generar enlace de acceso' }, 500);
     }
 
-    // Ensure magic link redirects to /app
-    // Transform: https://narra.mx/#access_token=... → https://narra.mx/app/#access_token=...
-    const appUrl = (env as any).APP_URL || 'https://narra.mx';
-    magicLink = magicLink.replace(appUrl + '/#', appUrl + '/app/#');
+    // The magic link already includes the redirect_to parameter, so we don't need to transform it
+    console.log('[gift-management-send-magic-link] Magic link generated:', magicLink);
 
     // Send email
     console.log('[gift-management-send-magic-link] Sending magic link email...');

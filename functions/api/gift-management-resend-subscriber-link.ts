@@ -77,7 +77,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     // Get subscriber and verify it belongs to this author
     console.log('[gift-management-resend-subscriber-link] Getting subscriber...');
     const subscriberResponse = await fetch(
-      `${env.SUPABASE_URL}/rest/v1/subscribers?id=eq.${subscriberId}&author_id=eq.${authorUserId}&select=*`,
+      `${env.SUPABASE_URL}/rest/v1/subscribers?id=eq.${subscriberId}&user_id=eq.${authorUserId}&select=*`,
       {
         headers: {
           'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
@@ -99,16 +99,16 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
     const subscriber = subscribers[0];
 
-    // Get the subscriber's magic_link from the database
-    const magicLink = subscriber.magic_link;
+    // Get the subscriber's access_token from the database
+    const accessToken = subscriber.access_token;
 
-    if (!magicLink) {
-      return json({ error: 'Magic link no encontrado para este suscriptor' }, 500);
+    if (!accessToken) {
+      return json({ error: 'Token de acceso no encontrado para este suscriptor' }, 500);
     }
 
     // Construct the full magic link URL
     const appUrl = (env as any).APP_URL || 'https://narra.mx';
-    const fullMagicLink = `${appUrl}/subscriber/${subscriber.author_id}?token=${magicLink}`;
+    const fullMagicLink = `${appUrl}/subscriber/${authorUserId}?token=${accessToken}`;
 
     // Send email to subscriber
     console.log('[gift-management-resend-subscriber-link] Sending email to subscriber...');

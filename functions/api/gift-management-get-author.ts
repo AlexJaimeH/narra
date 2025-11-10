@@ -104,7 +104,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
     // Get subscribers
     console.log('[gift-management-get-author] Getting subscribers...');
     const subscribersResponse = await fetch(
-      `${env.SUPABASE_URL}/rest/v1/subscribers?author_id=eq.${authorUserId}&select=id,name,email,status,created_at`,
+      `${env.SUPABASE_URL}/rest/v1/subscribers?user_id=eq.${authorUserId}&select=id,name,email,status,created_at`,
       {
         headers: {
           'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,

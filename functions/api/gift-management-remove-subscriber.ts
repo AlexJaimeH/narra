@@ -70,7 +70,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     // Verify subscriber belongs to this author
     console.log('[gift-management-remove-subscriber] Verifying subscriber ownership...');
     const subscriberResponse = await fetch(
-      `${env.SUPABASE_URL}/rest/v1/subscribers?id=eq.${subscriberId}&author_id=eq.${authorUserId}&select=id`,
+      `${env.SUPABASE_URL}/rest/v1/subscribers?id=eq.${subscriberId}&user_id=eq.${authorUserId}&select=id`,
       {
         headers: {
           'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,

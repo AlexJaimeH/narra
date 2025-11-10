@@ -132,50 +132,28 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         const storyText = createStoryText(story);
         storyFolder.file('historia.txt', storyText);
 
-        // Download and add images if they exist
+        // Add images as text references if they exist
+        // TEMPORARY: Not downloading actual files to debug 500 error
         if (photos.length > 0) {
           const imagesFolder = storyFolder.folder('imagenes');
           for (let j = 0; j < photos.length; j++) {
             const photo = photos[j];
-            try {
-              const imageData = await downloadFile(photo.photo_url);
-              if (imageData) {
-                const extension = getFileExtension(photo.photo_url) || 'jpg';
-                imagesFolder?.file(`imagen-${j + 1}.${extension}`, imageData, { binary: true });
-                console.log(`[download-user-data] Downloaded image ${j + 1}/${photos.length}`);
-              } else {
-                imagesFolder?.file(`imagen-${j + 1}-url.txt`, photo.photo_url);
-              }
-            } catch (error) {
-              console.error(`[download-user-data] Error downloading image ${j + 1}:`, error);
-              // Add a text file indicating the image URL if download fails
-              imagesFolder?.file(`imagen-${j + 1}-url.txt`, photo.photo_url);
-            }
+            imagesFolder?.file(`imagen-${j + 1}-url.txt`, `URL: ${photo.photo_url}\n\nNota: La descarga de archivos multimedia se habilitará una vez resuelto el error inicial.`);
           }
+          console.log(`[download-user-data] Added ${photos.length} image references`);
         }
 
-        // Download and add recordings if they exist
+        // Add recordings as text references if they exist
+        // TEMPORARY: Not downloading actual files to debug 500 error
         if (recordings.length > 0) {
           const recordingsFolder = storyFolder.folder('grabaciones');
           for (let j = 0; j < recordings.length; j++) {
             const recording = recordings[j];
             if (recording.audio_url) {
-              try {
-                const audioData = await downloadFile(recording.audio_url);
-                if (audioData) {
-                  const extension = getFileExtension(recording.audio_url) || 'mp3';
-                  recordingsFolder?.file(`grabacion-${j + 1}.${extension}`, audioData, { binary: true });
-                  console.log(`[download-user-data] Downloaded recording ${j + 1}/${recordings.length}`);
-                } else {
-                  recordingsFolder?.file(`grabacion-${j + 1}-url.txt`, recording.audio_url);
-                }
-              } catch (error) {
-                console.error(`[download-user-data] Error downloading recording ${j + 1}:`, error);
-                // Add a text file indicating the recording URL if download fails
-                recordingsFolder?.file(`grabacion-${j + 1}-url.txt`, recording.audio_url);
-              }
+              recordingsFolder?.file(`grabacion-${j + 1}-url.txt`, `URL: ${recording.audio_url}\n\nNota: La descarga de archivos multimedia se habilitará una vez resuelto el error inicial.`);
             }
           }
+          console.log(`[download-user-data] Added ${recordings.length} recording references`);
         }
 
         // Add version history if it exists

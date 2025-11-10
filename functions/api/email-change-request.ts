@@ -177,9 +177,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     // Determinar la URL base
     const appUrl = env.APP_URL || 'https://narra.mx';
 
-    // Construir los links
-    const confirmLink = `${appUrl}/app/email-change-confirm?token=${confirmationToken}`;
-    const revertLink = `${appUrl}/app/email-change-revert?token=${revertToken}`;
+    // Construir los links (páginas React, no Flutter)
+    const confirmLink = `${appUrl}/email-change-confirm?token=${confirmationToken}`;
+    const revertLink = `${appUrl}/email-change-revert?token=${revertToken}`;
 
     // Enviar email al correo viejo
     console.log('[email-change-request] Sending email to old address...');

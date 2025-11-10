@@ -52,69 +52,49 @@
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
     }
 
-    /* Loading spinner */
-    .loading-container {
+    #splash {
       position: fixed;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
       display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
       background: linear-gradient(135deg, #fdfbf7 0%, #f0ebe3 100%);
       z-index: 9999;
     }
 
-    .loading-spinner {
-      width: 50px;
-      height: 50px;
-      border: 4px solid #f3f4f6;
-      border-top-color: #4DB3A8;
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
+    #splash-logo {
+      width: 200px;
+      height: 60px;
     }
 
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-
-    .loading-text {
-      margin-top: 20px;
-      color: #38827A;
-      font-weight: 600;
-      font-size: 16px;
+    #splash-logo img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      filter: drop-shadow(0 10px 40px rgba(77, 179, 168, 0.2));
     }
   </style>
 </head>
 <body>
-  <div class="loading-container" id="loading">
-    <div>
-      <div class="loading-spinner"></div>
-      <div class="loading-text">Cargando...</div>
+  <div id="splash">
+    <div id="splash-logo">
+      <img src="splash-logo.png" alt="Narra">
     </div>
   </div>
 
   <script>
-    // Hide loading screen when Flutter app is ready
     window.addEventListener('flutter-first-frame', function() {
-      var loading = document.getElementById('loading');
-      if (loading) {
-        loading.style.display = 'none';
+      var splash = document.getElementById('splash');
+      if (splash) {
+        splash.style.opacity = '0';
+        splash.style.transition = 'opacity 0.3s';
+        setTimeout(function() { splash.remove(); }, 300);
       }
     });
-
-    // Fallback: hide after 3 seconds
-    setTimeout(function() {
-      var loading = document.getElementById('loading');
-      if (loading) {
-        loading.style.opacity = '0';
-        loading.style.transition = 'opacity 0.3s';
-        setTimeout(function() {
-          loading.style.display = 'none';
-        }, 300);
-      }
-    }, 3000);
   </script>
 
   <script src="flutter_bootstrap.js" async></script>

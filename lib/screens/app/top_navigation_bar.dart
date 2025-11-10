@@ -225,35 +225,20 @@ class _Brand extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    return Row(
-      children: [
-        Container(
-          height: 40,
-          width: 40,
-          decoration: BoxDecoration(
-            color: colorScheme.primary,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            'N',
-            style: theme.textTheme.titleMedium?.copyWith(
-              color: colorScheme.onPrimary,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Text(
+    return Image.network(
+      '/app/logo-horizontal.png',
+      height: 32,
+      fit: BoxFit.contain,
+      errorBuilder: (context, error, stackTrace) {
+        // Fallback si la imagen no carga
+        return const Text(
           'Narra',
-          style: theme.textTheme.titleLarge?.copyWith(
+          style: TextStyle(
+            fontSize: 20,
             fontWeight: FontWeight.w700,
           ),
-        ),
-      ],
+        );
+      },
     );
   }
 }

@@ -82,7 +82,7 @@ Se ejecuta ANTES de que Cloudflare intente servir cualquier archivo, garantizand
 
 Una vez que el workflow termine de ejecutarse:
 
-1. Ve a https://narra-8m1.pages.dev/app/
+1. Ve a https://narra.mx/app/
 2. Navega a cualquier parte de la app de Flutter
 3. **Presiona F5 o Ctrl+R para refrescar**
 4. Deberías quedarte en Flutter, NO ir a la página principal de React

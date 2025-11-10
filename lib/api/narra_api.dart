@@ -169,6 +169,11 @@ class NarraAPI {
     return StoryRepository.publishStory(id);
   }
 
+  /// Unpublish story (convert back to draft)
+  static Future<Story> unpublishStory(String id) async {
+    return StoryRepository.unpublishStory(id);
+  }
+
   /// Add photo to story
   static Future<StoryPhoto> addPhotoToStory(
     String storyId,

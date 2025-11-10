@@ -7,6 +7,7 @@ import 'package:narra/supabase/supabase_config.dart';
 import 'package:narra/supabase/narra_client.dart';
 import 'package:narra/services/user_service.dart';
 import 'package:narra/theme_controller.dart';
+import 'package:narra/screens/app/change_email_page.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -33,7 +34,7 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _reducedMotion = false;
   String _ghostTone = 'warm';
   String _ghostPerson = 'first';
-  bool _noBadWords = false;
+  bool _noBadWords = true; // Nuevo valor por defecto para historias de calidad profesional
   String _ghostFidelity = 'balanced';
 
   @override
@@ -70,7 +71,7 @@ class _SettingsPageState extends State<SettingsPage> {
             _ghostTone = profile?['writing_tone'] ?? 'warm';
             // Preferencias AI adicionales
             _ghostPerson = (settings['ai_person'] as String?) ?? 'first';
-            _noBadWords = (settings['ai_no_bad_words'] as bool?) ?? false;
+            _noBadWords = (settings['ai_no_bad_words'] as bool?) ?? true;
             _ghostFidelity = (settings['ai_fidelity'] as String?) ?? 'balanced';
           }
 
@@ -464,9 +465,72 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
               ),
             ),
-            
+
+            const SizedBox(height: 16),
+
+            // Change email button
+            Card(
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ChangeEmailPage(
+                        currentEmail: _userProfile?['email'] ?? '',
+                      ),
+                    ),
+                  );
+                },
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: colorScheme.tertiaryContainer.withValues(alpha: 0.5),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          Icons.alternate_email,
+                          color: colorScheme.tertiary,
+                          size: 20,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Cambiar email',
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Actualiza el email con el que inicias sesión',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(
+                        Icons.chevron_right,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
             const SizedBox(height: 24),
-            
+
             // Accessibility Section
             _buildSectionHeader('Accesibilidad'),
             Card(
@@ -581,12 +645,13 @@ class _SettingsPageState extends State<SettingsPage> {
                     trailing: DropdownButton<String>(
                       value: _ghostTone,
                       underline: const SizedBox(),
-                      onChanged: (value) {
+                      onChanged: (value) async {
                         if (value != null) {
                           setState(() {
                             _ghostTone = value;
                           });
-                          _updateUserSettings();
+                          await UserService.markGhostWriterAsConfigured();
+                          await _updateUserSettings();
                         }
                       },
                       items: const [
@@ -614,7 +679,10 @@ class _SettingsPageState extends State<SettingsPage> {
                           setState(() {
                             _ghostPerson = value;
                           });
-                          await UserService.updateAiPreferences(narrativePerson: value);
+                          await UserService.updateAiPreferences(
+                            narrativePerson: value,
+                            markAsConfigured: true,
+                          );
                           await _updateUserSettings();
                         }
                       },
@@ -637,7 +705,10 @@ class _SettingsPageState extends State<SettingsPage> {
                     value: _noBadWords,
                     onChanged: (value) async {
                       setState(() { _noBadWords = value; });
-                      await UserService.updateAiPreferences(noBadWords: value);
+                      await UserService.updateAiPreferences(
+                        noBadWords: value,
+                        markAsConfigured: true,
+                      );
                       await _updateUserSettings();
                     },
                   ),
@@ -662,7 +733,10 @@ class _SettingsPageState extends State<SettingsPage> {
                       ),
                       onChanged: (val) async {
                         _userSettings = {...?_userSettings, 'ai_extra_instructions': val};
-                        await UserService.updateAiPreferences(extraInstructions: val);
+                        await UserService.updateAiPreferences(
+                          extraInstructions: val,
+                          markAsConfigured: true,
+                        );
                         await _updateUserSettings();
                       },
                     ),
@@ -681,7 +755,10 @@ class _SettingsPageState extends State<SettingsPage> {
                           setState(() {
                             _ghostFidelity = value;
                           });
-                          await UserService.updateAiPreferences(editingStyle: value);
+                          await UserService.updateAiPreferences(
+                            editingStyle: value,
+                            markAsConfigured: true,
+                          );
                           await _updateUserSettings();
                         }
                       },

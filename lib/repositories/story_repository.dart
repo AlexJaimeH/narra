@@ -230,6 +230,12 @@ class StoryRepository {
     return Story.fromMap(data);
   }
 
+  /// Unpublish story (convert back to draft)
+  static Future<Story> unpublishStory(String id) async {
+    final data = await NarraSupabaseClient.unpublishStory(id);
+    return Story.fromMap(data);
+  }
+
   /// Add photo to story
   static Future<StoryPhoto> addPhoto(
     String storyId,

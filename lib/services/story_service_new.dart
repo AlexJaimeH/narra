@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:narra/api/narra_api.dart';
 import 'package:narra/openai/openai_service.dart';
 import 'package:narra/repositories/story_repository.dart';
+import 'package:narra/supabase/supabase_config.dart';
 
 /// Enhanced story service using the new API client
 /// This replaces the old story_service.dart with better architecture
@@ -289,10 +290,18 @@ class StoryServiceNew {
   }
 
   /// Unpublish a story (convert back to draft)
+  /// Sets status to 'draft' and clears published_at timestamp
   static Future<Story> unpublishStory(String storyId) async {
-    return await NarraAPI.updateStory(storyId, StoryUpdate(
-      status: StoryStatus.draft,
-    ));
+    return await NarraAPI.unpublishStory(storyId);
+  }
+
+  /// Revoke all subscriber access to a story
+  /// NOTE: This function intentionally does nothing.
+  /// When a story is unpublished (status changed to 'draft'), the blog automatically
+  /// filters out draft stories, so subscribers won't be able to see it.
+  /// No need to invalidate access tokens.
+  static Future<void> revokeAllSubscriberAccess(String storyId) async {
+    // No operation needed - unpublishing the story is sufficient
   }
 
   /// Delete a story permanently

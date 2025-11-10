@@ -1,4 +1,4 @@
-# narra
+# Narra 
 
 [![Build & Deploy (Cloudflare Pages)](https://github.com/narra-app/narra/actions/workflows/cf-pages.yml/badge.svg)](https://github.com/narra-app/narra/actions/workflows/cf-pages.yml)
 

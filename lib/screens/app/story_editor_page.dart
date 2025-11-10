@@ -596,7 +596,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   String _ghostWriterEditingStyle = 'balanced';
   String _ghostWriterLanguage = 'es';
   String _ghostWriterPerspective = 'first';
-  bool _ghostWriterAvoidProfanity = false;
+  bool _ghostWriterAvoidProfanity = true; // Nuevo valor por defecto para historias de calidad profesional
   String _ghostWriterExtraInstructions = '';
   bool _isGhostWriterProcessing = false;
   Timer? _ghostWriterInstructionsDebounce;
@@ -1167,7 +1167,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         _ghostWriterEditingStyle =
             (settings?['ai_fidelity'] as String?) ?? 'balanced';
         _ghostWriterAvoidProfanity =
-            (settings?['ai_no_bad_words'] as bool?) ?? false;
+            (settings?['ai_no_bad_words'] as bool?) ?? true;
         _ghostWriterExtraInstructions =
             (settings?['ai_extra_instructions'] as String?)?.trim() ?? '';
         _ghostWriterLanguage = (settings?['language'] as String?) ?? 'es';
@@ -2426,8 +2426,11 @@ class _StoryEditorPageState extends State<StoryEditorPage>
               unawaited(_saveDraft());
             },
             onPublish: _showPublishDialog,
+            onUnpublish: _showUnpublishDialog,
             onOpenDictation: _openDictationPanel,
             canPublish: _canPublish(),
+            isPublished: _currentStory?.isPublished ?? false,
+            hasChanges: _hasChanges,
           ),
         ),
       ),
@@ -2498,11 +2501,15 @@ class _StoryEditorPageState extends State<StoryEditorPage>
             children: [
               Icon(icon, size: 16, color: colorScheme.onSurfaceVariant),
               const SizedBox(width: 6),
-              Text(
-                label,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: colorScheme.onSurfaceVariant,
+              Flexible(
+                child: Text(
+                  label,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
                 ),
               ),
             ],
@@ -2707,37 +2714,143 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                 ),
               ),
               SizedBox(height: sectionSpacing),
-              ConstrainedBox(
-                constraints: BoxConstraints(minHeight: minBodyHeight),
-                child: TextField(
-                  controller: _contentController,
-                  decoration: buildFieldDecoration(
-                    isCompact: isCompact,
-                    hint: 'Cuenta tu historia...',
-                    hintStyle: bodyStyle?.copyWith(
-                      color:
-                          colorScheme.onSurfaceVariant.withValues(alpha: 0.55),
-                    ),
-                    padding: EdgeInsets.fromLTRB(
-                      isCompact ? 12 : 18,
-                      isCompact ? 16 : 22,
-                      isCompact ? 12 : 18,
-                      isCompact ? 20 : 26,
-                    ),
+              // Editor de contenido mejorado con mejor UX para escritura larga
+              Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(isCompact ? 20 : 24),
+                  color: colorScheme.surfaceContainerLowest,
+                  border: Border.all(
+                    color: colorScheme.outlineVariant.withValues(alpha: 0.3),
+                    width: 1,
                   ),
-                  style: bodyStyle,
-                  keyboardType: TextInputType.multiline,
-                  maxLines: null,
-                  minLines: 10,
-                  textAlignVertical: TextAlignVertical.top,
-                  enableSuggestions: false,
-                  autocorrect: false,
-                  smartDashesType: SmartDashesType.disabled,
-                  smartQuotesType: SmartQuotesType.disabled,
-                  textCapitalization: TextCapitalization.sentences,
-                  enableIMEPersonalizedLearning: false,
-                  autofillHints: null,
-                  scribbleEnabled: false,
+                  boxShadow: [
+                    BoxShadow(
+                      color: colorScheme.shadow.withValues(alpha: 0.04),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Campo de texto mejorado - crece con el contenido
+                    TextField(
+                      controller: _contentController,
+                      decoration: InputDecoration(
+                        hintText: 'Escribe tu historia con tus propias palabras. El asistente AI (Ghost Writer) la pulirá de forma profesional.\n\nUsa las sugerencias para empezar o el botón de micrófono para dictar.',
+                        hintStyle: bodyStyle?.copyWith(
+                          color: colorScheme.onSurfaceVariant
+                              .withValues(alpha: 0.4),
+                          height: 1.7,
+                        ),
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        contentPadding: EdgeInsets.fromLTRB(
+                          isCompact ? 18 : 24,
+                          isCompact ? 20 : 26,
+                          isCompact ? 18 : 24,
+                          isCompact ? 12 : 16,
+                        ),
+                        filled: false,
+                      ),
+                      style: bodyStyle?.copyWith(
+                        height: 1.7,
+                        letterSpacing: 0.2,
+                        fontSize: isCompact ? 16 : 17,
+                      ),
+                      keyboardType: TextInputType.multiline,
+                      maxLines: null,
+                      minLines: 12,
+                      textAlignVertical: TextAlignVertical.top,
+                      enableSuggestions: false,
+                      autocorrect: false,
+                      smartDashesType: SmartDashesType.disabled,
+                      smartQuotesType: SmartQuotesType.disabled,
+                      textCapitalization: TextCapitalization.sentences,
+                      enableIMEPersonalizedLearning: false,
+                      autofillHints: null,
+                      scribbleEnabled: false,
+                      cursorHeight: 24,
+                      cursorColor: colorScheme.primary,
+                      selectionControls: materialTextSelectionControls,
+                    ),
+
+                    // Barra inferior con estadísticas y consejos
+                    Container(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: isCompact ? 18 : 24,
+                        vertical: isCompact ? 12 : 14,
+                      ),
+                      decoration: BoxDecoration(
+                        color: colorScheme.surfaceContainerLow,
+                        borderRadius: BorderRadius.only(
+                          bottomLeft: Radius.circular(isCompact ? 20 : 24),
+                          bottomRight: Radius.circular(isCompact ? 20 : 24),
+                        ),
+                        border: Border(
+                          top: BorderSide(
+                            color: colorScheme.outlineVariant
+                                .withValues(alpha: 0.2),
+                            width: 1,
+                          ),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          // Icono de escritura
+                          Icon(
+                            Icons.edit_note_rounded,
+                            size: 18,
+                            color: colorScheme.onSurfaceVariant
+                                .withValues(alpha: 0.6),
+                          ),
+                          const SizedBox(width: 8),
+                          // Contador de palabras
+                          Expanded(
+                            child: Text(
+                              wordCount == 0
+                                  ? 'Empieza a escribir tu historia'
+                                  : wordCount == 1
+                                      ? '1 palabra'
+                                      : '$wordCount palabras${wordCount >= 300 ? ' ✓' : wordCount >= 200 ? ' • Casi listo para Ghost Writer (300+)' : ''}',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant
+                                    .withValues(alpha: 0.75),
+                                fontWeight: wordCount >= 300
+                                    ? FontWeight.w600
+                                    : FontWeight.w500,
+                                letterSpacing: 0.2,
+                              ),
+                            ),
+                          ),
+                          // Indicador visual de progreso para Ghost Writer
+                          if (wordCount > 0 && wordCount < 300)
+                            Container(
+                              width: isCompact ? 60 : 80,
+                              height: 4,
+                              decoration: BoxDecoration(
+                                color: colorScheme.surfaceContainerHighest,
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                              child: FractionallySizedBox(
+                                alignment: Alignment.centerLeft,
+                                widthFactor: (wordCount / 300).clamp(0.0, 1.0),
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: wordCount >= 200
+                                        ? colorScheme.primary
+                                        : colorScheme.tertiary,
+                                    borderRadius: BorderRadius.circular(2),
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
               SizedBox(height: verticalSpacing),
@@ -2768,7 +2881,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                           ),
                     label: _isGhostWriterProcessing
                         ? 'Trabajando...'
-                        : 'Ghost Writer',
+                        : 'Ghost Writer (AI)',
                   ),
                   buildActionButton(
                     isCompact: isCompact,
@@ -2817,8 +2930,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                 runSpacing: 10,
                 children: [
                   buildInfoChip(
-                    icon: Icons.text_fields_rounded,
-                    label: 'Palabras: $wordCount',
+                    icon: Icons.info_outline_rounded,
+                    label: 'Mínimo 300 palabras para publicar',
                   ),
                   if (_showSuggestions && timestampLabel != null)
                     buildInfoChip(
@@ -6497,16 +6610,21 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         _isSaving = false;
       });
 
+      final isPublished = _currentStory?.isPublished ?? false;
+      final message = isPublished
+          ? (audioUploaded
+              ? 'Historia modificada. Los cambios ya están disponibles para los suscriptores'
+              : 'Historia modificada. Audio pendiente por subir')
+          : (audioUploaded
+              ? 'Se guardó en borradores'
+              : 'Se guardó en borradores. Audio pendiente por subir');
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            audioUploaded
-                ? 'Borrador guardado'
-                : 'Borrador guardado. Audio pendiente por subir',
-          ),
-        ),
+        SnackBar(content: Text(message)),
       );
-      _captureVersion(reason: 'Borrador guardado');
+      _captureVersion(
+        reason: isPublished ? 'Historia modificada' : 'Se guardó en borradores',
+      );
       return true;
     } catch (e) {
       setState(() => _isSaving = false);
@@ -6825,6 +6943,74 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     );
   }
 
+  void _showUnpublishDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Despublicar historia'),
+        content: const Text(
+          'Al despublicar esta historia, tus suscriptores ya no tendrán acceso a ella. ¿Estás seguro de que quieres continuar?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await _unpublishStory();
+            },
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.grey,
+            ),
+            child: const Text('Despublicar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _unpublishStory() async {
+    try {
+      if (_currentStory == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error: Historia no encontrada')),
+        );
+        return;
+      }
+
+      // Revocar accesos de todos los suscriptores
+      await StoryServiceNew.revokeAllSubscriberAccess(_currentStory!.id);
+
+      // Despublicar la historia
+      await StoryServiceNew.unpublishStory(_currentStory!.id);
+
+      // Recargar la historia actualizada
+      final updatedStory = await StoryServiceNew.getStoryById(_currentStory!.id);
+      if (updatedStory != null) {
+        setState(() {
+          _currentStory = updatedStory;
+          _status = updatedStory.status.name;
+        });
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Historia despublicada. Los suscriptores ya no tienen acceso.'),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al despublicar: $e')),
+        );
+      }
+    }
+  }
+
   bool _hasUsedGhostWriter() {
     return _versionHistory.any(
       (version) => version.reason.contains('Ghost Writer afinó tu historia'),
@@ -6925,12 +7111,17 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   }
 
   void _showDiscardChangesDialog() {
+    final isPublished = _currentStory?.isPublished ?? false;
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('¿Descartar cambios?'),
-        content:
-            const Text('Tienes cambios sin guardar. ¿Quieres descartarlos?'),
+        content: Text(
+          isPublished
+              ? 'Tienes cambios sin guardar en esta historia publicada. Si los descartas, la historia se mantendrá como está publicada actualmente. ¿Quieres descartarlos?'
+              : 'Tienes cambios sin guardar. ¿Quieres descartarlos?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -8292,6 +8483,10 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           _hasChanges = true;
         });
         _captureVersion(reason: 'Ghost Writer afinó tu historia');
+
+        // Marcar que el usuario usó el ghost writer
+        await UserService.markGhostWriterAsUsed();
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('✓ Texto mejorado por Ghost Writer'),
@@ -9407,7 +9602,8 @@ class _EditorSegmentedControl extends StatelessWidget {
       child: TabBar(
         controller: controller,
         isScrollable: true,
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+        padding: const EdgeInsets.only(left: 4, right: 4, top: 4, bottom: 4),
+        tabAlignment: TabAlignment.start,
         dividerColor: Colors.transparent,
         indicator: BoxDecoration(
           borderRadius: BorderRadius.circular(18),
@@ -9446,15 +9642,21 @@ class _EditorBottomBar extends StatelessWidget {
     required this.isSaving,
     required this.onSaveDraft,
     required this.onPublish,
+    required this.onUnpublish,
     required this.onOpenDictation,
     required this.canPublish,
+    required this.isPublished,
+    required this.hasChanges,
   });
 
   final bool isSaving;
   final VoidCallback onSaveDraft;
   final VoidCallback onPublish;
+  final VoidCallback onUnpublish;
   final VoidCallback onOpenDictation;
   final bool canPublish;
+  final bool isPublished;
+  final bool hasChanges;
 
   @override
   Widget build(BuildContext context) {
@@ -9524,6 +9726,11 @@ class _EditorBottomBar extends StatelessWidget {
           }
 
           Widget draftButton(bool compact) {
+            // Si está publicada y hay cambios, mostrar "Modificar", sino "Guardar"
+            final label = isPublished && hasChanges
+                ? 'Modificar'
+                : (isSaving ? 'Guardando...' : 'Guardar');
+
             final button = FilledButton.tonal(
               onPressed: isSaving ? null : onSaveDraft,
               style: buildButtonStyle(compact: compact).copyWith(
@@ -9551,7 +9758,7 @@ class _EditorBottomBar extends StatelessWidget {
                   SizedBox(width: compactSpacing),
                   Flexible(
                     child: Text(
-                      isSaving ? 'Guardando...' : 'Borrador',
+                      label,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -9567,6 +9774,45 @@ class _EditorBottomBar extends StatelessWidget {
           }
 
           Widget publishButton(bool compact) {
+            // Si está publicada, mostrar botón de despublicar en gris
+            if (isPublished) {
+              final button = FilledButton(
+                onPressed: onUnpublish,
+                style: buildButtonStyle(compact: compact).copyWith(
+                  padding: WidgetStatePropertyAll(
+                    compact
+                        ? EdgeInsets.symmetric(horizontal: 12, vertical: 10)
+                        : const EdgeInsets.symmetric(
+                            horizontal: 22, vertical: 14),
+                  ),
+                  backgroundColor: WidgetStateProperty.all(Colors.grey),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.visibility_off_outlined,
+                      size: compactIconSize,
+                    ),
+                    SizedBox(width: compactSpacing),
+                    Flexible(
+                      child: const Text(
+                        'Despublicar',
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+
+              if (!compact) {
+                return button;
+              }
+
+              return SizedBox(height: buttonHeight, child: button);
+            }
+
+            // Si no está publicada, mostrar botón normal de publicar
             final button = FilledButton(
               onPressed: canPublish ? onPublish : null,
               style: buildButtonStyle(compact: compact).copyWith(

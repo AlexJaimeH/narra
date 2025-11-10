@@ -1818,16 +1818,38 @@ create index if not exists idx_user_feedback_created_at on public.user_feedback(
 alter table public.user_feedback enable row level security;
 
 -- Política: Los usuarios solo pueden ver su propio feedback
-create policy "Users can view their own feedback"
-  on public.user_feedback
-  for select
-  using (auth.uid() = user_id);
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'user_feedback'
+      and policyname = 'Users can view their own feedback'
+  ) then
+    create policy "Users can view their own feedback"
+      on public.user_feedback
+      for select
+      using (auth.uid() = user_id);
+  end if;
+end
+$$;
 
 -- Política: Los usuarios pueden insertar su propio feedback
-create policy "Users can insert their own feedback"
-  on public.user_feedback
-  for insert
-  with check (auth.uid() = user_id);
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'user_feedback'
+      and policyname = 'Users can insert their own feedback'
+  ) then
+    create policy "Users can insert their own feedback"
+      on public.user_feedback
+      for insert
+      with check (auth.uid() = user_id);
+  end if;
+end
+$$;
 
 -- Comentarios en la tabla
 comment on table public.user_feedback is 'Almacena el feedback y comentarios de los usuarios desde la página de ajustes';
@@ -1842,4 +1864,206 @@ comment on column public.user_feedback.user_name is 'Nombre del usuario (copia p
 
 commit;
 
+-- ============================================================
+-- Ghost Writer Tracking y Valores por Defecto Mejorados (Fecha: 2025-11-04)
+-- ============================================================
+-- Agrega columnas para rastrear el uso e interacción con el ghost writer
+-- y optimiza los valores por defecto para historias de calidad profesional
+-- ============================================================
+
+begin;
+
+-- Agregar columnas de tracking del ghost writer a user_settings
+do $$
+begin
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'user_settings'
+      and column_name = 'has_used_ghost_writer'
+  ) then
+    alter table public.user_settings
+    add column has_used_ghost_writer boolean not null default false;
+  end if;
+
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'user_settings'
+      and column_name = 'has_configured_ghost_writer'
+  ) then
+    alter table public.user_settings
+    add column has_configured_ghost_writer boolean not null default false;
+  end if;
+
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'user_settings'
+      and column_name = 'has_dismissed_ghost_writer_intro'
+  ) then
+    alter table public.user_settings
+    add column has_dismissed_ghost_writer_intro boolean not null default false;
+  end if;
+end
+$$;
+
+-- Cambiar el valor por defecto de ai_no_bad_words a TRUE
+-- (para historias de calidad profesional/publicable)
+do $$
+begin
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'user_settings'
+      and column_name = 'ai_no_bad_words'
+  ) then
+    alter table public.user_settings
+    add column ai_no_bad_words boolean not null default true;
+  else
+    alter table public.user_settings
+    alter column ai_no_bad_words set default true;
+  end if;
+end
+$$;
+
+-- Asegurar que existen las demás columnas del ghost writer
+do $$
+begin
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'user_settings'
+      and column_name = 'ai_person'
+  ) then
+    alter table public.user_settings
+    add column ai_person text not null default 'first'
+    check (ai_person in ('first', 'third'));
+  end if;
+
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'user_settings'
+      and column_name = 'ai_fidelity'
+  ) then
+    alter table public.user_settings
+    add column ai_fidelity text not null default 'balanced'
+    check (ai_fidelity in ('faithful', 'balanced', 'polished'));
+  end if;
+end
+$$;
+
+-- Comentarios explicativos
+comment on column public.user_settings.has_used_ghost_writer is 'Indica si el usuario ha usado el ghost writer al menos una vez';
+comment on column public.user_settings.has_configured_ghost_writer is 'Indica si el usuario ha configurado las preferencias del ghost writer';
+comment on column public.user_settings.has_dismissed_ghost_writer_intro is 'Indica si el usuario cerró la introducción del ghost writer en el dashboard';
+comment on column public.user_settings.ai_no_bad_words is 'Evitar palabras fuertes en sugerencias del ghost writer (por defecto true para calidad profesional)';
+comment on column public.user_settings.ai_person is 'Perspectiva narrativa del ghost writer (first o third)';
+comment on column public.user_settings.ai_fidelity is 'Estilo de edición del ghost writer (faithful, balanced, polished)';
+
+commit;
+
 -- Fin de la migración de user_feedback
+
+-- ============================================================
+-- Sistema de cambio de email (Fecha: 2025-11-05)
+-- ============================================================
+-- Permite a los usuarios cambiar su email de registro de forma segura
+-- con confirmación por email y opción de revertir en cualquier momento.
+-- ============================================================
+
+begin;
+
+-- Crear tabla para solicitudes de cambio de email
+create table if not exists public.email_change_requests (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  old_email text not null,
+  new_email text not null,
+  confirmation_token text not null unique,
+  revert_token text not null unique,
+  status text not null default 'pending' check (status in ('pending', 'confirmed', 'reverted', 'cancelled')),
+  created_at timestamptz not null default timezone('utc', now()),
+  confirmed_at timestamptz,
+  reverted_at timestamptz,
+  cancelled_at timestamptz
+);
+
+-- Índices para búsquedas rápidas
+create index if not exists email_change_requests_user_id_idx
+  on public.email_change_requests (user_id);
+
+create index if not exists email_change_requests_confirmation_token_idx
+  on public.email_change_requests (confirmation_token);
+
+create index if not exists email_change_requests_revert_token_idx
+  on public.email_change_requests (revert_token);
+
+create index if not exists email_change_requests_status_idx
+  on public.email_change_requests (status);
+
+-- Habilitar RLS
+alter table public.email_change_requests enable row level security;
+
+-- Políticas RLS: Los usuarios solo pueden ver sus propias solicitudes
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'email_change_requests'
+      and policyname = 'Users can view their own email change requests'
+  ) then
+    create policy "Users can view their own email change requests"
+      on public.email_change_requests
+      for select
+      using (auth.uid() = user_id);
+  end if;
+end
+$$;
+
+-- Los usuarios pueden insertar sus propias solicitudes
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'email_change_requests'
+      and policyname = 'Users can create their own email change requests'
+  ) then
+    create policy "Users can create their own email change requests"
+      on public.email_change_requests
+      for insert
+      with check (auth.uid() = user_id);
+  end if;
+end
+$$;
+
+-- Los usuarios pueden actualizar sus propias solicitudes (para cambiar status)
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'email_change_requests'
+      and policyname = 'Users can update their own email change requests'
+  ) then
+    create policy "Users can update their own email change requests"
+      on public.email_change_requests
+      for update
+      using (auth.uid() = user_id)
+      with check (auth.uid() = user_id);
+  end if;
+end
+$$;
+
+-- Comentarios explicativos
+comment on table public.email_change_requests is 'Solicitudes de cambio de email con confirmación bidireccional y opción de revertir';
+comment on column public.email_change_requests.confirmation_token is 'Token único para confirmar el cambio desde el nuevo email';
+comment on column public.email_change_requests.revert_token is 'Token único para revertir el cambio desde el email viejo (nunca expira)';
+comment on column public.email_change_requests.status is 'Estado: pending, confirmed, reverted, cancelled';
+
+commit;
+
+-- Fin de la migración de email_change_requests

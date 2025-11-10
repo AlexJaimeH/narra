@@ -10,10 +10,43 @@ import 'package:narra/services/email/subscriber_email_service.dart';
 import 'package:narra/services/story_service_new.dart';
 import 'package:narra/services/story_share_link_builder.dart';
 import 'package:narra/services/subscriber_service.dart';
+import 'package:narra/services/user_service.dart';
+import 'package:narra/supabase/narra_client.dart';
 import 'package:narra/supabase/supabase_config.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'story_editor_page.dart';
+
+/// Tipos de ordenamiento para las historias
+enum StorySortType {
+  modifiedDate,  // Por fecha de modificación (más reciente primero)
+  storyDate,     // Por fecha de la historia (si no tiene fecha, al final)
+  title,         // Por título alfabético
+}
+
+extension StorySortTypeExtension on StorySortType {
+  String get label {
+    switch (this) {
+      case StorySortType.modifiedDate:
+        return 'Fecha de modificación';
+      case StorySortType.storyDate:
+        return 'Fecha de la historia';
+      case StorySortType.title:
+        return 'Título';
+    }
+  }
+
+  IconData get icon {
+    switch (this) {
+      case StorySortType.modifiedDate:
+        return Icons.update;
+      case StorySortType.storyDate:
+        return Icons.event;
+      case StorySortType.title:
+        return Icons.sort_by_alpha;
+    }
+  }
+}
 
 class StoriesListPage extends StatefulWidget {
   const StoriesListPage({super.key});
@@ -500,7 +533,7 @@ class _StoriesSegmentedControl extends StatelessWidget {
   }
 }
 
-class StoriesTab extends StatelessWidget {
+class StoriesTab extends StatefulWidget {
   const StoriesTab({
     super.key,
     required this.stories,
@@ -525,35 +558,94 @@ class StoriesTab extends StatelessWidget {
       onSendStoryToSubscribers;
 
   @override
+  State<StoriesTab> createState() => _StoriesTabState();
+}
+
+class _StoriesTabState extends State<StoriesTab> {
+  StorySortType _sortType = StorySortType.modifiedDate;
+
+  List<Story> _sortStories(List<Story> stories) {
+    final sorted = List<Story>.from(stories);
+
+    switch (_sortType) {
+      case StorySortType.modifiedDate:
+        sorted.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+        break;
+
+      case StorySortType.storyDate:
+        sorted.sort((a, b) {
+          final aHasDate = a.startDate != null;
+          final bHasDate = b.startDate != null;
+
+          // Las historias sin fecha van al final
+          if (!aHasDate && !bHasDate) {
+            // Ambas sin fecha: ordenar por fecha de modificación
+            return b.updatedAt.compareTo(a.updatedAt);
+          }
+
+          if (!aHasDate) {
+            // 'a' sin fecha va al final (después de 'b')
+            return 1;
+          }
+
+          if (!bHasDate) {
+            // 'b' sin fecha va al final (antes de 'a')
+            return -1;
+          }
+
+          // Ambas tienen fecha: ordenar por fecha de historia (más antigua primero)
+          return a.startDate!.compareTo(b.startDate!);
+        });
+        break;
+
+      case StorySortType.title:
+        sorted.sort((a, b) {
+          final titleA = a.title.toLowerCase().trim();
+          final titleB = b.title.toLowerCase().trim();
+          if (titleA.isEmpty && titleB.isEmpty) return 0;
+          if (titleA.isEmpty) return 1;
+          if (titleB.isEmpty) return -1;
+          return titleA.compareTo(titleB);
+        });
+        break;
+    }
+
+    return sorted;
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final filteredStories = stories.where((story) {
-      final matchesFilter = switch (filterStatus) {
+    final filteredStories = widget.stories.where((story) {
+      final matchesFilter = switch (widget.filterStatus) {
         null => true,
         StoryStatus.published => story.isPublished,
         StoryStatus.draft =>
           !story.isPublished && story.status == StoryStatus.draft,
         StoryStatus.archived => story.status == StoryStatus.archived,
       };
-      final matchesSearch = _matchesSearch(story, searchQuery);
+      final matchesSearch = _matchesSearch(story, widget.searchQuery);
       return matchesFilter && matchesSearch;
     }).toList();
+
+    // Aplicar ordenamiento
+    final sortedStories = _sortStories(filteredStories);
 
     final mediaQuery = MediaQuery.of(context);
     final isCompact = mediaQuery.size.width < 640;
     final horizontalPadding = isCompact ? 10.0 : 16.0;
 
-    if (filteredStories.isEmpty) {
+    if (sortedStories.isEmpty) {
       return RefreshIndicator(
-        onRefresh: onRefresh,
+        onRefresh: widget.onRefresh,
         displacement: 80,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 48),
           children: [
             _EmptyStoriesState(
-              isSearching: searchQuery.trim().isNotEmpty,
-              filterStatus: filterStatus,
-              onCreateStory: onCreateStory,
+              isSearching: widget.searchQuery.trim().isNotEmpty,
+              filterStatus: widget.filterStatus,
+              onCreateStory: widget.onCreateStory,
             ),
           ],
         ),
@@ -561,44 +653,67 @@ class StoriesTab extends StatelessWidget {
     }
 
     return RefreshIndicator(
-      onRefresh: onRefresh,
+      onRefresh: widget.onRefresh,
       displacement: 80,
-      child: ListView.separated(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: EdgeInsets.fromLTRB(
-          horizontalPadding,
-          8,
-          horizontalPadding,
-          16,
-        ),
-        itemCount: filteredStories.length,
-        separatorBuilder: (context, index) => Padding(
-          padding: EdgeInsets.fromLTRB(
-            horizontalPadding + (isCompact ? 2 : 10),
-            isCompact ? 6 : 10,
-            horizontalPadding + (isCompact ? 2 : 10),
-            isCompact ? 2 : 6,
+      child: Column(
+        children: [
+          // Selector de ordenamiento
+          Padding(
+            padding: EdgeInsets.fromLTRB(
+              horizontalPadding,
+              8,
+              horizontalPadding,
+              4,
+            ),
+            child: _SortSelector(
+              currentSort: _sortType,
+              onSortChanged: (newSort) {
+                setState(() => _sortType = newSort);
+              },
+            ),
           ),
-          child: _StoriesSeparator(
-            color: Theme.of(context)
-                .colorScheme
-                .outlineVariant
-                .withValues(alpha: 0.24),
+
+          // Lista de historias
+          Expanded(
+            child: ListView.separated(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: EdgeInsets.fromLTRB(
+                horizontalPadding,
+                4,
+                horizontalPadding,
+                16,
+              ),
+              itemCount: sortedStories.length,
+              separatorBuilder: (context, index) => Padding(
+                padding: EdgeInsets.fromLTRB(
+                  horizontalPadding + (isCompact ? 2 : 10),
+                  isCompact ? 6 : 10,
+                  horizontalPadding + (isCompact ? 2 : 10),
+                  isCompact ? 2 : 6,
+                ),
+                child: _StoriesSeparator(
+                  color: Theme.of(context)
+                      .colorScheme
+                      .outlineVariant
+                      .withValues(alpha: 0.24),
+                ),
+              ),
+              itemBuilder: (context, index) {
+                final story = sortedStories[index];
+                return StoryListCard(
+                  story: story,
+                  onActionComplete: widget.onStoriesChanged,
+                  accentColor: _cardAccentColor(context, index),
+                  onSendToSubscribers: widget.onSendStoryToSubscribers == null
+                      ? null
+                      : (selectedSubscribers) => widget.onSendStoryToSubscribers!(
+                          context, story, selectedSubscribers),
+                  isSendingToSubscribers: widget.sendingStoryEmails.contains(story.id),
+                );
+              },
+            ),
           ),
-        ),
-        itemBuilder: (context, index) {
-          final story = filteredStories[index];
-          return StoryListCard(
-            story: story,
-            onActionComplete: onStoriesChanged,
-            accentColor: _cardAccentColor(context, index),
-            onSendToSubscribers: onSendStoryToSubscribers == null
-                ? null
-                : (selectedSubscribers) => onSendStoryToSubscribers!(
-                    context, story, selectedSubscribers),
-            isSendingToSubscribers: sendingStoryEmails.contains(story.id),
-          );
-        },
+        ],
       ),
     );
   }
@@ -717,6 +832,134 @@ class StoriesTab extends StatelessWidget {
     }
 
     return distance[m][n];
+  }
+}
+
+/// Widget selector de ordenamiento
+class _SortSelector extends StatelessWidget {
+  const _SortSelector({
+    required this.currentSort,
+    required this.onSortChanged,
+  });
+
+  final StorySortType currentSort;
+  final ValueChanged<StorySortType> onSortChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHigh.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.sort_rounded,
+            size: 18,
+            color: colorScheme.primary,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            'Ordenar:',
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            child: PopupMenuButton<StorySortType>(
+              initialValue: currentSort,
+              onSelected: onSortChanged,
+              offset: const Offset(0, 40),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              itemBuilder: (context) => [
+                for (final sortType in StorySortType.values)
+                  PopupMenuItem<StorySortType>(
+                    value: sortType,
+                    child: Row(
+                      children: [
+                        Icon(
+                          sortType.icon,
+                          size: 20,
+                          color: sortType == currentSort
+                              ? colorScheme.primary
+                              : colorScheme.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            sortType.label,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: sortType == currentSort
+                                  ? colorScheme.primary
+                                  : colorScheme.onSurface,
+                              fontWeight: sortType == currentSort
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                        if (sortType == currentSort)
+                          Icon(
+                            Icons.check,
+                            size: 20,
+                            color: colorScheme.primary,
+                          ),
+                      ],
+                    ),
+                  ),
+              ],
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: colorScheme.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      currentSort.icon,
+                      size: 16,
+                      color: colorScheme.primary,
+                    ),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        currentSort.label,
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: colorScheme.primary,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      Icons.arrow_drop_down,
+                      size: 18,
+                      color: colorScheme.primary,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -894,10 +1137,6 @@ class StoryListCard extends StatelessWidget {
     final statusColors = _statusColors(statusForDisplay, colorScheme);
     final publishedDisplayDate = story.publishedAt ?? story.updatedAt;
     final metadataChips = <Widget>[
-      _MetadataBadge(
-        icon: Icons.calendar_today,
-        label: _formatDate(story.createdAt),
-      ),
       if (story.wordCount > 0)
         _MetadataBadge(
           icon: Icons.text_snippet_outlined,
@@ -948,160 +1187,180 @@ class StoryListCard extends StatelessWidget {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    Container(
+                      width: 5,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(999),
+                        color: accentColor,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          IntrinsicHeight(
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                Container(
-                                  width: 5,
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(999),
-                                    color: accentColor,
-                                  ),
+                          // Imágenes en scroll horizontal (si existen)
+                          if (story.photos.isNotEmpty) ...[
+                            SizedBox(
+                              height: coverSize,
+                              child: ListView.separated(
+                                scrollDirection: Axis.horizontal,
+                                itemCount: story.photos.length,
+                                separatorBuilder: (_, __) =>
+                                    const SizedBox(width: 8),
+                                itemBuilder: (context, index) {
+                                  return _StoryCoverThumbnail(
+                                    url: story.photos[index].photoUrl,
+                                    size: coverSize,
+                                  );
+                                },
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                          ],
+
+                          // Título y acciones
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  story.title.isEmpty
+                                      ? 'Sin título'
+                                      : story.title,
+                                  style: titleStyle,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
-                                const SizedBox(width: 10),
-                                if (coverUrl != null) ...[
-                                  Align(
-                                    alignment: Alignment.topLeft,
-                                    child: _StoryCoverThumbnail(
-                                      url: coverUrl,
-                                      size: coverSize,
+                              ),
+                              const SizedBox(width: 12),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  _StatusPill(
+                                    label: statusForDisplay.displayName,
+                                    color: statusColors.foreground,
+                                    background: statusColors.background,
+                                    icon: switch (statusForDisplay) {
+                                      StoryStatus.published =>
+                                        Icons.check_circle,
+                                      StoryStatus.archived =>
+                                        Icons.inventory_2_outlined,
+                                      _ => Icons.edit_note,
+                                    },
+                                  ),
+                                  const SizedBox(width: 8),
+                                  _StoryActionsButton(
+                                    onSelected: (action) =>
+                                        _handleStoryAction(
+                                      context,
+                                      story: story,
+                                      onActionComplete: onActionComplete,
+                                      action: action,
+                                    ),
+                                    itemBuilder: (menuContext) =>
+                                        _buildStoryMenuItems(
+                                      story,
                                     ),
                                   ),
-                                  const SizedBox(width: 12),
                                 ],
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.center,
-                                        children: [
-                                          Expanded(
-                                            child: Text(
-                                              story.title.isEmpty
-                                                  ? 'Sin título'
-                                                  : story.title,
-                                              style: titleStyle,
-                                            ),
-                                          ),
-                                          const SizedBox(width: 12),
-                                          Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              _StatusPill(
-                                                label: statusForDisplay
-                                                    .displayName,
-                                                color: statusColors.foreground,
-                                                background:
-                                                    statusColors.background,
-                                                icon: switch (
-                                                    statusForDisplay) {
-                                                  StoryStatus.published =>
-                                                    Icons.check_circle,
-                                                  StoryStatus.archived =>
-                                                    Icons.inventory_2_outlined,
-                                                  _ => Icons.edit_note,
-                                                },
-                                              ),
-                                              const SizedBox(width: 8),
-                                              _StoryActionsButton(
-                                                onSelected: (action) =>
-                                                    _handleStoryAction(
-                                                  context,
-                                                  story: story,
-                                                  onActionComplete:
-                                                      onActionComplete,
-                                                  action: action,
-                                                ),
-                                                itemBuilder: (menuContext) =>
-                                                    _buildStoryMenuItems(
-                                                  story,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ],
-                                      ),
-                                      if (story.isPublished) ...[
-                                        const SizedBox(height: 8),
-                                        Row(
-                                          children: [
-                                            Icon(
-                                              Icons.public,
-                                              size: 18,
-                                              color: colorScheme.primary,
-                                            ),
-                                            const SizedBox(width: 6),
-                                            Text(
-                                              'Publicado el '
-                                              '${_formatFullDate(publishedDisplayDate)}',
-                                              style: theme.textTheme.bodySmall
-                                                  ?.copyWith(
-                                                color: colorScheme
-                                                    .onSurfaceVariant,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ],
-                                      if (excerpt.isNotEmpty) ...[
-                                        const SizedBox(height: 6),
-                                        Text(
-                                          excerpt,
-                                          style: theme.textTheme.bodyMedium
-                                              ?.copyWith(
-                                            height: 1.45,
-                                          ),
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ],
-                                      if (tags.isNotEmpty) ...[
-                                        const SizedBox(height: 12),
-                                        Wrap(
-                                          spacing: 8,
-                                          runSpacing: 8,
-                                          children: tags
-                                              .map(
-                                                  (tag) => _TagChip(label: tag))
-                                              .toList(),
-                                        ),
-                                      ],
-                                      if (metadataChips.isNotEmpty) ...[
-                                        const SizedBox(height: 12),
-                                        Wrap(
-                                          spacing: 8,
-                                          runSpacing: 6,
-                                          children: metadataChips,
-                                        ),
-                                      ],
-                                      if (story.isPublished) ...[
-                                        const SizedBox(height: 20),
-                                        _PublicStoryPreview(
-                                          story: story,
-                                          onViewPage: () =>
-                                              _openStoryPublicPage(
-                                                  context, story),
-                                          onSendToSubscribers:
-                                              onSendToSubscribers,
-                                          isSendingToSubscribers:
-                                              isSendingToSubscribers,
-                                        ),
-                                      ],
-                                    ],
+                              ),
+                            ],
+                          ),
+
+                          // Fecha de la historia y etiquetas
+                          const SizedBox(height: 12),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              // Fecha de la historia (si existe)
+                              if (_formatHistoryDate(story) != null)
+                                _HistoryDateBadge(
+                                  date: _formatHistoryDate(story)!,
+                                  colorScheme: colorScheme,
+                                ),
+
+                              // Etiquetas
+                              ...tags.map((tag) => _TagChip(label: tag)),
+                            ],
+                          ),
+
+                          // Fecha de publicación (si aplica)
+                          if (story.isPublished) ...[
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.public,
+                                  size: 16,
+                                  color: colorScheme.primary,
+                                ),
+                                const SizedBox(width: 6),
+                                Flexible(
+                                  child: Text(
+                                    'Publicado el '
+                                    '${_formatFullDate(publishedDisplayDate)}',
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: colorScheme.onSurfaceVariant,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
                               ],
                             ),
+                          ],
+
+                          // Fecha de última modificación (en itálica)
+                          const SizedBox(height: 6),
+                          Text(
+                            'Última modificación: ${_formatStoryDate(story.updatedAt)}',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant
+                                  .withValues(alpha: 0.8),
+                              fontStyle: FontStyle.italic,
+                              fontSize: 12,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
+
+                          // Extracto
+                          if (excerpt.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              excerpt,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                height: 1.45,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+
+                          // Metadata chips
+                          if (metadataChips.isNotEmpty) ...[
+                            const SizedBox(height: 12),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 6,
+                              children: metadataChips,
+                            ),
+                          ],
+
+                          // Vista previa pública
+                          if (story.isPublished) ...[
+                            const SizedBox(height: 20),
+                            _PublicStoryPreview(
+                              story: story,
+                              onViewPage: () =>
+                                  _openStoryPublicPage(context, story),
+                              onSendToSubscribers: onSendToSubscribers,
+                              isSendingToSubscribers: isSendingToSubscribers,
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -1690,6 +1949,37 @@ Future<void> _openStoryPublicPage(BuildContext context, Story story) async {
   );
 }
 
+/// Send email notifications to subscribers when a story is published
+Future<void> _sendPublishedStoryEmails(Story story) async {
+  try {
+    // Get current user
+    final user = NarraSupabaseClient.currentUser;
+    if (user == null) return;
+
+    // Get confirmed subscribers only
+    final subscribers = await SubscriberService.getConfirmedSubscribers();
+    if (subscribers.isEmpty) return;
+
+    // Get user profile for display name
+    final profile = await UserService.getCurrentUserProfile();
+    final authorName = profile?['display_name'] as String? ??
+                      profile?['name'] as String? ??
+                      user.email?.split('@').first ??
+                      'Tu autor en Narra';
+
+    // Send emails
+    await SubscriberEmailService.sendStoryPublished(
+      story: story,
+      subscribers: subscribers,
+      authorDisplayName: authorName,
+    );
+  } catch (e) {
+    // Don't show error to user - emails are sent in background
+    // Just log the error for debugging
+    debugPrint('Error sending story published emails: $e');
+  }
+}
+
 Future<void> _handleStoryAction(
   BuildContext context, {
   required Story story,
@@ -1708,32 +1998,49 @@ Future<void> _handleStoryAction(
       );
       onActionComplete();
       break;
-    case 'publish':
-      try {
-        await StoryServiceNew.publishStory(story.id);
-        messenger.showSnackBar(
-          const SnackBar(
-            content: Text('Historia publicada exitosamente'),
-          ),
-        );
-        onActionComplete();
-      } catch (e) {
-        messenger.showSnackBar(
-          SnackBar(content: Text('Error al publicar historia: $e')),
-        );
-      }
-      break;
     case 'unpublish':
-      try {
-        await StoryServiceNew.unpublishStory(story.id);
-        messenger.showSnackBar(
-          const SnackBar(content: Text('Historia despublicada')),
-        );
-        onActionComplete();
-      } catch (e) {
-        messenger.showSnackBar(
-          SnackBar(content: Text('Error al despublicar historia: $e')),
-        );
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Despublicar historia'),
+          content: const Text(
+            'Al despublicar esta historia, tus suscriptores ya no tendrán acceso a ella. ¿Estás seguro de que quieres continuar?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.grey,
+              ),
+              child: const Text('Despublicar'),
+            ),
+          ],
+        ),
+      );
+
+      if (confirmed == true) {
+        try {
+          // Revocar accesos de todos los suscriptores (no hace nada, solo por compatibilidad)
+          await StoryServiceNew.revokeAllSubscriberAccess(story.id);
+
+          // Despublicar la historia
+          await StoryServiceNew.unpublishStory(story.id);
+
+          messenger.showSnackBar(
+            const SnackBar(
+              content: Text('Historia despublicada. Los suscriptores ya no tienen acceso.'),
+            ),
+          );
+          onActionComplete();
+        } catch (e) {
+          messenger.showSnackBar(
+            SnackBar(content: Text('Error al despublicar historia: $e')),
+          );
+        }
       }
       break;
     case 'delete':
@@ -1783,14 +2090,6 @@ List<PopupMenuEntry<String>> _buildStoryMenuItems(Story story) {
         label: 'Editar',
       ),
     ),
-    if (story.isDraft)
-      const PopupMenuItem(
-        value: 'publish',
-        child: _PopupMenuRow(
-          icon: Icons.publish_outlined,
-          label: 'Publicar',
-        ),
-      ),
     if (story.isPublished)
       const PopupMenuItem(
         value: 'unpublish',
@@ -1877,6 +2176,109 @@ String _formatFullDate(DateTime date) {
 
   final month = months[date.month - 1];
   return '${date.day} de $month de ${date.year}';
+}
+
+/// Formatea la fecha de la historia según su precisión
+String? _formatHistoryDate(Story story) {
+  final startDate = story.startDate;
+  if (startDate == null) return null;
+
+  final precision = story.datesPrecision ?? 'day';
+
+  try {
+    String formattedStart;
+    switch (precision) {
+      case 'year':
+        formattedStart = startDate.year.toString();
+        break;
+      case 'month':
+        const months = [
+          'Enero',
+          'Febrero',
+          'Marzo',
+          'Abril',
+          'Mayo',
+          'Junio',
+          'Julio',
+          'Agosto',
+          'Septiembre',
+          'Octubre',
+          'Noviembre',
+          'Diciembre',
+        ];
+        formattedStart = '${months[startDate.month - 1]} ${startDate.year}';
+        break;
+      case 'day':
+      default:
+        const months = [
+          'enero',
+          'febrero',
+          'marzo',
+          'abril',
+          'mayo',
+          'junio',
+          'julio',
+          'agosto',
+          'septiembre',
+          'octubre',
+          'noviembre',
+          'diciembre',
+        ];
+        formattedStart = '${startDate.day} de ${months[startDate.month - 1]} de ${startDate.year}';
+        break;
+    }
+
+    // Si hay fecha de fin, formatearla y mostrar rango
+    final endDate = story.endDate;
+    if (endDate != null) {
+      String formattedEnd;
+      switch (precision) {
+        case 'year':
+          formattedEnd = endDate.year.toString();
+          break;
+        case 'month':
+          const months = [
+            'Enero',
+            'Febrero',
+            'Marzo',
+            'Abril',
+            'Mayo',
+            'Junio',
+            'Julio',
+            'Agosto',
+            'Septiembre',
+            'Octubre',
+            'Noviembre',
+            'Diciembre',
+          ];
+          formattedEnd = '${months[endDate.month - 1]} ${endDate.year}';
+          break;
+        case 'day':
+        default:
+          const months = [
+            'enero',
+            'febrero',
+            'marzo',
+            'abril',
+            'mayo',
+            'junio',
+            'julio',
+            'agosto',
+            'septiembre',
+            'octubre',
+            'noviembre',
+            'diciembre',
+          ];
+          formattedEnd = '${endDate.day} de ${months[endDate.month - 1]} de ${endDate.year}';
+          break;
+      }
+      return '$formattedStart - $formattedEnd';
+    }
+
+    return formattedStart;
+  } catch (e) {
+    return null;
+  }
 }
 
 String _fallbackStoryExcerpt(String? content) {
@@ -2063,6 +2465,52 @@ class _StoryActionsButtonState extends State<_StoryActionsButton> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Badge para mostrar la fecha de la historia (como en el blog de React)
+class _HistoryDateBadge extends StatelessWidget {
+  const _HistoryDateBadge({
+    required this.date,
+    required this.colorScheme,
+  });
+
+  final String date;
+  final ColorScheme colorScheme;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: colorScheme.primary.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.event,
+            size: 14,
+            color: colorScheme.primary,
+          ),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              date,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: colorScheme.primary,
+                fontWeight: FontWeight.w700,
+              ),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+            ),
+          ),
+        ],
       ),
     );
   }

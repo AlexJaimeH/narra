@@ -180,7 +180,7 @@ class _SettingsPageState extends State<SettingsPage> {
       }
 
       // Extract filename from Content-Disposition header
-      String filename = 'narra-mis-datos.zip';
+      String filename = 'narra-mis-datos.json';
       final contentDisposition = response.headers['content-disposition'];
       if (contentDisposition != null) {
         final filenameMatch = RegExp(r'filename="?([^"]+)"?').firstMatch(contentDisposition);
@@ -190,7 +190,7 @@ class _SettingsPageState extends State<SettingsPage> {
       }
 
       // Create a blob and download it
-      final blob = html.Blob([response.bodyBytes], 'application/zip');
+      final blob = html.Blob([response.bodyBytes], 'application/json');
       final url = html.Url.createObjectUrlFromBlob(blob);
       final anchor = html.AnchorElement(href: url)
         ..setAttribute('download', filename)

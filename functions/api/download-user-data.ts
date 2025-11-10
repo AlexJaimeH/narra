@@ -104,42 +104,24 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         const storyText = createStoryText(story);
         storyFolder.file('historia.txt', storyText);
 
-        // Add images
+        // Add images as URL references (not downloading files to avoid timeout)
         if (photos.length > 0) {
           const imagesFolder = storyFolder.folder('imagenes');
           for (let j = 0; j < photos.length; j++) {
             const photo = photos[j];
-            try {
-              const imageData = await downloadFile(photo.photo_url);
-              if (imageData) {
-                const extension = getFileExtension(photo.photo_url) || 'jpg';
-                imagesFolder?.file(`imagen-${j + 1}.${extension}`, imageData, { binary: true });
-              } else {
-                imagesFolder?.file(`imagen-${j + 1}-url.txt`, photo.photo_url);
-              }
-            } catch (error) {
-              imagesFolder?.file(`imagen-${j + 1}-url.txt`, photo.photo_url);
-            }
+            const extension = getFileExtension(photo.photo_url) || 'jpg';
+            imagesFolder?.file(`imagen-${j + 1}-${extension}.txt`, `URL de la imagen:\n${photo.photo_url}\n\nPuedes descargar este archivo manualmente desde esta URL.`);
           }
         }
 
-        // Add recordings
+        // Add recordings as URL references (not downloading files to avoid timeout)
         if (recordings.length > 0) {
           const recordingsFolder = storyFolder.folder('grabaciones');
           for (let j = 0; j < recordings.length; j++) {
             const recording = recordings[j];
             if (recording.audio_url) {
-              try {
-                const audioData = await downloadFile(recording.audio_url);
-                if (audioData) {
-                  const extension = getFileExtension(recording.audio_url) || 'mp3';
-                  recordingsFolder?.file(`grabacion-${j + 1}.${extension}`, audioData, { binary: true });
-                } else {
-                  recordingsFolder?.file(`grabacion-${j + 1}-url.txt`, recording.audio_url);
-                }
-              } catch (error) {
-                recordingsFolder?.file(`grabacion-${j + 1}-url.txt`, recording.audio_url);
-              }
+              const extension = getFileExtension(recording.audio_url) || 'mp3';
+              recordingsFolder?.file(`grabacion-${j + 1}-${extension}.txt`, `URL de la grabación:\n${recording.audio_url}\n\nPuedes descargar este archivo manualmente desde esta URL.`);
             }
           }
         }

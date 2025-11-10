@@ -18,9 +18,12 @@ export const onRequestOptions: PagesFunction<Env> = async () => {
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   try {
+    console.log('[download-user-data] Starting download request');
+
     // Get authorization header
     const authHeader = request.headers.get('Authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.error('[download-user-data] Missing authorization header');
       return json({ error: 'No autorizado' }, 401);
     }
 
@@ -37,6 +40,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       }, 500);
     }
 
+    console.log('[download-user-data] Verifying user token');
+
     // Verify token and get user
     const userResponse = await fetch(`${supabaseUrl}/auth/v1/user`, {
       headers: {
@@ -46,6 +51,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     });
 
     if (!userResponse.ok) {
+      console.error('[download-user-data] Invalid token', userResponse.status);
       return json({ error: 'Token inválido o expirado' }, 401);
     }
 
@@ -53,96 +59,143 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     const userId = user.id;
 
     if (!userId) {
+      console.error('[download-user-data] User ID not found');
       return json({ error: 'Usuario no encontrado' }, 404);
     }
 
+    console.log('[download-user-data] User verified:', userId);
+
     // Import JSZip dynamically
-    const JSZip = (await import('https://esm.sh/jszip@3.10.1')).default;
+    console.log('[download-user-data] Importing JSZip');
+    let JSZip: any;
+    try {
+      JSZip = (await import('https://esm.sh/jszip@3.10.1')).default;
+      console.log('[download-user-data] JSZip imported successfully');
+    } catch (importError) {
+      console.error('[download-user-data] Failed to import JSZip:', importError);
+      return json({ error: 'Error al cargar biblioteca de compresión', detail: String(importError) }, 500);
+    }
+
     const zip = new JSZip();
 
+    console.log('[download-user-data] Fetching user data');
+
     // Fetch user data
-    const [userProfile, userSettings, stories] = await Promise.all([
-      fetchFromSupabase(supabaseUrl, serviceKey, 'users', `id=eq.${userId}`),
-      fetchFromSupabase(supabaseUrl, serviceKey, 'user_settings', `user_id=eq.${userId}`),
-      fetchFromSupabase(supabaseUrl, serviceKey, 'stories', `author_id=eq.${userId}&order=created_at.desc`),
-    ]);
+    let stories: any[] = [];
+    try {
+      const [userProfile, userSettings, storiesData] = await Promise.all([
+        fetchFromSupabase(supabaseUrl, serviceKey, 'users', `id=eq.${userId}`),
+        fetchFromSupabase(supabaseUrl, serviceKey, 'user_settings', `user_id=eq.${userId}`),
+        fetchFromSupabase(supabaseUrl, serviceKey, 'stories', `author_id=eq.${userId}&order=created_at.desc`),
+      ]);
+      stories = storiesData;
+      console.log('[download-user-data] Fetched data - stories count:', stories.length);
+    } catch (fetchError) {
+      console.error('[download-user-data] Error fetching user data:', fetchError);
+      return json({ error: 'Error al obtener datos del usuario', detail: String(fetchError) }, 500);
+    }
 
     // Create root folders
     const draftFolder = zip.folder('borradores');
     const publishedFolder = zip.folder('publicadas');
 
+    console.log('[download-user-data] Processing', stories.length, 'stories');
+
     // Process each story
-    for (const story of stories) {
-      const isPublished = story.is_published;
-      const parentFolder = isPublished ? publishedFolder : draftFolder;
+    for (let i = 0; i < stories.length; i++) {
+      const story = stories[i];
+      try {
+        console.log(`[download-user-data] Processing story ${i + 1}/${stories.length}: ${story.title || 'Sin título'}`);
 
-      // Sanitize story title for folder name
-      const storyTitle = sanitizeFileName(story.title || 'Sin título');
-      const storyFolder = parentFolder?.folder(storyTitle);
+        const isPublished = story.is_published;
+        const parentFolder = isPublished ? publishedFolder : draftFolder;
 
-      if (!storyFolder) continue;
+        // Sanitize story title for folder name
+        const storyTitle = sanitizeFileName(story.title || 'Sin título');
+        const storyFolder = parentFolder?.folder(storyTitle);
 
-      // Fetch related data for this story
-      const [photos, recordings, versions] = await Promise.all([
-        fetchFromSupabase(supabaseUrl, serviceKey, 'story_photos', `story_id=eq.${story.id}&order=position.asc`),
-        fetchFromSupabase(supabaseUrl, serviceKey, 'voice_recordings', `story_id=eq.${story.id}&order=created_at.asc`),
-        fetchFromSupabase(supabaseUrl, serviceKey, 'story_versions', `story_id=eq.${story.id}&order=version_number.asc`),
-      ]);
-
-      // Create main story text file
-      const storyText = createStoryText(story);
-      storyFolder.file('historia.txt', storyText);
-
-      // Download and add images if they exist
-      if (photos.length > 0) {
-        const imagesFolder = storyFolder.folder('imagenes');
-        for (let i = 0; i < photos.length; i++) {
-          const photo = photos[i];
-          try {
-            const imageData = await downloadFile(photo.photo_url);
-            if (imageData) {
-              const extension = getFileExtension(photo.photo_url) || 'jpg';
-              imagesFolder?.file(`imagen-${i + 1}.${extension}`, imageData, { binary: true });
-            }
-          } catch (error) {
-            console.error(`[download-user-data] Error downloading image: ${error}`);
-            // Add a text file indicating the image URL if download fails
-            imagesFolder?.file(`imagen-${i + 1}-url.txt`, photo.photo_url);
-          }
+        if (!storyFolder) {
+          console.warn(`[download-user-data] Could not create folder for story: ${storyTitle}`);
+          continue;
         }
-      }
 
-      // Download and add recordings if they exist
-      if (recordings.length > 0) {
-        const recordingsFolder = storyFolder.folder('grabaciones');
-        for (let i = 0; i < recordings.length; i++) {
-          const recording = recordings[i];
-          if (recording.audio_url) {
+        // Fetch related data for this story
+        const [photos, recordings, versions] = await Promise.all([
+          fetchFromSupabase(supabaseUrl, serviceKey, 'story_photos', `story_id=eq.${story.id}&order=position.asc`),
+          fetchFromSupabase(supabaseUrl, serviceKey, 'voice_recordings', `story_id=eq.${story.id}&order=created_at.asc`),
+          fetchFromSupabase(supabaseUrl, serviceKey, 'story_versions', `story_id=eq.${story.id}&order=version_number.asc`),
+        ]);
+
+        console.log(`[download-user-data] Story data - photos: ${photos.length}, recordings: ${recordings.length}, versions: ${versions.length}`);
+
+        // Create main story text file
+        const storyText = createStoryText(story);
+        storyFolder.file('historia.txt', storyText);
+
+        // Download and add images if they exist
+        if (photos.length > 0) {
+          const imagesFolder = storyFolder.folder('imagenes');
+          for (let j = 0; j < photos.length; j++) {
+            const photo = photos[j];
             try {
-              const audioData = await downloadFile(recording.audio_url);
-              if (audioData) {
-                const extension = getFileExtension(recording.audio_url) || 'mp3';
-                recordingsFolder?.file(`grabacion-${i + 1}.${extension}`, audioData, { binary: true });
+              const imageData = await downloadFile(photo.photo_url);
+              if (imageData) {
+                const extension = getFileExtension(photo.photo_url) || 'jpg';
+                imagesFolder?.file(`imagen-${j + 1}.${extension}`, imageData, { binary: true });
+                console.log(`[download-user-data] Downloaded image ${j + 1}/${photos.length}`);
+              } else {
+                imagesFolder?.file(`imagen-${j + 1}-url.txt`, photo.photo_url);
               }
             } catch (error) {
-              console.error(`[download-user-data] Error downloading recording: ${error}`);
-              // Add a text file indicating the recording URL if download fails
-              recordingsFolder?.file(`grabacion-${i + 1}-url.txt`, recording.audio_url);
+              console.error(`[download-user-data] Error downloading image ${j + 1}:`, error);
+              // Add a text file indicating the image URL if download fails
+              imagesFolder?.file(`imagen-${j + 1}-url.txt`, photo.photo_url);
             }
           }
         }
-      }
 
-      // Add version history if it exists
-      if (versions.length > 0) {
-        const versionsFolder = storyFolder.folder('versiones');
-        for (let i = 0; i < versions.length; i++) {
-          const version = versions[i];
-          const versionText = createVersionText(version, i + 1);
-          versionsFolder?.file(`version-${version.version_number || (i + 1)}.txt`, versionText);
+        // Download and add recordings if they exist
+        if (recordings.length > 0) {
+          const recordingsFolder = storyFolder.folder('grabaciones');
+          for (let j = 0; j < recordings.length; j++) {
+            const recording = recordings[j];
+            if (recording.audio_url) {
+              try {
+                const audioData = await downloadFile(recording.audio_url);
+                if (audioData) {
+                  const extension = getFileExtension(recording.audio_url) || 'mp3';
+                  recordingsFolder?.file(`grabacion-${j + 1}.${extension}`, audioData, { binary: true });
+                  console.log(`[download-user-data] Downloaded recording ${j + 1}/${recordings.length}`);
+                } else {
+                  recordingsFolder?.file(`grabacion-${j + 1}-url.txt`, recording.audio_url);
+                }
+              } catch (error) {
+                console.error(`[download-user-data] Error downloading recording ${j + 1}:`, error);
+                // Add a text file indicating the recording URL if download fails
+                recordingsFolder?.file(`grabacion-${j + 1}-url.txt`, recording.audio_url);
+              }
+            }
+          }
         }
+
+        // Add version history if it exists
+        if (versions.length > 0) {
+          const versionsFolder = storyFolder.folder('versiones');
+          for (let j = 0; j < versions.length; j++) {
+            const version = versions[j];
+            const versionText = createVersionText(version, j + 1);
+            versionsFolder?.file(`version-${version.version_number || (j + 1)}.txt`, versionText);
+          }
+        }
+
+      } catch (storyError) {
+        console.error(`[download-user-data] Error processing story ${i + 1}:`, storyError);
+        // Continue with next story even if this one fails
+        continue;
       }
     }
+
+    console.log('[download-user-data] Creating metadata file');
 
     // Add metadata file in root
     const metadata = {
@@ -154,12 +207,23 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     };
     zip.file('info.txt', JSON.stringify(metadata, null, 2));
 
+    console.log('[download-user-data] Generating ZIP file');
+
     // Generate ZIP
-    const zipBlob = await zip.generateAsync({
-      type: 'uint8array',
-      compression: 'DEFLATE',
-      compressionOptions: { level: 6 }
-    });
+    let zipBlob: Uint8Array;
+    try {
+      zipBlob = await zip.generateAsync({
+        type: 'uint8array',
+        compression: 'DEFLATE',
+        compressionOptions: { level: 6 }
+      });
+      console.log('[download-user-data] ZIP generated successfully, size:', zipBlob.byteLength, 'bytes');
+    } catch (zipError) {
+      console.error('[download-user-data] Error generating ZIP:', zipError);
+      return json({ error: 'Error al generar archivo ZIP', detail: String(zipError) }, 500);
+    }
+
+    console.log('[download-user-data] Sending ZIP response');
 
     // Return as ZIP download
     return new Response(zipBlob, {
@@ -172,8 +236,13 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     });
 
   } catch (error) {
-    console.error('[download-user-data] Error:', error);
-    return json({ error: 'Error al generar descarga de datos', detail: String(error) }, 500);
+    console.error('[download-user-data] Unexpected error:', error);
+    // Include stack trace in error detail
+    const errorDetail = error instanceof Error ? `${error.message}\n${error.stack}` : String(error);
+    return json({
+      error: 'Error al generar descarga de datos',
+      detail: errorDetail
+    }, 500);
   }
 };
 

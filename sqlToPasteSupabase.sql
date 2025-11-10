@@ -2067,3 +2067,58 @@ comment on column public.email_change_requests.status is 'Estado: pending, confi
 commit;
 
 -- Fin de la migración de email_change_requests
+
+-- ============================================================
+-- Tabla de Tokens de Gestión de Regalos (Fecha: 2025-11-10)
+-- ============================================================
+-- Esta tabla permite a los compradores de regalos gestionar
+-- la cuenta del autor sin necesidad de autenticación
+begin;
+
+-- Crear tabla de tokens de gestión
+create table if not exists public.gift_management_tokens (
+  id uuid primary key default gen_random_uuid(),
+  author_user_id uuid not null references auth.users(id) on delete cascade,
+  buyer_email text not null,
+  management_token text not null unique,
+  created_at timestamptz not null default now(),
+  last_used_at timestamptz,
+  expires_at timestamptz, -- null = no expira
+  
+  constraint gift_management_tokens_email_check check (buyer_email ~* '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}$')
+);
+
+-- Índices para performance
+create index if not exists gift_management_tokens_author_idx on public.gift_management_tokens(author_user_id);
+create index if not exists gift_management_tokens_token_idx on public.gift_management_tokens(management_token);
+create index if not exists gift_management_tokens_buyer_email_idx on public.gift_management_tokens(buyer_email);
+
+-- Habilitar RLS
+alter table public.gift_management_tokens enable row level security;
+
+-- Políticas RLS (solo lectura, las escrituras se hacen vía API con SERVICE_ROLE_KEY)
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'gift_management_tokens'
+      and policyname = 'Service role can manage all tokens'
+  ) then
+    create policy "Service role can manage all tokens"
+      on public.gift_management_tokens
+      for all
+      using (true)
+      with check (true);
+  end if;
+end
+$$;
+
+-- Comentarios
+comment on table public.gift_management_tokens is 'Tokens de gestión para compradores de regalos que les permiten administrar la cuenta del autor';
+comment on column public.gift_management_tokens.management_token is 'Token único y seguro para acceder al panel de gestión';
+comment on column public.gift_management_tokens.expires_at is 'Fecha de expiración (null = nunca expira)';
+
+commit;
+
+-- Fin de migración de gift_management_tokens

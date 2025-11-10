@@ -208,13 +208,9 @@ export const LandingPage: React.FC = () => {
                 className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start mb-8"
               >
                 <motion.a
-                  href="#comprar"
+                  href="/purchase?type=gift"
                   className="px-8 py-4 text-white rounded-xl font-bold text-lg shadow-xl"
                   style={{ background: 'linear-gradient(135deg, #4DB3A8 0%, #38827A 100%)' }}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    scrollToSection(pricingRef);
-                  }}
                   whileHover={{ scale: 1.05, boxShadow: '0 25px 50px rgba(77, 179, 168, 0.4)' }}
                   whileTap={{ scale: 0.95 }}
                 >
@@ -617,22 +613,24 @@ export const LandingPage: React.FC = () => {
             </motion.div>
 
             <div className="space-y-4">
-              <motion.button
-                className="w-full py-5 text-white rounded-2xl font-bold text-xl shadow-xl"
+              <motion.a
+                href="/purchase?type=gift"
+                className="w-full py-5 text-white rounded-2xl font-bold text-xl shadow-xl block text-center"
                 style={{ background: 'linear-gradient(135deg, #4DB3A8 0%, #38827A 100%)' }}
                 whileHover={{ scale: 1.02, boxShadow: '0 30px 60px rgba(77, 179, 168, 0.4)' }}
                 whileTap={{ scale: 0.98 }}
               >
                 🎁 Comprar para regalar
-              </motion.button>
-              <motion.button
-                className="w-full py-5 bg-white rounded-2xl font-bold text-xl shadow-lg border-2"
+              </motion.a>
+              <motion.a
+                href="/purchase?type=self"
+                className="w-full py-5 bg-white rounded-2xl font-bold text-xl shadow-lg border-2 block text-center"
                 style={{ color: '#4DB3A8', borderColor: '#4DB3A8' }}
                 whileHover={{ scale: 1.02, boxShadow: '0 25px 50px rgba(0, 0, 0, 0.1)' }}
                 whileTap={{ scale: 0.98 }}
               >
                 ✍️ Comprar para mí
-              </motion.button>
+              </motion.a>
             </div>
 
             <p className="text-center mt-6 text-sm" style={{ color: '#9CA3AF' }}>
@@ -758,14 +756,15 @@ export const LandingPage: React.FC = () => {
             transition={{ delay: 0.2, duration: 0.6 }}
             className="flex flex-col sm:flex-row gap-6 justify-center mb-8"
           >
-            <motion.button
+            <motion.a
+              href="/purchase?type=self"
               className="px-12 py-5 text-white rounded-2xl font-bold text-xl shadow-2xl"
               style={{ background: 'linear-gradient(135deg, #4DB3A8 0%, #38827A 100%)' }}
               whileHover={{ scale: 1.05, boxShadow: '0 35px 70px rgba(77, 179, 168, 0.4)' }}
               whileTap={{ scale: 0.95 }}
             >
               Comienza tu historia ahora
-            </motion.button>
+            </motion.a>
             <motion.a
               href="/app"
               className="px-12 py-5 bg-white rounded-2xl font-bold text-xl shadow-xl border-2"

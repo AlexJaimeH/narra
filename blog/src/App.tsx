@@ -5,6 +5,10 @@ import { BlogHome } from './pages/BlogHome';
 import { StoryPage } from './pages/StoryPage';
 import { EmailChangeConfirm } from './pages/EmailChangeConfirm';
 import { EmailChangeRevert } from './pages/EmailChangeRevert';
+import { PurchasePage } from './pages/PurchasePage';
+import { PurchaseCheckoutPage } from './pages/PurchaseCheckoutPage';
+import { PurchaseSuccessPage } from './pages/PurchaseSuccessPage';
+import { GiftManagementPage } from './pages/GiftManagementPage';
 
 const App: React.FC = () => {
   return (
@@ -15,6 +19,10 @@ const App: React.FC = () => {
         <Route path="/blog/story/:storyId" element={<StoryPage />} />
         <Route path="/email-change-confirm" element={<EmailChangeConfirm />} />
         <Route path="/email-change-revert" element={<EmailChangeRevert />} />
+        <Route path="/purchase" element={<PurchasePage />} />
+        <Route path="/purchase/checkout" element={<PurchaseCheckoutPage />} />
+        <Route path="/purchase/success" element={<PurchaseSuccessPage />} />
+        <Route path="/gift-management" element={<GiftManagementPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

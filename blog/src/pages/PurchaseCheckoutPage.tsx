@@ -117,7 +117,7 @@ export const PurchaseCheckoutPage: React.FC = () => {
     }
   };
 
-  const price = 990;
+  const price = 300;
 
   return (
     <div

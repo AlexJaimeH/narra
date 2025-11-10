@@ -152,10 +152,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     // Generate filename
     const now = new Date();
     const yy = String(now.getFullYear()).slice(-2);
-    const mm = String(now.getMonth() + 1).padStart(2, '0');
-    const dd = String(now.getDate()).padStart(2, '0');
+    const mm = now.getMonth() + 1;
+    const dd = now.getDate();
+    const mmStr = mm < 10 ? '0' + mm : String(mm);
+    const ddStr = dd < 10 ? '0' + dd : String(dd);
     const sanitizedName = sanitizeFileName(userName);
-    const filename = `${yy}${mm}${dd} Narra - ${sanitizedName}.json`;
+    const filename = `${yy}${mmStr}${ddStr} Narra - ${sanitizedName}.json`;
 
     // Return as JSON download
     return new Response(JSON.stringify(completeData, null, 2), {

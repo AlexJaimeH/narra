@@ -119,11 +119,16 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     }
 
     const magicLinkData = await magicLinkResponse.json();
-    const magicLink = magicLinkData.action_link || '';
+    let magicLink = magicLinkData.action_link || '';
 
     if (!magicLink) {
       return json({ error: 'Error al generar enlace de acceso' }, 500);
     }
+
+    // Ensure magic link redirects to /app
+    // Transform: https://narra.mx/#access_token=... → https://narra.mx/app#access_token=...
+    const appUrl = (env as any).APP_URL || 'https://narra.mx';
+    magicLink = magicLink.replace(appUrl + '/#', appUrl + '/app#');
 
     // Send email
     console.log('[gift-management-send-magic-link] Sending magic link email...');

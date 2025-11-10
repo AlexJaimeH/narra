@@ -196,10 +196,16 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     }
 
     const magicLinkData = await magicLinkResponse.json();
-    const magicLink = magicLinkData.action_link || '';
+    let magicLink = magicLinkData.action_link || '';
 
     // Determine app URL
     const appUrl = env.APP_URL || 'https://narra.mx';
+
+    // Ensure magic link redirects to /app
+    // Transform: https://narra.mx/#access_token=... → https://narra.mx/app#access_token=...
+    if (magicLink) {
+      magicLink = magicLink.replace(appUrl + '/#', appUrl + '/app#');
+    }
 
     // Send emails
     console.log('[purchase-create-account] Sending emails...');

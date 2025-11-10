@@ -81,7 +81,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     // Check if subscriber already exists for this author
     console.log('[gift-management-add-subscriber] Checking for duplicate subscriber...');
     const existingSubResponse = await fetch(
-      `${env.SUPABASE_URL}/rest/v1/subscribers?author_id=eq.${authorUserId}&email=eq.${email}&select=id`,
+      `${env.SUPABASE_URL}/rest/v1/subscribers?user_id=eq.${authorUserId}&email=eq.${email}&select=id`,
       {
         headers: {
           'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
@@ -98,17 +98,18 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       }
     }
 
-    // Generate magic_link for the subscriber
-    const magicLink = generateToken();
+    // Generate access_token for the subscriber
+    const accessToken = generateToken();
 
     // Add subscriber
     console.log('[gift-management-add-subscriber] Adding subscriber...');
     const subscriberData = {
-      author_id: authorUserId,
+      user_id: authorUserId,
       name: name,
       email: email,
-      status: 'active',
-      magic_link: magicLink,
+      status: 'confirmed',
+      access_token: accessToken,
+      access_token_created_at: new Date().toISOString(),
       created_at: new Date().toISOString(),
     };
 

@@ -142,34 +142,34 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
     console.log('[purchase-create-account] User created:', userId);
 
-    // If gift, create management token
+    // Create management token for both gift AND self purchases (for account recovery)
     let managementToken: string | null = null;
-    if (purchaseType === 'gift' && buyerEmail) {
-      managementToken = generateToken();
+    const tokenBuyerEmail = purchaseType === 'gift' ? buyerEmail : authorEmail; // For self, use author email
 
-      console.log('[purchase-create-account] Creating management token for gift...');
-      const tokenResponse = await fetch(
-        `${env.SUPABASE_URL}/rest/v1/gift_management_tokens`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
-            'apikey': env.SUPABASE_SERVICE_ROLE_KEY,
-            'Content-Type': 'application/json',
-            'Prefer': 'return=minimal',
-          },
-          body: JSON.stringify({
-            author_user_id: userId,
-            buyer_email: buyerEmail,
-            management_token: managementToken,
-          }),
-        }
-      );
+    managementToken = generateToken();
 
-      if (!tokenResponse.ok) {
-        console.error('[purchase-create-account] Failed to create management token');
-        // Don't fail the whole process, but log it
+    console.log('[purchase-create-account] Creating management token...');
+    const tokenResponse = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/gift_management_tokens`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+          'apikey': env.SUPABASE_SERVICE_ROLE_KEY,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal',
+        },
+        body: JSON.stringify({
+          author_user_id: userId,
+          buyer_email: tokenBuyerEmail,
+          management_token: managementToken,
+        }),
       }
+    );
+
+    if (!tokenResponse.ok) {
+      console.error('[purchase-create-account] Failed to create management token');
+      // Don't fail the whole process, but log it
     }
 
     // Generate magic link for author
@@ -259,8 +259,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
     if (purchaseType === 'self') {
       // Send welcome + magic link email to author
-      const emailHtml = buildSelfPurchaseEmail(authorEmail, magicLink, appUrl);
-      const emailText = buildSelfPurchaseEmailText(authorEmail, magicLink, appUrl);
+      const emailHtml = buildSelfPurchaseEmail(authorEmail, magicLink, appUrl, managementToken);
+      const emailText = buildSelfPurchaseEmailText(authorEmail, magicLink, appUrl, managementToken);
 
       const emailResponse = await fetch('https://api.resend.com/emails', {
         method: 'POST',
@@ -351,7 +351,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 };
 
 // Email templates (simplified, will be expanded)
-function buildSelfPurchaseEmail(email: string, magicLink: string, appUrl: string): string {
+function buildSelfPurchaseEmail(email: string, magicLink: string, appUrl: string, managementToken: string | null): string {
+  const recoveryPortalUrl = managementToken ? `${appUrl}/gift-management?token=${managementToken}` : null;
   return `<!DOCTYPE html>
 <html lang="es">
   <head>
@@ -401,6 +402,24 @@ function buildSelfPurchaseEmail(email: string, magicLink: string, appUrl: string
                     <p style="margin:0;font-size:13px;word-break:break-all;"><a href="${magicLink}" style="color:#38827A;text-decoration:none;">${magicLink}</a></p>
                   </div>
                 </div>
+                ${recoveryPortalUrl ? `
+                <!-- Recovery Portal Section -->
+                <div style="background:#FFFBEB;padding:24px 36px;border-top:1px solid #FDE68A;">
+                  <div style="text-align:center;margin-bottom:16px;">
+                    <span style="font-size:24px;">🔐</span>
+                  </div>
+                  <h3 style="margin:0 0 12px 0;font-size:16px;color:#92400E;text-align:center;font-weight:700;">Portal de Recuperación y Gestión</h3>
+                  <p style="margin:0 0 16px 0;font-size:14px;line-height:1.65;color:#78350F;text-align:center;">
+                    Por seguridad, también puedes acceder a tu información desde este portal. Úsalo si necesitas cambiar tu email, recuperar acceso o gestionar tu cuenta.
+                  </p>
+                  <div style="text-align:center;margin:20px 0 0;">
+                    <a href="${recoveryPortalUrl}" style="display:inline-block;background:#92400E;color:#ffffff;text-decoration:none;font-weight:600;font-size:14px;padding:12px 24px;border-radius:8px;">Acceder al Portal de Gestión</a>
+                  </div>
+                  <p style="margin:16px 0 0 0;font-size:12px;line-height:1.5;color:#92400E;text-align:center;">
+                    💡 Guarda este enlace en un lugar seguro. Te permitirá gestionar tu cuenta incluso si pierdes acceso a tu email.
+                  </p>
+                </div>
+                ` : ''}
 
                 <div style="background:#fafaf9;padding:32px 36px;border-top:1px solid #e7e5e4;">
                   <p style="margin:0 0 16px 0;font-size:14px;line-height:1.6;color:#78716c;text-align:center;">¿Tienes preguntas? Estamos aquí para ayudarte en <a href="mailto:hola@narra.mx" style="color:#38827A">hola@narra.mx</a></p>
@@ -415,17 +434,38 @@ function buildSelfPurchaseEmail(email: string, magicLink: string, appUrl: string
 </html>`;
 }
 
-function buildSelfPurchaseEmailText(email: string, magicLink: string, appUrl: string): string {
-  return `¡Bienvenido a Narra!
+function buildSelfPurchaseEmailText(email: string, magicLink: string, appUrl: string, managementToken: string | null): string {
+  const recoveryPortalUrl = managementToken ? `${appUrl}/gift-management?token=${managementToken}` : null;
+
+  let text = `¡Bienvenido a Narra!
 
 Tu cuenta ha sido creada exitosamente.
 
 Email: ${email}
 
 Para confirmar tu cuenta y comenzar, usa este enlace:
-${magicLink}
+${magicLink}`;
+
+  if (recoveryPortalUrl) {
+    text += `
+
+---
+
+PORTAL DE RECUPERACIÓN Y GESTIÓN
+Por seguridad, también puedes acceder a tu información desde este portal. Úsalo si necesitas cambiar tu email, recuperar acceso o gestionar tu cuenta:
+
+${recoveryPortalUrl}
+
+💡 Guarda este enlace en un lugar seguro. Te permitirá gestionar tu cuenta incluso si pierdes acceso a tu email.
+
+---`;
+  }
+
+  text += `
 
 ¿Necesitas ayuda? Escríbenos a hola@narra.mx`;
+
+  return text;
 }
 
 function buildGiftAuthorEmail(email: string, magicLink: string): string {

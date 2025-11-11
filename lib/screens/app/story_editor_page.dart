@@ -10,6 +10,7 @@ import 'dart:html' as html;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:showcaseview/showcaseview.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
@@ -603,6 +604,16 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
   static const String _personalTagsTitle = 'Tus etiquetas únicas';
 
+  // GlobalKeys para el walkthrough del editor
+  final GlobalKey _contentFieldKey = GlobalKey();
+  final GlobalKey _ghostWriterButtonKey = GlobalKey();
+  final GlobalKey _suggestionsButtonKey = GlobalKey();
+  final GlobalKey _photosTabKey = GlobalKey();
+  final GlobalKey _datesTabKey = GlobalKey();
+  final GlobalKey _tagsTabKey = GlobalKey();
+  final GlobalKey _saveButtonKey = GlobalKey();
+  final GlobalKey _publishButtonKey = GlobalKey();
+
   @override
   void initState() {
     super.initState();
@@ -646,6 +657,9 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           includeIfUnchanged: true,
         );
       });
+
+      // Verificar si debe mostrar el walkthrough (solo para historias nuevas)
+      _checkAndShowWalkthrough();
     }
 
     unawaited(_loadVoiceRecordings());
@@ -684,6 +698,38 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     if (!_hasChanges) {
       setState(() => _hasChanges = true);
     }
+  }
+
+  Future<void> _checkAndShowWalkthrough() async {
+    final shouldShow = await UserService.shouldShowEditorWalkthrough();
+
+    if (!shouldShow || !mounted) return;
+
+    // Esperar un poco para que la UI se estabilice
+    await Future.delayed(const Duration(milliseconds: 800));
+
+    if (!mounted) return;
+
+    // Iniciar el walkthrough
+    _startWalkthrough();
+  }
+
+  void _startWalkthrough() {
+    final keys = <GlobalKey>[
+      _contentFieldKey,
+      _ghostWriterButtonKey,
+      _suggestionsButtonKey,
+      _photosTabKey,
+      _datesTabKey,
+      _tagsTabKey,
+      _saveButtonKey,
+      _publishButtonKey,
+    ];
+
+    ShowCaseWidget.of(context).startShowCase(keys);
+
+    // Marcar como visto inmediatamente
+    UserService.markEditorWalkthroughAsSeen();
   }
 
   bool _handleScrollNotification(ScrollNotification notification) {
@@ -2271,14 +2317,15 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
   @override
   Widget build(BuildContext context) {
-    return PopScope(
-      canPop: !_hasChanges,
-      onPopInvoked: (didPop) {
-        if (!didPop && _hasChanges) {
-          _showDiscardChangesDialog();
-        }
-      },
-      child: _isLoading
+    return ShowCaseWidget(
+      builder: (context) => PopScope(
+        canPop: !_hasChanges,
+        onPopInvoked: (didPop) {
+          if (!didPop && _hasChanges) {
+            _showDiscardChangesDialog();
+          }
+        },
+        child: _isLoading
           ? const Scaffold(
               body: Center(child: CircularProgressIndicator()),
             )
@@ -2400,6 +2447,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                 },
               ),
             ),
+      ),
     );
   }
 
@@ -2715,10 +2763,22 @@ class _StoryEditorPageState extends State<StoryEditorPage>
               ),
               SizedBox(height: sectionSpacing),
               // Editor de contenido mejorado con mejor UX para escritura larga
-              Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(isCompact ? 20 : 24),
-                  color: colorScheme.surfaceContainerLowest,
+              Showcase(
+                key: _contentFieldKey,
+                description: 'Escribe aquí tu historia de forma natural, como si se la contaras a un amigo. No te presiones, el Ghost Writer te ayudará a pulirla. Necesitas al menos 300 palabras para publicar.',
+                descTextStyle: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                  height: 1.5,
+                ),
+                tooltipBackgroundColor: const Color(0xFF4DB3A8),
+                textColor: Colors.white,
+                tooltipPadding: const EdgeInsets.all(20),
+                tooltipBorderRadius: BorderRadius.circular(16),
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(isCompact ? 20 : 24),
+                    color: colorScheme.surfaceContainerLowest,
                   border: Border.all(
                     color: colorScheme.outlineVariant.withValues(alpha: 0.3),
                     width: 1,
@@ -2851,6 +2911,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                       ),
                     ),
                   ],
+                ),
                 ),
               ),
               SizedBox(height: verticalSpacing),

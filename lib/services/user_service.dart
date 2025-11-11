@@ -153,6 +153,27 @@ class UserService {
     return !hasSeenWalkthrough;
   }
 
+  // Marcar que el usuario vio el walkthrough del editor
+  static Future<void> markEditorWalkthroughAsSeen() async {
+    final userId = SupabaseAuth.currentUser?.id;
+    if (userId == null) return;
+
+    await updateUserSettings({
+      'has_seen_editor_walkthrough': true,
+    });
+  }
+
+  // Verificar si debe mostrar el walkthrough del editor
+  static Future<bool> shouldShowEditorWalkthrough() async {
+    final settings = await getUserSettings();
+    if (settings == null) return true;
+
+    final hasSeenWalkthrough = settings['has_seen_editor_walkthrough'] as bool? ?? false;
+
+    // Mostrar solo si NO ha visto el walkthrough
+    return !hasSeenWalkthrough;
+  }
+
   // Obtener configuraciones del usuario
   static Future<Map<String, dynamic>?> getUserSettings() async {
     final userId = SupabaseAuth.currentUser?.id;
@@ -321,6 +342,8 @@ class UserService {
       'has_dismissed_ghost_writer_intro': false,
       // Tracking del walkthrough de inicio
       'has_seen_home_walkthrough': false,
+      // Tracking del walkthrough del editor
+      'has_seen_editor_walkthrough': false,
     });
   }
 

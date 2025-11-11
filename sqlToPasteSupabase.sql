@@ -2140,3 +2140,21 @@ comment on column public.user_settings.has_seen_home_walkthrough is 'Indica si e
 commit;
 
 -- Fin de migración de walkthrough tracking
+
+-- ============================================================
+-- Agregar columna para tracking de walkthrough del editor (Fecha: 2025-11-11)
+-- ============================================================
+-- Esta columna permite saber si el usuario ya vio el walkthrough
+-- interactivo del editor de historias
+begin;
+
+-- Agregar columna para tracking del walkthrough del editor
+alter table if exists public.user_settings
+add column if not exists has_seen_editor_walkthrough boolean not null default false;
+
+-- Comentario
+comment on column public.user_settings.has_seen_editor_walkthrough is 'Indica si el usuario ya vio el walkthrough interactivo del editor de historias';
+
+commit;
+
+-- Fin de migración de walkthrough del editor

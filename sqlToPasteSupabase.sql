@@ -2122,3 +2122,21 @@ comment on column public.gift_management_tokens.expires_at is 'Fecha de expiraci
 commit;
 
 -- Fin de migración de gift_management_tokens
+
+-- ============================================================
+-- Agregar columna para tracking de walkthrough de inicio (Fecha: 2025-11-11)
+-- ============================================================
+-- Esta columna permite saber si el usuario ya vio el walkthrough
+-- interactivo de la página de inicio
+begin;
+
+-- Agregar columna para tracking del walkthrough
+alter table if exists public.user_settings
+add column if not exists has_seen_home_walkthrough boolean not null default false;
+
+-- Comentario
+comment on column public.user_settings.has_seen_home_walkthrough is 'Indica si el usuario ya vio el walkthrough interactivo de la página de inicio';
+
+commit;
+
+-- Fin de migración de walkthrough tracking

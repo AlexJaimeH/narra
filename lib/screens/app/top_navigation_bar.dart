@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:showcaseview/showcaseview.dart';
 
 class AppNavigationItem {
   const AppNavigationItem({
@@ -21,6 +22,7 @@ class AppTopNavigationBar extends StatelessWidget {
     required this.onToggleMenu,
     required this.onCreateStory,
     required this.isScrolled,
+    this.menuKey,
   });
 
   final List<AppNavigationItem> items;
@@ -31,6 +33,7 @@ class AppTopNavigationBar extends StatelessWidget {
   final VoidCallback onToggleMenu;
   final VoidCallback onCreateStory;
   final bool isScrolled;
+  final GlobalKey? menuKey;
 
   @override
   Widget build(BuildContext context) {
@@ -54,12 +57,14 @@ class AppTopNavigationBar extends StatelessWidget {
                   isMenuOpen: isMenuOpen,
                   onToggleMenu: onToggleMenu,
                   onCreateStory: onCreateStory,
+                  menuKey: menuKey,
                 )
               : _DesktopNav(
                   items: items,
                   currentIndex: currentIndex,
                   onItemSelected: onItemSelected,
                   onCreateStory: onCreateStory,
+                  menuKey: menuKey,
                 ),
         ),
       ),
@@ -73,37 +78,56 @@ class _DesktopNav extends StatelessWidget {
     required this.currentIndex,
     required this.onItemSelected,
     required this.onCreateStory,
+    this.menuKey,
   });
 
   final List<AppNavigationItem> items;
   final int currentIndex;
   final ValueChanged<int> onItemSelected;
   final VoidCallback onCreateStory;
+  final GlobalKey? menuKey;
 
   @override
   Widget build(BuildContext context) {
+    final navRow = Row(
+      children: [
+        for (var i = 0; i < items.length; i++)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            child: Tooltip(
+              message: items[i].label,
+              waitDuration: const Duration(milliseconds: 300),
+              child: _NavItemButton(
+                label: items[i].label,
+                icon: items[i].icon,
+                selected: currentIndex == i,
+                onTap: () => onItemSelected(i),
+              ),
+            ),
+          ),
+      ],
+    );
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         const _Brand(),
-        Row(
-          children: [
-            for (var i = 0; i < items.length; i++)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 6),
-                child: Tooltip(
-                  message: items[i].label,
-                  waitDuration: const Duration(milliseconds: 300),
-                  child: _NavItemButton(
-                    label: items[i].label,
-                    icon: items[i].icon,
-                    selected: currentIndex == i,
-                    onTap: () => onItemSelected(i),
-                  ),
+        menuKey != null
+            ? Showcase(
+                key: menuKey!,
+                description: 'Aquí puedes navegar entre las diferentes secciones: Inicio, Historias, Suscriptores y Ajustes.',
+                descTextStyle: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                  height: 1.5,
                 ),
-              ),
-          ],
-        ),
+                tooltipBackgroundColor: const Color(0xFF4DB3A8),
+                textColor: Colors.white,
+                tooltipPadding: const EdgeInsets.all(20),
+                tooltipBorderRadius: BorderRadius.circular(16),
+                child: navRow,
+              )
+            : navRow,
         _CreateStoryButton(onPressed: onCreateStory),
       ],
     );
@@ -118,6 +142,7 @@ class _MobileNav extends StatelessWidget {
     required this.isMenuOpen,
     required this.onToggleMenu,
     required this.onCreateStory,
+    this.menuKey,
   });
 
   final List<AppNavigationItem> items;
@@ -126,11 +151,18 @@ class _MobileNav extends StatelessWidget {
   final bool isMenuOpen;
   final VoidCallback onToggleMenu;
   final VoidCallback onCreateStory;
+  final GlobalKey? menuKey;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+
+    final menuButton = _AnimatedMenuButton(
+      isOpen: isMenuOpen,
+      onPressed: onToggleMenu,
+      color: colorScheme.primary,
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -139,11 +171,22 @@ class _MobileNav extends StatelessWidget {
           children: [
             const _Brand(),
             const Spacer(),
-            _AnimatedMenuButton(
-              isOpen: isMenuOpen,
-              onPressed: onToggleMenu,
-              color: colorScheme.primary,
-            ),
+            menuKey != null
+                ? Showcase(
+                    key: menuKey!,
+                    description: 'Toca aquí para abrir el menú y navegar entre: Inicio, Historias, Suscriptores y Ajustes.',
+                    descTextStyle: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      height: 1.5,
+                    ),
+                    tooltipBackgroundColor: const Color(0xFF4DB3A8),
+                    textColor: Colors.white,
+                    tooltipPadding: const EdgeInsets.all(20),
+                    tooltipBorderRadius: BorderRadius.circular(16),
+                    child: menuButton,
+                  )
+                : menuButton,
           ],
         ),
         AnimatedCrossFade(

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
+import 'package:showcaseview/showcaseview.dart';
 import 'package:narra/api/narra_api.dart';
 import 'package:narra/repositories/user_repository.dart';
 import 'package:narra/repositories/story_repository.dart';
@@ -14,7 +16,9 @@ import 'stories_list_page.dart';
 import 'subscribers_page.dart';
 
 class DashboardPage extends StatefulWidget {
-  const DashboardPage({super.key});
+  const DashboardPage({super.key, this.menuKey});
+
+  final GlobalKey? menuKey;
 
   @override
   State<DashboardPage> createState() => _DashboardPageState();
@@ -29,6 +33,10 @@ class _DashboardPageState extends State<DashboardPage> {
   Story? _lastPublishedStory;
   bool _isLoading = true;
   bool _shouldShowGhostWriterIntro = false;
+
+  // Keys para el walkthrough
+  final GlobalKey _createStoryKey = GlobalKey();
+  final GlobalKey _ghostWriterKey = GlobalKey();
 
   @override
   void initState() {
@@ -59,6 +67,9 @@ class _DashboardPageState extends State<DashboardPage> {
       // Check if should show ghost writer intro
       final shouldShowIntro = await UserService.shouldShowGhostWriterIntro();
 
+      // Check if should show home walkthrough
+      final shouldShowWalkthrough = await UserService.shouldShowHomeWalkthrough();
+
       if (mounted) {
         setState(() {
           _userProfile = profile?.toMap();
@@ -79,6 +90,13 @@ class _DashboardPageState extends State<DashboardPage> {
           _shouldShowGhostWriterIntro = shouldShowIntro;
           _isLoading = false;
         });
+
+        // Iniciar walkthrough si es la primera vez
+        if (shouldShowWalkthrough) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _startWalkthrough();
+          });
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -88,6 +106,21 @@ class _DashboardPageState extends State<DashboardPage> {
         );
       }
     }
+  }
+
+  void _startWalkthrough() {
+    final keys = <GlobalKey>[
+      if (widget.menuKey != null) widget.menuKey!,
+      _createStoryKey,
+      if (_shouldShowGhostWriterIntro) _ghostWriterKey,
+    ];
+
+    // Iniciar el showcase
+    ShowCaseWidget.of(context).startShowCase(keys);
+
+    // Marcar como visto inmediatamente para que no vuelva a aparecer
+    // aunque el usuario lo cancele
+    UserService.markHomeWalkthroughAsSeen();
   }
 
   @override
@@ -184,11 +217,24 @@ class _DashboardPageState extends State<DashboardPage> {
               // Sección de bienvenida mejorada
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: _WelcomeSection(
-                  userProfile: _userProfile,
-                  allTags: _allTags,
-                  draftStories: _draftStories,
-                  stats: _dashboardStats,
+                child: Showcase(
+                  key: _createStoryKey,
+                  description: 'Aquí puedes crear tus historias. Toca el botón verde para empezar a escribir tus recuerdos.',
+                  descTextStyle: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    height: 1.5,
+                  ),
+                  tooltipBackgroundColor: const Color(0xFF4DB3A8),
+                  textColor: Colors.white,
+                  tooltipPadding: const EdgeInsets.all(20),
+                  tooltipBorderRadius: BorderRadius.circular(16),
+                  child: _WelcomeSection(
+                    userProfile: _userProfile,
+                    allTags: _allTags,
+                    draftStories: _draftStories,
+                    stats: _dashboardStats,
+                  ),
                 ),
               ),
 
@@ -198,10 +244,23 @@ class _DashboardPageState extends State<DashboardPage> {
               if (_shouldShowGhostWriterIntro)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: _GhostWriterIntroCard(
-                    onDismiss: () {
-                      setState(() => _shouldShowGhostWriterIntro = false);
-                    },
+                  child: Showcase(
+                    key: _ghostWriterKey,
+                    description: 'Tu Ghost Writer es un asistente inteligente que te ayuda a mejorar tus historias. Haz clic en Configurar para personalizarlo.',
+                    descTextStyle: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      height: 1.5,
+                    ),
+                    tooltipBackgroundColor: const Color(0xFF7C3AED),
+                    textColor: Colors.white,
+                    tooltipPadding: const EdgeInsets.all(20),
+                    tooltipBorderRadius: BorderRadius.circular(16),
+                    child: _GhostWriterIntroCard(
+                      onDismiss: () {
+                        setState(() => _shouldShowGhostWriterIntro = false);
+                      },
+                    ),
                   ),
                 ),
 

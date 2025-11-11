@@ -132,6 +132,27 @@ class UserService {
     return !hasUsed && !hasConfigured && !hasDismissed;
   }
 
+  // Marcar que el usuario vio el walkthrough de inicio
+  static Future<void> markHomeWalkthroughAsSeen() async {
+    final userId = SupabaseAuth.currentUser?.id;
+    if (userId == null) return;
+
+    await updateUserSettings({
+      'has_seen_home_walkthrough': true,
+    });
+  }
+
+  // Verificar si debe mostrar el walkthrough de inicio
+  static Future<bool> shouldShowHomeWalkthrough() async {
+    final settings = await getUserSettings();
+    if (settings == null) return true;
+
+    final hasSeenWalkthrough = settings['has_seen_home_walkthrough'] as bool? ?? false;
+
+    // Mostrar solo si NO ha visto el walkthrough
+    return !hasSeenWalkthrough;
+  }
+
   // Obtener configuraciones del usuario
   static Future<Map<String, dynamic>?> getUserSettings() async {
     final userId = SupabaseAuth.currentUser?.id;
@@ -298,6 +319,8 @@ class UserService {
       'has_used_ghost_writer': false,
       'has_configured_ghost_writer': false,
       'has_dismissed_ghost_writer_intro': false,
+      // Tracking del walkthrough de inicio
+      'has_seen_home_walkthrough': false,
     });
   }
 

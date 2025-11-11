@@ -142,14 +142,14 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     }
 
     const newSubscriber = await insertResponse.json();
-    const subscriberData = newSubscriber[0];
+    const insertedSubscriber = newSubscriber[0];
 
     console.log('[gift-management-add-subscriber] Subscriber added successfully');
 
     // Send welcome email to subscriber
     console.log('[gift-management-add-subscriber] Sending welcome email to subscriber...');
     const appUrl = (env as any).APP_URL || 'https://narra.mx';
-    const subscriberLink = `${appUrl}/blog/subscriber/${subscriberData.id}?author=${authorUserId}&subscriber=${subscriberData.id}&token=${accessToken}&name=${encodeURIComponent(name)}`;
+    const subscriberLink = `${appUrl}/blog/subscriber/${insertedSubscriber.id}?author=${authorUserId}&subscriber=${insertedSubscriber.id}&token=${accessToken}&name=${encodeURIComponent(name)}`;
 
     const emailHtml = buildSubscriberEmail(name, email, subscriberLink);
     const emailText = buildSubscriberEmailText(name, subscriberLink);
@@ -181,7 +181,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     return json({
       success: true,
       message: 'Suscriptor agregado exitosamente',
-      subscriber: subscriberData,
+      subscriber: insertedSubscriber,
     });
 
   } catch (error) {

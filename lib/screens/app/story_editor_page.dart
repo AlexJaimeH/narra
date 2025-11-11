@@ -657,12 +657,15 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           includeIfUnchanged: true,
         );
       });
-
-      // Verificar si debe mostrar el walkthrough (solo para historias nuevas)
-      _checkAndShowWalkthrough();
     }
 
     unawaited(_loadVoiceRecordings());
+
+    // Verificar si debe mostrar el walkthrough (siempre, no solo para historias nuevas)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _checkAndShowWalkthrough();
+    });
 
     // Generate initial AI suggestions when suggestions are shown
     // Open suggestions automatically if requested
@@ -705,8 +708,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
     if (!shouldShow || !mounted) return;
 
-    // Esperar un poco para que la UI se estabilice
-    await Future.delayed(const Duration(milliseconds: 800));
+    // Esperar a que la UI se estabilice completamente
+    await Future.delayed(const Duration(milliseconds: 1500));
 
     if (!mounted) return;
 

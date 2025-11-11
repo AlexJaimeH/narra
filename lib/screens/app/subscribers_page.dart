@@ -97,8 +97,11 @@ class _SubscribersPageState extends State<SubscribersPage>
       vsync: this,
       duration: const Duration(milliseconds: 300),
     );
-    _loadDashboard().then((_) {
-      // Verificar si debe mostrar el walkthrough después de cargar los datos
+    _loadDashboard();
+
+    // Verificar si debe mostrar el walkthrough después de que el widget esté construido
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       _checkAndShowWalkthrough();
     });
   }
@@ -108,8 +111,8 @@ class _SubscribersPageState extends State<SubscribersPage>
 
     if (!shouldShow || !mounted) return;
 
-    // Esperar un poco para que la UI se estabilice
-    await Future.delayed(const Duration(milliseconds: 800));
+    // Esperar a que la UI se estabilice y los datos se carguen
+    await Future.delayed(const Duration(milliseconds: 1500));
 
     if (!mounted) return;
 
@@ -118,12 +121,15 @@ class _SubscribersPageState extends State<SubscribersPage>
   }
 
   void _startWalkthrough() {
+    // Construir lista de keys solo con elementos que existen
     final keys = <GlobalKey>[
       _addButtonKey,
       _searchFieldKey,
       _statsCardsKey,
       _filterChipsKey,
-      _subscribersListKey,
+      // Solo agregar lista de suscriptores si hay al menos uno
+      if ((_dashboard?.totalSubscribersIncludingUnsubscribed ?? 0) > 0)
+        _subscribersListKey,
     ];
 
     ShowCaseWidget.of(context).startShowCase(keys);

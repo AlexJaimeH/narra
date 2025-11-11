@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
+import 'package:showcaseview/showcaseview.dart';
 import 'package:narra/services/email/email_service.dart';
 import 'package:narra/services/email/subscriber_email_service.dart';
 import 'package:narra/services/subscriber_service.dart';
@@ -82,6 +84,11 @@ class _SubscribersPageState extends State<SubscribersPage>
   final Set<String> _sendingInviteIds = <String>{};
   late AnimationController _fabController;
 
+  // GlobalKeys para el walkthrough
+  final GlobalKey _subscriberConceptKey = GlobalKey();
+  final GlobalKey _securityInfoKey = GlobalKey();
+  final GlobalKey _addButtonKey = GlobalKey();
+
   @override
   void initState() {
     super.initState();
@@ -90,6 +97,28 @@ class _SubscribersPageState extends State<SubscribersPage>
       duration: const Duration(milliseconds: 300),
     );
     _loadDashboard();
+    _checkAndShowWalkthrough();
+  }
+
+  Future<void> _checkAndShowWalkthrough() async {
+    final shouldShow = await UserService.shouldShowSubscribersWalkthrough();
+    if (!shouldShow || !mounted) return;
+
+    await Future.delayed(const Duration(milliseconds: 800));
+    if (!mounted) return;
+
+    _startWalkthrough();
+  }
+
+  void _startWalkthrough() {
+    final keys = <GlobalKey>[
+      _subscriberConceptKey,
+      _securityInfoKey,
+      _addButtonKey,
+    ];
+
+    ShowCaseWidget.of(context).startShowCase(keys);
+    UserService.markSubscribersWalkthroughAsSeen();
   }
 
   @override
@@ -607,7 +636,8 @@ class _SubscribersPageState extends State<SubscribersPage>
     final subscribers = _filteredSubscribers;
     final hasAnySubscribers = (dashboard?.totalSubscribersIncludingUnsubscribed ?? 0) > 0;
 
-    return Scaffold(
+    return ShowCaseWidget(
+      builder: (context) => Scaffold(
       body: RefreshIndicator(
         onRefresh: _onRefresh,
         child: CustomScrollView(
@@ -623,46 +653,58 @@ class _SubscribersPageState extends State<SubscribersPage>
                   ),
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: colorScheme.primary.withValues(alpha: 0.12),
-                                borderRadius: BorderRadius.circular(18),
+                    child: Showcase(
+                      key: _subscriberConceptKey,
+                      description: 'Los suscriptores son las personas que eliges para compartir tus historias. Cada vez que publiques, recibirán un correo con un enlace para leerla en un blog privado donde pueden comentar y reaccionar.',
+                      descTextStyle: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        height: 1.5,
+                      ),
+                      tooltipBackgroundColor: const Color(0xFF4DB3A8),
+                      textColor: Colors.white,
+                      tooltipPadding: const EdgeInsets.all(20),
+                      tooltipBorderRadius: BorderRadius.circular(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: colorScheme.primary.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(18),
+                                ),
+                                child: Icon(
+                                  Icons.people_alt_rounded,
+                                  color: colorScheme.primary,
+                                  size: 28,
+                                ),
                               ),
-                              child: Icon(
-                                Icons.people_alt_rounded,
-                                color: colorScheme.primary,
-                                size: 28,
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Suscriptores',
-                                    style: theme.textTheme.headlineSmall?.copyWith(
-                                      fontWeight: FontWeight.w700,
-                                      letterSpacing: -0.2,
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Suscriptores',
+                                      style: theme.textTheme.headlineSmall?.copyWith(
+                                        fontWeight: FontWeight.w700,
+                                        letterSpacing: -0.2,
+                                      ),
                                     ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    'Gestiona tu audiencia, envía invitaciones y mantén el contacto con quienes siguen tus historias.',
-                                    style: theme.textTheme.bodyMedium?.copyWith(
-                                      color: colorScheme.onSurfaceVariant,
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Gestiona tu audiencia, envía invitaciones y mantén el contacto con quienes siguen tus historias.',
+                                      style: theme.textTheme.bodyMedium?.copyWith(
+                                        color: colorScheme.onSurfaceVariant,
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
-                            ),
                             const SizedBox(width: 6),
                             IconButton(
                               onPressed: _isRefreshing ? null : () => _loadDashboard(silent: true),
@@ -689,7 +731,8 @@ class _SubscribersPageState extends State<SubscribersPage>
                             ),
                           ],
                         ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -698,7 +741,20 @@ class _SubscribersPageState extends State<SubscribersPage>
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: _StatsOverview(dashboard: dashboard),
+                child: Showcase(
+                  key: _securityInfoKey,
+                  description: 'Solo los suscriptores pueden leer tus historias PUBLICADAS haciendo clic en el enlace del correo. Tus historias están seguras y privadas.',
+                  descTextStyle: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    height: 1.5,
+                  ),
+                  tooltipBackgroundColor: const Color(0xFF2563EB),
+                  textColor: Colors.white,
+                  tooltipPadding: const EdgeInsets.all(20),
+                  tooltipBorderRadius: BorderRadius.circular(16),
+                  child: _StatsOverview(dashboard: dashboard),
+                ),
               ),
             ),
             if ((dashboard?.recentComments.isNotEmpty ?? false) ||
@@ -807,25 +863,39 @@ class _SubscribersPageState extends State<SubscribersPage>
           parent: _fabController,
           curve: Curves.easeOutBack,
         ),
-        child: FloatingActionButton.extended(
-          onPressed: _showAddSubscriberDialog,
-          icon: const Icon(Icons.person_add_alt_1, size: 24),
-          label: const Text(
-            'Agregar',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.5,
+        child: Showcase(
+          key: _addButtonKey,
+          description: 'Toca aquí para agregar suscriptores. Les llegará un correo de invitación para confirmar que quieren recibir tus historias.',
+          descTextStyle: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
+            height: 1.5,
+          ),
+          tooltipBackgroundColor: const Color(0xFF059669),
+          textColor: Colors.white,
+          tooltipPadding: const EdgeInsets.all(20),
+          tooltipBorderRadius: BorderRadius.circular(16),
+          child: FloatingActionButton.extended(
+            onPressed: _showAddSubscriberDialog,
+            icon: const Icon(Icons.person_add_alt_1, size: 24),
+            label: const Text(
+              'Agregar',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.5,
+              ),
+            ),
+            elevation: 6,
+            highlightElevation: 12,
+            backgroundColor: colorScheme.primary,
+            foregroundColor: colorScheme.onPrimary,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
             ),
           ),
-          elevation: 6,
-          highlightElevation: 12,
-          backgroundColor: colorScheme.primary,
-          foregroundColor: colorScheme.onPrimary,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
         ),
+      ),
       ),
     );
   }

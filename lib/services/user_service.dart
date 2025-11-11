@@ -174,6 +174,27 @@ class UserService {
     return !hasSeenWalkthrough;
   }
 
+  // Marcar que el usuario vio el walkthrough de suscriptores
+  static Future<void> markSubscribersWalkthroughAsSeen() async {
+    final userId = SupabaseAuth.currentUser?.id;
+    if (userId == null) return;
+
+    await updateUserSettings({
+      'has_seen_subscribers_walkthrough': true,
+    });
+  }
+
+  // Verificar si debe mostrar el walkthrough de suscriptores
+  static Future<bool> shouldShowSubscribersWalkthrough() async {
+    final settings = await getUserSettings();
+    if (settings == null) return true;
+
+    final hasSeenWalkthrough = settings['has_seen_subscribers_walkthrough'] as bool? ?? false;
+
+    // Mostrar solo si NO ha visto el walkthrough
+    return !hasSeenWalkthrough;
+  }
+
   // Obtener configuraciones del usuario
   static Future<Map<String, dynamic>?> getUserSettings() async {
     final userId = SupabaseAuth.currentUser?.id;
@@ -344,6 +365,8 @@ class UserService {
       'has_seen_home_walkthrough': false,
       // Tracking del walkthrough del editor
       'has_seen_editor_walkthrough': false,
+      // Tracking del walkthrough de suscriptores
+      'has_seen_subscribers_walkthrough': false,
     });
   }
 

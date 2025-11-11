@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:showcaseview/showcaseview.dart';
 import 'package:narra/supabase/supabase_config.dart';
 import 'dashboard_page.dart';
 import 'stories_list_page.dart';
@@ -22,35 +23,38 @@ class _AppNavigationState extends State<AppNavigation> {
   bool _isScrolled = false;
   bool _isCheckingAuth = true;
 
-  final List<_NavigationItem> _items = const [
-    _NavigationItem(
-      label: 'Inicio',
-      icon: Icons.dashboard,
-      builder: DashboardPage.new,
-    ),
-    _NavigationItem(
-      label: 'Historias',
-      icon: Icons.library_books,
-      builder: StoriesListPage.new,
-    ),
-    _NavigationItem(
-      label: 'Suscriptores',
-      icon: Icons.email,
-      builder: SubscribersPage.new,
-    ),
-    _NavigationItem(
-      label: 'Ajustes',
-      icon: Icons.settings,
-      builder: SettingsPage.new,
-    ),
-  ];
+  // Key para el showcase del menú
+  final GlobalKey _menuKey = GlobalKey();
 
+  late final List<_NavigationItem> _items;
   late final List<int> _pageVersions;
   late List<Widget> _pages;
 
   @override
   void initState() {
     super.initState();
+    _items = [
+      _NavigationItem(
+        label: 'Inicio',
+        icon: Icons.dashboard,
+        builder: ({Key? key}) => DashboardPage(key: key, menuKey: _menuKey),
+      ),
+      const _NavigationItem(
+        label: 'Historias',
+        icon: Icons.library_books,
+        builder: StoriesListPage.new,
+      ),
+      const _NavigationItem(
+        label: 'Suscriptores',
+        icon: Icons.email,
+        builder: SubscribersPage.new,
+      ),
+      const _NavigationItem(
+        label: 'Ajustes',
+        icon: Icons.settings,
+        builder: SettingsPage.new,
+      ),
+    ];
     _currentIndex = widget.initialIndex.clamp(0, _items.length - 1).toInt();
     _pageVersions = List<int>.filled(_items.length, 0);
     _pages = List<Widget>.generate(
@@ -212,9 +216,10 @@ class _AppNavigationState extends State<AppNavigation> {
           });
         }
 
-        return Scaffold(
-          backgroundColor: Theme.of(context).colorScheme.surface,
-          body: SafeArea(
+        return ShowCaseWidget(
+          builder: (context) => Scaffold(
+            backgroundColor: Theme.of(context).colorScheme.surface,
+            body: SafeArea(
             child: Column(
               children: [
                 AppTopNavigationBar(
@@ -225,6 +230,7 @@ class _AppNavigationState extends State<AppNavigation> {
                   isCompact: isCompact,
                   isMenuOpen: _isMenuOpen,
                   isScrolled: _isScrolled,
+                  menuKey: _menuKey,
                   onItemSelected: _handleNavigationTap,
                   onCreateStory: _startNewStory,
                   onToggleMenu: () {

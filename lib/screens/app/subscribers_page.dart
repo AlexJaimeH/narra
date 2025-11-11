@@ -797,46 +797,29 @@ class _SubscribersPageState extends State<SubscribersPage>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Showcase(
-                      key: _searchFieldKey,
-                      description: 'Busca tus suscriptores por nombre o email. Útil cuando tienes muchos suscriptores y necesitas encontrar a alguien específico.',
-                      descTextStyle: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        height: 1.5,
-                        color: Colors.white,
-                      ),
-                      tooltipBackgroundColor: const Color(0xFF3B82F6),
-                      textColor: Colors.white,
-                      tooltipPadding: const EdgeInsets.all(24),
-                      tooltipBorderRadius: BorderRadius.circular(20),
-                      overlayColor: Colors.black,
-                      overlayOpacity: 0.85,
-                      disableDefaultTargetGestures: true,
-                      child: TextField(
-                        controller: _searchController,
-                        decoration: InputDecoration(
-                          filled: true,
-                          prefixIcon: const Icon(Icons.search_rounded),
-                          hintText: 'Buscar por nombre o correo…',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(16),
-                            borderSide: BorderSide.none,
-                          ),
-                          suffixIcon: _searchTerm.isNotEmpty
-                              ? IconButton(
-                                  onPressed: () {
-                                    _searchController.clear();
-                                    setState(() => _searchTerm = '');
-                                  },
-                                  icon: const Icon(Icons.clear),
-                                )
-                              : null,
+                    TextField(
+                      controller: _searchController,
+                      decoration: InputDecoration(
+                        filled: true,
+                        prefixIcon: const Icon(Icons.search_rounded),
+                        hintText: 'Buscar por nombre o correo…',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide.none,
                         ),
-                        onChanged: (value) {
-                          setState(() => _searchTerm = value);
-                        },
+                        suffixIcon: _searchTerm.isNotEmpty
+                            ? IconButton(
+                                onPressed: () {
+                                  _searchController.clear();
+                                  setState(() => _searchTerm = '');
+                                },
+                                icon: const Icon(Icons.clear),
+                              )
+                            : null,
                       ),
+                      onChanged: (value) {
+                        setState(() => _searchTerm = value);
+                      },
                     ),
                     const SizedBox(height: 12),
                     Showcase(
@@ -943,7 +926,7 @@ class _SubscribersPageState extends State<SubscribersPage>
       ),
       floatingActionButton: Showcase(
         key: _addButtonKey,
-        description: '¡Aquí puedes agregar nuevos suscriptores! Solo necesitas su nombre y email. Ellos recibirán una invitación para ver tus historias.',
+        description: '¡Aquí puedes agregar nuevos suscriptores! Solo necesitas su nombre y email. Ellos recibirán una invitación y podrán ver únicamente tus historias PUBLICADAS.',
         descTextStyle: const TextStyle(
           fontSize: 16,
           fontWeight: FontWeight.w600,

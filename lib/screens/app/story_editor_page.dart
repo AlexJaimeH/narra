@@ -759,23 +759,13 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
   Future<void> _loadVoiceRecordings({bool forceRefresh = false}) async {
     if (_isLoadingVoiceRecordings && !forceRefresh) {
-      if (kDebugMode) {
-        debugPrint('[StoryEditor] _loadVoiceRecordings skipped (already loading)');
-      }
       return;
     }
 
     final rawStoryId = _currentStory?.id ?? widget.storyId;
     final normalizedStoryId = rawStoryId?.trim();
 
-    if (kDebugMode) {
-      debugPrint('[StoryEditor] _loadVoiceRecordings for story: $normalizedStoryId');
-    }
-
     if (normalizedStoryId == null || normalizedStoryId.isEmpty) {
-      if (kDebugMode) {
-        debugPrint('[StoryEditor] No story ID, cannot load voice recordings');
-      }
       if (mounted) {
         setState(() {
           _isLoadingVoiceRecordings = false;
@@ -801,10 +791,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         storyId: normalizedStoryId,
       );
 
-      if (kDebugMode) {
-        debugPrint('[StoryEditor] Loaded ${recordings.length} voice recordings');
-      }
-
       if (mounted) {
         setState(() {
           _voiceRecordings = recordings;
@@ -816,14 +802,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         _hasVoiceRecordingsShortcut = _voiceRecordings.isNotEmpty;
         _isLoadingVoiceRecordings = false;
       }
-
-      if (kDebugMode) {
-        debugPrint('[StoryEditor] _hasVoiceRecordingsShortcut = $_hasVoiceRecordingsShortcut');
-      }
     } catch (e) {
-      if (kDebugMode) {
-        debugPrint('[StoryEditor] Error loading voice recordings: $e');
-      }
       if (mounted) {
         setState(() => _isLoadingVoiceRecordings = false);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -913,9 +892,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   }) async {
     try {
       _appendRecorderLog('info', 'Iniciando guardado de grabación...');
-      if (kDebugMode) {
-        debugPrint('[StoryEditor] Starting to persist voice recording');
-      }
 
       final storyIdentity = await _ensureStoryIdentityForRecording();
       final byteCount = audioBytes.lengthInBytes;
@@ -924,11 +900,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         'info',
         'Guardando ${byteCount.toString()} bytes en historia ${storyIdentity.id}',
       );
-      if (kDebugMode) {
-        debugPrint(
-          '[StoryEditor] Persisting voice recording of $byteCount bytes for story ${storyIdentity.id}',
-        );
-      }
 
       final recording = await VoiceRecordingRepository.create(
         audioBytes: audioBytes,
@@ -937,12 +908,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         storyId: storyIdentity.id,
         storyTitle: storyIdentity.title,
       );
-
-      if (kDebugMode) {
-        debugPrint(
-          '[StoryEditor] Voice recording stored at ${recording.audioPath}',
-        );
-      }
 
       final normalizedTitle = (storyIdentity.title ?? '').trim();
       final recordingForState = recording.copyWith(
@@ -972,9 +937,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
       return recordingForState;
     } catch (e) {
-      if (kDebugMode) {
-        debugPrint('[StoryEditor] Error al guardar grabación: $e');
-      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('No se pudo guardar la grabación: $e')),
@@ -1510,14 +1472,12 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         _expandedSections.clear();
       });
     } on OpenAIProxyException catch (error) {
-      debugPrint('Story coach suggestions error: ${error.message}');
       if (!mounted) return;
       setState(() {
         _suggestionsError = _suggestionsFriendlyErrorMessage;
         _isSuggestionsLoading = false;
       });
     } catch (error) {
-      debugPrint('Unexpected story coach suggestions error: $error');
       if (!mounted) return;
       setState(() {
         _suggestionsError = _suggestionsFriendlyErrorMessage;
@@ -2321,6 +2281,9 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   Widget build(BuildContext context) {
     return ShowCaseWidget(
       onStart: (index, key) {
+        // No hacer scroll para el content field porque es grande y se desenfoca
+        if (key == _contentFieldKey) return;
+
         // Hacer scroll al elemento cuando se muestre
         if (key.currentContext != null) {
           Future.delayed(const Duration(milliseconds: 300), () {
@@ -5043,9 +5006,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       if (allowRetryQueue) {
         _pendingVersionEntries.add(entry);
       }
-      if (kDebugMode) {
-        debugPrint('No se pudo guardar la versión: $error');
-      }
       return false;
     }
   }
@@ -5813,9 +5773,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                                             Navigator.pop(sheetContext, text);
                                           }
                                         } catch (error) {
-                                          if (kDebugMode) {
-                                            debugPrint('Error al finalizar: $error');
-                                          }
+                                          // Error handling
                                         } finally {
                                           if (mounted) {
                                             setState(() {
@@ -6185,9 +6143,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       'info',
       '⚙️ Entrando a _handleDictationDismiss',
     );
-    if (kDebugMode) {
-      debugPrint('⚙️ [StoryEditor] _handleDictationDismiss called');
-    }
 
     final transcriptLength = _liveTranscript.trim().length;
     _appendRecorderLog(
@@ -6212,9 +6167,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         );
       } catch (error) {
         _appendRecorderLog('error', '❌ Error al descartar: $error');
-        if (kDebugMode) {
-          debugPrint('❌ [StoryEditor] Error in discard: $error');
-        }
         return false;
       }
       if (mounted) {
@@ -6275,9 +6227,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         );
       } catch (error) {
         _appendRecorderLog('error', '❌ Error al descartar: $error');
-        if (kDebugMode) {
-          debugPrint('❌ [StoryEditor] Error in discard: $error');
-        }
         return false;
       }
       if (mounted) {
@@ -6845,9 +6794,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
             _photos[i]['bytes'] = null; // Clear bytes to save memory
           });
         } catch (e) {
-          if (kDebugMode) {
-            print('Error uploading photo ${i + 1}: $e');
-          }
           // Continue with other photos even if one fails
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Error subiendo foto ${i + 1}: $e')),
@@ -6862,9 +6808,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
             'position': i,
           }).eq('id', photo['id']);
         } catch (e) {
-          if (kDebugMode) {
-            print('Error updating photo caption: $e');
-          }
+          // Error updating caption
         }
       }
     }
@@ -6978,7 +6922,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         authorDisplayName: authorName,
       );
     } catch (e) {
-      debugPrint('Error sending story published emails: $e');
       // Don't show error to user - emails are sent in background
     }
   }
@@ -10073,7 +10016,7 @@ class _EditorBottomBar extends StatelessWidget {
             if (publishButtonKey != null) {
               return Showcase(
                 key: publishButtonKey!,
-                description: '¡Publica tu historia! Todos tus suscriptores la recibirán por email y podrán leerla, comentar y reaccionar. Necesitas al menos 300 palabras.',
+                description: '¡Publica tu historia! Tu historia está segura: solo tus suscriptores podrán verla. Ellos la recibirán por email y podrán leerla, comentar y reaccionar.',
                 descTextStyle: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,

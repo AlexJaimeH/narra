@@ -220,59 +220,60 @@ class _AppNavigationState extends State<AppNavigation> {
           builder: (context) => Scaffold(
             backgroundColor: Theme.of(context).colorScheme.surface,
             body: SafeArea(
-            child: Column(
-              children: [
-                AppTopNavigationBar(
-                  items: _items
-                      .map((item) => item.asNavigationItem)
-                      .toList(growable: false),
-                  currentIndex: _currentIndex,
-                  isCompact: isCompact,
-                  isMenuOpen: _isMenuOpen,
-                  isScrolled: _isScrolled,
-                  menuKey: _menuKey,
-                  onItemSelected: _handleNavigationTap,
-                  onCreateStory: _startNewStory,
-                  onToggleMenu: () {
-                    setState(() {
-                      _isMenuOpen = !_isMenuOpen;
-                    });
-                  },
-                ),
-                const SizedBox(height: 4),
-                Expanded(
-                  child: NotificationListener<ScrollNotification>(
-                    onNotification: (notification) {
-                      final didScroll = notification.metrics.pixels > 12;
-
-                      if (didScroll != _isScrolled) {
-                        setState(() {
-                          _isScrolled = didScroll;
-                        });
-                      }
-
-                      if (_isMenuOpen && didScroll) {
-                        setState(() {
-                          _isMenuOpen = false;
-                        });
-                      }
-
-                      return false;
+              child: Column(
+                children: [
+                  AppTopNavigationBar(
+                    items: _items
+                        .map((item) => item.asNavigationItem)
+                        .toList(growable: false),
+                    currentIndex: _currentIndex,
+                    isCompact: isCompact,
+                    isMenuOpen: _isMenuOpen,
+                    isScrolled: _isScrolled,
+                    menuKey: _menuKey,
+                    onItemSelected: _handleNavigationTap,
+                    onCreateStory: _startNewStory,
+                    onToggleMenu: () {
+                      setState(() {
+                        _isMenuOpen = !_isMenuOpen;
+                      });
                     },
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 250),
-                      switchInCurve: Curves.easeOut,
-                      switchOutCurve: Curves.easeIn,
-                      child: _PageContainer(
-                        key: ValueKey(
-                          '$_currentIndex-${_pageVersions[_currentIndex]}',
+                  ),
+                  const SizedBox(height: 4),
+                  Expanded(
+                    child: NotificationListener<ScrollNotification>(
+                      onNotification: (notification) {
+                        final didScroll = notification.metrics.pixels > 12;
+
+                        if (didScroll != _isScrolled) {
+                          setState(() {
+                            _isScrolled = didScroll;
+                          });
+                        }
+
+                        if (_isMenuOpen && didScroll) {
+                          setState(() {
+                            _isMenuOpen = false;
+                          });
+                        }
+
+                        return false;
+                      },
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 250),
+                        switchInCurve: Curves.easeOut,
+                        switchOutCurve: Curves.easeIn,
+                        child: _PageContainer(
+                          key: ValueKey(
+                            '$_currentIndex-${_pageVersions[_currentIndex]}',
+                          ),
+                          child: _pages[_currentIndex],
                         ),
-                        child: _pages[_currentIndex],
                       ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         );

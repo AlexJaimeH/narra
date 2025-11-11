@@ -115,14 +115,12 @@ class _DashboardPageState extends State<DashboardPage> {
       if (_shouldShowGhostWriterIntro) _ghostWriterKey,
     ];
 
+    // Iniciar el showcase
     ShowCaseWidget.of(context).startShowCase(keys);
 
-    // Marcar como visto cuando termine
-    ShowCaseWidget.of(context).addListener(() {
-      if (!ShowCaseWidget.of(context).isShowCaseActive) {
-        UserService.markHomeWalkthroughAsSeen();
-      }
-    });
+    // Marcar como visto inmediatamente para que no vuelva a aparecer
+    // aunque el usuario lo cancele
+    UserService.markHomeWalkthroughAsSeen();
   }
 
   @override

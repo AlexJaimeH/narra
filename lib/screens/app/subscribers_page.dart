@@ -595,6 +595,19 @@ class _SubscribersPageState extends State<SubscribersPage>
   @override
   Widget build(BuildContext context) {
     return ShowCaseWidget(
+      onStart: (index, key) {
+        // Hacer scroll al elemento cuando se muestre
+        if (key.currentContext != null) {
+          Future.delayed(const Duration(milliseconds: 300), () {
+            Scrollable.ensureVisible(
+              key.currentContext!,
+              duration: const Duration(milliseconds: 400),
+              curve: Curves.easeInOut,
+              alignment: 0.5, // Centrar el elemento
+            );
+          });
+        }
+      },
       builder: (showcaseContext) {
         // Guardar el contexto del ShowCaseWidget para usar en walkthrough
         _showcaseContext = showcaseContext;

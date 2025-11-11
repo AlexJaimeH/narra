@@ -95,7 +95,6 @@ class _SubscribersPageState extends State<SubscribersPage>
 
   @override
   void initState() {
-    print('📍 [Subscribers] initState called');
     super.initState();
     _fabController = AnimationController(
       vsync: this,
@@ -103,80 +102,35 @@ class _SubscribersPageState extends State<SubscribersPage>
     );
     _loadDashboard();
 
-    // Verificar si debe mostrar el walkthrough después de que el widget esté construido
-    print('📍 [Subscribers] Scheduling walkthrough check via postFrameCallback');
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      print('📍 [Subscribers] postFrameCallback executed');
-      if (!mounted) {
-        print('❌ [Subscribers] Not mounted in postFrameCallback');
-        return;
-      }
+      if (!mounted) return;
       _checkAndShowWalkthrough();
     });
   }
 
   Future<void> _checkAndShowWalkthrough() async {
-    print('🎯 [Subscribers] _checkAndShowWalkthrough called');
-    print('🎯 [Subscribers] mounted: $mounted');
-
     final shouldShow = await UserService.shouldShowSubscribersWalkthrough();
-    print('🎯 [Subscribers] shouldShow: $shouldShow');
+    if (!shouldShow || !mounted) return;
 
-    if (!shouldShow) {
-      print('❌ [Subscribers] Not showing walkthrough (already seen)');
-      return;
-    }
-
-    if (!mounted) {
-      print('❌ [Subscribers] Not showing walkthrough (not mounted)');
-      return;
-    }
-
-    print('⏳ [Subscribers] Waiting 1500ms for UI to stabilize...');
-    // Esperar a que la UI se estabilice y los datos se carguen
     await Future.delayed(const Duration(milliseconds: 1500));
+    if (!mounted) return;
 
-    if (!mounted) {
-      print('❌ [Subscribers] Not mounted after delay');
-      return;
-    }
-
-    print('🚀 [Subscribers] Starting walkthrough...');
-    // Iniciar el walkthrough
     _startWalkthrough();
   }
 
   void _startWalkthrough() {
-    print('🎬 [Subscribers] _startWalkthrough called');
+    if (_showcaseContext == null) return;
 
-    if (_showcaseContext == null) {
-      print('❌ [Subscribers] showcaseContext is null!');
-      return;
-    }
-
-    // Construir lista de keys solo con elementos que existen
     final keys = <GlobalKey>[
       _addButtonKey,
       _searchFieldKey,
       _statsCardsKey,
       _filterChipsKey,
-      // Solo agregar lista de suscriptores si hay al menos uno
       if ((_dashboard?.totalSubscribersIncludingUnsubscribed ?? 0) > 0)
         _subscribersListKey,
     ];
 
-    print('🎬 [Subscribers] Keys: ${keys.length}');
-    print('🎬 [Subscribers] Dashboard total: ${_dashboard?.totalSubscribersIncludingUnsubscribed ?? 0}');
-    print('🎬 [Subscribers] Calling ShowCaseWidget.of(showcaseContext).startShowCase');
-
-    try {
-      ShowCaseWidget.of(_showcaseContext!).startShowCase(keys);
-      print('✅ [Subscribers] ShowCase started successfully');
-    } catch (e) {
-      print('❌ [Subscribers] Error starting showcase: $e');
-    }
-
-    // Marcar como visto inmediatamente
+    ShowCaseWidget.of(_showcaseContext!).startShowCase(keys);
     UserService.markSubscribersWalkthroughAsSeen();
   }
 

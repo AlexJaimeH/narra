@@ -2158,3 +2158,19 @@ comment on column public.user_settings.has_seen_editor_walkthrough is 'Indica si
 commit;
 
 -- Fin de migración de walkthrough del editor
+
+-- ============================================================
+-- Agregar tracking para walkthrough de suscriptores (Fecha: 2025-01-11)
+-- ============================================================
+begin;
+
+-- Agregar columna para tracking del walkthrough de suscriptores
+alter table if exists public.user_settings
+add column if not exists has_seen_subscribers_walkthrough boolean not null default false;
+
+-- Comentario
+comment on column public.user_settings.has_seen_subscribers_walkthrough is 'Indica si el usuario ya vio el walkthrough interactivo de la página de suscriptores';
+
+commit;
+
+-- Fin de migración de walkthrough de suscriptores

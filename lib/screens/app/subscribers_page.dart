@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:showcaseview/showcaseview.dart';
 import 'package:narra/services/email/email_service.dart';
 import 'package:narra/services/email/subscriber_email_service.dart';
 import 'package:narra/services/subscriber_service.dart';
@@ -82,6 +83,13 @@ class _SubscribersPageState extends State<SubscribersPage>
   final Set<String> _sendingInviteIds = <String>{};
   late AnimationController _fabController;
 
+  // GlobalKeys para el walkthrough
+  final GlobalKey _addButtonKey = GlobalKey();
+  final GlobalKey _searchFieldKey = GlobalKey();
+  final GlobalKey _statsCardsKey = GlobalKey();
+  final GlobalKey _subscribersListKey = GlobalKey();
+  final GlobalKey _filterChipsKey = GlobalKey();
+
   @override
   void initState() {
     super.initState();
@@ -89,7 +97,39 @@ class _SubscribersPageState extends State<SubscribersPage>
       vsync: this,
       duration: const Duration(milliseconds: 300),
     );
-    _loadDashboard();
+    _loadDashboard().then((_) {
+      // Verificar si debe mostrar el walkthrough después de cargar los datos
+      _checkAndShowWalkthrough();
+    });
+  }
+
+  Future<void> _checkAndShowWalkthrough() async {
+    final shouldShow = await UserService.shouldShowSubscribersWalkthrough();
+
+    if (!shouldShow || !mounted) return;
+
+    // Esperar un poco para que la UI se estabilice
+    await Future.delayed(const Duration(milliseconds: 800));
+
+    if (!mounted) return;
+
+    // Iniciar el walkthrough
+    _startWalkthrough();
+  }
+
+  void _startWalkthrough() {
+    final keys = <GlobalKey>[
+      _addButtonKey,
+      _searchFieldKey,
+      _statsCardsKey,
+      _filterChipsKey,
+      _subscribersListKey,
+    ];
+
+    ShowCaseWidget.of(context).startShowCase(keys);
+
+    // Marcar como visto inmediatamente
+    UserService.markSubscribersWalkthroughAsSeen();
   }
 
   @override
@@ -552,6 +592,12 @@ class _SubscribersPageState extends State<SubscribersPage>
 
   @override
   Widget build(BuildContext context) {
+    return ShowCaseWidget(
+      builder: (context) => _buildContent(context),
+    );
+  }
+
+  Widget _buildContent(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
@@ -698,7 +744,20 @@ class _SubscribersPageState extends State<SubscribersPage>
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: _StatsOverview(dashboard: dashboard),
+                child: Showcase(
+                  key: _statsCardsKey,
+                  description: '¡Tus estadísticas al instante! Ve cuántos suscriptores tienes en total, cuántos confirmaron su invitación y cuántos están pendientes.',
+                  descTextStyle: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    height: 1.5,
+                  ),
+                  tooltipBackgroundColor: const Color(0xFF4DB3A8),
+                  textColor: Colors.white,
+                  tooltipPadding: const EdgeInsets.all(20),
+                  tooltipBorderRadius: BorderRadius.circular(16),
+                  child: _StatsOverview(dashboard: dashboard),
+                ),
               ),
             ),
             if ((dashboard?.recentComments.isNotEmpty ?? false) ||
@@ -715,32 +774,57 @@ class _SubscribersPageState extends State<SubscribersPage>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    TextField(
-                      controller: _searchController,
-                      decoration: InputDecoration(
-                        filled: true,
-                        prefixIcon: const Icon(Icons.search_rounded),
-                        hintText: 'Buscar por nombre o correo…',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: BorderSide.none,
-                        ),
-                        suffixIcon: _searchTerm.isNotEmpty
-                            ? IconButton(
-                                onPressed: () {
-                                  _searchController.clear();
-                                  setState(() => _searchTerm = '');
-                                },
-                                icon: const Icon(Icons.clear),
-                              )
-                            : null,
+                    Showcase(
+                      key: _searchFieldKey,
+                      description: 'Busca tus suscriptores por nombre o email. Útil cuando tienes muchos suscriptores y necesitas encontrar a alguien específico.',
+                      descTextStyle: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        height: 1.5,
                       ),
-                      onChanged: (value) {
-                        setState(() => _searchTerm = value);
-                      },
+                      tooltipBackgroundColor: const Color(0xFF4DB3A8),
+                      textColor: Colors.white,
+                      tooltipPadding: const EdgeInsets.all(20),
+                      tooltipBorderRadius: BorderRadius.circular(16),
+                      child: TextField(
+                        controller: _searchController,
+                        decoration: InputDecoration(
+                          filled: true,
+                          prefixIcon: const Icon(Icons.search_rounded),
+                          hintText: 'Buscar por nombre o correo…',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide: BorderSide.none,
+                          ),
+                          suffixIcon: _searchTerm.isNotEmpty
+                              ? IconButton(
+                                  onPressed: () {
+                                    _searchController.clear();
+                                    setState(() => _searchTerm = '');
+                                  },
+                                  icon: const Icon(Icons.clear),
+                                )
+                              : null,
+                        ),
+                        onChanged: (value) {
+                          setState(() => _searchTerm = value);
+                        },
+                      ),
                     ),
                     const SizedBox(height: 12),
-                    _FilterChips(
+                    Showcase(
+                      key: _filterChipsKey,
+                      description: 'Filtra tus suscriptores: ve todos, solo confirmados, pendientes de confirmación o los que se dieron de baja.',
+                      descTextStyle: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        height: 1.5,
+                      ),
+                      tooltipBackgroundColor: const Color(0xFF4DB3A8),
+                      textColor: Colors.white,
+                      tooltipPadding: const EdgeInsets.all(20),
+                      tooltipBorderRadius: BorderRadius.circular(16),
+                      child: _FilterChips(
                       current: _filter,
                       onChanged: (filter) {
                         setState(() => _filter = filter);
@@ -750,6 +834,7 @@ class _SubscribersPageState extends State<SubscribersPage>
                         confirmed: dashboard?.confirmedSubscribers ?? 0,
                         pending: dashboard?.pendingSubscribers ?? 0,
                         unsubscribed: dashboard?.unsubscribedSubscribers ?? 0,
+                      ),
                       ),
                     ),
                   ],
@@ -783,16 +868,35 @@ class _SubscribersPageState extends State<SubscribersPage>
                     (context, index) {
                       final subscriber = subscribers[index];
                       final engagement = dashboard?.engagementFor(subscriber.id);
+
+                      // Envolver el primer item con Showcase
+                      final card = _SubscriberCard(
+                        subscriber: subscriber,
+                        engagement: engagement,
+                        onTap: () => _openSubscriberDetails(subscriber),
+                        onResend: () => _sendInvite(subscriber),
+                        isSendingInvite:
+                            _sendingInviteIds.contains(subscriber.id),
+                      );
+
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 12),
-                        child: _SubscriberCard(
-                          subscriber: subscriber,
-                          engagement: engagement,
-                          onTap: () => _openSubscriberDetails(subscriber),
-                          onResend: () => _sendInvite(subscriber),
-                          isSendingInvite:
-                              _sendingInviteIds.contains(subscriber.id),
-                        ),
+                        child: index == 0
+                            ? Showcase(
+                                key: _subscribersListKey,
+                                description: 'Aquí están todos tus suscriptores. Toca uno para ver detalles, reenviar invitación o editar su información. Ve sus reacciones y comentarios.',
+                                descTextStyle: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w500,
+                                  height: 1.5,
+                                ),
+                                tooltipBackgroundColor: const Color(0xFF4DB3A8),
+                                textColor: Colors.white,
+                                tooltipPadding: const EdgeInsets.all(20),
+                                tooltipBorderRadius: BorderRadius.circular(16),
+                                child: card,
+                              )
+                            : card,
                       );
                     },
                     childCount: subscribers.length,
@@ -802,28 +906,41 @@ class _SubscribersPageState extends State<SubscribersPage>
           ],
         ),
       ),
-      floatingActionButton: ScaleTransition(
-        scale: CurvedAnimation(
-          parent: _fabController,
-          curve: Curves.easeOutBack,
+      floatingActionButton: Showcase(
+        key: _addButtonKey,
+        description: '¡Aquí puedes agregar nuevos suscriptores! Solo necesitas su nombre y email. Ellos recibirán una invitación para ver tus historias.',
+        descTextStyle: const TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w500,
+          height: 1.5,
         ),
-        child: FloatingActionButton.extended(
-          onPressed: _showAddSubscriberDialog,
-          icon: const Icon(Icons.person_add_alt_1, size: 24),
-          label: const Text(
-            'Agregar',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.5,
-            ),
+        tooltipBackgroundColor: const Color(0xFF4DB3A8),
+        textColor: Colors.white,
+        tooltipPadding: const EdgeInsets.all(20),
+        tooltipBorderRadius: BorderRadius.circular(16),
+        child: ScaleTransition(
+          scale: CurvedAnimation(
+            parent: _fabController,
+            curve: Curves.easeOutBack,
           ),
-          elevation: 6,
-          highlightElevation: 12,
-          backgroundColor: colorScheme.primary,
-          foregroundColor: colorScheme.onPrimary,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+          child: FloatingActionButton.extended(
+            onPressed: _showAddSubscriberDialog,
+            icon: const Icon(Icons.person_add_alt_1, size: 24),
+            label: const Text(
+              'Agregar',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.5,
+              ),
+            ),
+            elevation: 6,
+            highlightElevation: 12,
+            backgroundColor: colorScheme.primary,
+            foregroundColor: colorScheme.onPrimary,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
           ),
         ),
       ),

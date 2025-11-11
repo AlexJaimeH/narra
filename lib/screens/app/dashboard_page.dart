@@ -225,10 +225,13 @@ class _DashboardPageState extends State<DashboardPage> {
                     fontWeight: FontWeight.w500,
                     height: 1.5,
                   ),
-                  tooltipBackgroundColor: const Color(0xFF4DB3A8),
+                  tooltipBackgroundColor: const Color(0xFF2D7A6E),
                   textColor: Colors.white,
                   tooltipPadding: const EdgeInsets.all(20),
                   tooltipBorderRadius: BorderRadius.circular(16),
+                  overlayColor: Colors.black,
+                  overlayOpacity: 0.85,
+                  disableDefaultTargetGestures: true,
                   child: _WelcomeSection(
                     userProfile: _userProfile,
                     allTags: _allTags,
@@ -252,10 +255,13 @@ class _DashboardPageState extends State<DashboardPage> {
                       fontWeight: FontWeight.w500,
                       height: 1.5,
                     ),
-                    tooltipBackgroundColor: const Color(0xFF7C3AED),
+                    tooltipBackgroundColor: const Color(0xFF5B21B6),
                     textColor: Colors.white,
                     tooltipPadding: const EdgeInsets.all(20),
                     tooltipBorderRadius: BorderRadius.circular(16),
+                    overlayColor: Colors.black,
+                    overlayOpacity: 0.85,
+                    disableDefaultTargetGestures: true,
                     child: _GhostWriterIntroCard(
                       onDismiss: () {
                         setState(() => _shouldShowGhostWriterIntro = false);

@@ -662,8 +662,13 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     unawaited(_loadVoiceRecordings());
 
     // Verificar si debe mostrar el walkthrough (siempre, no solo para historias nuevas)
+    print('📍 [Editor] Scheduling walkthrough check via postFrameCallback');
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
+      print('📍 [Editor] postFrameCallback executed');
+      if (!mounted) {
+        print('❌ [Editor] Not mounted in postFrameCallback');
+        return;
+      }
       _checkAndShowWalkthrough();
     });
 
@@ -704,20 +709,38 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   }
 
   Future<void> _checkAndShowWalkthrough() async {
+    print('🎯 [Editor] _checkAndShowWalkthrough called');
+    print('🎯 [Editor] mounted: $mounted');
+
     final shouldShow = await UserService.shouldShowEditorWalkthrough();
+    print('🎯 [Editor] shouldShow: $shouldShow');
 
-    if (!shouldShow || !mounted) return;
+    if (!shouldShow) {
+      print('❌ [Editor] Not showing walkthrough (already seen)');
+      return;
+    }
 
+    if (!mounted) {
+      print('❌ [Editor] Not showing walkthrough (not mounted)');
+      return;
+    }
+
+    print('⏳ [Editor] Waiting 1500ms for UI to stabilize...');
     // Esperar a que la UI se estabilice completamente
     await Future.delayed(const Duration(milliseconds: 1500));
 
-    if (!mounted) return;
+    if (!mounted) {
+      print('❌ [Editor] Not mounted after delay');
+      return;
+    }
 
+    print('🚀 [Editor] Starting walkthrough...');
     // Iniciar el walkthrough
     _startWalkthrough();
   }
 
   void _startWalkthrough() {
+    print('🎬 [Editor] _startWalkthrough called');
     final keys = <GlobalKey>[
       _contentFieldKey,
       _ghostWriterButtonKey,
@@ -729,7 +752,15 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       _publishButtonKey,
     ];
 
-    ShowCaseWidget.of(context).startShowCase(keys);
+    print('🎬 [Editor] Keys: ${keys.length}');
+    print('🎬 [Editor] Calling ShowCaseWidget.of(context).startShowCase');
+
+    try {
+      ShowCaseWidget.of(context).startShowCase(keys);
+      print('✅ [Editor] ShowCase started successfully');
+    } catch (e) {
+      print('❌ [Editor] Error starting showcase: $e');
+    }
 
     // Marcar como visto inmediatamente
     UserService.markEditorWalkthroughAsSeen();

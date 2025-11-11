@@ -165,34 +165,55 @@ class UserService {
 
   // Verificar si debe mostrar el walkthrough del editor
   static Future<bool> shouldShowEditorWalkthrough() async {
+    print('🔍 [UserService] Checking shouldShowEditorWalkthrough...');
     final settings = await getUserSettings();
-    if (settings == null) return true;
+    print('🔍 [UserService] Settings: $settings');
+    if (settings == null) {
+      print('✅ [UserService] No settings found, showing walkthrough');
+      return true;
+    }
 
     final hasSeenWalkthrough = settings['has_seen_editor_walkthrough'] as bool? ?? false;
+    print('🔍 [UserService] has_seen_editor_walkthrough: $hasSeenWalkthrough');
 
     // Mostrar solo si NO ha visto el walkthrough
-    return !hasSeenWalkthrough;
+    final shouldShow = !hasSeenWalkthrough;
+    print('✅ [UserService] Should show editor walkthrough: $shouldShow');
+    return shouldShow;
   }
 
   // Marcar que el usuario vio el walkthrough de suscriptores
   static Future<void> markSubscribersWalkthroughAsSeen() async {
+    print('💾 [UserService] Marking subscribers walkthrough as seen...');
     final userId = SupabaseAuth.currentUser?.id;
-    if (userId == null) return;
+    if (userId == null) {
+      print('❌ [UserService] No user logged in');
+      return;
+    }
 
     await updateUserSettings({
       'has_seen_subscribers_walkthrough': true,
     });
+    print('✅ [UserService] Subscribers walkthrough marked as seen');
   }
 
   // Verificar si debe mostrar el walkthrough de suscriptores
   static Future<bool> shouldShowSubscribersWalkthrough() async {
+    print('🔍 [UserService] Checking shouldShowSubscribersWalkthrough...');
     final settings = await getUserSettings();
-    if (settings == null) return true;
+    print('🔍 [UserService] Settings: $settings');
+    if (settings == null) {
+      print('✅ [UserService] No settings found, showing walkthrough');
+      return true;
+    }
 
     final hasSeenWalkthrough = settings['has_seen_subscribers_walkthrough'] as bool? ?? false;
+    print('🔍 [UserService] has_seen_subscribers_walkthrough: $hasSeenWalkthrough');
 
     // Mostrar solo si NO ha visto el walkthrough
-    return !hasSeenWalkthrough;
+    final shouldShow = !hasSeenWalkthrough;
+    print('✅ [UserService] Should show subscribers walkthrough: $shouldShow');
+    return shouldShow;
   }
 
   // Obtener configuraciones del usuario

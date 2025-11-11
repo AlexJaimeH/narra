@@ -1,6 +1,9 @@
 interface Env {
   SUPABASE_URL: string;
   SUPABASE_SERVICE_ROLE_KEY: string;
+  RESEND_API_KEY: string;
+  RESEND_FROM_EMAIL: string;
+  APP_URL?: string;
 }
 
 const CORS_HEADERS: Record<string, string> = {
@@ -32,6 +35,11 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
       console.error('[gift-management-add-subscriber] Missing Supabase configuration');
       return json({ error: 'Server configuration error' }, 500);
+    }
+
+    if (!env.RESEND_API_KEY || !env.RESEND_FROM_EMAIL) {
+      console.error('[gift-management-add-subscriber] Missing email configuration');
+      return json({ error: 'Email service not configured' }, 500);
     }
 
     const payload = await request.json().catch(() => null);
@@ -134,13 +142,46 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     }
 
     const newSubscriber = await insertResponse.json();
+    const subscriberData = newSubscriber[0];
 
     console.log('[gift-management-add-subscriber] Subscriber added successfully');
+
+    // Send welcome email to subscriber
+    console.log('[gift-management-add-subscriber] Sending welcome email to subscriber...');
+    const appUrl = (env as any).APP_URL || 'https://narra.mx';
+    const subscriberLink = `${appUrl}/blog/subscriber/${subscriberData.id}?author=${authorUserId}&subscriber=${subscriberData.id}&token=${accessToken}&name=${encodeURIComponent(name)}`;
+
+    const emailHtml = buildSubscriberEmail(name, email, subscriberLink);
+    const emailText = buildSubscriberEmailText(name, subscriberLink);
+
+    const emailResponse = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${env.RESEND_API_KEY}`,
+      },
+      body: JSON.stringify({
+        from: env.RESEND_FROM_EMAIL,
+        to: [email],
+        subject: '📖 Accede al blog de historias de Narra',
+        html: emailHtml,
+        text: emailText,
+        tags: [{ name: 'type', value: 'subscriber-welcome' }],
+      }),
+    });
+
+    if (!emailResponse.ok) {
+      const errorText = await emailResponse.text();
+      console.error('[gift-management-add-subscriber] Failed to send email:', errorText);
+      // Don't fail the whole operation if email fails
+    } else {
+      console.log('[gift-management-add-subscriber] Welcome email sent successfully');
+    }
 
     return json({
       success: true,
       message: 'Suscriptor agregado exitosamente',
-      subscriber: newSubscriber[0],
+      subscriber: subscriberData,
     });
 
   } catch (error) {
@@ -148,3 +189,75 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     return json({ error: 'Internal server error' }, 500);
   }
 };
+
+function buildSubscriberEmail(name: string, email: string, magicLink: string): string {
+  return `<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Accede al blog de Narra</title>
+  </head>
+  <body style="margin:0;padding:0;background:linear-gradient(135deg, #fdfbf7 0%, #f0ebe3 100%);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;color:#1f2937;">
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:660px;margin:40px auto;padding:0 20px;">
+      <tr>
+        <td>
+          <div style="text-align:center;margin-bottom:32px;">
+            <img src="https://narra.mx/logo-horizontal.png" alt="Narra" style="height:36px;width:auto;" />
+          </div>
+
+          <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#ffffff;border-radius:24px;box-shadow:0 20px 60px rgba(77,179,168,0.12);overflow:hidden;">
+            <tr>
+              <td style="padding:0;">
+                <div style="background:linear-gradient(135deg, #4DB3A8 0%, #38827A 100%);padding:48px 36px;text-align:center;">
+                  <h1 style="font-size:32px;margin:0;font-weight:800;color:#ffffff;">📖 Accede al Blog</h1>
+                </div>
+
+                <div style="padding:40px 36px;">
+                  <p style="margin:0 0 24px 0;font-size:18px;line-height:1.65;color:#374151;">Hola ${name},</p>
+                  <p style="margin:0 0 28px 0;font-size:16px;line-height:1.65;color:#374151;">
+                    Has sido agregado como suscriptor. Haz clic en el botón de abajo para acceder al blog de historias en Narra.
+                  </p>
+
+                  <div style="text-align:center;margin:40px 0 32px;">
+                    <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;">
+                      <tr>
+                        <td style="border-radius:16px;background:linear-gradient(135deg, #4DB3A8 0%, #38827A 100%);box-shadow:0 8px 24px rgba(77,179,168,0.35);">
+                          <a href="${magicLink}" style="display:inline-block;color:#ffffff;text-decoration:none;font-weight:700;font-size:17px;padding:18px 42px;border-radius:16px;">📖 Ver Historias</a>
+                        </td>
+                      </tr>
+                    </table>
+                  </div>
+
+                  <div style="background:#f9fafb;border:2px dashed #e5e7eb;border-radius:12px;padding:20px;margin:24px 0 0 0;">
+                    <p style="margin:0 0 8px 0;font-size:13px;color:#6b7280;font-weight:600;">Si el botón no funciona, usa este enlace:</p>
+                    <p style="margin:0;font-size:13px;word-break:break-all;"><a href="${magicLink}" style="color:#38827A;text-decoration:none;">${magicLink}</a></p>
+                  </div>
+                </div>
+
+                <div style="background:#fafaf9;padding:32px 36px;border-top:1px solid #e7e5e4;">
+                  <p style="margin:0;font-size:12px;color:#a8a29e;line-height:1.6;text-align:center;">
+                    Correo automático de Narra • Por favor no respondas
+                  </p>
+                </div>
+              </td>
+            </tr>
+          </table>
+
+          <div style="height:40px;"></div>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+}
+
+function buildSubscriberEmailText(name: string, magicLink: string): string {
+  return `Hola ${name},
+
+Has sido agregado como suscriptor. Haz clic en el siguiente enlace para acceder al blog de historias en Narra:
+
+${magicLink}
+
+Correo automático de Narra`;
+}

@@ -2919,48 +2919,74 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                 spacing: isCompact ? 10 : 14,
                 runSpacing: isCompact ? 10 : 14,
                 children: [
-                  buildActionButton(
-                    isCompact: isCompact,
-                    onPressed: _isGhostWriterProcessing
-                        ? null
-                        : _handleGhostWriterPressed,
-                    icon: _isGhostWriterProcessing
-                        ? SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.5,
-                              valueColor:
-                                  AlwaysStoppedAnimation(colorScheme.primary),
-                            ),
-                          )
-                        : Icon(
-                            Icons.auto_fix_high,
-                            color: _canUseGhostWriter()
-                                ? colorScheme.primary
-                                : colorScheme.onSurfaceVariant,
-                          ),
-                    label: _isGhostWriterProcessing
-                        ? 'Trabajando...'
-                        : 'Ghost Writer (AI)',
-                  ),
-                  buildActionButton(
-                    isCompact: isCompact,
-                    onPressed: () {
-                      setState(() => _showSuggestions = !_showSuggestions);
-                      if (_showSuggestions) {
-                        _generateAISuggestions();
-                      }
-                    },
-                    icon: Icon(
-                      _showSuggestions
-                          ? Icons.lightbulb
-                          : Icons.lightbulb_outline,
-                      color: _showSuggestions
-                          ? colorScheme.primary
-                          : colorScheme.onSurfaceVariant,
+                  Showcase(
+                    key: _ghostWriterButtonKey,
+                    description: 'El Ghost Writer te ayuda a pulir tu historia. Escribe al menos 300 palabras y este botón mejorará tu texto de forma profesional.',
+                    descTextStyle: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      height: 1.5,
                     ),
-                    label: 'Sugerencias',
+                    tooltipBackgroundColor: const Color(0xFF7C3AED),
+                    textColor: Colors.white,
+                    tooltipPadding: const EdgeInsets.all(20),
+                    tooltipBorderRadius: BorderRadius.circular(16),
+                    child: buildActionButton(
+                      isCompact: isCompact,
+                      onPressed: _isGhostWriterProcessing
+                          ? null
+                          : _handleGhostWriterPressed,
+                      icon: _isGhostWriterProcessing
+                          ? SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                                valueColor:
+                                    AlwaysStoppedAnimation(colorScheme.primary),
+                              ),
+                            )
+                          : Icon(
+                              Icons.auto_fix_high,
+                              color: _canUseGhostWriter()
+                                  ? colorScheme.primary
+                                  : colorScheme.onSurfaceVariant,
+                            ),
+                      label: _isGhostWriterProcessing
+                          ? 'Trabajando...'
+                          : 'Ghost Writer (AI)',
+                    ),
+                  ),
+                  Showcase(
+                    key: _suggestionsButtonKey,
+                    description: 'Obtén ideas y preguntas para desarrollar tu historia. Funciona aunque aún no hayas escrito nada.',
+                    descTextStyle: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      height: 1.5,
+                    ),
+                    tooltipBackgroundColor: const Color(0xFFF59E0B),
+                    textColor: Colors.white,
+                    tooltipPadding: const EdgeInsets.all(20),
+                    tooltipBorderRadius: BorderRadius.circular(16),
+                    child: buildActionButton(
+                      isCompact: isCompact,
+                      onPressed: () {
+                        setState(() => _showSuggestions = !_showSuggestions);
+                        if (_showSuggestions) {
+                          _generateAISuggestions();
+                        }
+                      },
+                      icon: Icon(
+                        _showSuggestions
+                            ? Icons.lightbulb
+                            : Icons.lightbulb_outline,
+                        color: _showSuggestions
+                            ? colorScheme.primary
+                            : colorScheme.onSurfaceVariant,
+                      ),
+                      label: 'Sugerencias',
+                    ),
                   ),
                   buildActionButton(
                     isCompact: isCompact,
@@ -3036,14 +3062,26 @@ class _StoryEditorPageState extends State<StoryEditorPage>
             ),
             child: Padding(
               padding: innerPadding,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Fotos (${_photos.length}/8)',
+              child: Showcase(
+                key: _photosTabKey,
+                description: 'Agrega fotos para ilustrar tu historia (máximo 8). Usa "Colocar foto" para agregar etiquetas [img_1] en tu texto que puedes mover libremente.',
+                descTextStyle: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                  height: 1.5,
+                ),
+                tooltipBackgroundColor: const Color(0xFF10B981),
+                textColor: Colors.white,
+                tooltipPadding: const EdgeInsets.all(20),
+                tooltipBorderRadius: BorderRadius.circular(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Fotos (${_photos.length}/8)',
                           style: theme.textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.w700,
                           ),
@@ -3102,6 +3140,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                       ],
                     ),
                 ],
+                ),
               ),
             ),
           ),
@@ -3138,18 +3177,30 @@ class _StoryEditorPageState extends State<StoryEditorPage>
             ),
             child: Padding(
               padding: innerPadding,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Fechas de la historia',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
+              child: Showcase(
+                key: _datesTabKey,
+                description: 'Indica cuándo ocurrió tu historia. Puede ser una fecha exacta o aproximada (año, mes). También puedes indicar solo fecha de inicio si no sabes cuándo terminó.',
+                descTextStyle: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                  height: 1.5,
+                ),
+                tooltipBackgroundColor: const Color(0xFF3B82F6),
+                textColor: Colors.white,
+                tooltipPadding: const EdgeInsets.all(20),
+                tooltipBorderRadius: BorderRadius.circular(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Fechas de la historia',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Define cuándo sucedió tu recuerdo para darle contexto.',
+                    const SizedBox(height: 6),
+                    Text(
+                      'Define cuándo sucedió tu recuerdo para darle contexto.',
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: colorScheme.onSurfaceVariant,
                     ),
@@ -3275,29 +3326,41 @@ class _StoryEditorPageState extends State<StoryEditorPage>
             ),
             child: Padding(
               padding: innerPadding,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.local_offer_outlined,
-                          color: colorScheme.primary),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Etiquetas temáticas',
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
+              child: Showcase(
+                key: _tagsTabKey,
+                description: 'Agrega etiquetas temáticas para organizar tus historias. Tus suscriptores podrán navegar por categorías como "Familia", "Trabajo", "Viajes", etc.',
+                descTextStyle: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                  height: 1.5,
+                ),
+                tooltipBackgroundColor: const Color(0xFF8B5CF6),
+                textColor: Colors.white,
+                tooltipPadding: const EdgeInsets.all(20),
+                tooltipBorderRadius: BorderRadius.circular(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.local_offer_outlined,
+                            color: colorScheme.primary),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Etiquetas temáticas',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Elige etiquetas que ayuden a tu familia a navegar por tus recuerdos.',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
+                      ],
                     ),
-                  ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Elige etiquetas que ayuden a tu familia a navegar por tus recuerdos.',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
                   const SizedBox(height: 18),
                   TextField(
                     controller: _tagSearchController,
@@ -9922,9 +9985,39 @@ class _EditorBottomBar extends StatelessWidget {
                       Expanded(
                         child: Row(
                           children: [
-                            Expanded(child: draftButton(true)),
+                            Expanded(
+                              child: Showcase(
+                                key: _saveButtonKey,
+                                description: 'Guarda tu historia como borrador para seguir editando después. Tus cambios estarán seguros.',
+                                descTextStyle: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w500,
+                                  height: 1.5,
+                                ),
+                                tooltipBackgroundColor: const Color(0xFF64748B),
+                                textColor: Colors.white,
+                                tooltipPadding: const EdgeInsets.all(20),
+                                tooltipBorderRadius: BorderRadius.circular(16),
+                                child: draftButton(true),
+                              ),
+                            ),
                             const SizedBox(width: 10),
-                            Expanded(child: publishButton(true)),
+                            Expanded(
+                              child: Showcase(
+                                key: _publishButtonKey,
+                                description: 'Publica tu historia para que llegue a tus suscriptores por correo. Necesitas al menos 300 palabras para publicar.',
+                                descTextStyle: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w500,
+                                  height: 1.5,
+                                ),
+                                tooltipBackgroundColor: const Color(0xFF059669),
+                                textColor: Colors.white,
+                                tooltipPadding: const EdgeInsets.all(20),
+                                tooltipBorderRadius: BorderRadius.circular(16),
+                                child: publishButton(true),
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -9938,9 +10031,35 @@ class _EditorBottomBar extends StatelessWidget {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.end,
                           children: [
-                            draftButton(false),
+                            Showcase(
+                              key: _saveButtonKey,
+                              description: 'Guarda tu historia como borrador para seguir editando después. Tus cambios estarán seguros.',
+                              descTextStyle: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                                height: 1.5,
+                              ),
+                              tooltipBackgroundColor: const Color(0xFF64748B),
+                              textColor: Colors.white,
+                              tooltipPadding: const EdgeInsets.all(20),
+                              tooltipBorderRadius: BorderRadius.circular(16),
+                              child: draftButton(false),
+                            ),
                             const SizedBox(width: 12),
-                            publishButton(false),
+                            Showcase(
+                              key: _publishButtonKey,
+                              description: 'Publica tu historia para que llegue a tus suscriptores por correo. Necesitas al menos 300 palabras para publicar.',
+                              descTextStyle: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                                height: 1.5,
+                              ),
+                              tooltipBackgroundColor: const Color(0xFF059669),
+                              textColor: Colors.white,
+                              tooltipPadding: const EdgeInsets.all(20),
+                              tooltipBorderRadius: BorderRadius.circular(16),
+                              child: publishButton(false),
+                            ),
                           ],
                         ),
                       ),

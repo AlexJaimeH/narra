@@ -489,11 +489,11 @@ export const GiftManagementPage: React.FC = () => {
                                 <span
                                   className="inline-block px-2 py-1 rounded-md text-xs font-semibold"
                                   style={{
-                                    background: sub.status === 'active' ? '#D1FAE5' : '#FEE2E2',
-                                    color: sub.status === 'active' ? '#065F46' : '#991B1B',
+                                    background: sub.status === 'confirmed' ? '#D1FAE5' : sub.status === 'pending' ? '#FEF3C7' : '#FEE2E2',
+                                    color: sub.status === 'confirmed' ? '#065F46' : sub.status === 'pending' ? '#92400E' : '#991B1B',
                                   }}
                                 >
-                                  {sub.status === 'active' ? '✓ Activo' : '✗ Inactivo'}
+                                  {sub.status === 'confirmed' ? '✓ Confirmado' : sub.status === 'pending' ? '⏳ Pendiente' : '✗ Dado de baja'}
                                 </span>
                                 <span className="text-xs" style={{ color: NarraColors.text.light }}>
                                   Agregado: {new Date(sub.added_at).toLocaleDateString()}

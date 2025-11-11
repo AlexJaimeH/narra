@@ -96,6 +96,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
     // Generate magic link
     console.log('[gift-management-send-magic-link] Generating magic link...');
+    const appUrl = (env as any).APP_URL || 'https://narra.mx';
+    const redirectTo = `${appUrl}/app`;
+
     const magicLinkResponse = await fetch(
       `${env.SUPABASE_URL}/auth/v1/admin/generate_link`,
       {
@@ -109,7 +112,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
           type: 'magiclink',
           email: authorEmail,
           options: {
-            redirect_to: `${(env as any).APP_URL || 'https://narra.mx'}/app/`,
+            redirect_to: redirectTo,
           },
         }),
       }
@@ -122,14 +125,51 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     }
 
     const magicLinkData = await magicLinkResponse.json();
-    const magicLink = magicLinkData.action_link || '';
+    let magicLink = magicLinkData.properties?.action_link || magicLinkData.action_link;
 
     if (!magicLink) {
       return json({ error: 'Error al generar enlace de acceso' }, 500);
     }
 
-    // The magic link already includes the redirect_to parameter, so we don't need to transform it
-    console.log('[gift-management-send-magic-link] Magic link generated:', magicLink);
+    console.log('[gift-management-send-magic-link] Original magic link:', magicLink);
+
+    // IMPORTANT: Fix common issues with redirect_to (same logic as author-magic-link.ts)
+    const urlObj = new URL(magicLink);
+    let redirectParam = urlObj.searchParams.get('redirect_to');
+
+    console.log('[gift-management-send-magic-link] Original redirect_to param:', redirectParam);
+
+    // 1. Replace localhost if it appears
+    if (redirectParam && redirectParam.includes('localhost')) {
+      console.log('[gift-management-send-magic-link] Detected localhost in redirect_to');
+      redirectParam = redirectParam.replace(/http:\/\/localhost:\d+/g, appUrl);
+      redirectParam = redirectParam.replace(/https:\/\/localhost:\d+/g, appUrl);
+    }
+
+    // 2. Make sure it ends in /app
+    if (redirectParam) {
+      const redirectUrl = new URL(redirectParam);
+
+      // If it ends in /app/app, remove one
+      if (redirectUrl.pathname.endsWith('/app/app')) {
+        console.log('[gift-management-send-magic-link] Detected /app/app, fixing to /app');
+        redirectUrl.pathname = redirectUrl.pathname.replace(/\/app\/app$/, '/app');
+        redirectParam = redirectUrl.toString();
+      }
+      // If it does NOT end in /app, add /app
+      else if (!redirectUrl.pathname.endsWith('/app')) {
+        console.log('[gift-management-send-magic-link] redirect_to missing /app, adding it');
+        redirectUrl.pathname = redirectUrl.pathname.replace(/\/$/, '') + '/app';
+        redirectParam = redirectUrl.toString();
+      }
+
+      // Update the magic link with the corrected redirect_to
+      urlObj.searchParams.set('redirect_to', redirectParam);
+      magicLink = urlObj.toString();
+    }
+
+    console.log('[gift-management-send-magic-link] Fixed redirect_to param:', redirectParam);
+    console.log('[gift-management-send-magic-link] Final magic link:', magicLink);
 
     // Send email
     console.log('[gift-management-send-magic-link] Sending magic link email...');

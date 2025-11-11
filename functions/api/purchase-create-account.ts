@@ -174,6 +174,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
     // Generate magic link for author
     console.log('[purchase-create-account] Generating magic link for author...');
+    const appUrl = env.APP_URL || 'https://narra.mx';
+    const redirectTo = `${appUrl}/app`;
+
     const magicLinkResponse = await fetch(
       `${env.SUPABASE_URL}/auth/v1/admin/generate_link`,
       {
@@ -187,7 +190,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
           type: 'magiclink',
           email: authorEmail,
           options: {
-            redirect_to: `${env.APP_URL || 'https://narra.mx'}/app`,
+            redirect_to: redirectTo,
           },
         }),
       }
@@ -199,15 +202,56 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     }
 
     const magicLinkData = await magicLinkResponse.json();
-    let magicLink = magicLinkData.action_link || '';
+    let magicLink = magicLinkData.properties?.action_link || magicLinkData.action_link || '';
 
-    // Determine app URL
-    const appUrl = env.APP_URL || 'https://narra.mx';
+    if (!magicLink) {
+      console.error('[purchase-create-account] No magic link generated');
+      return json({ error: 'Error al generar enlace de acceso' }, 500);
+    }
 
-    // Ensure magic link redirects to /app
-    // Transform: https://narra.mx/#access_token=... → https://narra.mx/app/#access_token=...
-    if (magicLink) {
-      magicLink = magicLink.replace(appUrl + '/#', appUrl + '/app/#');
+    console.log('[purchase-create-account] Original magic link:', magicLink);
+
+    // IMPORTANT: Fix common issues with redirect_to (same logic as author-magic-link.ts)
+    try {
+      const urlObj = new URL(magicLink);
+      let redirectParam = urlObj.searchParams.get('redirect_to');
+
+      console.log('[purchase-create-account] Original redirect_to param:', redirectParam);
+
+      // 1. Replace localhost if it appears
+      if (redirectParam && redirectParam.includes('localhost')) {
+        console.log('[purchase-create-account] Detected localhost in redirect_to');
+        redirectParam = redirectParam.replace(/http:\/\/localhost:\d+/g, appUrl);
+        redirectParam = redirectParam.replace(/https:\/\/localhost:\d+/g, appUrl);
+      }
+
+      // 2. Make sure it ends in /app
+      if (redirectParam) {
+        const redirectUrl = new URL(redirectParam);
+
+        // If it ends in /app/app, remove one
+        if (redirectUrl.pathname.endsWith('/app/app')) {
+          console.log('[purchase-create-account] Detected /app/app, fixing to /app');
+          redirectUrl.pathname = redirectUrl.pathname.replace(/\/app\/app$/, '/app');
+          redirectParam = redirectUrl.toString();
+        }
+        // If it does NOT end in /app, add /app
+        else if (!redirectUrl.pathname.endsWith('/app')) {
+          console.log('[purchase-create-account] redirect_to missing /app, adding it');
+          redirectUrl.pathname = redirectUrl.pathname.replace(/\/$/, '') + '/app';
+          redirectParam = redirectUrl.toString();
+        }
+
+        // Update the magic link with the corrected redirect_to
+        urlObj.searchParams.set('redirect_to', redirectParam);
+        magicLink = urlObj.toString();
+      }
+
+      console.log('[purchase-create-account] Fixed redirect_to param:', redirectParam);
+      console.log('[purchase-create-account] Final magic link:', magicLink);
+    } catch (error) {
+      console.error('[purchase-create-account] Error fixing magic link:', error);
+      // Continue with original magic link if fixing fails
     }
 
     // Send emails

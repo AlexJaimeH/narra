@@ -106,9 +106,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       return json({ error: 'Token de acceso no encontrado para este suscriptor' }, 500);
     }
 
-    // Construct the full magic link URL
+    // Construct the full subscriber link URL
     const appUrl = (env as any).APP_URL || 'https://narra.mx';
-    const fullMagicLink = `${appUrl}/subscriber/${authorUserId}?token=${accessToken}`;
+    const fullMagicLink = `${appUrl}/blog/subscriber/${subscriberId}?author=${authorUserId}&subscriber=${subscriberId}&token=${accessToken}&name=${encodeURIComponent(subscriber.name)}`;
 
     // Send email to subscriber
     console.log('[gift-management-resend-subscriber-link] Sending email to subscriber...');

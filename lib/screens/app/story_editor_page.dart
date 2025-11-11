@@ -614,6 +614,9 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   final GlobalKey _saveButtonKey = GlobalKey();
   final GlobalKey _publishButtonKey = GlobalKey();
 
+  // Contexto del ShowCaseWidget builder
+  BuildContext? _showcaseContext;
+
   @override
   void initState() {
     super.initState();
@@ -741,6 +744,12 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
   void _startWalkthrough() {
     print('🎬 [Editor] _startWalkthrough called');
+
+    if (_showcaseContext == null) {
+      print('❌ [Editor] showcaseContext is null!');
+      return;
+    }
+
     final keys = <GlobalKey>[
       _contentFieldKey,
       _ghostWriterButtonKey,
@@ -753,10 +762,10 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     ];
 
     print('🎬 [Editor] Keys: ${keys.length}');
-    print('🎬 [Editor] Calling ShowCaseWidget.of(context).startShowCase');
+    print('🎬 [Editor] Calling ShowCaseWidget.of(showcaseContext).startShowCase');
 
     try {
-      ShowCaseWidget.of(context).startShowCase(keys);
+      ShowCaseWidget.of(_showcaseContext!).startShowCase(keys);
       print('✅ [Editor] ShowCase started successfully');
     } catch (e) {
       print('❌ [Editor] Error starting showcase: $e');
@@ -2352,7 +2361,10 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   @override
   Widget build(BuildContext context) {
     return ShowCaseWidget(
-      builder: (context) => PopScope(
+      builder: (showcaseContext) {
+        // Guardar el contexto del ShowCaseWidget para usar en walkthrough
+        _showcaseContext = showcaseContext;
+        return PopScope(
         canPop: !_hasChanges,
         onPopInvoked: (didPop) {
           if (!didPop && _hasChanges) {
@@ -2484,7 +2496,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                 },
               ),
             ),
-      ),
+        );
+      },
     );
   }
 

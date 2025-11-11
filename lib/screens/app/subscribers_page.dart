@@ -90,6 +90,9 @@ class _SubscribersPageState extends State<SubscribersPage>
   final GlobalKey _subscribersListKey = GlobalKey();
   final GlobalKey _filterChipsKey = GlobalKey();
 
+  // Contexto del ShowCaseWidget builder
+  BuildContext? _showcaseContext;
+
   @override
   void initState() {
     print('📍 [Subscribers] initState called');
@@ -145,6 +148,12 @@ class _SubscribersPageState extends State<SubscribersPage>
 
   void _startWalkthrough() {
     print('🎬 [Subscribers] _startWalkthrough called');
+
+    if (_showcaseContext == null) {
+      print('❌ [Subscribers] showcaseContext is null!');
+      return;
+    }
+
     // Construir lista de keys solo con elementos que existen
     final keys = <GlobalKey>[
       _addButtonKey,
@@ -158,10 +167,10 @@ class _SubscribersPageState extends State<SubscribersPage>
 
     print('🎬 [Subscribers] Keys: ${keys.length}');
     print('🎬 [Subscribers] Dashboard total: ${_dashboard?.totalSubscribersIncludingUnsubscribed ?? 0}');
-    print('🎬 [Subscribers] Calling ShowCaseWidget.of(context).startShowCase');
+    print('🎬 [Subscribers] Calling ShowCaseWidget.of(showcaseContext).startShowCase');
 
     try {
-      ShowCaseWidget.of(context).startShowCase(keys);
+      ShowCaseWidget.of(_showcaseContext!).startShowCase(keys);
       print('✅ [Subscribers] ShowCase started successfully');
     } catch (e) {
       print('❌ [Subscribers] Error starting showcase: $e');
@@ -632,7 +641,11 @@ class _SubscribersPageState extends State<SubscribersPage>
   @override
   Widget build(BuildContext context) {
     return ShowCaseWidget(
-      builder: (context) => _buildContent(context),
+      builder: (showcaseContext) {
+        // Guardar el contexto del ShowCaseWidget para usar en walkthrough
+        _showcaseContext = showcaseContext;
+        return _buildContent(showcaseContext);
+      },
     );
   }
 

@@ -95,7 +95,6 @@ class _SubscribersPageState extends State<SubscribersPage>
 
   @override
   void initState() {
-    print('📍 [Subscribers] initState called');
     super.initState();
     _fabController = AnimationController(
       vsync: this,
@@ -103,80 +102,35 @@ class _SubscribersPageState extends State<SubscribersPage>
     );
     _loadDashboard();
 
-    // Verificar si debe mostrar el walkthrough después de que el widget esté construido
-    print('📍 [Subscribers] Scheduling walkthrough check via postFrameCallback');
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      print('📍 [Subscribers] postFrameCallback executed');
-      if (!mounted) {
-        print('❌ [Subscribers] Not mounted in postFrameCallback');
-        return;
-      }
+      if (!mounted) return;
       _checkAndShowWalkthrough();
     });
   }
 
   Future<void> _checkAndShowWalkthrough() async {
-    print('🎯 [Subscribers] _checkAndShowWalkthrough called');
-    print('🎯 [Subscribers] mounted: $mounted');
-
     final shouldShow = await UserService.shouldShowSubscribersWalkthrough();
-    print('🎯 [Subscribers] shouldShow: $shouldShow');
+    if (!shouldShow || !mounted) return;
 
-    if (!shouldShow) {
-      print('❌ [Subscribers] Not showing walkthrough (already seen)');
-      return;
-    }
-
-    if (!mounted) {
-      print('❌ [Subscribers] Not showing walkthrough (not mounted)');
-      return;
-    }
-
-    print('⏳ [Subscribers] Waiting 1500ms for UI to stabilize...');
-    // Esperar a que la UI se estabilice y los datos se carguen
     await Future.delayed(const Duration(milliseconds: 1500));
+    if (!mounted) return;
 
-    if (!mounted) {
-      print('❌ [Subscribers] Not mounted after delay');
-      return;
-    }
-
-    print('🚀 [Subscribers] Starting walkthrough...');
-    // Iniciar el walkthrough
     _startWalkthrough();
   }
 
   void _startWalkthrough() {
-    print('🎬 [Subscribers] _startWalkthrough called');
+    if (_showcaseContext == null) return;
 
-    if (_showcaseContext == null) {
-      print('❌ [Subscribers] showcaseContext is null!');
-      return;
-    }
-
-    // Construir lista de keys solo con elementos que existen
     final keys = <GlobalKey>[
       _addButtonKey,
       _searchFieldKey,
       _statsCardsKey,
       _filterChipsKey,
-      // Solo agregar lista de suscriptores si hay al menos uno
       if ((_dashboard?.totalSubscribersIncludingUnsubscribed ?? 0) > 0)
         _subscribersListKey,
     ];
 
-    print('🎬 [Subscribers] Keys: ${keys.length}');
-    print('🎬 [Subscribers] Dashboard total: ${_dashboard?.totalSubscribersIncludingUnsubscribed ?? 0}');
-    print('🎬 [Subscribers] Calling ShowCaseWidget.of(showcaseContext).startShowCase');
-
-    try {
-      ShowCaseWidget.of(_showcaseContext!).startShowCase(keys);
-      print('✅ [Subscribers] ShowCase started successfully');
-    } catch (e) {
-      print('❌ [Subscribers] Error starting showcase: $e');
-    }
-
-    // Marcar como visto inmediatamente
+    ShowCaseWidget.of(_showcaseContext!).startShowCase(keys);
     UserService.markSubscribersWalkthroughAsSeen();
   }
 
@@ -641,6 +595,19 @@ class _SubscribersPageState extends State<SubscribersPage>
   @override
   Widget build(BuildContext context) {
     return ShowCaseWidget(
+      onStart: (index, key) {
+        // Hacer scroll al elemento cuando se muestre
+        if (key.currentContext != null) {
+          Future.delayed(const Duration(milliseconds: 300), () {
+            Scrollable.ensureVisible(
+              key.currentContext!,
+              duration: const Duration(milliseconds: 400),
+              curve: Curves.easeInOut,
+              alignment: 0.5, // Centrar el elemento
+            );
+          });
+        }
+      },
       builder: (showcaseContext) {
         // Guardar el contexto del ShowCaseWidget para usar en walkthrough
         _showcaseContext = showcaseContext;
@@ -801,13 +768,17 @@ class _SubscribersPageState extends State<SubscribersPage>
                   description: '¡Tus estadísticas al instante! Ve cuántos suscriptores tienes en total, cuántos confirmaron su invitación y cuántos están pendientes.',
                   descTextStyle: const TextStyle(
                     fontSize: 16,
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w600,
                     height: 1.5,
+                    color: Colors.white,
                   ),
-                  tooltipBackgroundColor: const Color(0xFF4DB3A8),
+                  tooltipBackgroundColor: const Color(0xFF10B981),
                   textColor: Colors.white,
-                  tooltipPadding: const EdgeInsets.all(20),
-                  tooltipBorderRadius: BorderRadius.circular(16),
+                  tooltipPadding: const EdgeInsets.all(24),
+                  tooltipBorderRadius: BorderRadius.circular(20),
+                  overlayColor: Colors.black,
+                  overlayOpacity: 0.85,
+                  disableDefaultTargetGestures: true,
                   child: _StatsOverview(dashboard: dashboard),
                 ),
               ),
@@ -831,13 +802,17 @@ class _SubscribersPageState extends State<SubscribersPage>
                       description: 'Busca tus suscriptores por nombre o email. Útil cuando tienes muchos suscriptores y necesitas encontrar a alguien específico.',
                       descTextStyle: const TextStyle(
                         fontSize: 16,
-                        fontWeight: FontWeight.w500,
+                        fontWeight: FontWeight.w600,
                         height: 1.5,
+                        color: Colors.white,
                       ),
-                      tooltipBackgroundColor: const Color(0xFF4DB3A8),
+                      tooltipBackgroundColor: const Color(0xFF3B82F6),
                       textColor: Colors.white,
-                      tooltipPadding: const EdgeInsets.all(20),
-                      tooltipBorderRadius: BorderRadius.circular(16),
+                      tooltipPadding: const EdgeInsets.all(24),
+                      tooltipBorderRadius: BorderRadius.circular(20),
+                      overlayColor: Colors.black,
+                      overlayOpacity: 0.85,
+                      disableDefaultTargetGestures: true,
                       child: TextField(
                         controller: _searchController,
                         decoration: InputDecoration(
@@ -869,13 +844,17 @@ class _SubscribersPageState extends State<SubscribersPage>
                       description: 'Filtra tus suscriptores: ve todos, solo confirmados, pendientes de confirmación o los que se dieron de baja.',
                       descTextStyle: const TextStyle(
                         fontSize: 16,
-                        fontWeight: FontWeight.w500,
+                        fontWeight: FontWeight.w600,
                         height: 1.5,
+                        color: Colors.white,
                       ),
-                      tooltipBackgroundColor: const Color(0xFF4DB3A8),
+                      tooltipBackgroundColor: const Color(0xFFF59E0B),
                       textColor: Colors.white,
-                      tooltipPadding: const EdgeInsets.all(20),
-                      tooltipBorderRadius: BorderRadius.circular(16),
+                      tooltipPadding: const EdgeInsets.all(24),
+                      tooltipBorderRadius: BorderRadius.circular(20),
+                      overlayColor: Colors.black,
+                      overlayOpacity: 0.85,
+                      disableDefaultTargetGestures: true,
                       child: _FilterChips(
                       current: _filter,
                       onChanged: (filter) {
@@ -939,13 +918,17 @@ class _SubscribersPageState extends State<SubscribersPage>
                                 description: 'Aquí están todos tus suscriptores. Toca uno para ver detalles, reenviar invitación o editar su información. Ve sus reacciones y comentarios.',
                                 descTextStyle: const TextStyle(
                                   fontSize: 16,
-                                  fontWeight: FontWeight.w500,
+                                  fontWeight: FontWeight.w600,
                                   height: 1.5,
+                                  color: Colors.white,
                                 ),
-                                tooltipBackgroundColor: const Color(0xFF4DB3A8),
+                                tooltipBackgroundColor: const Color(0xFF3B82F6),
                                 textColor: Colors.white,
-                                tooltipPadding: const EdgeInsets.all(20),
-                                tooltipBorderRadius: BorderRadius.circular(16),
+                                tooltipPadding: const EdgeInsets.all(24),
+                                tooltipBorderRadius: BorderRadius.circular(20),
+                                overlayColor: Colors.black,
+                                overlayOpacity: 0.85,
+                                disableDefaultTargetGestures: true,
                                 child: card,
                               )
                             : card,
@@ -963,13 +946,17 @@ class _SubscribersPageState extends State<SubscribersPage>
         description: '¡Aquí puedes agregar nuevos suscriptores! Solo necesitas su nombre y email. Ellos recibirán una invitación para ver tus historias.',
         descTextStyle: const TextStyle(
           fontSize: 16,
-          fontWeight: FontWeight.w500,
+          fontWeight: FontWeight.w600,
           height: 1.5,
+          color: Colors.white,
         ),
-        tooltipBackgroundColor: const Color(0xFF4DB3A8),
+        tooltipBackgroundColor: const Color(0xFF8B5CF6),
         textColor: Colors.white,
-        tooltipPadding: const EdgeInsets.all(20),
-        tooltipBorderRadius: BorderRadius.circular(16),
+        tooltipPadding: const EdgeInsets.all(24),
+        tooltipBorderRadius: BorderRadius.circular(20),
+        overlayColor: Colors.black,
+        overlayOpacity: 0.85,
+        disableDefaultTargetGestures: true,
         child: ScaleTransition(
           scale: CurvedAnimation(
             parent: _fabController,

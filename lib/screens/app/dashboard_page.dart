@@ -112,7 +112,9 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   void _startWalkthrough() {
-    if (_showcaseContext == null) return;
+    if (_showcaseContext == null) {
+      return;
+    }
 
     // RADICALLY SIMPLE: Just add keys, no validation
     final keys = <GlobalKey>[_createStoryKey];

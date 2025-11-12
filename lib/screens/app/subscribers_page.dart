@@ -595,23 +595,28 @@ class _SubscribersPageState extends State<SubscribersPage>
   @override
   Widget build(BuildContext context) {
     return ShowCaseWidget(
+      blurValue: 4,
+      disableBarrierInteraction: true,
+      disableScaleAnimation: false,
       onStart: (index, key) {
         // Hacer scroll al elemento ANTES de mostrarlo
         if (key.currentContext != null) {
           Scrollable.ensureVisible(
             key.currentContext!,
-            duration: const Duration(milliseconds: 500),
+            duration: const Duration(milliseconds: 400),
             curve: Curves.easeInOut,
-            alignment: 0.3, // Posicionar más arriba para que el tooltip tenga espacio
+            alignment: 0.2, // Posicionar más arriba para que el tooltip tenga espacio
           ).then((_) {
             // Esperar un momento para que se complete el scroll
-            Future.delayed(const Duration(milliseconds: 200));
+            Future.delayed(const Duration(milliseconds: 150));
           });
         }
       },
       builder: (showcaseContext) {
         // Guardar el contexto del ShowCaseWidget para usar en walkthrough
-        _showcaseContext = showcaseContext;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _showcaseContext = showcaseContext;
+        });
         return _buildContent(showcaseContext);
       },
     );

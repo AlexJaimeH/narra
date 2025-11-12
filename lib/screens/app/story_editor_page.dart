@@ -2280,26 +2280,34 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   @override
   Widget build(BuildContext context) {
     return ShowCaseWidget(
+      blurValue: 4,
+      disableBarrierInteraction: true,
+      disableScaleAnimation: false,
       onStart: (index, key) {
         // No hacer scroll para el content field porque es grande y se desenfoca
         if (key == _contentFieldKey) return;
+
+        // Para el Ghost Writer, necesitamos un scroll más agresivo
+        final isGhostWriter = key == _ghostWriterButtonKey;
 
         // Hacer scroll al elemento ANTES de mostrarlo
         if (key.currentContext != null) {
           Scrollable.ensureVisible(
             key.currentContext!,
-            duration: const Duration(milliseconds: 500),
+            duration: Duration(milliseconds: isGhostWriter ? 600 : 400),
             curve: Curves.easeInOut,
-            alignment: 0.25, // Posicionar más arriba para que el tooltip tenga espacio
+            alignment: isGhostWriter ? 0.15 : 0.2, // Ghost Writer más arriba para dar espacio al tooltip
           ).then((_) {
-            // Esperar un momento para que se complete el scroll
-            Future.delayed(const Duration(milliseconds: 200));
+            // Esperar un momento extra para el Ghost Writer
+            Future.delayed(Duration(milliseconds: isGhostWriter ? 300 : 150));
           });
         }
       },
       builder: (showcaseContext) {
         // Guardar el contexto del ShowCaseWidget para usar en walkthrough
-        _showcaseContext = showcaseContext;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _showcaseContext = showcaseContext;
+        });
         return PopScope(
         canPop: !_hasChanges,
         onPopInvoked: (didPop) {

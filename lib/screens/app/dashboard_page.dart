@@ -142,24 +142,29 @@ class _DashboardPageState extends State<DashboardPage> {
     final isMobile = screenWidth < 600;
 
     return ShowCaseWidget(
+      blurValue: 4,
+      disableBarrierInteraction: true,
+      disableScaleAnimation: false,
       onStart: (index, key) {
         // Hacer scroll al elemento ANTES de mostrarlo
         if (key.currentContext != null) {
           // Primero hacer scroll
           Scrollable.ensureVisible(
             key.currentContext!,
-            duration: const Duration(milliseconds: 500),
+            duration: const Duration(milliseconds: 400),
             curve: Curves.easeInOut,
-            alignment: 0.3, // Posicionar el elemento más arriba para que el tooltip tenga espacio
+            alignment: 0.2, // Posicionar el elemento más arriba para que el tooltip tenga espacio
           ).then((_) {
             // Esperar un momento para que se complete el scroll antes de mostrar el showcase
-            Future.delayed(const Duration(milliseconds: 200));
+            Future.delayed(const Duration(milliseconds: 150));
           });
         }
       },
       builder: (showcaseContext) {
         // Guardar el contexto del ShowCaseWidget para usar en walkthrough
-        _showcaseContext = showcaseContext;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _showcaseContext = showcaseContext;
+        });
         return Scaffold(
           body: RefreshIndicator(
         onRefresh: _loadDashboardData,

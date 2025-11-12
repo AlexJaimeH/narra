@@ -128,24 +128,26 @@ class _DashboardPageState extends State<DashboardPage> {
       return;
     }
 
-    // Esperar 1 segundo antes de iniciar
-    print('🔵 [Dashboard] Esperando 1 segundo...');
-    await Future.delayed(const Duration(milliseconds: 1000));
-
-    print('🔵 [Dashboard] Después del delay, mounted: $mounted');
-    if (!mounted) {
-      print('🔴 [Dashboard] No mounted después del delay, saliendo');
-      return;
-    }
-
     print('🔵 [Dashboard] Agregando postFrameCallback');
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       print('🔵 [Dashboard] postFrameCallback ejecutándose, mounted: $mounted');
+
+      if (!mounted) {
+        print('🔴 [Dashboard] No mounted en postFrameCallback');
+        return;
+      }
+
+      // Esperar 1 segundo DENTRO del postFrameCallback
+      print('🔵 [Dashboard] Esperando 1 segundo...');
+      await Future.delayed(const Duration(milliseconds: 1000));
+
+      print('🔵 [Dashboard] Después del delay, mounted: $mounted, _showcaseContext: $_showcaseContext');
+
       if (mounted) {
         print('🔵 [Dashboard] Llamando a _startWalkthrough()');
         _startWalkthrough();
       } else {
-        print('🔴 [Dashboard] No mounted en postFrameCallback');
+        print('🔴 [Dashboard] No mounted después del delay');
       }
     });
   }

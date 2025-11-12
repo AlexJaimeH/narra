@@ -603,7 +603,7 @@ class _SubscribersPageState extends State<SubscribersPage>
   Widget build(BuildContext context) {
     return ShowCaseWidget(
       blurValue: 4,
-      disableBarrierInteraction: true,
+      disableBarrierInteraction: false,
       onFinish: () {
         setState(() => _isWalkthroughActive = false);
         // DEBUG MODE: No marcar como visto para que siempre se muestre
@@ -611,29 +611,7 @@ class _SubscribersPageState extends State<SubscribersPage>
       },
       builder: (showcaseContext) {
         _showcaseContext = showcaseContext;
-        return Stack(
-          children: [
-            _buildContent(showcaseContext),
-            // Overlay para absorber clics durante el walkthrough
-            if (_isWalkthroughActive)
-              Positioned.fill(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () {
-                    if (_showcaseContext != null) {
-                      ShowCaseWidget.of(_showcaseContext!).next();
-                    }
-                  },
-                  child: AbsorbPointer(
-                    absorbing: true,
-                    child: Container(
-                      color: Colors.transparent,
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        );
+        return _buildContent(showcaseContext);
       },
     );
   }
@@ -803,7 +781,7 @@ class _SubscribersPageState extends State<SubscribersPage>
                   disableDefaultTargetGestures: true,
                   onTargetClick: () => ShowCaseWidget.of(context).next(),
                   onToolTipClick: () => ShowCaseWidget.of(context).next(),
-                  onBarrierClick: () => ShowCaseWidget.of(context).dismiss(),
+                  onBarrierClick: () => ShowCaseWidget.of(context).next(),
                   child: _StatsOverview(dashboard: dashboard),
                 ),
               ),
@@ -865,7 +843,7 @@ class _SubscribersPageState extends State<SubscribersPage>
                       disableDefaultTargetGestures: true,
                       onTargetClick: () => ShowCaseWidget.of(context).next(),
                       onToolTipClick: () => ShowCaseWidget.of(context).next(),
-                      onBarrierClick: () => ShowCaseWidget.of(context).dismiss(),
+                      onBarrierClick: () => ShowCaseWidget.of(context).next(),
                       child: _FilterChips(
                       current: _filter,
                       onChanged: (filter) {
@@ -942,7 +920,7 @@ class _SubscribersPageState extends State<SubscribersPage>
                                 disableDefaultTargetGestures: true,
                                 onTargetClick: () => ShowCaseWidget.of(context).next(),
                                 onToolTipClick: () => ShowCaseWidget.of(context).next(),
-                                onBarrierClick: () => ShowCaseWidget.of(context).dismiss(),
+                                onBarrierClick: () => ShowCaseWidget.of(context).next(),
                                 child: card,
                               )
                             : card,
@@ -973,7 +951,7 @@ class _SubscribersPageState extends State<SubscribersPage>
         disableDefaultTargetGestures: true,
         onTargetClick: () => ShowCaseWidget.of(context).next(),
         onToolTipClick: () => ShowCaseWidget.of(context).next(),
-        onBarrierClick: () => ShowCaseWidget.of(context).dismiss(),
+        onBarrierClick: () => ShowCaseWidget.of(context).next(),
         child: ScaleTransition(
           scale: CurvedAnimation(
             parent: _fabController,

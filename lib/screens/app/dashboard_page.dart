@@ -119,7 +119,7 @@ class _DashboardPageState extends State<DashboardPage> {
     }
   }
 
-  void _startWalkthrough() {
+  Future<void> _startWalkthrough() async {
     if (_showcaseContext == null) {
       return;
     }
@@ -137,14 +137,10 @@ class _DashboardPageState extends State<DashboardPage> {
     keys.add(_createStoryKey);
     if (_shouldShowGhostWriterIntro) keys.add(_ghostWriterKey);
 
-    ShowCaseWidget.of(_showcaseContext!).startShowCase(keys);
-  }
-
-  Future<void> _handleCreateStoryClick(BuildContext context) async {
-    // Si hay ghost writer, hacer scroll antes de avanzar
-    if (_shouldShowGhostWriterIntro && _ghostWriterKey.currentContext != null) {
+    // Si hay ghost writer, hacer scroll ANTES de iniciar el walkthrough
+    if (_shouldShowGhostWriterIntro && _ghostWriterKey.currentContext != null && _scrollController.hasClients) {
       final RenderBox? box = _ghostWriterKey.currentContext!.findRenderObject() as RenderBox?;
-      if (box != null) {
+      if (box != null && mounted) {
         final position = box.localToGlobal(Offset.zero);
         final screenHeight = MediaQuery.of(context).size.height;
         // Calcular el offset para centrar el widget
@@ -161,10 +157,11 @@ class _DashboardPageState extends State<DashboardPage> {
       }
     }
 
-    if (_showcaseContext != null && mounted) {
-      ShowCaseWidget.of(_showcaseContext!).next();
+    if (mounted && _showcaseContext != null) {
+      ShowCaseWidget.of(_showcaseContext!).startShowCase(keys);
     }
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -181,7 +178,7 @@ class _DashboardPageState extends State<DashboardPage> {
 
     return ShowCaseWidget(
       blurValue: 4,
-      disableBarrierInteraction: true,
+      disableBarrierInteraction: false,
       onFinish: () {
         setState(() => _isWalkthroughActive = false);
         // DEBUG MODE: No marcar como visto para que siempre se muestre
@@ -189,9 +186,7 @@ class _DashboardPageState extends State<DashboardPage> {
       },
       builder: (showcaseContext) {
         _showcaseContext = showcaseContext;
-        return Stack(
-          children: [
-            Scaffold(
+        return Scaffold(
           body: RefreshIndicator(
         onRefresh: _loadDashboardData,
         child: SingleChildScrollView(
@@ -289,9 +284,9 @@ class _DashboardPageState extends State<DashboardPage> {
                   overlayColor: Colors.black,
                   overlayOpacity: 0.60,
                   disableDefaultTargetGestures: true,
-                  onTargetClick: () => _handleCreateStoryClick(context),
-                  onToolTipClick: () => _handleCreateStoryClick(context),
-                  onBarrierClick: () => ShowCaseWidget.of(context).dismiss(),
+                  onTargetClick: () => ShowCaseWidget.of(context).next(),
+                  onToolTipClick: () => ShowCaseWidget.of(context).next(),
+                  onBarrierClick: () => ShowCaseWidget.of(context).next(),
                   child: _WelcomeSection(
                     userProfile: _userProfile,
                     allTags: _allTags,
@@ -325,7 +320,7 @@ class _DashboardPageState extends State<DashboardPage> {
                     disableDefaultTargetGestures: true,
                     onTargetClick: () => ShowCaseWidget.of(context).next(),
                     onToolTipClick: () => ShowCaseWidget.of(context).next(),
-                    onBarrierClick: () => ShowCaseWidget.of(context).dismiss(),
+                    onBarrierClick: () => ShowCaseWidget.of(context).next(),
                     child: _GhostWriterIntroCard(
                       onDismiss: () {
                         setState(() => _shouldShowGhostWriterIntro = false);
@@ -374,26 +369,6 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
         ),
       ),
-        ),
-            // Overlay para absorber clics durante el walkthrough
-            if (_isWalkthroughActive)
-              Positioned.fill(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () {
-                    if (_showcaseContext != null) {
-                      ShowCaseWidget.of(_showcaseContext!).next();
-                    }
-                  },
-                  child: AbsorbPointer(
-                    absorbing: true,
-                    child: Container(
-                      color: Colors.transparent,
-                    ),
-                  ),
-                ),
-              ),
-          ],
         );
       },
     );

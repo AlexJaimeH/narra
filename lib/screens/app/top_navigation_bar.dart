@@ -135,7 +135,7 @@ class _DesktopNav extends StatelessWidget {
                 disableDefaultTargetGestures: true,
                 onTargetClick: () => ShowCaseWidget.of(context).next(),
                 onToolTipClick: () => ShowCaseWidget.of(context).next(),
-                onBarrierClick: () => ShowCaseWidget.of(context).dismiss(),
+                onBarrierClick: () => ShowCaseWidget.of(context).next(),
                 child: navRow,
               )
             : navRow,
@@ -205,7 +205,7 @@ class _MobileNav extends StatelessWidget {
                     disableDefaultTargetGestures: true,
                     onTargetClick: () => ShowCaseWidget.of(context).next(),
                     onToolTipClick: () => ShowCaseWidget.of(context).next(),
-                    onBarrierClick: () => ShowCaseWidget.of(context).dismiss(),
+                    onBarrierClick: () => ShowCaseWidget.of(context).next(),
                     child: menuButton,
                   )
                 : menuButton,

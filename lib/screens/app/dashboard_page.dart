@@ -38,6 +38,7 @@ class _DashboardPageState extends State<DashboardPage> {
   // Keys para el walkthrough
   final GlobalKey _createStoryKey = GlobalKey();
   final GlobalKey _ghostWriterKey = GlobalKey();
+  final GlobalKey _bookProgressKey = GlobalKey();
 
   // Contexto del ShowCaseWidget builder
   BuildContext? _showcaseContext;
@@ -124,9 +125,14 @@ class _DashboardPageState extends State<DashboardPage> {
       return;
     }
 
+    // Esperar 1 segundo antes de iniciar
+    await Future.delayed(const Duration(milliseconds: 1000));
+
+    if (!mounted || _showcaseContext == null) return;
+
     setState(() => _isWalkthroughActive = true);
 
-    // RADICALLY SIMPLE: Just add keys, no validation
+    // Construir lista de keys
     final keys = <GlobalKey>[];
 
     // Primero explicar el menú si está disponible
@@ -136,29 +142,54 @@ class _DashboardPageState extends State<DashboardPage> {
 
     keys.add(_createStoryKey);
     if (_shouldShowGhostWriterIntro) keys.add(_ghostWriterKey);
-
-    // Si hay ghost writer, hacer scroll ANTES de iniciar el walkthrough
-    if (_shouldShowGhostWriterIntro && _ghostWriterKey.currentContext != null && _scrollController.hasClients) {
-      final RenderBox? box = _ghostWriterKey.currentContext!.findRenderObject() as RenderBox?;
-      if (box != null && mounted) {
-        final position = box.localToGlobal(Offset.zero);
-        final screenHeight = MediaQuery.of(context).size.height;
-        // Calcular el offset para centrar el widget
-        final targetScroll = _scrollController.offset + position.dy - (screenHeight / 2) + (box.size.height / 2);
-
-        await _scrollController.animateTo(
-          targetScroll.clamp(0, _scrollController.position.maxScrollExtent),
-          duration: const Duration(milliseconds: 500),
-          curve: Curves.easeInOut,
-        );
-
-        // Pequeña pausa para que se vea el scroll
-        await Future.delayed(const Duration(milliseconds: 300));
-      }
-    }
+    keys.add(_bookProgressKey);
 
     if (mounted && _showcaseContext != null) {
       ShowCaseWidget.of(_showcaseContext!).startShowCase(keys);
+    }
+  }
+
+  Future<void> _scrollToWidget(GlobalKey key) async {
+    if (!_scrollController.hasClients || key.currentContext == null) return;
+
+    final RenderBox? box = key.currentContext!.findRenderObject() as RenderBox?;
+    if (box != null && mounted) {
+      final position = box.localToGlobal(Offset.zero);
+      final screenHeight = MediaQuery.of(context).size.height;
+      // Calcular el offset para centrar el widget
+      final targetScroll = _scrollController.offset + position.dy - (screenHeight / 2) + (box.size.height / 2);
+
+      await _scrollController.animateTo(
+        targetScroll.clamp(0, _scrollController.position.maxScrollExtent),
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeInOut,
+      );
+
+      // Pequeña pausa para que se vea el scroll
+      await Future.delayed(const Duration(milliseconds: 300));
+    }
+  }
+
+  Future<void> _handleCreateStoryNext() async {
+    // Si hay ghost writer, hacer scroll a él
+    if (_shouldShowGhostWriterIntro) {
+      await _scrollToWidget(_ghostWriterKey);
+    } else {
+      // Si no hay ghost writer, hacer scroll directo al progreso del libro
+      await _scrollToWidget(_bookProgressKey);
+    }
+
+    if (_showcaseContext != null && mounted) {
+      ShowCaseWidget.of(_showcaseContext!).next();
+    }
+  }
+
+  Future<void> _handleGhostWriterNext() async {
+    // Hacer scroll al progreso del libro
+    await _scrollToWidget(_bookProgressKey);
+
+    if (_showcaseContext != null && mounted) {
+      ShowCaseWidget.of(_showcaseContext!).next();
     }
   }
 
@@ -284,9 +315,9 @@ class _DashboardPageState extends State<DashboardPage> {
                   overlayColor: Colors.black,
                   overlayOpacity: 0.60,
                   disableDefaultTargetGestures: true,
-                  onTargetClick: () => ShowCaseWidget.of(context).next(),
-                  onToolTipClick: () => ShowCaseWidget.of(context).next(),
-                  onBarrierClick: () => ShowCaseWidget.of(context).next(),
+                  onTargetClick: () => _handleCreateStoryNext(),
+                  onToolTipClick: () => _handleCreateStoryNext(),
+                  onBarrierClick: () => _handleCreateStoryNext(),
                   child: _WelcomeSection(
                     userProfile: _userProfile,
                     allTags: _allTags,
@@ -318,9 +349,9 @@ class _DashboardPageState extends State<DashboardPage> {
                     overlayColor: Colors.black,
                     overlayOpacity: 0.60,
                     disableDefaultTargetGestures: true,
-                    onTargetClick: () => ShowCaseWidget.of(context).next(),
-                    onToolTipClick: () => ShowCaseWidget.of(context).next(),
-                    onBarrierClick: () => ShowCaseWidget.of(context).next(),
+                    onTargetClick: () => _handleGhostWriterNext(),
+                    onToolTipClick: () => _handleGhostWriterNext(),
+                    onBarrierClick: () => _handleGhostWriterNext(),
                     child: _GhostWriterIntroCard(
                       onDismiss: () {
                         setState(() => _shouldShowGhostWriterIntro = false);
@@ -346,9 +377,29 @@ class _DashboardPageState extends State<DashboardPage> {
               // Progreso hacia el libro
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: _BookProgressSection(
-                  stats: _dashboardStats,
-                  lastPublishedStory: _lastPublishedStory,
+                child: Showcase(
+                  key: _bookProgressKey,
+                  description: '¡Tu meta es escribir al menos 20 historias para publicar tu libro digital! Pero no te preocupes, puedes publicarlo con más historias si lo deseas. Cada historia cuenta para tu progreso.',
+                  descTextStyle: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    height: 1.5,
+                    color: Colors.white,
+                  ),
+                  tooltipBackgroundColor: const Color(0xFF6B4DE6),
+                  textColor: Colors.white,
+                  tooltipPadding: const EdgeInsets.all(20),
+                  tooltipBorderRadius: BorderRadius.circular(16),
+                  overlayColor: Colors.black,
+                  overlayOpacity: 0.60,
+                  disableDefaultTargetGestures: true,
+                  onTargetClick: () => ShowCaseWidget.of(context).next(),
+                  onToolTipClick: () => ShowCaseWidget.of(context).next(),
+                  onBarrierClick: () => ShowCaseWidget.of(context).next(),
+                  child: _BookProgressSection(
+                    stats: _dashboardStats,
+                    lastPublishedStory: _lastPublishedStory,
+                  ),
                 ),
               ),
 

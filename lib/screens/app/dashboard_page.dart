@@ -34,6 +34,7 @@ class _DashboardPageState extends State<DashboardPage> {
   bool _isLoading = true;
   bool _shouldShowGhostWriterIntro = false;
   bool _isWalkthroughActive = false;
+  List<String> _cachedSuggestedTopics = [];
 
   // Keys para el walkthrough
   final GlobalKey _createStoryKey = GlobalKey();
@@ -56,6 +57,76 @@ class _DashboardPageState extends State<DashboardPage> {
   void dispose() {
     _scrollController.dispose();
     super.dispose();
+  }
+
+  List<String> _calculateSuggestedTopics(List<StoryTag> allTags) {
+    final usedTags = allTags.map((t) => t.name.toLowerCase()).toSet();
+
+    const excludedTopics = {
+      'otros momentos',
+      'recuerdos unicos',
+      'recuerdos únicos',
+      'sin categoría',
+      'sin categoria',
+      'naturaleza',
+      'recuperacion',
+      'recuperación',
+      'cultura',
+      'hogar',
+      'amistad',
+      'graduación',
+      'graduacion',
+      'mentoría laboral',
+      'mentoria laboral',
+      'fe y esperanza',
+      'recetas favoritas',
+      'música',
+      'musica',
+      'tecnología',
+      'tecnologia',
+      'conversaciones especiales',
+    };
+
+    const commonTopics = [
+      'Familia',
+      'Viajes',
+      'Infancia',
+      'Amigos',
+      'Trabajo',
+      'Mascotas',
+      'Hobbies',
+      'Logros',
+      'Aventuras',
+      'Momentos especiales',
+      'Aprendizajes',
+      'Celebraciones',
+      'Arte',
+      'Música',
+      'Comida',
+      'Deportes',
+      'Tradiciones',
+      'Sueños',
+      'Reflexiones',
+      'Amor',
+      'Salud',
+      'Educación',
+      'Fotografía',
+      'Tecnología',
+      'Libros',
+      'Cine',
+      'Juegos',
+      'Voluntariado',
+      'Emprendimiento',
+    ];
+
+    final unusedTopics = commonTopics
+        .where((topic) =>
+            !usedTags.contains(topic.toLowerCase()) &&
+            !excludedTopics.contains(topic.toLowerCase()))
+        .toList();
+
+    unusedTopics.shuffle();
+    return unusedTopics.take(5).toList();
   }
 
   Future<void> _loadDashboardData() async {
@@ -85,6 +156,9 @@ class _DashboardPageState extends State<DashboardPage> {
       // final shouldShowWalkthrough = await UserService.shouldShowHomeWalkthrough();
 
       if (mounted) {
+        // Calculate suggested topics once to avoid random changes on rebuild
+        final suggestedTopics = _calculateSuggestedTopics(allTags);
+
         setState(() {
           _userProfile = profile?.toMap();
           _dashboardStats = {
@@ -102,6 +176,7 @@ class _DashboardPageState extends State<DashboardPage> {
           _subscriberDashboard = subscriberDashboard;
           _lastPublishedStory = lastPublished;
           _shouldShowGhostWriterIntro = shouldShowIntro;
+          _cachedSuggestedTopics = suggestedTopics;
           _isLoading = false;
         });
 
@@ -168,12 +243,15 @@ class _DashboardPageState extends State<DashboardPage> {
     // Primero explicar el menú si está disponible
     if (widget.menuKey != null) {
       keys.add(widget.menuKey!);
+      print('🟢 [Dashboard] Agregado menuKey');
     }
 
     keys.add(_createStoryKey);
+    print('🟢 [Dashboard] Agregado _createStoryKey');
 
     if (_shouldShowGhostWriterIntro) {
       keys.add(_ghostWriterKey);
+      print('🟢 [Dashboard] Agregado _ghostWriterKey');
     }
 
     keys.add(_bookProgressKey);
@@ -367,6 +445,7 @@ class _DashboardPageState extends State<DashboardPage> {
                     allTags: _allTags,
                     draftStories: _draftStories,
                     stats: _dashboardStats,
+                    suggestedTopics: _cachedSuggestedTopics,
                   ),
                 ),
               ),
@@ -476,88 +555,15 @@ class _WelcomeSection extends StatelessWidget {
   final List<StoryTag> allTags;
   final List<Story> draftStories;
   final Map<String, dynamic>? stats;
+  final List<String> suggestedTopics;
 
   const _WelcomeSection({
     required this.userProfile,
     required this.allTags,
     required this.draftStories,
     required this.stats,
+    required this.suggestedTopics,
   });
-
-  List<String> _getSuggestedTopics() {
-    // Obtener etiquetas usadas en historias existentes
-    final usedTags = allTags.map((t) => t.name.toLowerCase()).toSet();
-
-    // Temas a excluir de las sugerencias
-    const excludedTopics = {
-      'otros momentos',
-      'recuerdos unicos',
-      'recuerdos únicos',
-      'sin categoría',
-      'sin categoria',
-      'naturaleza',
-      'recuperacion',
-      'recuperación',
-      'cultura',
-      'hogar',
-      'amistad',
-      'graduación',
-      'graduacion',
-      'mentoría laboral',
-      'mentoria laboral',
-      'fe y esperanza',
-      'recetas favoritas',
-      'música',
-      'musica',
-      'tecnología',
-      'tecnologia',
-      'conversaciones especiales',
-    };
-
-    // Lista de temas sugeridos comunes
-    const commonTopics = [
-      'Familia',
-      'Viajes',
-      'Infancia',
-      'Amigos',
-      'Trabajo',
-      'Mascotas',
-      'Hobbies',
-      'Logros',
-      'Aventuras',
-      'Momentos especiales',
-      'Aprendizajes',
-      'Celebraciones',
-      'Arte',
-      'Música',
-      'Comida',
-      'Deportes',
-      'Tradiciones',
-      'Sueños',
-      'Reflexiones',
-      'Amor',
-      'Salud',
-      'Educación',
-      'Fotografía',
-      'Tecnología',
-      'Libros',
-      'Cine',
-      'Juegos',
-      'Voluntariado',
-      'Emprendimiento',
-    ];
-
-    // Filtrar temas que no se han usado y no están excluidos
-    final unusedTopics = commonTopics
-        .where((topic) =>
-            !usedTags.contains(topic.toLowerCase()) &&
-            !excludedTopics.contains(topic.toLowerCase()))
-        .toList();
-
-    // Mezclar y tomar 5 aleatorios
-    unusedTopics.shuffle();
-    return unusedTopics.take(5).toList();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -567,7 +573,6 @@ class _WelcomeSection extends StatelessWidget {
     final userName = userProfile?['name'] ?? 'Usuario';
     final hasDrafts = draftStories.isNotEmpty;
     final totalStories = stats?['total_stories'] ?? 0;
-    final suggestedTopics = _getSuggestedTopics();
 
     return Card(
       elevation: 4,

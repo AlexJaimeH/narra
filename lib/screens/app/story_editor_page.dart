@@ -2280,26 +2280,27 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   @override
   Widget build(BuildContext context) {
     return ShowCaseWidget(
-      blurValue: 4,
+      blurValue: 3,
       disableBarrierInteraction: true,
       disableScaleAnimation: false,
+      disableMovingAnimation: true,
       onStart: (index, key) {
         // No hacer scroll para el content field porque es grande y se desenfoca
         if (key == _contentFieldKey) return;
 
-        // Para el Ghost Writer, necesitamos un scroll más agresivo
+        // Para el Ghost Writer, necesitamos un scroll MUY agresivo para que se vea bien
         final isGhostWriter = key == _ghostWriterButtonKey;
 
         // Hacer scroll al elemento ANTES de mostrarlo
         if (key.currentContext != null) {
           Scrollable.ensureVisible(
             key.currentContext!,
-            duration: Duration(milliseconds: isGhostWriter ? 600 : 400),
+            duration: Duration(milliseconds: isGhostWriter ? 800 : 400),
             curve: Curves.easeInOut,
-            alignment: isGhostWriter ? 0.15 : 0.2, // Ghost Writer más arriba para dar espacio al tooltip
+            alignment: isGhostWriter ? 0.08 : 0.2, // Ghost Writer MUCHO más arriba para dar espacio al tooltip
           ).then((_) {
-            // Esperar un momento extra para el Ghost Writer
-            Future.delayed(Duration(milliseconds: isGhostWriter ? 300 : 150));
+            // Esperar un momento extra para el Ghost Writer para que termine el scroll
+            Future.delayed(Duration(milliseconds: isGhostWriter ? 400 : 150));
           });
         }
       },
@@ -2771,11 +2772,11 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                 tooltipPadding: const EdgeInsets.all(24),
                 tooltipBorderRadius: BorderRadius.circular(20),
                 overlayColor: Colors.black,
-                overlayOpacity: 0.85,
+                overlayOpacity: 0.60,
                 disableDefaultTargetGestures: true,
                 onTargetClick: () => ShowCaseWidget.of(context).next(),
                 onToolTipClick: () => ShowCaseWidget.of(context).next(),
-                onBarrierClick: () => ShowCaseWidget.of(context).next(),
+                onBarrierClick: () => ShowCaseWidget.of(context).dismiss(),
                 child: Container(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(isCompact ? 20 : 24),
@@ -2934,11 +2935,11 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                     tooltipPadding: const EdgeInsets.all(24),
                     tooltipBorderRadius: BorderRadius.circular(20),
                     overlayColor: Colors.black,
-                    overlayOpacity: 0.85,
+                    overlayOpacity: 0.60,
                     disableDefaultTargetGestures: true,
                     onTargetClick: () => ShowCaseWidget.of(context).next(),
                     onToolTipClick: () => ShowCaseWidget.of(context).next(),
-                    onBarrierClick: () => ShowCaseWidget.of(context).next(),
+                    onBarrierClick: () => ShowCaseWidget.of(context).dismiss(),
                     child: buildActionButton(
                       isCompact: isCompact,
                       onPressed: _isGhostWriterProcessing
@@ -2979,11 +2980,11 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                     tooltipPadding: const EdgeInsets.all(24),
                     tooltipBorderRadius: BorderRadius.circular(20),
                     overlayColor: Colors.black,
-                    overlayOpacity: 0.85,
+                    overlayOpacity: 0.60,
                     disableDefaultTargetGestures: true,
                     onTargetClick: () => ShowCaseWidget.of(context).next(),
                     onToolTipClick: () => ShowCaseWidget.of(context).next(),
-                    onBarrierClick: () => ShowCaseWidget.of(context).next(),
+                    onBarrierClick: () => ShowCaseWidget.of(context).dismiss(),
                     child: buildActionButton(
                       isCompact: isCompact,
                       onPressed: () {
@@ -9740,11 +9741,11 @@ class _EditorSegmentedControl extends StatelessWidget {
               tooltipPadding: const EdgeInsets.all(24),
               tooltipBorderRadius: BorderRadius.circular(20),
               overlayColor: Colors.black,
-              overlayOpacity: 0.85,
+              overlayOpacity: 0.60,
               disableDefaultTargetGestures: true,
               onTargetClick: () => ShowCaseWidget.of(context).next(),
               onToolTipClick: () => ShowCaseWidget.of(context).next(),
-              onBarrierClick: () => ShowCaseWidget.of(context).next(),
+              onBarrierClick: () => ShowCaseWidget.of(context).dismiss(),
               child: const Tab(text: 'Fotos'),
             )
           else
@@ -9764,11 +9765,11 @@ class _EditorSegmentedControl extends StatelessWidget {
               tooltipPadding: const EdgeInsets.all(24),
               tooltipBorderRadius: BorderRadius.circular(20),
               overlayColor: Colors.black,
-              overlayOpacity: 0.85,
+              overlayOpacity: 0.60,
               disableDefaultTargetGestures: true,
               onTargetClick: () => ShowCaseWidget.of(context).next(),
               onToolTipClick: () => ShowCaseWidget.of(context).next(),
-              onBarrierClick: () => ShowCaseWidget.of(context).next(),
+              onBarrierClick: () => ShowCaseWidget.of(context).dismiss(),
               child: const Tab(text: 'Fechas'),
             )
           else
@@ -9788,11 +9789,11 @@ class _EditorSegmentedControl extends StatelessWidget {
               tooltipPadding: const EdgeInsets.all(24),
               tooltipBorderRadius: BorderRadius.circular(20),
               overlayColor: Colors.black,
-              overlayOpacity: 0.85,
+              overlayOpacity: 0.60,
               disableDefaultTargetGestures: true,
               onTargetClick: () => ShowCaseWidget.of(context).next(),
               onToolTipClick: () => ShowCaseWidget.of(context).next(),
-              onBarrierClick: () => ShowCaseWidget.of(context).next(),
+              onBarrierClick: () => ShowCaseWidget.of(context).dismiss(),
               child: const Tab(text: 'Etiquetas'),
             )
           else
@@ -9956,11 +9957,11 @@ class _EditorBottomBar extends StatelessWidget {
                 tooltipPadding: const EdgeInsets.all(24),
                 tooltipBorderRadius: BorderRadius.circular(20),
                 overlayColor: Colors.black,
-                overlayOpacity: 0.85,
+                overlayOpacity: 0.60,
                 disableDefaultTargetGestures: true,
                 onTargetClick: () => ShowCaseWidget.of(context).next(),
                 onToolTipClick: () => ShowCaseWidget.of(context).next(),
-                onBarrierClick: () => ShowCaseWidget.of(context).next(),
+                onBarrierClick: () => ShowCaseWidget.of(context).dismiss(),
                 child: wrappedButton,
               );
             }
@@ -10056,11 +10057,11 @@ class _EditorBottomBar extends StatelessWidget {
                 tooltipPadding: const EdgeInsets.all(24),
                 tooltipBorderRadius: BorderRadius.circular(20),
                 overlayColor: Colors.black,
-                overlayOpacity: 0.85,
+                overlayOpacity: 0.60,
                 disableDefaultTargetGestures: true,
                 onTargetClick: () => ShowCaseWidget.of(context).next(),
                 onToolTipClick: () => ShowCaseWidget.of(context).next(),
-                onBarrierClick: () => ShowCaseWidget.of(context).next(),
+                onBarrierClick: () => ShowCaseWidget.of(context).dismiss(),
                 child: wrappedButton,
               );
             }

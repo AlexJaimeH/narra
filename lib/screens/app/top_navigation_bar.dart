@@ -115,16 +115,27 @@ class _DesktopNav extends StatelessWidget {
         menuKey != null
             ? Showcase(
                 key: menuKey!,
-                description: 'Aquí puedes navegar entre las diferentes secciones: Inicio, Historias, Suscriptores y Ajustes.',
+                description: '🗂️ Menú de navegación:\n\n'
+                    '• Inicio - Vista general y crear historias\n'
+                    '• Historias - Ver y organizar tus relatos\n'
+                    '• Suscriptores - Gestionar tu audiencia\n'
+                    '• Ajustes - Personalizar tu cuenta',
                 descTextStyle: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
                   height: 1.5,
+                  color: Colors.white,
                 ),
                 tooltipBackgroundColor: const Color(0xFF4DB3A8),
                 textColor: Colors.white,
                 tooltipPadding: const EdgeInsets.all(20),
                 tooltipBorderRadius: BorderRadius.circular(16),
+                overlayColor: Colors.black,
+                overlayOpacity: 0.60,
+                disableDefaultTargetGestures: true,
+                onTargetClick: () => ShowCaseWidget.of(context).next(),
+                onToolTipClick: () => ShowCaseWidget.of(context).next(),
+                onBarrierClick: () => ShowCaseWidget.of(context).dismiss(),
                 child: navRow,
               )
             : navRow,
@@ -174,16 +185,27 @@ class _MobileNav extends StatelessWidget {
             menuKey != null
                 ? Showcase(
                     key: menuKey!,
-                    description: 'Toca aquí para abrir el menú y navegar entre: Inicio, Historias, Suscriptores y Ajustes.',
+                    description: '🗂️ Menú de navegación:\n\n'
+                        '• Inicio - Vista general y crear historias\n'
+                        '• Historias - Ver y organizar tus relatos\n'
+                        '• Suscriptores - Gestionar tu audiencia\n'
+                        '• Ajustes - Personalizar tu cuenta',
                     descTextStyle: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
                       height: 1.5,
+                      color: Colors.white,
                     ),
                     tooltipBackgroundColor: const Color(0xFF4DB3A8),
                     textColor: Colors.white,
                     tooltipPadding: const EdgeInsets.all(20),
                     tooltipBorderRadius: BorderRadius.circular(16),
+                    overlayColor: Colors.black,
+                    overlayOpacity: 0.60,
+                    disableDefaultTargetGestures: true,
+                    onTargetClick: () => ShowCaseWidget.of(context).next(),
+                    onToolTipClick: () => ShowCaseWidget.of(context).next(),
+                    onBarrierClick: () => ShowCaseWidget.of(context).dismiss(),
                     child: menuButton,
                   )
                 : menuButton,

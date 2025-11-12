@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:showcaseview/showcaseview.dart';
 import 'package:narra/api/narra_api.dart';
 import 'package:narra/repositories/user_repository.dart';
 import 'package:narra/repositories/story_repository.dart';
@@ -34,13 +33,6 @@ class _DashboardPageState extends State<DashboardPage> {
   bool _isLoading = true;
   bool _shouldShowGhostWriterIntro = false;
 
-  // Keys para el walkthrough
-  final GlobalKey _createStoryKey = GlobalKey();
-  final GlobalKey _ghostWriterKey = GlobalKey();
-
-  // Contexto del ShowCaseWidget builder
-  BuildContext? _showcaseContext;
-
   @override
   void initState() {
     super.initState();
@@ -70,9 +62,6 @@ class _DashboardPageState extends State<DashboardPage> {
       // Check if should show ghost writer intro
       final shouldShowIntro = await UserService.shouldShowGhostWriterIntro();
 
-      // Check if should show home walkthrough
-      final shouldShowWalkthrough = await UserService.shouldShowHomeWalkthrough();
-
       if (mounted) {
         setState(() {
           _userProfile = profile?.toMap();
@@ -93,13 +82,6 @@ class _DashboardPageState extends State<DashboardPage> {
           _shouldShowGhostWriterIntro = shouldShowIntro;
           _isLoading = false;
         });
-
-        // RADICALLY SIMPLE: Just one postFrameCallback, that's it
-        if (shouldShowWalkthrough) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) _startWalkthrough();
-          });
-        }
       }
     } catch (e) {
       if (mounted) {
@@ -109,18 +91,6 @@ class _DashboardPageState extends State<DashboardPage> {
         );
       }
     }
-  }
-
-  void _startWalkthrough() {
-    if (_showcaseContext == null) {
-      return;
-    }
-
-    // RADICALLY SIMPLE: Just add keys, no validation
-    final keys = <GlobalKey>[_createStoryKey];
-    if (_shouldShowGhostWriterIntro) keys.add(_ghostWriterKey);
-
-    ShowCaseWidget.of(_showcaseContext!).startShowCase(keys);
   }
 
   @override
@@ -136,13 +106,7 @@ class _DashboardPageState extends State<DashboardPage> {
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 600;
 
-    return ShowCaseWidget(
-      blurValue: 4,
-      disableBarrierInteraction: true,
-      onFinish: () => UserService.markHomeWalkthroughAsSeen(),
-      builder: (showcaseContext) {
-        _showcaseContext = showcaseContext;
-        return Scaffold(
+    return Scaffold(
           body: RefreshIndicator(
         onRefresh: _loadDashboardData,
         child: SingleChildScrollView(
@@ -223,31 +187,11 @@ class _DashboardPageState extends State<DashboardPage> {
               // Sección de bienvenida mejorada
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Showcase(
-                  key: _createStoryKey,
-                  description: 'Aquí puedes crear tus historias. Toca el botón verde para empezar a escribir tus recuerdos.',
-                  descTextStyle: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                    height: 1.5,
-                    color: Colors.white,
-                  ),
-                  tooltipBackgroundColor: const Color(0xFF2D7A6E),
-                  textColor: Colors.white,
-                  tooltipPadding: const EdgeInsets.all(20),
-                  tooltipBorderRadius: BorderRadius.circular(16),
-                  overlayColor: Colors.black,
-                  overlayOpacity: 0.60,
-                  disableDefaultTargetGestures: true,
-                  onTargetClick: () => ShowCaseWidget.of(context).next(),
-                  onToolTipClick: () => ShowCaseWidget.of(context).next(),
-                  onBarrierClick: () => ShowCaseWidget.of(context).dismiss(),
-                  child: _WelcomeSection(
-                    userProfile: _userProfile,
-                    allTags: _allTags,
-                    draftStories: _draftStories,
-                    stats: _dashboardStats,
-                  ),
+                child: _WelcomeSection(
+                  userProfile: _userProfile,
+                  allTags: _allTags,
+                  draftStories: _draftStories,
+                  stats: _dashboardStats,
                 ),
               ),
 
@@ -257,30 +201,10 @@ class _DashboardPageState extends State<DashboardPage> {
               if (_shouldShowGhostWriterIntro)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Showcase(
-                    key: _ghostWriterKey,
-                    description: 'Tu Ghost Writer es un asistente inteligente que te ayuda a mejorar tus historias. Haz clic en Configurar para personalizarlo.',
-                    descTextStyle: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                      height: 1.5,
-                      color: Colors.white,
-                    ),
-                    tooltipBackgroundColor: const Color(0xFF5B21B6),
-                    textColor: Colors.white,
-                    tooltipPadding: const EdgeInsets.all(20),
-                    tooltipBorderRadius: BorderRadius.circular(16),
-                    overlayColor: Colors.black,
-                    overlayOpacity: 0.60,
-                    disableDefaultTargetGestures: true,
-                    onTargetClick: () => ShowCaseWidget.of(context).next(),
-                    onToolTipClick: () => ShowCaseWidget.of(context).next(),
-                    onBarrierClick: () => ShowCaseWidget.of(context).dismiss(),
-                    child: _GhostWriterIntroCard(
-                      onDismiss: () {
-                        setState(() => _shouldShowGhostWriterIntro = false);
-                      },
-                    ),
+                  child: _GhostWriterIntroCard(
+                    onDismiss: () {
+                      setState(() => _shouldShowGhostWriterIntro = false);
+                    },
                   ),
                 ),
 
@@ -324,8 +248,6 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
         ),
       ),
-        );
-      },
     );
   }
 }

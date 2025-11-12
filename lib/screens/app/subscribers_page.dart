@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:showcaseview/showcaseview.dart';
 import 'package:narra/services/email/email_service.dart';
 import 'package:narra/services/email/subscriber_email_service.dart';
 import 'package:narra/services/subscriber_service.dart';
@@ -83,16 +82,6 @@ class _SubscribersPageState extends State<SubscribersPage>
   final Set<String> _sendingInviteIds = <String>{};
   late AnimationController _fabController;
 
-  // GlobalKeys para el walkthrough
-  final GlobalKey _addButtonKey = GlobalKey();
-  final GlobalKey _searchFieldKey = GlobalKey();
-  final GlobalKey _statsCardsKey = GlobalKey();
-  final GlobalKey _subscribersListKey = GlobalKey();
-  final GlobalKey _filterChipsKey = GlobalKey();
-
-  // Contexto del ShowCaseWidget builder
-  BuildContext? _showcaseContext;
-
   @override
   void initState() {
     super.initState();
@@ -101,35 +90,6 @@ class _SubscribersPageState extends State<SubscribersPage>
       duration: const Duration(milliseconds: 300),
     );
     _loadDashboard();
-  }
-
-  Future<void> _checkAndShowWalkthrough() async {
-    final shouldShow = await UserService.shouldShowSubscribersWalkthrough();
-    if (!shouldShow || !mounted) return;
-
-    // RADICALLY SIMPLE: Just one postFrameCallback
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _startWalkthrough();
-    });
-  }
-
-  void _startWalkthrough() {
-    if (_showcaseContext == null) return;
-
-    // RADICALLY SIMPLE: Just add keys, no validation
-    final keys = <GlobalKey>[
-      _addButtonKey,
-      _statsCardsKey,
-      _filterChipsKey,
-    ];
-
-    // Only add list key if there are subscribers
-    if ((_dashboard?.totalSubscribersIncludingUnsubscribed ?? 0) > 0) {
-      keys.add(_subscribersListKey);
-    }
-
-    // Note: searchFieldKey removed from walkthrough - no longer needed
-    ShowCaseWidget.of(_showcaseContext!).startShowCase(keys);
   }
 
   @override
@@ -187,9 +147,6 @@ class _SubscribersPageState extends State<SubscribersPage>
         _isRefreshing = false;
       });
       _fabController.forward();
-
-      // Check walkthrough after loading
-      _checkAndShowWalkthrough();
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -595,18 +552,6 @@ class _SubscribersPageState extends State<SubscribersPage>
 
   @override
   Widget build(BuildContext context) {
-    return ShowCaseWidget(
-      blurValue: 4,
-      disableBarrierInteraction: true,
-      onFinish: () => UserService.markSubscribersWalkthroughAsSeen(),
-      builder: (showcaseContext) {
-        _showcaseContext = showcaseContext;
-        return _buildContent(showcaseContext);
-      },
-    );
-  }
-
-  Widget _buildContent(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
@@ -753,27 +698,7 @@ class _SubscribersPageState extends State<SubscribersPage>
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: Showcase(
-                  key: _statsCardsKey,
-                  description: '¡Tus estadísticas al instante! Ve cuántos suscriptores tienes en total, cuántos confirmaron su invitación y cuántos están pendientes.',
-                  descTextStyle: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    height: 1.5,
-                    color: Colors.white,
-                  ),
-                  tooltipBackgroundColor: const Color(0xFF10B981),
-                  textColor: Colors.white,
-                  tooltipPadding: const EdgeInsets.all(24),
-                  tooltipBorderRadius: BorderRadius.circular(20),
-                  overlayColor: Colors.black,
-                  overlayOpacity: 0.60,
-                  disableDefaultTargetGestures: true,
-                  onTargetClick: () => ShowCaseWidget.of(context).next(),
-                  onToolTipClick: () => ShowCaseWidget.of(context).next(),
-                  onBarrierClick: () => ShowCaseWidget.of(context).dismiss(),
-                  child: _StatsOverview(dashboard: dashboard),
-                ),
+                child: _StatsOverview(dashboard: dashboard),
               ),
             ),
             if ((dashboard?.recentComments.isNotEmpty ?? false) ||
@@ -815,26 +740,7 @@ class _SubscribersPageState extends State<SubscribersPage>
                       },
                     ),
                     const SizedBox(height: 12),
-                    Showcase(
-                      key: _filterChipsKey,
-                      description: 'Filtra tus suscriptores: ve todos, solo confirmados, pendientes de confirmación o los que se dieron de baja.',
-                      descTextStyle: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        height: 1.5,
-                        color: Colors.white,
-                      ),
-                      tooltipBackgroundColor: const Color(0xFFF59E0B),
-                      textColor: Colors.white,
-                      tooltipPadding: const EdgeInsets.all(24),
-                      tooltipBorderRadius: BorderRadius.circular(20),
-                      overlayColor: Colors.black,
-                      overlayOpacity: 0.60,
-                      disableDefaultTargetGestures: true,
-                      onTargetClick: () => ShowCaseWidget.of(context).next(),
-                      onToolTipClick: () => ShowCaseWidget.of(context).next(),
-                      onBarrierClick: () => ShowCaseWidget.of(context).dismiss(),
-                      child: _FilterChips(
+                    _FilterChips(
                       current: _filter,
                       onChanged: (filter) {
                         setState(() => _filter = filter);
@@ -844,7 +750,6 @@ class _SubscribersPageState extends State<SubscribersPage>
                         confirmed: dashboard?.confirmedSubscribers ?? 0,
                         pending: dashboard?.pendingSubscribers ?? 0,
                         unsubscribed: dashboard?.unsubscribedSubscribers ?? 0,
-                      ),
                       ),
                     ),
                   ],
@@ -879,41 +784,16 @@ class _SubscribersPageState extends State<SubscribersPage>
                       final subscriber = subscribers[index];
                       final engagement = dashboard?.engagementFor(subscriber.id);
 
-                      // Envolver el primer item con Showcase
-                      final card = _SubscriberCard(
-                        subscriber: subscriber,
-                        engagement: engagement,
-                        onTap: () => _openSubscriberDetails(subscriber),
-                        onResend: () => _sendInvite(subscriber),
-                        isSendingInvite:
-                            _sendingInviteIds.contains(subscriber.id),
-                      );
-
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 12),
-                        child: index == 0
-                            ? Showcase(
-                                key: _subscribersListKey,
-                                description: 'Aquí están todos tus suscriptores. Toca uno para ver detalles, reenviar invitación o editar su información. Ve sus reacciones y comentarios.',
-                                descTextStyle: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  height: 1.5,
-                                  color: Colors.white,
-                                ),
-                                tooltipBackgroundColor: const Color(0xFF3B82F6),
-                                textColor: Colors.white,
-                                tooltipPadding: const EdgeInsets.all(24),
-                                tooltipBorderRadius: BorderRadius.circular(20),
-                                overlayColor: Colors.black,
-                                overlayOpacity: 0.60,
-                                disableDefaultTargetGestures: true,
-                                onTargetClick: () => ShowCaseWidget.of(context).next(),
-                                onToolTipClick: () => ShowCaseWidget.of(context).next(),
-                                onBarrierClick: () => ShowCaseWidget.of(context).dismiss(),
-                                child: card,
-                              )
-                            : card,
+                        child: _SubscriberCard(
+                          subscriber: subscriber,
+                          engagement: engagement,
+                          onTap: () => _openSubscriberDetails(subscriber),
+                          onResend: () => _sendInvite(subscriber),
+                          isSendingInvite:
+                              _sendingInviteIds.contains(subscriber.id),
+                        ),
                       );
                     },
                     childCount: subscribers.length,
@@ -923,48 +803,28 @@ class _SubscribersPageState extends State<SubscribersPage>
           ],
         ),
       ),
-      floatingActionButton: Showcase(
-        key: _addButtonKey,
-        description: '¡Aquí puedes agregar nuevos suscriptores! Solo necesitas su nombre y email. Ellos recibirán una invitación y podrán ver únicamente tus historias PUBLICADAS.',
-        descTextStyle: const TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.w600,
-          height: 1.5,
-          color: Colors.white,
+      floatingActionButton: ScaleTransition(
+        scale: CurvedAnimation(
+          parent: _fabController,
+          curve: Curves.easeOutBack,
         ),
-        tooltipBackgroundColor: const Color(0xFF8B5CF6),
-        textColor: Colors.white,
-        tooltipPadding: const EdgeInsets.all(24),
-        tooltipBorderRadius: BorderRadius.circular(20),
-        overlayColor: Colors.black,
-        overlayOpacity: 0.60,
-        disableDefaultTargetGestures: true,
-        onTargetClick: () => ShowCaseWidget.of(context).next(),
-        onToolTipClick: () => ShowCaseWidget.of(context).next(),
-        onBarrierClick: () => ShowCaseWidget.of(context).dismiss(),
-        child: ScaleTransition(
-          scale: CurvedAnimation(
-            parent: _fabController,
-            curve: Curves.easeOutBack,
+        child: FloatingActionButton.extended(
+          onPressed: _showAddSubscriberDialog,
+          icon: const Icon(Icons.person_add_alt_1, size: 24),
+          label: const Text(
+            'Agregar',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.5,
+            ),
           ),
-          child: FloatingActionButton.extended(
-            onPressed: _showAddSubscriberDialog,
-            icon: const Icon(Icons.person_add_alt_1, size: 24),
-            label: const Text(
-              'Agregar',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.5,
-              ),
-            ),
-            elevation: 6,
-            highlightElevation: 12,
-            backgroundColor: colorScheme.primary,
-            foregroundColor: colorScheme.onPrimary,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
+          elevation: 6,
+          highlightElevation: 12,
+          backgroundColor: colorScheme.primary,
+          foregroundColor: colorScheme.onPrimary,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
           ),
         ),
       ),

@@ -710,8 +710,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     final shouldShow = await UserService.shouldShowEditorWalkthrough();
     if (!shouldShow || !mounted) return;
 
-    // Aumentar delay para asegurar que todos los widgets estén renderizados
-    await Future.delayed(const Duration(milliseconds: 2500));
+    // Aumentar delay MUCHO más para asegurar que todos los widgets estén renderizados
+    await Future.delayed(const Duration(milliseconds: 4000));
     if (!mounted) return;
 
     _startWalkthrough();
@@ -720,19 +720,22 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   void _startWalkthrough() {
     if (_showcaseContext == null) return;
 
-    // Verificar que las keys tengan contexto antes de agregarlas
-    final keys = <GlobalKey>[];
+    // SOLO mostrar las keys que están en la vista actual (tab 0 - Editar)
+    // Las otras keys (tabs) solo existen cuando están renderizadas
+    final keys = <GlobalKey>[
+      // Siempre incluir el campo de contenido
+      _contentFieldKey,
+      // Incluir los botones de acciones que siempre están visibles
+      _ghostWriterButtonKey,
+      _suggestionsButtonKey,
+      // Incluir el botón de guardar que está en el bottom bar
+      _saveButtonKey,
+      // Solo incluir Publicar si tiene contenido suficiente
+      if (_getWordCount() >= 300) _publishButtonKey,
+    ];
 
-    if (_contentFieldKey.currentContext != null) keys.add(_contentFieldKey);
-    if (_ghostWriterButtonKey.currentContext != null) keys.add(_ghostWriterButtonKey);
-    if (_suggestionsButtonKey.currentContext != null) keys.add(_suggestionsButtonKey);
-    if (_photosTabKey.currentContext != null) keys.add(_photosTabKey);
-    if (_datesTabKey.currentContext != null) keys.add(_datesTabKey);
-    if (_tagsTabKey.currentContext != null) keys.add(_tagsTabKey);
-    if (_saveButtonKey.currentContext != null) keys.add(_saveButtonKey);
-    if (_publishButtonKey.currentContext != null) keys.add(_publishButtonKey);
-
-    if (keys.isEmpty) return;
+    // NO incluir las tabs de Fotos, Fechas y Etiquetas porque no están visibles
+    // al inicio (están en tabs diferentes)
 
     ShowCaseWidget.of(_showcaseContext!).startShowCase(keys);
     // NO marcar como visto inmediatamente
@@ -2297,19 +2300,21 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         // No hacer scroll para el content field porque es grande y se desenfoca
         if (key == _contentFieldKey) return;
 
-        // Para el Ghost Writer, necesitamos un scroll MUY agresivo para que se vea bien
+        // Para el Ghost Writer, necesitamos un scroll EXTREMADAMENTE agresivo
         final isGhostWriter = key == _ghostWriterButtonKey;
+        final isSuggestions = key == _suggestionsButtonKey;
 
         // Hacer scroll al elemento ANTES de mostrarlo
         if (key.currentContext != null) {
           Scrollable.ensureVisible(
             key.currentContext!,
-            duration: Duration(milliseconds: isGhostWriter ? 800 : 400),
-            curve: Curves.easeInOut,
-            alignment: isGhostWriter ? 0.08 : 0.2, // Ghost Writer MUCHO más arriba para dar espacio al tooltip
+            duration: Duration(milliseconds: isGhostWriter ? 1000 : 400),
+            curve: Curves.easeInOutCubic,
+            // Ghost Writer EXTREMADAMENTE arriba para dar espacio al tooltip grande
+            alignment: isGhostWriter ? 0.05 : (isSuggestions ? 0.1 : 0.2),
           ).then((_) {
             // Esperar un momento extra para el Ghost Writer para que termine el scroll
-            Future.delayed(Duration(milliseconds: isGhostWriter ? 400 : 150));
+            Future.delayed(Duration(milliseconds: isGhostWriter ? 500 : 150));
           });
         }
       },

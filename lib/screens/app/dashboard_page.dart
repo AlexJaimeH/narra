@@ -105,6 +105,7 @@ class _DashboardPageState extends State<DashboardPage> {
           _isLoading = false;
         });
 
+        print('🟢 [Dashboard] Datos cargados, llamando a _checkAndShowWalkthrough()');
         // DEBUG MODE: Siempre mostrar walkthrough
         _checkAndShowWalkthrough();
       }
@@ -120,24 +121,46 @@ class _DashboardPageState extends State<DashboardPage> {
 
   Future<void> _checkAndShowWalkthrough() async {
     // DEBUG MODE: Siempre mostrar walkthrough
-    if (!mounted) return;
+    print('🔵 [Dashboard] _checkAndShowWalkthrough() iniciando, mounted: $mounted');
+    if (!mounted) {
+      print('🔴 [Dashboard] Not mounted en _checkAndShowWalkthrough');
+      return;
+    }
 
+    print('🔵 [Dashboard] Agregando postFrameCallback');
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
+      print('🔵 [Dashboard] postFrameCallback ejecutándose, mounted: $mounted');
+      if (!mounted) {
+        print('🔴 [Dashboard] Not mounted en postFrameCallback');
+        return;
+      }
 
+      print('🔵 [Dashboard] Iniciando delay de 1 segundo...');
       // Esperar 1 segundo antes de iniciar el walkthrough
       Future.delayed(const Duration(milliseconds: 1000)).then((_) {
+        print('🔵 [Dashboard] Delay completado, mounted: $mounted, _showcaseContext: $_showcaseContext');
         if (mounted) {
           _startWalkthrough();
+        } else {
+          print('🔴 [Dashboard] Not mounted después del delay');
         }
       });
     });
   }
 
   void _startWalkthrough() {
-    if (_showcaseContext == null) return;
+    print('🟢 [Dashboard] _startWalkthrough() iniciando');
+    print('🟢 [Dashboard] _showcaseContext: $_showcaseContext');
+    print('🟢 [Dashboard] widget.menuKey: ${widget.menuKey}');
+    print('🟢 [Dashboard] _shouldShowGhostWriterIntro: $_shouldShowGhostWriterIntro');
+
+    if (_showcaseContext == null) {
+      print('🔴 [Dashboard] _showcaseContext es null, abortando');
+      return;
+    }
 
     setState(() => _isWalkthroughActive = true);
+    print('🟢 [Dashboard] _isWalkthroughActive establecido a true');
 
     // Construir lista de keys
     final keys = <GlobalKey>[];
@@ -154,8 +177,17 @@ class _DashboardPageState extends State<DashboardPage> {
     }
 
     keys.add(_bookProgressKey);
+    print('🟢 [Dashboard] Agregado _bookProgressKey');
 
-    ShowCaseWidget.of(_showcaseContext!).startShowCase(keys);
+    print('🟢 [Dashboard] Total keys: ${keys.length}');
+    print('🟢 [Dashboard] Llamando a ShowCaseWidget.of(_showcaseContext!).startShowCase(keys)');
+
+    try {
+      ShowCaseWidget.of(_showcaseContext!).startShowCase(keys);
+      print('🟢 [Dashboard] startShowCase() ejecutado exitosamente');
+    } catch (e) {
+      print('🔴 [Dashboard] Error en startShowCase: $e');
+    }
   }
 
   Future<void> _scrollToWidget(GlobalKey key) async {
@@ -226,6 +258,7 @@ class _DashboardPageState extends State<DashboardPage> {
       },
       builder: (showcaseContext) {
         _showcaseContext = showcaseContext;
+        print('🟡 [Dashboard] ShowCaseWidget builder ejecutado, contexto guardado: $showcaseContext');
         return Scaffold(
           body: RefreshIndicator(
         onRefresh: _loadDashboardData,

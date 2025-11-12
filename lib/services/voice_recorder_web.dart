@@ -1,12 +1,48 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:html' as html;
-import 'dart:js_util' as js_util;
+// ignore: deprecated_member_use
+import 'dart:js' as js;
 import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
+
+// Helper functions to replace dart:js_util
+T _getProperty<T>(Object object, String property) {
+  return (object as js.JsObject)[property] as T;
+}
+
+void _setProperty(Object object, String property, Object? value) {
+  (object as js.JsObject)[property] = value;
+}
+
+T _callMethod<T>(Object object, String method, List<Object?> args) {
+  return (object as js.JsObject).callMethod(method, args) as T;
+}
+
+Object _callConstructor(Object constructor, List<Object?> args) {
+  return js.JsObject.fromBrowserObject(constructor).callMethod('new', args);
+}
+
+bool _hasProperty(Object object, String property) {
+  return (object as js.JsObject).hasProperty(property);
+}
+
+Future<T> _promiseToFuture<T>(Object promise) {
+  final completer = Completer<T>();
+  final jsPromise = promise as js.JsObject;
+
+  jsPromise.callMethod('then', [
+    (result) => completer.complete(result as T),
+  ]);
+  jsPromise.callMethod('catch', [
+    (error) => completer.completeError(error),
+  ]);
+
+  return completer.future;
+}
 
 typedef OnText = void Function(String text);
 typedef OnRecorderLog = void Function(String level, String message);
@@ -599,7 +635,7 @@ class VoiceRecorder {
 
   void _attachRecorderListeners(html.MediaRecorder recorder) {
     recorder.addEventListener('dataavailable', (html.Event event) async {
-      final dynamic blob = js_util.getProperty(event, 'data');
+      final dynamic blob = _getProperty(event, 'data');
       if (blob is! html.Blob || blob.size == 0) {
         return;
       }
@@ -621,11 +657,11 @@ class VoiceRecorder {
     });
 
     recorder.addEventListener('error', (html.Event event) {
-      final name = js_util.hasProperty(event, 'name')
-          ? js_util.getProperty(event, 'name')
+      final name = _hasProperty(event, 'name')
+          ? _getProperty(event, 'name')
           : null;
-      final message = js_util.hasProperty(event, 'message')
-          ? js_util.getProperty(event, 'message')
+      final message = _hasProperty(event, 'message')
+          ? _getProperty(event, 'message')
           : null;
       final detailParts = <String>[];
       if (name is String && name.isNotEmpty) {
@@ -652,27 +688,27 @@ class VoiceRecorder {
 
     try {
       Object? ctor;
-      if (js_util.hasProperty(html.window, 'AudioContext')) {
-        ctor = js_util.getProperty(html.window, 'AudioContext');
+      if (_hasProperty(html.window, 'AudioContext')) {
+        ctor = _getProperty(html.window, 'AudioContext');
       }
       if (ctor == null &&
-          js_util.hasProperty(html.window, 'webkitAudioContext')) {
-        ctor = js_util.getProperty(html.window, 'webkitAudioContext');
+          _hasProperty(html.window, 'webkitAudioContext')) {
+        ctor = _getProperty(html.window, 'webkitAudioContext');
       }
 
       if (ctor == null) {
         throw UnsupportedError('AudioContext no disponible');
       }
 
-      final context = js_util.callConstructor(ctor, const []);
+      final context = _callConstructor(ctor, const []);
       final source =
-          js_util.callMethod(context, 'createMediaStreamSource', [stream]);
-      final analyser = js_util.callMethod(context, 'createAnalyser', const []);
-      js_util.setProperty(analyser, 'fftSize', 512);
-      js_util.setProperty(analyser, 'smoothingTimeConstant', 0.22);
-      js_util.callMethod(source, 'connect', [analyser]);
+          _callMethod(context, 'createMediaStreamSource', [stream]);
+      final analyser = _callMethod(context, 'createAnalyser', const []);
+      _setProperty(analyser, 'fftSize', 512);
+      _setProperty(analyser, 'smoothingTimeConstant', 0.22);
+      _callMethod(source, 'connect', [analyser]);
 
-      final binCount = js_util.getProperty(analyser, 'frequencyBinCount');
+      final binCount = _getProperty(analyser, 'frequencyBinCount');
       final count = binCount is int ? binCount : int.tryParse('$binCount') ?? 0;
 
       _audioContext = context;
@@ -702,7 +738,7 @@ class VoiceRecorder {
     }
 
     try {
-      js_util.callMethod(analyser, 'getByteTimeDomainData', [buffer]);
+      _callMethod(analyser, 'getByteTimeDomainData', [buffer]);
     } catch (_) {
       return;
     }
@@ -733,7 +769,7 @@ class VoiceRecorder {
     final source = _audioSourceNode;
     if (source != null) {
       try {
-        js_util.callMethod(source, 'disconnect', const []);
+        _callMethod(source, 'disconnect', const []);
       } catch (_) {}
     }
     _audioSourceNode = null;
@@ -743,12 +779,12 @@ class VoiceRecorder {
     _audioContext = null;
     if (context != null) {
       try {
-        final closeResult = js_util.callMethod(context, 'close', const []);
+        final closeResult = _callMethod(context, 'close', const []);
         if (closeResult is Future) {
           closeResult.catchError((_) {});
         } else if (closeResult != null) {
           try {
-            js_util.promiseToFuture(closeResult).catchError((_) {});
+            _promiseToFuture(closeResult).catchError((_) {});
           } catch (_) {}
         }
       } catch (_) {}

@@ -120,49 +120,24 @@ class _DashboardPageState extends State<DashboardPage> {
 
   Future<void> _checkAndShowWalkthrough() async {
     // DEBUG MODE: Siempre mostrar walkthrough
-    print('🔵 [Dashboard] _checkAndShowWalkthrough() iniciando');
-    print('🔵 [Dashboard] mounted: $mounted');
+    if (!mounted) return;
 
-    if (!mounted) {
-      print('🔴 [Dashboard] No mounted, saliendo de _checkAndShowWalkthrough');
-      return;
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
 
-    print('🔵 [Dashboard] Agregando postFrameCallback');
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      print('🔵 [Dashboard] postFrameCallback ejecutándose, mounted: $mounted');
-
-      if (!mounted) {
-        print('🔴 [Dashboard] No mounted en postFrameCallback');
-        return;
-      }
-
-      // Esperar 1 segundo DENTRO del postFrameCallback
-      print('🔵 [Dashboard] Esperando 1 segundo...');
-      await Future.delayed(const Duration(milliseconds: 1000));
-
-      print('🔵 [Dashboard] Después del delay, mounted: $mounted, _showcaseContext: $_showcaseContext');
-
-      if (mounted) {
-        print('🔵 [Dashboard] Llamando a _startWalkthrough()');
-        _startWalkthrough();
-      } else {
-        print('🔴 [Dashboard] No mounted después del delay');
-      }
+      // Esperar 1 segundo antes de iniciar el walkthrough
+      Future.delayed(const Duration(milliseconds: 1000)).then((_) {
+        if (mounted) {
+          _startWalkthrough();
+        }
+      });
     });
   }
 
   void _startWalkthrough() {
-    print('🟢 [Dashboard] _startWalkthrough() iniciando');
-    print('🟢 [Dashboard] _showcaseContext: $_showcaseContext');
-
-    if (_showcaseContext == null) {
-      print('🔴 [Dashboard] _showcaseContext es null, saliendo');
-      return;
-    }
+    if (_showcaseContext == null) return;
 
     setState(() => _isWalkthroughActive = true);
-    print('🟢 [Dashboard] _isWalkthroughActive = true');
 
     // Construir lista de keys
     final keys = <GlobalKey>[];
@@ -170,25 +145,17 @@ class _DashboardPageState extends State<DashboardPage> {
     // Primero explicar el menú si está disponible
     if (widget.menuKey != null) {
       keys.add(widget.menuKey!);
-      print('🟢 [Dashboard] Agregado menuKey');
     }
 
     keys.add(_createStoryKey);
-    print('🟢 [Dashboard] Agregado _createStoryKey');
 
     if (_shouldShowGhostWriterIntro) {
       keys.add(_ghostWriterKey);
-      print('🟢 [Dashboard] Agregado _ghostWriterKey');
     }
 
     keys.add(_bookProgressKey);
-    print('🟢 [Dashboard] Agregado _bookProgressKey');
-
-    print('🟢 [Dashboard] Total de keys: ${keys.length}');
-    print('🟢 [Dashboard] Llamando a startShowCase con ${keys.length} keys');
 
     ShowCaseWidget.of(_showcaseContext!).startShowCase(keys);
-    print('🟢 [Dashboard] startShowCase ejecutado');
   }
 
   Future<void> _scrollToWidget(GlobalKey key) async {

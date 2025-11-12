@@ -135,11 +135,6 @@ class _DashboardPageState extends State<DashboardPage> {
   void _startWalkthrough() {
     if (_showcaseContext == null) return;
 
-    // Esperar 1 segundo antes de iniciar
-    await Future.delayed(const Duration(milliseconds: 1000));
-
-    if (!mounted || _showcaseContext == null) return;
-
     setState(() => _isWalkthroughActive = true);
 
     // Construir lista de keys

@@ -707,10 +707,13 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   }
 
   Future<void> _checkAndShowWalkthrough() async {
-    final shouldShow = await UserService.shouldShowEditorWalkthrough();
-    if (!shouldShow || !mounted) return;
+    // DEBUG MODE: Siempre mostrar walkthrough
+    // final shouldShow = await UserService.shouldShowEditorWalkthrough();
+    // if (!shouldShow || !mounted) return;
 
-    // RADICALLY SIMPLE: Just one postFrameCallback
+    // Siempre mostrar walkthrough
+    if (!mounted) return;
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _startWalkthrough();
     });
@@ -2279,7 +2282,10 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     return ShowCaseWidget(
       blurValue: 4,
       disableBarrierInteraction: true,
-      onFinish: () => UserService.markEditorWalkthroughAsSeen(),
+      onFinish: () {
+        // DEBUG MODE: No marcar como visto para que siempre se muestre
+        // UserService.markEditorWalkthroughAsSeen();
+      },
       builder: (showcaseContext) {
         _showcaseContext = showcaseContext;
         return PopScope(

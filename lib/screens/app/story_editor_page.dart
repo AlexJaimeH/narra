@@ -2307,7 +2307,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   Widget build(BuildContext context) {
     return ShowCaseWidget(
       blurValue: 4,
-      disableBarrierInteraction: true,
+      disableBarrierInteraction: false,
       onFinish: () {
         setState(() => _isWalkthroughActive = false);
         // DEBUG MODE: No marcar como visto para que siempre se muestre
@@ -2315,9 +2315,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       },
       builder: (showcaseContext) {
         _showcaseContext = showcaseContext;
-        return Stack(
-          children: [
-            PopScope(
+        return PopScope(
         canPop: !_hasChanges,
         onPopInvoked: (didPop) {
           if (!didPop && _hasChanges) {
@@ -2449,26 +2447,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                 },
               ),
             ),
-        ),
-            // Overlay para absorber clics durante el walkthrough
-            if (_isWalkthroughActive)
-              Positioned.fill(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () {
-                    if (_showcaseContext != null) {
-                      ShowCaseWidget.of(_showcaseContext!).next();
-                    }
-                  },
-                  child: AbsorbPointer(
-                    absorbing: true,
-                    child: Container(
-                      color: Colors.transparent,
-                    ),
-                  ),
-                ),
-              ),
-          ],
         );
       },
     );
@@ -2807,7 +2785,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                 disableDefaultTargetGestures: true,
                 onTargetClick: () => _handleContentFieldClick(context),
                 onToolTipClick: () => _handleContentFieldClick(context),
-                onBarrierClick: () => ShowCaseWidget.of(context).dismiss(),
+                onBarrierClick: () => ShowCaseWidget.of(context).next(),
                 child: Container(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(isCompact ? 20 : 24),
@@ -2970,7 +2948,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                     disableDefaultTargetGestures: true,
                     onTargetClick: () => ShowCaseWidget.of(context).next(),
                     onToolTipClick: () => ShowCaseWidget.of(context).next(),
-                    onBarrierClick: () => ShowCaseWidget.of(context).dismiss(),
+                    onBarrierClick: () => ShowCaseWidget.of(context).next(),
                     child: buildActionButton(
                       isCompact: isCompact,
                       onPressed: _isGhostWriterProcessing
@@ -3015,7 +2993,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                     disableDefaultTargetGestures: true,
                     onTargetClick: () => ShowCaseWidget.of(context).next(),
                     onToolTipClick: () => ShowCaseWidget.of(context).next(),
-                    onBarrierClick: () => ShowCaseWidget.of(context).dismiss(),
+                    onBarrierClick: () => ShowCaseWidget.of(context).next(),
                     child: buildActionButton(
                       isCompact: isCompact,
                       onPressed: () {
@@ -9776,7 +9754,7 @@ class _EditorSegmentedControl extends StatelessWidget {
               disableDefaultTargetGestures: true,
               onTargetClick: () => ShowCaseWidget.of(context).next(),
               onToolTipClick: () => ShowCaseWidget.of(context).next(),
-              onBarrierClick: () => ShowCaseWidget.of(context).dismiss(),
+              onBarrierClick: () => ShowCaseWidget.of(context).next(),
               child: const Tab(text: 'Fotos'),
             )
           else
@@ -9800,7 +9778,7 @@ class _EditorSegmentedControl extends StatelessWidget {
               disableDefaultTargetGestures: true,
               onTargetClick: () => ShowCaseWidget.of(context).next(),
               onToolTipClick: () => ShowCaseWidget.of(context).next(),
-              onBarrierClick: () => ShowCaseWidget.of(context).dismiss(),
+              onBarrierClick: () => ShowCaseWidget.of(context).next(),
               child: const Tab(text: 'Fechas'),
             )
           else
@@ -9824,7 +9802,7 @@ class _EditorSegmentedControl extends StatelessWidget {
               disableDefaultTargetGestures: true,
               onTargetClick: () => ShowCaseWidget.of(context).next(),
               onToolTipClick: () => ShowCaseWidget.of(context).next(),
-              onBarrierClick: () => ShowCaseWidget.of(context).dismiss(),
+              onBarrierClick: () => ShowCaseWidget.of(context).next(),
               child: const Tab(text: 'Etiquetas'),
             )
           else
@@ -9929,7 +9907,7 @@ class _EditorBottomBar extends StatelessWidget {
                 disableDefaultTargetGestures: true,
                 onTargetClick: () => ShowCaseWidget.of(context).next(),
                 onToolTipClick: () => ShowCaseWidget.of(context).next(),
-                onBarrierClick: () => ShowCaseWidget.of(context).dismiss(),
+                onBarrierClick: () => ShowCaseWidget.of(context).next(),
                 child: button,
               );
             }
@@ -10022,7 +10000,7 @@ class _EditorBottomBar extends StatelessWidget {
                 disableDefaultTargetGestures: true,
                 onTargetClick: () => ShowCaseWidget.of(context).next(),
                 onToolTipClick: () => ShowCaseWidget.of(context).next(),
-                onBarrierClick: () => ShowCaseWidget.of(context).dismiss(),
+                onBarrierClick: () => ShowCaseWidget.of(context).next(),
                 child: wrappedButton,
               );
             }
@@ -10122,7 +10100,7 @@ class _EditorBottomBar extends StatelessWidget {
                 disableDefaultTargetGestures: true,
                 onTargetClick: () => ShowCaseWidget.of(context).next(),
                 onToolTipClick: () => ShowCaseWidget.of(context).next(),
-                onBarrierClick: () => ShowCaseWidget.of(context).dismiss(),
+                onBarrierClick: () => ShowCaseWidget.of(context).next(),
                 child: wrappedButton,
               );
             }

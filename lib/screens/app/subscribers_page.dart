@@ -128,6 +128,7 @@ class _SubscribersPageState extends State<SubscribersPage>
       keys.add(_subscribersListKey);
     }
 
+    // Note: searchFieldKey removed from walkthrough - no longer needed
     ShowCaseWidget.of(_showcaseContext!).startShowCase(keys);
   }
 
@@ -675,26 +676,7 @@ class _SubscribersPageState extends State<SubscribersPage>
                     color: colorScheme.surface,
                     borderRadius: BorderRadius.circular(28),
                   ),
-                  child: Showcase(
-                    key: _searchFieldKey,
-                    description: 'Busca tus suscriptores por nombre o email aquí.',
-                    descTextStyle: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      height: 1.5,
-                      color: Colors.white,
-                    ),
-                    tooltipBackgroundColor: const Color(0xFF6366F1),
-                    textColor: Colors.white,
-                    tooltipPadding: const EdgeInsets.all(24),
-                    tooltipBorderRadius: BorderRadius.circular(20),
-                    overlayColor: Colors.black,
-                    overlayOpacity: 0.60,
-                    disableDefaultTargetGestures: true,
-                    onTargetClick: () => ShowCaseWidget.of(context).next(),
-                    onToolTipClick: () => ShowCaseWidget.of(context).next(),
-                    onBarrierClick: () => ShowCaseWidget.of(context).dismiss(),
-                    child: Padding(
+                  child: Padding(
                     padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,

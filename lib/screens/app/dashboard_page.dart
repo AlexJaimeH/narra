@@ -106,9 +106,7 @@ class _DashboardPageState extends State<DashboardPage> {
         });
 
         // DEBUG MODE: Siempre mostrar walkthrough
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) _startWalkthrough();
-        });
+        _checkAndShowWalkthrough();
       }
     } catch (e) {
       if (mounted) {
@@ -120,15 +118,22 @@ class _DashboardPageState extends State<DashboardPage> {
     }
   }
 
-  Future<void> _startWalkthrough() async {
-    if (_showcaseContext == null) {
-      return;
-    }
+  Future<void> _checkAndShowWalkthrough() async {
+    // DEBUG MODE: Siempre mostrar walkthrough
+    if (!mounted) return;
 
     // Esperar 1 segundo antes de iniciar
     await Future.delayed(const Duration(milliseconds: 1000));
 
-    if (!mounted || _showcaseContext == null) return;
+    if (!mounted) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _startWalkthrough();
+    });
+  }
+
+  void _startWalkthrough() {
+    if (_showcaseContext == null) return;
 
     setState(() => _isWalkthroughActive = true);
 
@@ -144,9 +149,7 @@ class _DashboardPageState extends State<DashboardPage> {
     if (_shouldShowGhostWriterIntro) keys.add(_ghostWriterKey);
     keys.add(_bookProgressKey);
 
-    if (mounted && _showcaseContext != null) {
-      ShowCaseWidget.of(_showcaseContext!).startShowCase(keys);
-    }
+    ShowCaseWidget.of(_showcaseContext!).startShowCase(keys);
   }
 
   Future<void> _scrollToWidget(GlobalKey key) async {

@@ -168,15 +168,12 @@ class _DashboardPageState extends State<DashboardPage> {
     // Primero explicar el menú si está disponible
     if (widget.menuKey != null) {
       keys.add(widget.menuKey!);
-      print('🟢 [Dashboard] Agregado menuKey');
     }
 
     keys.add(_createStoryKey);
-    print('🟢 [Dashboard] Agregado _createStoryKey');
 
     if (_shouldShowGhostWriterIntro) {
       keys.add(_ghostWriterKey);
-      print('🟢 [Dashboard] Agregado _ghostWriterKey');
     }
 
     keys.add(_bookProgressKey);

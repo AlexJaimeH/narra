@@ -9,8 +9,6 @@ import 'dart:html' as html;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
-import 'package:showcaseview/showcaseview.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
@@ -604,19 +602,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
   static const String _personalTagsTitle = 'Tus etiquetas únicas';
 
-  // GlobalKeys para el walkthrough del editor
-  final GlobalKey _contentFieldKey = GlobalKey();
-  final GlobalKey _ghostWriterButtonKey = GlobalKey();
-  final GlobalKey _suggestionsButtonKey = GlobalKey();
-  final GlobalKey _photosTabKey = GlobalKey();
-  final GlobalKey _datesTabKey = GlobalKey();
-  final GlobalKey _tagsTabKey = GlobalKey();
-  final GlobalKey _saveButtonKey = GlobalKey();
-  final GlobalKey _publishButtonKey = GlobalKey();
-
-  // Contexto del ShowCaseWidget builder
-  BuildContext? _showcaseContext;
-
   @override
   void initState() {
     super.initState();
@@ -664,12 +649,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
     unawaited(_loadVoiceRecordings());
 
-    // Verificar si debe mostrar el walkthrough (siempre, no solo para historias nuevas)
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _checkAndShowWalkthrough();
-    });
-
     // Generate initial AI suggestions when suggestions are shown
     // Open suggestions automatically if requested
     if (widget.openSuggestionsAutomatically) {
@@ -704,31 +683,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     if (!_hasChanges) {
       setState(() => _hasChanges = true);
     }
-  }
-
-  Future<void> _checkAndShowWalkthrough() async {
-    final shouldShow = await UserService.shouldShowEditorWalkthrough();
-    if (!shouldShow || !mounted) return;
-
-    // RADICALLY SIMPLE: Just one postFrameCallback
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _startWalkthrough();
-    });
-  }
-
-  void _startWalkthrough() {
-    if (_showcaseContext == null) return;
-
-    // RADICALLY SIMPLE: Just add visible keys, no validation
-    final keys = <GlobalKey>[
-      _contentFieldKey,
-      _ghostWriterButtonKey,
-      _suggestionsButtonKey,
-      _saveButtonKey,
-      if (_getWordCount() >= 300) _publishButtonKey,
-    ];
-
-    ShowCaseWidget.of(_showcaseContext!).startShowCase(keys);
   }
 
   bool _handleScrollNotification(ScrollNotification notification) {
@@ -2276,43 +2230,36 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
   @override
   Widget build(BuildContext context) {
-    return ShowCaseWidget(
-      blurValue: 4,
-      disableBarrierInteraction: true,
-      onFinish: () => UserService.markEditorWalkthroughAsSeen(),
-      builder: (showcaseContext) {
-        _showcaseContext = showcaseContext;
-        return PopScope(
-        canPop: !_hasChanges,
-        onPopInvoked: (didPop) {
-          if (!didPop && _hasChanges) {
-            _showDiscardChangesDialog();
-          }
-        },
-        child: _isLoading
-          ? const Scaffold(
-              body: Center(child: CircularProgressIndicator()),
-            )
-          : Scaffold(
-              backgroundColor: Theme.of(context).colorScheme.surface,
-              body: SafeArea(
-                bottom: false,
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final tabContent = _buildActiveTabContent();
-                    const List<AppNavigationItem> navItems = [
-                      AppNavigationItem(label: 'Inicio', icon: Icons.dashboard),
-                      AppNavigationItem(
-                        label: 'Historias',
-                        icon: Icons.library_books,
-                      ),
-                      AppNavigationItem(label: 'Personas', icon: Icons.people),
-                      AppNavigationItem(
-                        label: 'Suscriptores',
-                        icon: Icons.email,
-                      ),
-                      AppNavigationItem(label: 'Ajustes', icon: Icons.settings),
-                    ];
+    return PopScope(
+      canPop: !_hasChanges,
+      onPopInvoked: (didPop) {
+        if (!didPop && _hasChanges) {
+          _showDiscardChangesDialog();
+        }
+      },
+      child: _isLoading
+        ? const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          )
+        : Scaffold(
+            backgroundColor: Theme.of(context).colorScheme.surface,
+            body: SafeArea(
+              bottom: false,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final tabContent = _buildActiveTabContent();
+                  const List<AppNavigationItem> navItems = [
+                    AppNavigationItem(label: 'Inicio', icon: Icons.dashboard),
+                    AppNavigationItem(
+                      label: 'Historias',
+                      icon: Icons.library_books,
+                    ),
+                    AppNavigationItem(
+                      label: 'Suscriptores',
+                      icon: Icons.email,
+                    ),
+                    AppNavigationItem(label: 'Ajustes', icon: Icons.settings),
+                  ];
                     final isCompactNav = constraints.maxWidth < 840;
 
                     List<Widget> buildEditorSlivers(double extraBottomPadding) {
@@ -2323,9 +2270,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                             child: _EditorHeader(
                               controller: _tabController,
                               isNewStory: widget.storyId == null,
-                              photosTabKey: _photosTabKey,
-                              datesTabKey: _datesTabKey,
-                              tagsTabKey: _tagsTabKey,
                             ),
                           ),
                         ),
@@ -2447,8 +2391,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
             canPublish: _canPublish(),
             isPublished: _currentStory?.isPublished ?? false,
             hasChanges: _hasChanges,
-            saveButtonKey: _saveButtonKey,
-            publishButtonKey: _publishButtonKey,
           ),
         ),
       ),
@@ -2733,26 +2675,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
               ),
               SizedBox(height: sectionSpacing),
               // Editor de contenido mejorado con mejor UX para escritura larga
-              Showcase(
-                key: _contentFieldKey,
-                description: 'Escribe aquí tu historia de forma natural, como si se la contaras a un amigo. No te presiones, el Ghost Writer te ayudará a pulirla. Necesitas al menos 300 palabras para publicar.',
-                descTextStyle: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  height: 1.5,
-                  color: Colors.white,
-                ),
-                tooltipBackgroundColor: const Color(0xFF10B981),
-                textColor: Colors.white,
-                tooltipPadding: const EdgeInsets.all(24),
-                tooltipBorderRadius: BorderRadius.circular(20),
-                overlayColor: Colors.black,
-                overlayOpacity: 0.60,
-                disableDefaultTargetGestures: true,
-                onTargetClick: () => ShowCaseWidget.of(context).next(),
-                onToolTipClick: () => ShowCaseWidget.of(context).next(),
-                onBarrierClick: () => ShowCaseWidget.of(context).dismiss(),
-                child: Container(
+              Container(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(isCompact ? 20 : 24),
                     color: colorScheme.surfaceContainerLowest,
@@ -2896,88 +2819,48 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                 spacing: isCompact ? 10 : 14,
                 runSpacing: isCompact ? 10 : 14,
                 children: [
-                  Showcase(
-                    key: _ghostWriterButtonKey,
-                    description: 'El Ghost Writer es tu asistente de IA personal. Pulirá tu historia manteniendo tu voz y emociones. Escribe al menos 300 palabras para usarlo.',
-                    descTextStyle: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      height: 1.5,
-                      color: Colors.white,
-                    ),
-                    tooltipBackgroundColor: const Color(0xFF8B5CF6),
-                    textColor: Colors.white,
-                    tooltipPadding: const EdgeInsets.all(24),
-                    tooltipBorderRadius: BorderRadius.circular(20),
-                    overlayColor: Colors.black,
-                    overlayOpacity: 0.60,
-                    disableDefaultTargetGestures: true,
-                    onTargetClick: () => ShowCaseWidget.of(context).next(),
-                    onToolTipClick: () => ShowCaseWidget.of(context).next(),
-                    onBarrierClick: () => ShowCaseWidget.of(context).dismiss(),
-                    child: buildActionButton(
-                      isCompact: isCompact,
-                      onPressed: _isGhostWriterProcessing
-                          ? null
-                          : _handleGhostWriterPressed,
-                      icon: _isGhostWriterProcessing
-                          ? SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2.5,
-                                valueColor:
-                                    AlwaysStoppedAnimation(colorScheme.primary),
-                              ),
-                            )
-                          : Icon(
-                              Icons.auto_fix_high,
-                              color: _canUseGhostWriter()
-                                  ? colorScheme.primary
-                                  : colorScheme.onSurfaceVariant,
+                  buildActionButton(
+                    isCompact: isCompact,
+                    onPressed: _isGhostWriterProcessing
+                        ? null
+                        : _handleGhostWriterPressed,
+                    icon: _isGhostWriterProcessing
+                        ? SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              valueColor:
+                                  AlwaysStoppedAnimation(colorScheme.primary),
                             ),
-                      label: _isGhostWriterProcessing
-                          ? 'Trabajando...'
-                          : 'Ghost Writer (AI)',
-                    ),
+                          )
+                        : Icon(
+                            Icons.auto_fix_high,
+                            color: _canUseGhostWriter()
+                                ? colorScheme.primary
+                                : colorScheme.onSurfaceVariant,
+                          ),
+                    label: _isGhostWriterProcessing
+                        ? 'Trabajando...'
+                        : 'Ghost Writer (AI)',
                   ),
-                  Showcase(
-                    key: _suggestionsButtonKey,
-                    description: 'Recibe ideas y preguntas de la IA para enriquecer tu historia. Perfectas para cuando no sabes qué escribir o quieres agregar más detalles.',
-                    descTextStyle: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      height: 1.5,
-                      color: Colors.white,
+                  buildActionButton(
+                    isCompact: isCompact,
+                    onPressed: () {
+                      setState(() => _showSuggestions = !_showSuggestions);
+                      if (_showSuggestions) {
+                        _generateAISuggestions();
+                      }
+                    },
+                    icon: Icon(
+                      _showSuggestions
+                          ? Icons.lightbulb
+                          : Icons.lightbulb_outline,
+                      color: _showSuggestions
+                          ? colorScheme.primary
+                          : colorScheme.onSurfaceVariant,
                     ),
-                    tooltipBackgroundColor: const Color(0xFFF59E0B),
-                    textColor: Colors.white,
-                    tooltipPadding: const EdgeInsets.all(24),
-                    tooltipBorderRadius: BorderRadius.circular(20),
-                    overlayColor: Colors.black,
-                    overlayOpacity: 0.60,
-                    disableDefaultTargetGestures: true,
-                    onTargetClick: () => ShowCaseWidget.of(context).next(),
-                    onToolTipClick: () => ShowCaseWidget.of(context).next(),
-                    onBarrierClick: () => ShowCaseWidget.of(context).dismiss(),
-                    child: buildActionButton(
-                      isCompact: isCompact,
-                      onPressed: () {
-                        setState(() => _showSuggestions = !_showSuggestions);
-                        if (_showSuggestions) {
-                          _generateAISuggestions();
-                        }
-                      },
-                      icon: Icon(
-                        _showSuggestions
-                            ? Icons.lightbulb
-                            : Icons.lightbulb_outline,
-                        color: _showSuggestions
-                            ? colorScheme.primary
-                            : colorScheme.onSurfaceVariant,
-                      ),
-                      label: 'Sugerencias',
-                    ),
+                    label: 'Sugerencias',
                   ),
                   buildActionButton(
                     isCompact: isCompact,
@@ -9562,16 +9445,10 @@ class _EditorHeader extends StatelessWidget {
   const _EditorHeader({
     required this.controller,
     required this.isNewStory,
-    this.photosTabKey,
-    this.datesTabKey,
-    this.tagsTabKey,
   });
 
   final TabController controller;
   final bool isNewStory;
-  final GlobalKey? photosTabKey;
-  final GlobalKey? datesTabKey;
-  final GlobalKey? tagsTabKey;
 
   @override
   Widget build(BuildContext context) {
@@ -9637,9 +9514,6 @@ class _EditorHeader extends StatelessWidget {
             _EditorSegmentedControl(
               controller: controller,
               theme: theme,
-              photosTabKey: photosTabKey,
-              datesTabKey: datesTabKey,
-              tagsTabKey: tagsTabKey,
             ),
           ],
         ),
@@ -9652,16 +9526,10 @@ class _EditorSegmentedControl extends StatelessWidget {
   const _EditorSegmentedControl({
     required this.controller,
     required this.theme,
-    this.photosTabKey,
-    this.datesTabKey,
-    this.tagsTabKey,
   });
 
   final TabController controller;
   final ThemeData theme;
-  final GlobalKey? photosTabKey;
-  final GlobalKey? datesTabKey;
-  final GlobalKey? tagsTabKey;
 
   @override
   Widget build(BuildContext context) {
@@ -9699,80 +9567,11 @@ class _EditorSegmentedControl extends StatelessWidget {
         }),
         indicatorSize: TabBarIndicatorSize.tab,
         splashFactory: InkSparkle.splashFactory,
-        tabs: [
-          const Tab(text: 'Escribir'),
-          if (photosTabKey != null)
-            Showcase(
-              key: photosTabKey!,
-              description: 'Agrega fotos a tu historia para enriquecerla visualmente. Las imágenes ayudan a tu familia a revivir los momentos.',
-              descTextStyle: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                height: 1.5,
-                color: Colors.white,
-              ),
-              tooltipBackgroundColor: const Color(0xFF3B82F6),
-              textColor: Colors.white,
-              tooltipPadding: const EdgeInsets.all(24),
-              tooltipBorderRadius: BorderRadius.circular(20),
-              overlayColor: Colors.black,
-              overlayOpacity: 0.60,
-              disableDefaultTargetGestures: true,
-              onTargetClick: () => ShowCaseWidget.of(context).next(),
-              onToolTipClick: () => ShowCaseWidget.of(context).next(),
-              onBarrierClick: () => ShowCaseWidget.of(context).dismiss(),
-              child: const Tab(text: 'Fotos'),
-            )
-          else
-            const Tab(text: 'Fotos'),
-          if (datesTabKey != null)
-            Showcase(
-              key: datesTabKey!,
-              description: 'Especifica cuándo ocurrió tu historia. Puedes elegir el año, mes o día exacto. ¡Ayuda a organizar tus recuerdos cronológicamente!',
-              descTextStyle: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                height: 1.5,
-                color: Colors.white,
-              ),
-              tooltipBackgroundColor: const Color(0xFF3B82F6),
-              textColor: Colors.white,
-              tooltipPadding: const EdgeInsets.all(24),
-              tooltipBorderRadius: BorderRadius.circular(20),
-              overlayColor: Colors.black,
-              overlayOpacity: 0.60,
-              disableDefaultTargetGestures: true,
-              onTargetClick: () => ShowCaseWidget.of(context).next(),
-              onToolTipClick: () => ShowCaseWidget.of(context).next(),
-              onBarrierClick: () => ShowCaseWidget.of(context).dismiss(),
-              child: const Tab(text: 'Fechas'),
-            )
-          else
-            const Tab(text: 'Fechas'),
-          if (tagsTabKey != null)
-            Showcase(
-              key: tagsTabKey!,
-              description: 'Etiqueta tu historia por temas como "familia", "viajes" o "infancia". Esto ayuda a tus suscriptores a navegar y encontrar historias relacionadas.',
-              descTextStyle: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                height: 1.5,
-                color: Colors.white,
-              ),
-              tooltipBackgroundColor: const Color(0xFF3B82F6),
-              textColor: Colors.white,
-              tooltipPadding: const EdgeInsets.all(24),
-              tooltipBorderRadius: BorderRadius.circular(20),
-              overlayColor: Colors.black,
-              overlayOpacity: 0.60,
-              disableDefaultTargetGestures: true,
-              onTargetClick: () => ShowCaseWidget.of(context).next(),
-              onToolTipClick: () => ShowCaseWidget.of(context).next(),
-              onBarrierClick: () => ShowCaseWidget.of(context).dismiss(),
-              child: const Tab(text: 'Etiquetas'),
-            )
-          else
-            const Tab(text: 'Etiquetas'),
+        tabs: const [
+          Tab(text: 'Escribir'),
+          Tab(text: 'Fotos'),
+          Tab(text: 'Fechas'),
+          Tab(text: 'Etiquetas'),
         ],
       ),
     );
@@ -9789,8 +9588,6 @@ class _EditorBottomBar extends StatelessWidget {
     required this.canPublish,
     required this.isPublished,
     required this.hasChanges,
-    this.saveButtonKey,
-    this.publishButtonKey,
   });
 
   final bool isSaving;
@@ -9801,8 +9598,6 @@ class _EditorBottomBar extends StatelessWidget {
   final bool canPublish;
   final bool isPublished;
   final bool hasChanges;
-  final GlobalKey? saveButtonKey;
-  final GlobalKey? publishButtonKey;
 
   @override
   Widget build(BuildContext context) {
@@ -9912,36 +9707,9 @@ class _EditorBottomBar extends StatelessWidget {
               ),
             );
 
-            final wrappedButton = compact
+            return compact
                 ? SizedBox(height: buttonHeight, child: button)
                 : button;
-
-            // Envolver con Showcase si se proporciona la key
-            if (saveButtonKey != null) {
-              return Showcase(
-                key: saveButtonKey!,
-                description: 'Guarda tu historia como borrador. Podrás seguir editándola más tarde antes de publicarla.',
-                descTextStyle: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  height: 1.5,
-                  color: Colors.white,
-                ),
-                tooltipBackgroundColor: const Color(0xFF10B981),
-                textColor: Colors.white,
-                tooltipPadding: const EdgeInsets.all(24),
-                tooltipBorderRadius: BorderRadius.circular(20),
-                overlayColor: Colors.black,
-                overlayOpacity: 0.60,
-                disableDefaultTargetGestures: true,
-                onTargetClick: () => ShowCaseWidget.of(context).next(),
-                onToolTipClick: () => ShowCaseWidget.of(context).next(),
-                onBarrierClick: () => ShowCaseWidget.of(context).dismiss(),
-                child: wrappedButton,
-              );
-            }
-
-            return wrappedButton;
           }
 
           Widget publishButton(bool compact) {
@@ -10012,36 +9780,9 @@ class _EditorBottomBar extends StatelessWidget {
               ),
             );
 
-            final wrappedButton = compact
+            return compact
                 ? SizedBox(height: buttonHeight, child: button)
                 : button;
-
-            // Envolver con Showcase si se proporciona la key
-            if (publishButtonKey != null) {
-              return Showcase(
-                key: publishButtonKey!,
-                description: '¡Publica tu historia! Tu historia está segura: solo tus suscriptores podrán verla. Ellos la recibirán por email y podrán leerla, comentar y reaccionar.',
-                descTextStyle: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  height: 1.5,
-                  color: Colors.white,
-                ),
-                tooltipBackgroundColor: const Color(0xFFEF4444),
-                textColor: Colors.white,
-                tooltipPadding: const EdgeInsets.all(24),
-                tooltipBorderRadius: BorderRadius.circular(20),
-                overlayColor: Colors.black,
-                overlayOpacity: 0.60,
-                disableDefaultTargetGestures: true,
-                onTargetClick: () => ShowCaseWidget.of(context).next(),
-                onToolTipClick: () => ShowCaseWidget.of(context).next(),
-                onBarrierClick: () => ShowCaseWidget.of(context).dismiss(),
-                child: wrappedButton,
-              );
-            }
-
-            return wrappedButton;
           }
 
           return Padding(

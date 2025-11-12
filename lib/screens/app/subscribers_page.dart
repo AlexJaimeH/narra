@@ -82,6 +82,7 @@ class _SubscribersPageState extends State<SubscribersPage>
   String? _authorDisplayName;
   final Set<String> _sendingInviteIds = <String>{};
   late AnimationController _fabController;
+  bool _isWalkthroughActive = false;
 
   // GlobalKeys para el walkthrough
   final GlobalKey _addButtonKey = GlobalKey();
@@ -118,6 +119,8 @@ class _SubscribersPageState extends State<SubscribersPage>
 
   void _startWalkthrough() {
     if (_showcaseContext == null) return;
+
+    setState(() => _isWalkthroughActive = true);
 
     // RADICALLY SIMPLE: Just add keys, no validation
     final keys = <GlobalKey>[
@@ -602,12 +605,35 @@ class _SubscribersPageState extends State<SubscribersPage>
       blurValue: 4,
       disableBarrierInteraction: true,
       onFinish: () {
+        setState(() => _isWalkthroughActive = false);
         // DEBUG MODE: No marcar como visto para que siempre se muestre
         // UserService.markSubscribersWalkthroughAsSeen();
       },
       builder: (showcaseContext) {
         _showcaseContext = showcaseContext;
-        return _buildContent(showcaseContext);
+        return Stack(
+          children: [
+            _buildContent(showcaseContext),
+            // Overlay para absorber clics durante el walkthrough
+            if (_isWalkthroughActive)
+              Positioned.fill(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    if (_showcaseContext != null) {
+                      ShowCaseWidget.of(_showcaseContext!).next();
+                    }
+                  },
+                  child: AbsorbPointer(
+                    absorbing: true,
+                    child: Container(
+                      color: Colors.transparent,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        );
       },
     );
   }

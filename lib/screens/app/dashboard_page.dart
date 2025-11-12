@@ -33,6 +33,7 @@ class _DashboardPageState extends State<DashboardPage> {
   Story? _lastPublishedStory;
   bool _isLoading = true;
   bool _shouldShowGhostWriterIntro = false;
+  bool _isWalkthroughActive = false;
 
   // Keys para el walkthrough
   final GlobalKey _createStoryKey = GlobalKey();
@@ -114,6 +115,8 @@ class _DashboardPageState extends State<DashboardPage> {
       return;
     }
 
+    setState(() => _isWalkthroughActive = true);
+
     // RADICALLY SIMPLE: Just add keys, no validation
     final keys = <GlobalKey>[_createStoryKey];
     if (_shouldShowGhostWriterIntro) keys.add(_ghostWriterKey);
@@ -138,12 +141,15 @@ class _DashboardPageState extends State<DashboardPage> {
       blurValue: 4,
       disableBarrierInteraction: true,
       onFinish: () {
+        setState(() => _isWalkthroughActive = false);
         // DEBUG MODE: No marcar como visto para que siempre se muestre
         // UserService.markHomeWalkthroughAsSeen();
       },
       builder: (showcaseContext) {
         _showcaseContext = showcaseContext;
-        return Scaffold(
+        return Stack(
+          children: [
+            Scaffold(
           body: RefreshIndicator(
         onRefresh: _loadDashboardData,
         child: SingleChildScrollView(
@@ -325,6 +331,26 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
         ),
       ),
+        ),
+            // Overlay para absorber clics durante el walkthrough
+            if (_isWalkthroughActive)
+              Positioned.fill(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    if (_showcaseContext != null) {
+                      ShowCaseWidget.of(_showcaseContext!).next();
+                    }
+                  },
+                  child: AbsorbPointer(
+                    absorbing: true,
+                    child: Container(
+                      color: Colors.transparent,
+                    ),
+                  ),
+                ),
+              ),
+          ],
         );
       },
     );

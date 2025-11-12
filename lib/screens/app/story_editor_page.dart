@@ -613,6 +613,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   final GlobalKey _photosTabKey = GlobalKey();
   final GlobalKey _datesTabKey = GlobalKey();
   final GlobalKey _tagsTabKey = GlobalKey();
+  final GlobalKey _microphoneButtonKey = GlobalKey();
   final GlobalKey _saveButtonKey = GlobalKey();
   final GlobalKey _publishButtonKey = GlobalKey();
 
@@ -726,16 +727,37 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
     setState(() => _isWalkthroughActive = true);
 
-    // RADICALLY SIMPLE: Just add visible keys, no validation
+    // Orden completo del walkthrough
     final keys = <GlobalKey>[
       _contentFieldKey,
       _ghostWriterButtonKey,
       _suggestionsButtonKey,
+      _photosTabKey,
+      _datesTabKey,
+      _tagsTabKey,
+      _microphoneButtonKey,
       _saveButtonKey,
       if (_getWordCount() >= 300) _publishButtonKey,
     ];
 
     ShowCaseWidget.of(_showcaseContext!).startShowCase(keys);
+  }
+
+  Future<void> _handleContentFieldClick(BuildContext context) async {
+    // Hacer scroll hasta abajo antes de mostrar el ghost writer
+    if (_editorScrollController.hasClients && _ghostWriterButtonKey.currentContext != null) {
+      await _editorScrollController.animateTo(
+        _editorScrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeInOut,
+      );
+
+      await Future.delayed(const Duration(milliseconds: 300));
+    }
+
+    if (_showcaseContext != null && mounted) {
+      ShowCaseWidget.of(_showcaseContext!).next();
+    }
   }
 
   bool _handleScrollNotification(ScrollNotification notification) {
@@ -2480,6 +2502,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
             canPublish: _canPublish(),
             isPublished: _currentStory?.isPublished ?? false,
             hasChanges: _hasChanges,
+            microphoneButtonKey: _microphoneButtonKey,
             saveButtonKey: _saveButtonKey,
             publishButtonKey: _publishButtonKey,
           ),
@@ -2782,8 +2805,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                 overlayColor: Colors.black,
                 overlayOpacity: 0.60,
                 disableDefaultTargetGestures: true,
-                onTargetClick: () => ShowCaseWidget.of(context).next(),
-                onToolTipClick: () => ShowCaseWidget.of(context).next(),
+                onTargetClick: () => _handleContentFieldClick(context),
+                onToolTipClick: () => _handleContentFieldClick(context),
                 onBarrierClick: () => ShowCaseWidget.of(context).dismiss(),
                 child: Container(
                   decoration: BoxDecoration(
@@ -9822,6 +9845,7 @@ class _EditorBottomBar extends StatelessWidget {
     required this.canPublish,
     required this.isPublished,
     required this.hasChanges,
+    this.microphoneButtonKey,
     this.saveButtonKey,
     this.publishButtonKey,
   });
@@ -9834,6 +9858,7 @@ class _EditorBottomBar extends StatelessWidget {
   final bool canPublish;
   final bool isPublished;
   final bool hasChanges;
+  final GlobalKey? microphoneButtonKey;
   final GlobalKey? saveButtonKey;
   final GlobalKey? publishButtonKey;
 
@@ -9867,22 +9892,50 @@ class _EditorBottomBar extends StatelessWidget {
           final compactIconSize = isCompact ? 20.0 : 24.0;
           final compactSpacing = isCompact ? 6.0 : 8.0;
 
-          Widget micButton() => IconButton(
-                onPressed: onOpenDictation,
-                icon: Icon(
-                  Icons.mic_rounded,
-                  size: compactIconSize + (isCompact ? 2 : 0),
+          Widget micButton() {
+            final button = IconButton(
+              onPressed: onOpenDictation,
+              icon: Icon(
+                Icons.mic_rounded,
+                size: compactIconSize + (isCompact ? 2 : 0),
+              ),
+              style: IconButton.styleFrom(
+                backgroundColor: colorScheme.primary.withValues(alpha: 0.12),
+                foregroundColor: colorScheme.primary,
+                minimumSize: Size.square(buttonHeight),
+                padding: EdgeInsets.all(isCompact ? 12 : 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
                 ),
-                style: IconButton.styleFrom(
-                  backgroundColor: colorScheme.primary.withValues(alpha: 0.12),
-                  foregroundColor: colorScheme.primary,
-                  minimumSize: Size.square(buttonHeight),
-                  padding: EdgeInsets.all(isCompact ? 12 : 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(18),
-                  ),
+              ),
+            );
+
+            if (microphoneButtonKey != null) {
+              return Showcase(
+                key: microphoneButtonKey!,
+                description: '🎙️ Dicta tu historia en lugar de escribir. Puedes alternar entre dictar y escribir en cualquier momento. ¡Habla con naturalidad y la IA convertirá tu voz en texto!',
+                descTextStyle: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  height: 1.5,
+                  color: Colors.white,
                 ),
+                tooltipBackgroundColor: const Color(0xFFEC4899),
+                textColor: Colors.white,
+                tooltipPadding: const EdgeInsets.all(24),
+                tooltipBorderRadius: BorderRadius.circular(20),
+                overlayColor: Colors.black,
+                overlayOpacity: 0.60,
+                disableDefaultTargetGestures: true,
+                onTargetClick: () => ShowCaseWidget.of(context).next(),
+                onToolTipClick: () => ShowCaseWidget.of(context).next(),
+                onBarrierClick: () => ShowCaseWidget.of(context).dismiss(),
+                child: button,
               );
+            }
+
+            return button;
+          }
 
           ButtonStyle buildButtonStyle({required bool compact}) {
             final base = FilledButton.styleFrom(

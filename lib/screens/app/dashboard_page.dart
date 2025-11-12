@@ -42,10 +42,19 @@ class _DashboardPageState extends State<DashboardPage> {
   // Contexto del ShowCaseWidget builder
   BuildContext? _showcaseContext;
 
+  // ScrollController para el walkthrough
+  final ScrollController _scrollController = ScrollController();
+
   @override
   void initState() {
     super.initState();
     _loadDashboardData();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadDashboardData() async {
@@ -118,10 +127,43 @@ class _DashboardPageState extends State<DashboardPage> {
     setState(() => _isWalkthroughActive = true);
 
     // RADICALLY SIMPLE: Just add keys, no validation
-    final keys = <GlobalKey>[_createStoryKey];
+    final keys = <GlobalKey>[];
+
+    // Primero explicar el menú si está disponible
+    if (widget.menuKey != null) {
+      keys.add(widget.menuKey!);
+    }
+
+    keys.add(_createStoryKey);
     if (_shouldShowGhostWriterIntro) keys.add(_ghostWriterKey);
 
     ShowCaseWidget.of(_showcaseContext!).startShowCase(keys);
+  }
+
+  Future<void> _handleCreateStoryClick(BuildContext context) async {
+    // Si hay ghost writer, hacer scroll antes de avanzar
+    if (_shouldShowGhostWriterIntro && _ghostWriterKey.currentContext != null) {
+      final RenderBox? box = _ghostWriterKey.currentContext!.findRenderObject() as RenderBox?;
+      if (box != null) {
+        final position = box.localToGlobal(Offset.zero);
+        final screenHeight = MediaQuery.of(context).size.height;
+        // Calcular el offset para centrar el widget
+        final targetScroll = _scrollController.offset + position.dy - (screenHeight / 2) + (box.size.height / 2);
+
+        await _scrollController.animateTo(
+          targetScroll.clamp(0, _scrollController.position.maxScrollExtent),
+          duration: const Duration(milliseconds: 500),
+          curve: Curves.easeInOut,
+        );
+
+        // Pequeña pausa para que se vea el scroll
+        await Future.delayed(const Duration(milliseconds: 300));
+      }
+    }
+
+    if (_showcaseContext != null && mounted) {
+      ShowCaseWidget.of(_showcaseContext!).next();
+    }
   }
 
   @override
@@ -153,6 +195,7 @@ class _DashboardPageState extends State<DashboardPage> {
           body: RefreshIndicator(
         onRefresh: _loadDashboardData,
         child: SingleChildScrollView(
+          controller: _scrollController,
           physics: const AlwaysScrollableScrollPhysics(),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -246,8 +289,8 @@ class _DashboardPageState extends State<DashboardPage> {
                   overlayColor: Colors.black,
                   overlayOpacity: 0.60,
                   disableDefaultTargetGestures: true,
-                  onTargetClick: () => ShowCaseWidget.of(context).next(),
-                  onToolTipClick: () => ShowCaseWidget.of(context).next(),
+                  onTargetClick: () => _handleCreateStoryClick(context),
+                  onToolTipClick: () => _handleCreateStoryClick(context),
                   onBarrierClick: () => ShowCaseWidget.of(context).dismiss(),
                   child: _WelcomeSection(
                     userProfile: _userProfile,

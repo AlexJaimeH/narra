@@ -101,44 +101,35 @@ class _SubscribersPageState extends State<SubscribersPage>
       duration: const Duration(milliseconds: 300),
     );
     _loadDashboard();
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _checkAndShowWalkthrough();
-    });
   }
 
   Future<void> _checkAndShowWalkthrough() async {
     final shouldShow = await UserService.shouldShowSubscribersWalkthrough();
     if (!shouldShow || !mounted) return;
 
-    // Aumentar delay para asegurar que todos los widgets estén renderizados
-    await Future.delayed(const Duration(milliseconds: 2500));
-    if (!mounted) return;
-
-    _startWalkthrough();
+    // RADICALLY SIMPLE: Just one postFrameCallback
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _startWalkthrough();
+    });
   }
 
   void _startWalkthrough() {
     if (_showcaseContext == null) return;
 
-    // Verificar que las keys tengan contexto antes de agregarlas
-    final keys = <GlobalKey>[];
+    // RADICALLY SIMPLE: Just add keys, no validation
+    final keys = <GlobalKey>[
+      _addButtonKey,
+      _statsCardsKey,
+      _filterChipsKey,
+    ];
 
-    if (_addButtonKey.currentContext != null) keys.add(_addButtonKey);
-    if (_searchFieldKey.currentContext != null) keys.add(_searchFieldKey);
-    if (_statsCardsKey.currentContext != null) keys.add(_statsCardsKey);
-    if (_filterChipsKey.currentContext != null) keys.add(_filterChipsKey);
-    if ((_dashboard?.totalSubscribersIncludingUnsubscribed ?? 0) > 0 &&
-        _subscribersListKey.currentContext != null) {
+    // Only add list key if there are subscribers
+    if ((_dashboard?.totalSubscribersIncludingUnsubscribed ?? 0) > 0) {
       keys.add(_subscribersListKey);
     }
 
-    if (keys.isEmpty) return;
-
+    // Note: searchFieldKey removed from walkthrough - no longer needed
     ShowCaseWidget.of(_showcaseContext!).startShowCase(keys);
-    // NO marcar como visto inmediatamente
-    // UserService.markSubscribersWalkthroughAsSeen(); // Comentado por ahora
   }
 
   @override
@@ -196,6 +187,9 @@ class _SubscribersPageState extends State<SubscribersPage>
         _isRefreshing = false;
       });
       _fabController.forward();
+
+      // Check walkthrough after loading
+      _checkAndShowWalkthrough();
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -602,30 +596,10 @@ class _SubscribersPageState extends State<SubscribersPage>
   @override
   Widget build(BuildContext context) {
     return ShowCaseWidget(
-      blurValue: 3,
+      blurValue: 4,
       disableBarrierInteraction: true,
-      disableScaleAnimation: true,
-      disableMovingAnimation: true,
-      onComplete: (index, key) {
-        // Cuando complete el último paso, marcar como visto
-        UserService.markSubscribersWalkthroughAsSeen();
-      },
-      onStart: (index, key) {
-        // Hacer scroll al elemento ANTES de mostrarlo
-        if (key.currentContext != null) {
-          Scrollable.ensureVisible(
-            key.currentContext!,
-            duration: const Duration(milliseconds: 400),
-            curve: Curves.easeInOut,
-            alignment: 0.2, // Posicionar más arriba para que el tooltip tenga espacio
-          ).then((_) {
-            // Esperar un momento para que se complete el scroll
-            Future.delayed(const Duration(milliseconds: 150));
-          });
-        }
-      },
+      onFinish: () => UserService.markSubscribersWalkthroughAsSeen(),
       builder: (showcaseContext) {
-        // Guardar el contexto INMEDIATAMENTE para usarlo en walkthrough
         _showcaseContext = showcaseContext;
         return _buildContent(showcaseContext);
       },

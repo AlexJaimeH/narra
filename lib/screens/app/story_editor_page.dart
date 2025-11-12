@@ -710,36 +710,25 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     final shouldShow = await UserService.shouldShowEditorWalkthrough();
     if (!shouldShow || !mounted) return;
 
-    // Aumentar delay MUCHO más para asegurar que todos los widgets estén renderizados
-    await Future.delayed(const Duration(milliseconds: 4000));
-    if (!mounted) return;
-
-    _startWalkthrough();
+    // RADICALLY SIMPLE: Just one postFrameCallback
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _startWalkthrough();
+    });
   }
 
   void _startWalkthrough() {
     if (_showcaseContext == null) return;
 
-    // SOLO mostrar las keys que están en la vista actual (tab 0 - Editar)
-    // Las otras keys (tabs) solo existen cuando están renderizadas
+    // RADICALLY SIMPLE: Just add visible keys, no validation
     final keys = <GlobalKey>[
-      // Siempre incluir el campo de contenido
       _contentFieldKey,
-      // Incluir los botones de acciones que siempre están visibles
       _ghostWriterButtonKey,
       _suggestionsButtonKey,
-      // Incluir el botón de guardar que está en el bottom bar
       _saveButtonKey,
-      // Solo incluir Publicar si tiene contenido suficiente
       if (_getWordCount() >= 300) _publishButtonKey,
     ];
 
-    // NO incluir las tabs de Fotos, Fechas y Etiquetas porque no están visibles
-    // al inicio (están en tabs diferentes)
-
     ShowCaseWidget.of(_showcaseContext!).startShowCase(keys);
-    // NO marcar como visto inmediatamente
-    // UserService.markEditorWalkthroughAsSeen(); // Comentado por ahora
   }
 
   bool _handleScrollNotification(ScrollNotification notification) {
@@ -2288,38 +2277,10 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   @override
   Widget build(BuildContext context) {
     return ShowCaseWidget(
-      blurValue: 3,
+      blurValue: 4,
       disableBarrierInteraction: true,
-      disableScaleAnimation: true,
-      disableMovingAnimation: true,
-      onComplete: (index, key) {
-        // Cuando complete el último paso, marcar como visto
-        UserService.markEditorWalkthroughAsSeen();
-      },
-      onStart: (index, key) {
-        // No hacer scroll para el content field porque es grande y se desenfoca
-        if (key == _contentFieldKey) return;
-
-        // Para el Ghost Writer, necesitamos un scroll EXTREMADAMENTE agresivo
-        final isGhostWriter = key == _ghostWriterButtonKey;
-        final isSuggestions = key == _suggestionsButtonKey;
-
-        // Hacer scroll al elemento ANTES de mostrarlo
-        if (key.currentContext != null) {
-          Scrollable.ensureVisible(
-            key.currentContext!,
-            duration: Duration(milliseconds: isGhostWriter ? 1000 : 400),
-            curve: Curves.easeInOutCubic,
-            // Ghost Writer EXTREMADAMENTE arriba para dar espacio al tooltip grande
-            alignment: isGhostWriter ? 0.05 : (isSuggestions ? 0.1 : 0.2),
-          ).then((_) {
-            // Esperar un momento extra para el Ghost Writer para que termine el scroll
-            Future.delayed(Duration(milliseconds: isGhostWriter ? 500 : 150));
-          });
-        }
-      },
+      onFinish: () => UserService.markEditorWalkthroughAsSeen(),
       builder: (showcaseContext) {
-        // Guardar el contexto INMEDIATAMENTE para usarlo en walkthrough
         _showcaseContext = showcaseContext;
         return PopScope(
         canPop: !_hasChanges,

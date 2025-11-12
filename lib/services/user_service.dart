@@ -143,14 +143,10 @@ class UserService {
 
   // Verificar si debe mostrar el walkthrough de inicio
   static Future<bool> shouldShowHomeWalkthrough() async {
-    // TEMPORALMENTE: Siempre mostrar el walkthrough para debugging
-    return true;
-
-    // TODO: Descomentar esto cuando el walkthrough esté funcionando correctamente
-    // final settings = await getUserSettings();
-    // if (settings == null) return true;
-    // final hasSeenWalkthrough = settings['has_seen_home_walkthrough'] as bool? ?? false;
-    // return !hasSeenWalkthrough;
+    final settings = await getUserSettings();
+    if (settings == null) return true;
+    final hasSeenWalkthrough = settings['has_seen_home_walkthrough'] as bool? ?? false;
+    return !hasSeenWalkthrough;
   }
 
   // Marcar que el usuario vio el walkthrough del editor
@@ -165,14 +161,10 @@ class UserService {
 
   // Verificar si debe mostrar el walkthrough del editor
   static Future<bool> shouldShowEditorWalkthrough() async {
-    // TEMPORALMENTE: Siempre mostrar el walkthrough para debugging
-    return true;
-
-    // TODO: Descomentar esto cuando el walkthrough esté funcionando correctamente
-    // final settings = await getUserSettings();
-    // if (settings == null) return true;
-    // final hasSeenWalkthrough = settings['has_seen_editor_walkthrough'] as bool? ?? false;
-    // return !hasSeenWalkthrough;
+    final settings = await getUserSettings();
+    if (settings == null) return true;
+    final hasSeenWalkthrough = settings['has_seen_editor_walkthrough'] as bool? ?? false;
+    return !hasSeenWalkthrough;
   }
 
   // Marcar que el usuario vio el walkthrough de suscriptores
@@ -189,14 +181,10 @@ class UserService {
 
   // Verificar si debe mostrar el walkthrough de suscriptores
   static Future<bool> shouldShowSubscribersWalkthrough() async {
-    // TEMPORALMENTE: Siempre mostrar el walkthrough para debugging
-    return true;
-
-    // TODO: Descomentar esto cuando el walkthrough esté funcionando correctamente
-    // final settings = await getUserSettings();
-    // if (settings == null) return true;
-    // final hasSeenWalkthrough = settings['has_seen_subscribers_walkthrough'] as bool? ?? false;
-    // return !hasSeenWalkthrough;
+    final settings = await getUserSettings();
+    if (settings == null) return true;
+    final hasSeenWalkthrough = settings['has_seen_subscribers_walkthrough'] as bool? ?? false;
+    return !hasSeenWalkthrough;
   }
 
   // Obtener configuraciones del usuario

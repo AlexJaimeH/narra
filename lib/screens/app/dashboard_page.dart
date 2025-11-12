@@ -94,15 +94,10 @@ class _DashboardPageState extends State<DashboardPage> {
           _isLoading = false;
         });
 
-        // Iniciar walkthrough si es la primera vez
+        // RADICALLY SIMPLE: Just one postFrameCallback, that's it
         if (shouldShowWalkthrough) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            // Dar tiempo suficiente para que se rendericen todos los widgets
-            Future.delayed(const Duration(milliseconds: 2500), () {
-              if (mounted) {
-                _startWalkthrough();
-              }
-            });
+            if (mounted) _startWalkthrough();
           });
         }
       }
@@ -121,28 +116,11 @@ class _DashboardPageState extends State<DashboardPage> {
       return;
     }
 
-    // Verificar que las keys tengan contexto antes de agregarlas
-    final keys = <GlobalKey>[];
+    // RADICALLY SIMPLE: Just add keys, no validation
+    final keys = <GlobalKey>[_createStoryKey];
+    if (_shouldShowGhostWriterIntro) keys.add(_ghostWriterKey);
 
-    if (widget.menuKey != null && widget.menuKey!.currentContext != null) {
-      keys.add(widget.menuKey!);
-    }
-    if (_createStoryKey.currentContext != null) {
-      keys.add(_createStoryKey);
-    }
-    if (_shouldShowGhostWriterIntro && _ghostWriterKey.currentContext != null) {
-      keys.add(_ghostWriterKey);
-    }
-
-    if (keys.isEmpty) {
-      return;
-    }
-
-    // Iniciar el showcase
     ShowCaseWidget.of(_showcaseContext!).startShowCase(keys);
-
-    // NO marcar como visto hasta que el usuario complete o cierre el walkthrough
-    // UserService.markHomeWalkthroughAsSeen(); // Comentado por ahora
   }
 
   @override
@@ -159,33 +137,10 @@ class _DashboardPageState extends State<DashboardPage> {
     final isMobile = screenWidth < 600;
 
     return ShowCaseWidget(
-      blurValue: 3,
+      blurValue: 4,
       disableBarrierInteraction: true,
-      disableScaleAnimation: true,
-      disableMovingAnimation: true,
-      onComplete: (index, key) {
-        // Cuando complete el último paso, marcar como visto
-        if (index == 2 || index == 1) { // Último índice dependiendo si tiene ghost writer intro
-          UserService.markHomeWalkthroughAsSeen();
-        }
-      },
-      onStart: (index, key) {
-        // Hacer scroll al elemento ANTES de mostrarlo
-        if (key.currentContext != null) {
-          // Primero hacer scroll
-          Scrollable.ensureVisible(
-            key.currentContext!,
-            duration: const Duration(milliseconds: 400),
-            curve: Curves.easeInOut,
-            alignment: 0.2, // Posicionar el elemento más arriba para que el tooltip tenga espacio
-          ).then((_) {
-            // Esperar un momento para que se complete el scroll antes de mostrar el showcase
-            Future.delayed(const Duration(milliseconds: 150));
-          });
-        }
-      },
+      onFinish: () => UserService.markHomeWalkthroughAsSeen(),
       builder: (showcaseContext) {
-        // Guardar el contexto INMEDIATAMENTE para usarlo en walkthrough
         _showcaseContext = showcaseContext;
         return Scaffold(
           body: RefreshIndicator(

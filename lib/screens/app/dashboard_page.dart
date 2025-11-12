@@ -38,6 +38,9 @@ class _DashboardPageState extends State<DashboardPage> {
   final GlobalKey _createStoryKey = GlobalKey();
   final GlobalKey _ghostWriterKey = GlobalKey();
 
+  // Contexto del ShowCaseWidget builder
+  BuildContext? _showcaseContext;
+
   @override
   void initState() {
     super.initState();
@@ -109,6 +112,8 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   void _startWalkthrough() {
+    if (_showcaseContext == null) return;
+
     final keys = <GlobalKey>[
       if (widget.menuKey != null) widget.menuKey!,
       _createStoryKey,
@@ -116,7 +121,7 @@ class _DashboardPageState extends State<DashboardPage> {
     ];
 
     // Iniciar el showcase
-    ShowCaseWidget.of(context).startShowCase(keys);
+    ShowCaseWidget.of(_showcaseContext!).startShowCase(keys);
 
     // Marcar como visto inmediatamente para que no vuelva a aparecer
     // aunque el usuario lo cancele
@@ -136,8 +141,27 @@ class _DashboardPageState extends State<DashboardPage> {
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 600;
 
-    return Scaffold(
-      body: RefreshIndicator(
+    return ShowCaseWidget(
+      onStart: (index, key) {
+        // Hacer scroll al elemento ANTES de mostrarlo
+        if (key.currentContext != null) {
+          // Primero hacer scroll
+          Scrollable.ensureVisible(
+            key.currentContext!,
+            duration: const Duration(milliseconds: 500),
+            curve: Curves.easeInOut,
+            alignment: 0.3, // Posicionar el elemento más arriba para que el tooltip tenga espacio
+          ).then((_) {
+            // Esperar un momento para que se complete el scroll antes de mostrar el showcase
+            Future.delayed(const Duration(milliseconds: 200));
+          });
+        }
+      },
+      builder: (showcaseContext) {
+        // Guardar el contexto del ShowCaseWidget para usar en walkthrough
+        _showcaseContext = showcaseContext;
+        return Scaffold(
+          body: RefreshIndicator(
         onRefresh: _loadDashboardData,
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -224,6 +248,7 @@ class _DashboardPageState extends State<DashboardPage> {
                     fontSize: 16,
                     fontWeight: FontWeight.w500,
                     height: 1.5,
+                    color: Colors.white,
                   ),
                   tooltipBackgroundColor: const Color(0xFF2D7A6E),
                   textColor: Colors.white,
@@ -232,6 +257,9 @@ class _DashboardPageState extends State<DashboardPage> {
                   overlayColor: Colors.black,
                   overlayOpacity: 0.85,
                   disableDefaultTargetGestures: true,
+                  onTargetClick: () => ShowCaseWidget.of(context).next(),
+                  onToolTipClick: () => ShowCaseWidget.of(context).next(),
+                  onBarrierClick: () => ShowCaseWidget.of(context).next(),
                   child: _WelcomeSection(
                     userProfile: _userProfile,
                     allTags: _allTags,
@@ -254,6 +282,7 @@ class _DashboardPageState extends State<DashboardPage> {
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
                       height: 1.5,
+                      color: Colors.white,
                     ),
                     tooltipBackgroundColor: const Color(0xFF5B21B6),
                     textColor: Colors.white,
@@ -262,6 +291,9 @@ class _DashboardPageState extends State<DashboardPage> {
                     overlayColor: Colors.black,
                     overlayOpacity: 0.85,
                     disableDefaultTargetGestures: true,
+                    onTargetClick: () => ShowCaseWidget.of(context).next(),
+                    onToolTipClick: () => ShowCaseWidget.of(context).next(),
+                    onBarrierClick: () => ShowCaseWidget.of(context).next(),
                     child: _GhostWriterIntroCard(
                       onDismiss: () {
                         setState(() => _shouldShowGhostWriterIntro = false);
@@ -310,6 +342,8 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
         ),
       ),
+        );
+      },
     );
   }
 }

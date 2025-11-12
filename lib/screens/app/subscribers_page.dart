@@ -596,15 +596,16 @@ class _SubscribersPageState extends State<SubscribersPage>
   Widget build(BuildContext context) {
     return ShowCaseWidget(
       onStart: (index, key) {
-        // Hacer scroll al elemento cuando se muestre
+        // Hacer scroll al elemento ANTES de mostrarlo
         if (key.currentContext != null) {
-          Future.delayed(const Duration(milliseconds: 300), () {
-            Scrollable.ensureVisible(
-              key.currentContext!,
-              duration: const Duration(milliseconds: 400),
-              curve: Curves.easeInOut,
-              alignment: 0.5, // Centrar el elemento
-            );
+          Scrollable.ensureVisible(
+            key.currentContext!,
+            duration: const Duration(milliseconds: 500),
+            curve: Curves.easeInOut,
+            alignment: 0.3, // Posicionar más arriba para que el tooltip tenga espacio
+          ).then((_) {
+            // Esperar un momento para que se complete el scroll
+            Future.delayed(const Duration(milliseconds: 200));
           });
         }
       },
@@ -779,6 +780,9 @@ class _SubscribersPageState extends State<SubscribersPage>
                   overlayColor: Colors.black,
                   overlayOpacity: 0.85,
                   disableDefaultTargetGestures: true,
+                  onTargetClick: () => ShowCaseWidget.of(context).next(),
+                  onToolTipClick: () => ShowCaseWidget.of(context).next(),
+                  onBarrierClick: () => ShowCaseWidget.of(context).next(),
                   child: _StatsOverview(dashboard: dashboard),
                 ),
               ),
@@ -838,6 +842,9 @@ class _SubscribersPageState extends State<SubscribersPage>
                       overlayColor: Colors.black,
                       overlayOpacity: 0.85,
                       disableDefaultTargetGestures: true,
+                      onTargetClick: () => ShowCaseWidget.of(context).next(),
+                      onToolTipClick: () => ShowCaseWidget.of(context).next(),
+                      onBarrierClick: () => ShowCaseWidget.of(context).next(),
                       child: _FilterChips(
                       current: _filter,
                       onChanged: (filter) {
@@ -912,6 +919,9 @@ class _SubscribersPageState extends State<SubscribersPage>
                                 overlayColor: Colors.black,
                                 overlayOpacity: 0.85,
                                 disableDefaultTargetGestures: true,
+                                onTargetClick: () => ShowCaseWidget.of(context).next(),
+                                onToolTipClick: () => ShowCaseWidget.of(context).next(),
+                                onBarrierClick: () => ShowCaseWidget.of(context).next(),
                                 child: card,
                               )
                             : card,
@@ -940,6 +950,9 @@ class _SubscribersPageState extends State<SubscribersPage>
         overlayColor: Colors.black,
         overlayOpacity: 0.85,
         disableDefaultTargetGestures: true,
+        onTargetClick: () => ShowCaseWidget.of(context).next(),
+        onToolTipClick: () => ShowCaseWidget.of(context).next(),
+        onBarrierClick: () => ShowCaseWidget.of(context).next(),
         child: ScaleTransition(
           scale: CurvedAnimation(
             parent: _fabController,

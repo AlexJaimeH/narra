@@ -2304,10 +2304,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         }
       },
       builder: (showcaseContext) {
-        // Guardar el contexto del ShowCaseWidget para usar en walkthrough
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _showcaseContext = showcaseContext;
-        });
+        // Guardar el contexto INMEDIATAMENTE para usarlo en walkthrough
+        _showcaseContext = showcaseContext;
         return PopScope(
         canPop: !_hasChanges,
         onPopInvoked: (didPop) {

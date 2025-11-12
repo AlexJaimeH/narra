@@ -161,10 +161,8 @@ class _DashboardPageState extends State<DashboardPage> {
         }
       },
       builder: (showcaseContext) {
-        // Guardar el contexto del ShowCaseWidget para usar en walkthrough
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _showcaseContext = showcaseContext;
-        });
+        // Guardar el contexto INMEDIATAMENTE para usarlo en walkthrough
+        _showcaseContext = showcaseContext;
         return Scaffold(
           body: RefreshIndicator(
         onRefresh: _loadDashboardData,

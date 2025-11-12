@@ -604,6 +604,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
   static const String _personalTagsTitle = 'Tus etiquetas únicas';
 
+  bool _isWalkthroughActive = false;
+
   // GlobalKeys para el walkthrough del editor
   final GlobalKey _contentFieldKey = GlobalKey();
   final GlobalKey _ghostWriterButtonKey = GlobalKey();
@@ -721,6 +723,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
   void _startWalkthrough() {
     if (_showcaseContext == null) return;
+
+    setState(() => _isWalkthroughActive = true);
 
     // RADICALLY SIMPLE: Just add visible keys, no validation
     final keys = <GlobalKey>[
@@ -2283,12 +2287,15 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       blurValue: 4,
       disableBarrierInteraction: true,
       onFinish: () {
+        setState(() => _isWalkthroughActive = false);
         // DEBUG MODE: No marcar como visto para que siempre se muestre
         // UserService.markEditorWalkthroughAsSeen();
       },
       builder: (showcaseContext) {
         _showcaseContext = showcaseContext;
-        return PopScope(
+        return Stack(
+          children: [
+            PopScope(
         canPop: !_hasChanges,
         onPopInvoked: (didPop) {
           if (!didPop && _hasChanges) {
@@ -2420,6 +2427,26 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                 },
               ),
             ),
+        ),
+            // Overlay para absorber clics durante el walkthrough
+            if (_isWalkthroughActive)
+              Positioned.fill(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    if (_showcaseContext != null) {
+                      ShowCaseWidget.of(_showcaseContext!).next();
+                    }
+                  },
+                  child: AbsorbPointer(
+                    absorbing: true,
+                    child: Container(
+                      color: Colors.transparent,
+                    ),
+                  ),
+                ),
+              ),
+          ],
         );
       },
     );

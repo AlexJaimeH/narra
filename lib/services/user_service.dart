@@ -20,7 +20,6 @@ class UserService {
         'location': location,
       });
     } catch (e) {
-      print('Error creating user profile: $e');
       // Continuar con otras operaciones aunque falle el perfil
     }
 
@@ -28,14 +27,14 @@ class UserService {
       // Crear configuraciones por defecto
       await _createDefaultSettings(userId);
     } catch (e) {
-      print('Error creating default settings: $e');
+      // Error creating default settings
     }
 
     try {
       // Crear etiquetas por defecto
       await TagService.createDefaultTags();
     } catch (e) {
-      print('Error creating default tags: $e');
+      // Error creating default tags
     }
   }
 

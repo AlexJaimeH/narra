@@ -142,9 +142,10 @@ class _DashboardPageState extends State<DashboardPage> {
     final isMobile = screenWidth < 600;
 
     return ShowCaseWidget(
-      blurValue: 4,
+      blurValue: 3,
       disableBarrierInteraction: true,
       disableScaleAnimation: false,
+      disableMovingAnimation: true,
       onStart: (index, key) {
         // Hacer scroll al elemento ANTES de mostrarlo
         if (key.currentContext != null) {
@@ -258,11 +259,11 @@ class _DashboardPageState extends State<DashboardPage> {
                   tooltipPadding: const EdgeInsets.all(20),
                   tooltipBorderRadius: BorderRadius.circular(16),
                   overlayColor: Colors.black,
-                  overlayOpacity: 0.85,
+                  overlayOpacity: 0.60,
                   disableDefaultTargetGestures: true,
                   onTargetClick: () => ShowCaseWidget.of(context).next(),
                   onToolTipClick: () => ShowCaseWidget.of(context).next(),
-                  onBarrierClick: () => ShowCaseWidget.of(context).next(),
+                  onBarrierClick: () => ShowCaseWidget.of(context).dismiss(),
                   child: _WelcomeSection(
                     userProfile: _userProfile,
                     allTags: _allTags,
@@ -292,11 +293,11 @@ class _DashboardPageState extends State<DashboardPage> {
                     tooltipPadding: const EdgeInsets.all(20),
                     tooltipBorderRadius: BorderRadius.circular(16),
                     overlayColor: Colors.black,
-                    overlayOpacity: 0.85,
+                    overlayOpacity: 0.60,
                     disableDefaultTargetGestures: true,
                     onTargetClick: () => ShowCaseWidget.of(context).next(),
                     onToolTipClick: () => ShowCaseWidget.of(context).next(),
-                    onBarrierClick: () => ShowCaseWidget.of(context).next(),
+                    onBarrierClick: () => ShowCaseWidget.of(context).dismiss(),
                     child: _GhostWriterIntroCard(
                       onDismiss: () {
                         setState(() => _shouldShowGhostWriterIntro = false);

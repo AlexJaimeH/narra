@@ -97,7 +97,12 @@ class _DashboardPageState extends State<DashboardPage> {
         // Iniciar walkthrough si es la primera vez
         if (shouldShowWalkthrough) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            _startWalkthrough();
+            // Dar tiempo suficiente para que se rendericen todos los widgets
+            Future.delayed(const Duration(milliseconds: 2500), () {
+              if (mounted) {
+                _startWalkthrough();
+              }
+            });
           });
         }
       }
@@ -112,13 +117,26 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   void _startWalkthrough() {
-    if (_showcaseContext == null) return;
+    if (_showcaseContext == null) {
+      return;
+    }
 
-    final keys = <GlobalKey>[
-      if (widget.menuKey != null) widget.menuKey!,
-      _createStoryKey,
-      if (_shouldShowGhostWriterIntro) _ghostWriterKey,
-    ];
+    // Verificar que las keys tengan contexto antes de agregarlas
+    final keys = <GlobalKey>[];
+
+    if (widget.menuKey != null && widget.menuKey!.currentContext != null) {
+      keys.add(widget.menuKey!);
+    }
+    if (_createStoryKey.currentContext != null) {
+      keys.add(_createStoryKey);
+    }
+    if (_shouldShowGhostWriterIntro && _ghostWriterKey.currentContext != null) {
+      keys.add(_ghostWriterKey);
+    }
+
+    if (keys.isEmpty) {
+      return;
+    }
 
     // Iniciar el showcase
     ShowCaseWidget.of(_showcaseContext!).startShowCase(keys);

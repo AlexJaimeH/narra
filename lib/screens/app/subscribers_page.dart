@@ -112,7 +112,8 @@ class _SubscribersPageState extends State<SubscribersPage>
     final shouldShow = await UserService.shouldShowSubscribersWalkthrough();
     if (!shouldShow || !mounted) return;
 
-    await Future.delayed(const Duration(milliseconds: 1500));
+    // Aumentar delay para asegurar que todos los widgets estén renderizados
+    await Future.delayed(const Duration(milliseconds: 2500));
     if (!mounted) return;
 
     _startWalkthrough();
@@ -121,17 +122,23 @@ class _SubscribersPageState extends State<SubscribersPage>
   void _startWalkthrough() {
     if (_showcaseContext == null) return;
 
-    final keys = <GlobalKey>[
-      _addButtonKey,
-      _searchFieldKey,
-      _statsCardsKey,
-      _filterChipsKey,
-      if ((_dashboard?.totalSubscribersIncludingUnsubscribed ?? 0) > 0)
-        _subscribersListKey,
-    ];
+    // Verificar que las keys tengan contexto antes de agregarlas
+    final keys = <GlobalKey>[];
+
+    if (_addButtonKey.currentContext != null) keys.add(_addButtonKey);
+    if (_searchFieldKey.currentContext != null) keys.add(_searchFieldKey);
+    if (_statsCardsKey.currentContext != null) keys.add(_statsCardsKey);
+    if (_filterChipsKey.currentContext != null) keys.add(_filterChipsKey);
+    if ((_dashboard?.totalSubscribersIncludingUnsubscribed ?? 0) > 0 &&
+        _subscribersListKey.currentContext != null) {
+      keys.add(_subscribersListKey);
+    }
+
+    if (keys.isEmpty) return;
 
     ShowCaseWidget.of(_showcaseContext!).startShowCase(keys);
-    UserService.markSubscribersWalkthroughAsSeen();
+    // NO marcar como visto inmediatamente
+    // UserService.markSubscribersWalkthroughAsSeen(); // Comentado por ahora
   }
 
   @override
@@ -597,8 +604,12 @@ class _SubscribersPageState extends State<SubscribersPage>
     return ShowCaseWidget(
       blurValue: 3,
       disableBarrierInteraction: true,
-      disableScaleAnimation: false,
+      disableScaleAnimation: true,
       disableMovingAnimation: true,
+      onComplete: (index, key) {
+        // Cuando complete el último paso, marcar como visto
+        UserService.markSubscribersWalkthroughAsSeen();
+      },
       onStart: (index, key) {
         // Hacer scroll al elemento ANTES de mostrarlo
         if (key.currentContext != null) {

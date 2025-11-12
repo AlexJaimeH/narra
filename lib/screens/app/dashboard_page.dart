@@ -123,9 +123,8 @@ class _DashboardPageState extends State<DashboardPage> {
     // Iniciar el showcase
     ShowCaseWidget.of(_showcaseContext!).startShowCase(keys);
 
-    // Marcar como visto inmediatamente para que no vuelva a aparecer
-    // aunque el usuario lo cancele
-    UserService.markHomeWalkthroughAsSeen();
+    // NO marcar como visto hasta que el usuario complete o cierre el walkthrough
+    // UserService.markHomeWalkthroughAsSeen(); // Comentado por ahora
   }
 
   @override
@@ -144,8 +143,14 @@ class _DashboardPageState extends State<DashboardPage> {
     return ShowCaseWidget(
       blurValue: 3,
       disableBarrierInteraction: true,
-      disableScaleAnimation: false,
+      disableScaleAnimation: true,
       disableMovingAnimation: true,
+      onComplete: (index, key) {
+        // Cuando complete el último paso, marcar como visto
+        if (index == 2 || index == 1) { // Último índice dependiendo si tiene ghost writer intro
+          UserService.markHomeWalkthroughAsSeen();
+        }
+      },
       onStart: (index, key) {
         // Hacer scroll al elemento ANTES de mostrarlo
         if (key.currentContext != null) {

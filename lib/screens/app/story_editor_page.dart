@@ -710,7 +710,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     final shouldShow = await UserService.shouldShowEditorWalkthrough();
     if (!shouldShow || !mounted) return;
 
-    await Future.delayed(const Duration(milliseconds: 1500));
+    // Aumentar delay para asegurar que todos los widgets estén renderizados
+    await Future.delayed(const Duration(milliseconds: 2500));
     if (!mounted) return;
 
     _startWalkthrough();
@@ -719,19 +720,23 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   void _startWalkthrough() {
     if (_showcaseContext == null) return;
 
-    final keys = <GlobalKey>[
-      _contentFieldKey,
-      _ghostWriterButtonKey,
-      _suggestionsButtonKey,
-      _photosTabKey,
-      _datesTabKey,
-      _tagsTabKey,
-      _saveButtonKey,
-      _publishButtonKey,
-    ];
+    // Verificar que las keys tengan contexto antes de agregarlas
+    final keys = <GlobalKey>[];
+
+    if (_contentFieldKey.currentContext != null) keys.add(_contentFieldKey);
+    if (_ghostWriterButtonKey.currentContext != null) keys.add(_ghostWriterButtonKey);
+    if (_suggestionsButtonKey.currentContext != null) keys.add(_suggestionsButtonKey);
+    if (_photosTabKey.currentContext != null) keys.add(_photosTabKey);
+    if (_datesTabKey.currentContext != null) keys.add(_datesTabKey);
+    if (_tagsTabKey.currentContext != null) keys.add(_tagsTabKey);
+    if (_saveButtonKey.currentContext != null) keys.add(_saveButtonKey);
+    if (_publishButtonKey.currentContext != null) keys.add(_publishButtonKey);
+
+    if (keys.isEmpty) return;
 
     ShowCaseWidget.of(_showcaseContext!).startShowCase(keys);
-    UserService.markEditorWalkthroughAsSeen();
+    // NO marcar como visto inmediatamente
+    // UserService.markEditorWalkthroughAsSeen(); // Comentado por ahora
   }
 
   bool _handleScrollNotification(ScrollNotification notification) {
@@ -2282,8 +2287,12 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     return ShowCaseWidget(
       blurValue: 3,
       disableBarrierInteraction: true,
-      disableScaleAnimation: false,
+      disableScaleAnimation: true,
       disableMovingAnimation: true,
+      onComplete: (index, key) {
+        // Cuando complete el último paso, marcar como visto
+        UserService.markEditorWalkthroughAsSeen();
+      },
       onStart: (index, key) {
         // No hacer scroll para el content field porque es grande y se desenfoca
         if (key == _contentFieldKey) return;

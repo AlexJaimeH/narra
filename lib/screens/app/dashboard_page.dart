@@ -70,8 +70,8 @@ class _DashboardPageState extends State<DashboardPage> {
       // Check if should show ghost writer intro
       final shouldShowIntro = await UserService.shouldShowGhostWriterIntro();
 
-      // Check if should show home walkthrough
-      final shouldShowWalkthrough = await UserService.shouldShowHomeWalkthrough();
+      // DEBUG MODE: Siempre mostrar walkthrough
+      // final shouldShowWalkthrough = await UserService.shouldShowHomeWalkthrough();
 
       if (mounted) {
         setState(() {
@@ -94,12 +94,10 @@ class _DashboardPageState extends State<DashboardPage> {
           _isLoading = false;
         });
 
-        // RADICALLY SIMPLE: Just one postFrameCallback, that's it
-        if (shouldShowWalkthrough) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) _startWalkthrough();
-          });
-        }
+        // DEBUG MODE: Siempre mostrar walkthrough
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _startWalkthrough();
+        });
       }
     } catch (e) {
       if (mounted) {
@@ -139,7 +137,10 @@ class _DashboardPageState extends State<DashboardPage> {
     return ShowCaseWidget(
       blurValue: 4,
       disableBarrierInteraction: true,
-      onFinish: () => UserService.markHomeWalkthroughAsSeen(),
+      onFinish: () {
+        // DEBUG MODE: No marcar como visto para que siempre se muestre
+        // UserService.markHomeWalkthroughAsSeen();
+      },
       builder: (showcaseContext) {
         _showcaseContext = showcaseContext;
         return Scaffold(

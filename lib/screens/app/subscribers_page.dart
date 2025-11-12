@@ -104,10 +104,13 @@ class _SubscribersPageState extends State<SubscribersPage>
   }
 
   Future<void> _checkAndShowWalkthrough() async {
-    final shouldShow = await UserService.shouldShowSubscribersWalkthrough();
-    if (!shouldShow || !mounted) return;
+    // DEBUG MODE: Siempre mostrar walkthrough
+    // final shouldShow = await UserService.shouldShowSubscribersWalkthrough();
+    // if (!shouldShow || !mounted) return;
 
-    // RADICALLY SIMPLE: Just one postFrameCallback
+    // Siempre mostrar walkthrough
+    if (!mounted) return;
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _startWalkthrough();
     });
@@ -598,7 +601,10 @@ class _SubscribersPageState extends State<SubscribersPage>
     return ShowCaseWidget(
       blurValue: 4,
       disableBarrierInteraction: true,
-      onFinish: () => UserService.markSubscribersWalkthroughAsSeen(),
+      onFinish: () {
+        // DEBUG MODE: No marcar como visto para que siempre se muestre
+        // UserService.markSubscribersWalkthroughAsSeen();
+      },
       builder: (showcaseContext) {
         _showcaseContext = showcaseContext;
         return _buildContent(showcaseContext);

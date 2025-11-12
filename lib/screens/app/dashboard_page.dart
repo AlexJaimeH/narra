@@ -188,8 +188,8 @@ class _DashboardPageState extends State<DashboardPage> {
     // Hacer scroll al progreso del libro
     await _scrollToWidget(_bookProgressKey);
 
-    if (_showcaseContext != null && mounted) {
-      ShowCaseWidget.of(_showcaseContext!).next();
+    if (mounted && _showcaseContext != null) {
+      ShowCaseWidget.of(_showcaseContext!).startShowCase(keys);
     }
   }
 

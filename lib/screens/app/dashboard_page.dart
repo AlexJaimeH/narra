@@ -237,12 +237,6 @@ class _DashboardPageState extends State<DashboardPage> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
-
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final screenWidth = MediaQuery.of(context).size.width;
@@ -259,6 +253,14 @@ class _DashboardPageState extends State<DashboardPage> {
       builder: (showcaseContext) {
         _showcaseContext = showcaseContext;
         print('🟡 [Dashboard] ShowCaseWidget builder ejecutado, contexto guardado: $showcaseContext');
+
+        // Check loading state inside builder
+        if (_isLoading) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+
         return Scaffold(
           body: RefreshIndicator(
         onRefresh: _loadDashboardData,

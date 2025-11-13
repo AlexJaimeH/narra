@@ -1170,6 +1170,48 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     await _handleWalkthroughAdvanceRequest();
   }
 
+  void _handleOverlayTap() {
+    if (!_isWalkthroughOverlayVisible) {
+      return;
+    }
+
+    if (!_isWalkthroughActive) {
+      _startWalkthrough();
+      return;
+    }
+
+    unawaited(_handleWalkthroughAdvanceRequest());
+  }
+
+  void _handleWalkthroughFinished() {
+    _walkthroughSteps.clear();
+    _walkthroughKeys.clear();
+    _pendingWalkthroughStepIndex = null;
+    _isAdvancingWalkthrough = false;
+    _isWalkthroughStartPending = false;
+    _currentWalkthroughStepIndex = 0;
+    _lastWalkthroughTap = null;
+
+    if (mounted) {
+      setState(() {
+        _isWalkthroughActive = false;
+        _shouldShowWalkthrough = false;
+        _hasStartedWalkthrough = false;
+      });
+    } else {
+      _isWalkthroughActive = false;
+      _shouldShowWalkthrough = false;
+      _hasStartedWalkthrough = false;
+    }
+
+    // DEBUG MODE: Mantener comentario para mostrar siempre el walkthrough
+    // unawaited(UserService.markEditorWalkthroughAsSeen());
+  }
+
+  Future<void> _handleContentFieldClick() async {
+    await _handleWalkthroughAdvanceRequest();
+  }
+
   bool _handleScrollNotification(ScrollNotification notification) {
     final offset = notification.metrics.pixels;
     final shouldElevate = offset > 12;

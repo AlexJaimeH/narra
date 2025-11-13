@@ -224,6 +224,7 @@ class _AppNavigationState extends State<AppNavigation> {
         return ShowCaseWidget(
           blurValue: 4,
           disableBarrierInteraction: false,
+          enableAutoScroll: false,
           onStart: (index, key) {
             if (key != _menuKey || key.currentContext == null) {
               return;

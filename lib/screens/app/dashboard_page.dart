@@ -332,9 +332,22 @@ class _DashboardPageState extends State<DashboardPage> {
     if (!mounted || _walkthroughSteps.isEmpty) return;
 
     final key = _keyForStep(_walkthroughSteps[_currentWalkthroughStepIndex]);
-    if (key.currentContext != null) {
-      ShowCaseWidget.of(context).startShowCase([key]);
+    if (key.currentContext == null) {
+      return;
     }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_isWalkthroughActive) {
+        return;
+      }
+
+      final showcase = ShowCaseWidget.of(context);
+      if (showcase == null) {
+        return;
+      }
+
+      showcase.startShowCase([key]);
+    });
   }
 
   Future<void> _advanceWalkthrough() async {
@@ -380,9 +393,6 @@ class _DashboardPageState extends State<DashboardPage> {
     } finally {
       _isAdvancingWalkthrough = false;
     }
-
-    if (!mounted) return;
-    ShowCaseWidget.of(context).next();
   }
 
   Future<void> _finishWalkthrough() async {

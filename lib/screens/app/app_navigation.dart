@@ -7,6 +7,7 @@ import 'subscribers_page.dart';
 import 'settings_page.dart';
 import 'story_editor_page.dart';
 import 'top_navigation_bar.dart';
+import 'dashboard_walkthrough_controller.dart';
 
 class AppNavigation extends StatefulWidget {
   const AppNavigation({super.key, this.initialIndex = 0});
@@ -25,6 +26,8 @@ class _AppNavigationState extends State<AppNavigation> {
 
   // Key para el showcase del menú
   final GlobalKey _menuKey = GlobalKey();
+  final DashboardWalkthroughController _dashboardWalkthroughController =
+      DashboardWalkthroughController();
 
   late final List<_NavigationItem> _items;
   late final List<int> _pageVersions;
@@ -37,7 +40,11 @@ class _AppNavigationState extends State<AppNavigation> {
       _NavigationItem(
         label: 'Inicio',
         icon: Icons.dashboard,
-        builder: ({Key? key}) => DashboardPage(key: key, menuKey: _menuKey),
+        builder: ({Key? key}) => DashboardPage(
+          key: key,
+          menuKey: _menuKey,
+          walkthroughController: _dashboardWalkthroughController,
+        ),
       ),
       const _NavigationItem(
         label: 'Historias',
@@ -75,8 +82,10 @@ class _AppNavigationState extends State<AppNavigation> {
     final uri = Uri.base;
     final errorInFragment = uri.fragment.contains('error=');
     final errorDescription = uri.fragment.contains('error_description=')
-        ? Uri.decodeComponent(
-            uri.fragment.split('error_description=')[1].split('&')[0].replaceAll('+', ' '))
+        ? Uri.decodeComponent(uri.fragment
+            .split('error_description=')[1]
+            .split('&')[0]
+            .replaceAll('+', ' '))
         : null;
 
     // Verificar si ya hay una sesión
@@ -99,7 +108,8 @@ class _AppNavigationState extends State<AppNavigation> {
       });
 
       // Mostrar mensaje amigable según el tipo de error
-      String friendlyMessage = 'El enlace de inicio de sesión no es válido o ya expiró. '
+      String friendlyMessage =
+          'El enlace de inicio de sesión no es válido o ya expiró. '
           'Por favor, solicita un nuevo correo de inicio de sesión.';
 
       if (errorDescription != null) {
@@ -119,7 +129,8 @@ class _AppNavigationState extends State<AppNavigation> {
               content: Text(friendlyMessage),
               backgroundColor: Colors.orange.shade700,
               behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
               duration: const Duration(seconds: 8),
               action: SnackBarAction(
                 label: 'Entendido',
@@ -140,7 +151,8 @@ class _AppNavigationState extends State<AppNavigation> {
 
     // Si no hay sesión, suscribirse a cambios de auth por un tiempo limitado
     bool sessionDetected = false;
-    var authSubscription = SupabaseConfig.client.auth.onAuthStateChange.listen((data) {
+    var authSubscription =
+        SupabaseConfig.client.auth.onAuthStateChange.listen((data) {
       final authSession = data.session;
       if (authSession != null && mounted && !sessionDetected) {
         sessionDetected = true;
@@ -217,18 +229,24 @@ class _AppNavigationState extends State<AppNavigation> {
         }
 
         return ShowCaseWidget(
+          blurValue: 4,
+          disableBarrierInteraction: false,
+          enableAutoScroll: false,
           onStart: (index, key) {
-            // Hacer scroll al elemento cuando se muestre
-            if (key.currentContext != null) {
-              Future.delayed(const Duration(milliseconds: 300), () {
+            if (key != _menuKey || key.currentContext == null) {
+              return;
+            }
+
+            Future.delayed(const Duration(milliseconds: 300), () {
+              if (key.currentContext != null) {
                 Scrollable.ensureVisible(
                   key.currentContext!,
                   duration: const Duration(milliseconds: 400),
                   curve: Curves.easeInOut,
-                  alignment: 0.5, // Centrar el elemento
+                  alignment: 0.5,
                 );
-              });
-            }
+              }
+            });
           },
           builder: (context) => Scaffold(
             backgroundColor: Theme.of(context).colorScheme.surface,
@@ -244,6 +262,7 @@ class _AppNavigationState extends State<AppNavigation> {
                     isMenuOpen: _isMenuOpen,
                     isScrolled: _isScrolled,
                     menuKey: _menuKey,
+                    walkthroughController: _dashboardWalkthroughController,
                     onItemSelected: _handleNavigationTap,
                     onCreateStory: _startNewStory,
                     onToggleMenu: () {

@@ -609,7 +609,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   String _ghostWriterEditingStyle = 'balanced';
   String _ghostWriterLanguage = 'es';
   String _ghostWriterPerspective = 'first';
-  bool _ghostWriterAvoidProfanity = true; // Nuevo valor por defecto para historias de calidad profesional
+  bool _ghostWriterAvoidProfanity =
+      true; // Nuevo valor por defecto para historias de calidad profesional
   String _ghostWriterExtraInstructions = '';
   bool _isGhostWriterProcessing = false;
   Timer? _ghostWriterInstructionsDebounce;
@@ -748,12 +749,18 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
     await Future.delayed(const Duration(seconds: 1));
 
-    if (!mounted || !_shouldShowWalkthrough || _isWalkthroughActive || _hasStartedWalkthrough) {
+    if (!mounted ||
+        !_shouldShowWalkthrough ||
+        _isWalkthroughActive ||
+        _hasStartedWalkthrough) {
       return;
     }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_shouldShowWalkthrough || _isWalkthroughActive || _hasStartedWalkthrough) {
+      if (!mounted ||
+          !_shouldShowWalkthrough ||
+          _isWalkthroughActive ||
+          _hasStartedWalkthrough) {
         return;
       }
 
@@ -788,8 +795,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     }
 
     final keys = steps.map(_keyForWalkthroughStep).toList(growable: false);
-    final allContextsReady =
-        keys.every((key) => key.currentContext != null);
+    final allContextsReady = keys.every((key) => key.currentContext != null);
 
     if (!allContextsReady) {
       if (_isWalkthroughStartPending) {
@@ -837,11 +843,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       _EditorWalkthroughStep.tagsTab,
       _EditorWalkthroughStep.microphone,
       _EditorWalkthroughStep.saveDraft,
+      _EditorWalkthroughStep.publish,
     ];
-
-    if (_getWordCount() >= 300) {
-      steps.add(_EditorWalkthroughStep.publish);
-    }
 
     return steps;
   }
@@ -869,6 +872,25 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     }
   }
 
+  int? _tabIndexForWalkthroughStep(_EditorWalkthroughStep step) {
+    switch (step) {
+      case _EditorWalkthroughStep.content:
+        return 0;
+      case _EditorWalkthroughStep.photosTab:
+        return 1;
+      case _EditorWalkthroughStep.datesTab:
+        return 2;
+      case _EditorWalkthroughStep.tagsTab:
+        return 3;
+      case _EditorWalkthroughStep.ghostWriter:
+      case _EditorWalkthroughStep.suggestions:
+      case _EditorWalkthroughStep.microphone:
+      case _EditorWalkthroughStep.saveDraft:
+      case _EditorWalkthroughStep.publish:
+        return null;
+    }
+  }
+
   double _alignmentForWalkthroughStep(_EditorWalkthroughStep step) {
     switch (step) {
       case _EditorWalkthroughStep.content:
@@ -885,6 +907,68 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       case _EditorWalkthroughStep.publish:
         return 0.85;
     }
+  }
+
+  Future<void> _ensureTabSelection(int index) async {
+    if (!mounted) {
+      return;
+    }
+
+    if (_tabController.index == index && !_tabController.indexIsChanging) {
+      return;
+    }
+
+    final completer = Completer<void>();
+
+    void listener() {
+      if (!_tabController.indexIsChanging &&
+          _tabController.index == index &&
+          !completer.isCompleted) {
+        completer.complete();
+      }
+    }
+
+    _tabController.addListener(listener);
+
+    if (_tabController.index != index) {
+      _tabController.animateTo(
+        index,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeInOut,
+      );
+    }
+
+    try {
+      await completer.future.timeout(
+        const Duration(milliseconds: 400),
+        onTimeout: () {
+          if (!completer.isCompleted) {
+            completer.complete();
+          }
+        },
+      );
+    } finally {
+      _tabController.removeListener(listener);
+    }
+
+    await Future<void>.delayed(const Duration(milliseconds: 32));
+  }
+
+  Future<BuildContext?> _waitForKeyContext(GlobalKey key) async {
+    BuildContext? context = key.currentContext;
+    if (context != null) {
+      return context;
+    }
+
+    for (var i = 0; i < 5; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 16));
+      context = key.currentContext;
+      if (context != null) {
+        return context;
+      }
+    }
+
+    return null;
   }
 
   Future<void> _scrollToKey(
@@ -910,7 +994,13 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     }
 
     final key = _keyForWalkthroughStep(step);
-    final context = key.currentContext;
+    final tabIndex = _tabIndexForWalkthroughStep(step);
+
+    if (tabIndex != null) {
+      await _ensureTabSelection(tabIndex);
+    }
+
+    final context = await _waitForKeyContext(key);
     if (context == null) {
       return;
     }
@@ -967,6 +1057,11 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     }
 
     final step = _walkthroughSteps[index];
+
+    final tabIndex = _tabIndexForWalkthroughStep(step);
+    if (tabIndex != null) {
+      unawaited(_ensureTabSelection(tabIndex));
+    }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_isWalkthroughActive || key.currentContext == null) {
@@ -1031,6 +1126,48 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         _isAdvancingWalkthrough = false;
       }
     }
+  }
+
+  void _onWalkthroughOverlayTap() {
+    if (!_isWalkthroughOverlayVisible) {
+      return;
+    }
+
+    if (!_isWalkthroughActive) {
+      _startWalkthrough();
+      return;
+    }
+
+    unawaited(_handleWalkthroughAdvanceRequest());
+  }
+
+  void _onWalkthroughFinished() {
+    _walkthroughSteps.clear();
+    _walkthroughKeys.clear();
+    _pendingWalkthroughStepIndex = null;
+    _isAdvancingWalkthrough = false;
+    _isWalkthroughStartPending = false;
+    _currentWalkthroughStepIndex = 0;
+    _lastWalkthroughTap = null;
+
+    if (mounted) {
+      setState(() {
+        _isWalkthroughActive = false;
+        _shouldShowWalkthrough = false;
+        _hasStartedWalkthrough = false;
+      });
+    } else {
+      _isWalkthroughActive = false;
+      _shouldShowWalkthrough = false;
+      _hasStartedWalkthrough = false;
+    }
+
+    // DEBUG MODE: Mantener comentario para mostrar siempre el walkthrough
+    // unawaited(UserService.markEditorWalkthroughAsSeen());
+  }
+
+  Future<void> _onWalkthroughContentFieldTap() async {
+    await _handleWalkthroughAdvanceRequest();
   }
 
   void _handleOverlayTap() {
@@ -2006,8 +2143,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         if (plan.warmups.isNotEmpty)
           _buildQuickInspirationChips(theme, colorScheme, plan),
 
-        if (plan.warmups.isNotEmpty)
-          const SizedBox(height: 16),
+        if (plan.warmups.isNotEmpty) const SizedBox(height: 16),
 
         // Expandable sections for details
         if (plan.sections.isNotEmpty)
@@ -2231,7 +2367,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                   child: Container(
                     constraints: const BoxConstraints(maxWidth: 280),
                     decoration: BoxDecoration(
-                      color: colorScheme.primaryContainer.withValues(alpha: 0.4),
+                      color:
+                          colorScheme.primaryContainer.withValues(alpha: 0.4),
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(
                         color: colorScheme.primary.withValues(alpha: 0.2),
@@ -2327,17 +2464,14 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                                       .withValues(alpha: 0.7),
                                 ),
                                 maxLines: isExpanded ? null : 1,
-                                overflow: isExpanded
-                                    ? null
-                                    : TextOverflow.ellipsis,
+                                overflow:
+                                    isExpanded ? null : TextOverflow.ellipsis,
                               ),
                           ],
                         ),
                       ),
                       Icon(
-                        isExpanded
-                            ? Icons.expand_less
-                            : Icons.expand_more,
+                        isExpanded ? Icons.expand_less : Icons.expand_more,
                         color: colorScheme.primary,
                       ),
                     ],
@@ -2629,7 +2763,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           _handleShowcaseStepStarted(key);
         }
       },
-      onFinish: _handleWalkthroughFinished,
+      onFinish: _onWalkthroughFinished,
       builder: (showcaseContext) {
         _showcaseContext = showcaseContext;
         return Stack(
@@ -2668,8 +2802,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                               AppNavigationItem(
                                   label: 'Ajustes', icon: Icons.settings),
                             ];
-                            final isCompactNav =
-                                constraints.maxWidth < 840;
+                            final isCompactNav = constraints.maxWidth < 840;
 
                             List<Widget> buildEditorSlivers(
                                 double extraBottomPadding) {
@@ -2696,16 +2829,14 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                                   padding: EdgeInsets.symmetric(
                                     horizontal: isCompactNav ? 12 : 24,
                                   ),
-                                  sliver:
-                                      SliverToBoxAdapter(child: tabContent),
+                                  sliver: SliverToBoxAdapter(child: tabContent),
                                 ),
                               ];
 
                               if (extraBottomPadding > 0) {
                                 slivers.add(
                                   SliverToBoxAdapter(
-                                    child:
-                                        SizedBox(height: extraBottomPadding),
+                                    child: SizedBox(height: extraBottomPadding),
                                   ),
                                 );
                               }
@@ -2718,8 +2849,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                               final scrollView = CustomScrollView(
                                 controller: _editorScrollController,
                                 physics: const ClampingScrollPhysics(),
-                                slivers:
-                                    buildEditorSlivers(extraBottomPadding),
+                                slivers: buildEditorSlivers(extraBottomPadding),
                               );
 
                               final decoratedScrollView = isCompactNav
@@ -2750,8 +2880,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                                 const SizedBox(height: 8),
                                 Expanded(
                                   child: buildScrollableBody(
-                                    extraBottomPadding:
-                                        isCompactNav ? 16 : 0,
+                                    extraBottomPadding: isCompactNav ? 16 : 0,
                                   ),
                                 ),
                                 if (isCompactNav)
@@ -2766,8 +2895,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                       ),
                       bottomNavigationBar: LayoutBuilder(
                         builder: (context, constraints) {
-                          final isCompactNav =
-                              constraints.maxWidth < 840;
+                          final isCompactNav = constraints.maxWidth < 840;
                           if (isCompactNav) {
                             return const SizedBox.shrink();
                           }
@@ -2784,7 +2912,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
               Positioned.fill(
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
-                  onTap: _handleOverlayTap,
+                  onTap: _onWalkthroughOverlayTap,
                   child: Container(
                     color: Colors.black.withValues(alpha: 0.04),
                   ),
@@ -3114,7 +3242,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
               // Editor de contenido mejorado con mejor UX para escritura larga
               Showcase(
                 key: _contentFieldKey,
-                description: 'Escribe aquí tu historia de forma natural, como si se la contaras a un amigo. No te presiones, el Ghost Writer te ayudará a pulirla. Necesitas al menos 300 palabras para publicar.',
+                description:
+                    'Escribe aquí tu historia de forma natural, como si se la contaras a un amigo. No te presiones, el Ghost Writer te ayudará a pulirla. Necesitas al menos 300 palabras para publicar.',
                 descTextStyle: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
@@ -3128,147 +3257,149 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                 overlayColor: Colors.black,
                 overlayOpacity: 0.60,
                 disableDefaultTargetGestures: true,
-                onTargetClick: () => unawaited(_handleContentFieldClick()),
-                onToolTipClick: () => unawaited(_handleContentFieldClick()),
+                onTargetClick: () => unawaited(_onWalkthroughContentFieldTap()),
+                onToolTipClick: () => unawaited(_onWalkthroughContentFieldTap()),
                 onBarrierClick: () =>
                     unawaited(_handleWalkthroughAdvanceRequest()),
                 child: Container(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(isCompact ? 20 : 24),
                     color: colorScheme.surfaceContainerLowest,
-                  border: Border.all(
-                    color: colorScheme.outlineVariant.withValues(alpha: 0.3),
-                    width: 1,
+                    border: Border.all(
+                      color: colorScheme.outlineVariant.withValues(alpha: 0.3),
+                      width: 1,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: colorScheme.shadow.withValues(alpha: 0.04),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
                   ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: colorScheme.shadow.withValues(alpha: 0.04),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // Campo de texto mejorado - crece con el contenido
-                    TextField(
-                      controller: _contentController,
-                      decoration: InputDecoration(
-                        hintText: 'Escribe tu historia con tus propias palabras. El asistente AI (Ghost Writer) la pulirá de forma profesional.\n\nUsa las sugerencias para empezar o el botón de micrófono para dictar.',
-                        hintStyle: bodyStyle?.copyWith(
-                          color: colorScheme.onSurfaceVariant
-                              .withValues(alpha: 0.4),
-                          height: 1.7,
-                        ),
-                        border: InputBorder.none,
-                        enabledBorder: InputBorder.none,
-                        focusedBorder: InputBorder.none,
-                        contentPadding: EdgeInsets.fromLTRB(
-                          isCompact ? 18 : 24,
-                          isCompact ? 20 : 26,
-                          isCompact ? 18 : 24,
-                          isCompact ? 12 : 16,
-                        ),
-                        filled: false,
-                      ),
-                      style: bodyStyle?.copyWith(
-                        height: 1.7,
-                        letterSpacing: 0.2,
-                        fontSize: isCompact ? 16 : 17,
-                      ),
-                      keyboardType: TextInputType.multiline,
-                      maxLines: null,
-                      minLines: 12,
-                      textAlignVertical: TextAlignVertical.top,
-                      enableSuggestions: false,
-                      autocorrect: false,
-                      smartDashesType: SmartDashesType.disabled,
-                      smartQuotesType: SmartQuotesType.disabled,
-                      textCapitalization: TextCapitalization.sentences,
-                      enableIMEPersonalizedLearning: false,
-                      autofillHints: null,
-                      scribbleEnabled: false,
-                      cursorHeight: 24,
-                      cursorColor: colorScheme.primary,
-                      selectionControls: materialTextSelectionControls,
-                    ),
-
-                    // Barra inferior con estadísticas y consejos
-                    Container(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: isCompact ? 18 : 24,
-                        vertical: isCompact ? 12 : 14,
-                      ),
-                      decoration: BoxDecoration(
-                        color: colorScheme.surfaceContainerLow,
-                        borderRadius: BorderRadius.only(
-                          bottomLeft: Radius.circular(isCompact ? 20 : 24),
-                          bottomRight: Radius.circular(isCompact ? 20 : 24),
-                        ),
-                        border: Border(
-                          top: BorderSide(
-                            color: colorScheme.outlineVariant
-                                .withValues(alpha: 0.2),
-                            width: 1,
-                          ),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          // Icono de escritura
-                          Icon(
-                            Icons.edit_note_rounded,
-                            size: 18,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Campo de texto mejorado - crece con el contenido
+                      TextField(
+                        controller: _contentController,
+                        decoration: InputDecoration(
+                          hintText:
+                              'Escribe tu historia con tus propias palabras. El asistente AI (Ghost Writer) la pulirá de forma profesional.\n\nUsa las sugerencias para empezar o el botón de micrófono para dictar.',
+                          hintStyle: bodyStyle?.copyWith(
                             color: colorScheme.onSurfaceVariant
-                                .withValues(alpha: 0.6),
+                                .withValues(alpha: 0.4),
+                            height: 1.7,
                           ),
-                          const SizedBox(width: 8),
-                          // Contador de palabras
-                          Expanded(
-                            child: Text(
-                              wordCount == 0
-                                  ? 'Empieza a escribir tu historia'
-                                  : wordCount == 1
-                                      ? '1 palabra'
-                                      : '$wordCount palabras${wordCount >= 300 ? ' ✓' : wordCount >= 200 ? ' • Casi listo para Ghost Writer (300+)' : ''}',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: colorScheme.onSurfaceVariant
-                                    .withValues(alpha: 0.75),
-                                fontWeight: wordCount >= 300
-                                    ? FontWeight.w600
-                                    : FontWeight.w500,
-                                letterSpacing: 0.2,
-                              ),
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          contentPadding: EdgeInsets.fromLTRB(
+                            isCompact ? 18 : 24,
+                            isCompact ? 20 : 26,
+                            isCompact ? 18 : 24,
+                            isCompact ? 12 : 16,
+                          ),
+                          filled: false,
+                        ),
+                        style: bodyStyle?.copyWith(
+                          height: 1.7,
+                          letterSpacing: 0.2,
+                          fontSize: isCompact ? 16 : 17,
+                        ),
+                        keyboardType: TextInputType.multiline,
+                        maxLines: null,
+                        minLines: 12,
+                        textAlignVertical: TextAlignVertical.top,
+                        enableSuggestions: false,
+                        autocorrect: false,
+                        smartDashesType: SmartDashesType.disabled,
+                        smartQuotesType: SmartQuotesType.disabled,
+                        textCapitalization: TextCapitalization.sentences,
+                        enableIMEPersonalizedLearning: false,
+                        autofillHints: null,
+                        scribbleEnabled: false,
+                        cursorHeight: 24,
+                        cursorColor: colorScheme.primary,
+                        selectionControls: materialTextSelectionControls,
+                      ),
+
+                      // Barra inferior con estadísticas y consejos
+                      Container(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: isCompact ? 18 : 24,
+                          vertical: isCompact ? 12 : 14,
+                        ),
+                        decoration: BoxDecoration(
+                          color: colorScheme.surfaceContainerLow,
+                          borderRadius: BorderRadius.only(
+                            bottomLeft: Radius.circular(isCompact ? 20 : 24),
+                            bottomRight: Radius.circular(isCompact ? 20 : 24),
+                          ),
+                          border: Border(
+                            top: BorderSide(
+                              color: colorScheme.outlineVariant
+                                  .withValues(alpha: 0.2),
+                              width: 1,
                             ),
                           ),
-                          // Indicador visual de progreso para Ghost Writer
-                          if (wordCount > 0 && wordCount < 300)
-                            Container(
-                              width: isCompact ? 60 : 80,
-                              height: 4,
-                              decoration: BoxDecoration(
-                                color: colorScheme.surfaceContainerHighest,
-                                borderRadius: BorderRadius.circular(2),
-                              ),
-                              child: FractionallySizedBox(
-                                alignment: Alignment.centerLeft,
-                                widthFactor: (wordCount / 300).clamp(0.0, 1.0),
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    color: wordCount >= 200
-                                        ? colorScheme.primary
-                                        : colorScheme.tertiary,
-                                    borderRadius: BorderRadius.circular(2),
-                                  ),
+                        ),
+                        child: Row(
+                          children: [
+                            // Icono de escritura
+                            Icon(
+                              Icons.edit_note_rounded,
+                              size: 18,
+                              color: colorScheme.onSurfaceVariant
+                                  .withValues(alpha: 0.6),
+                            ),
+                            const SizedBox(width: 8),
+                            // Contador de palabras
+                            Expanded(
+                              child: Text(
+                                wordCount == 0
+                                    ? 'Empieza a escribir tu historia'
+                                    : wordCount == 1
+                                        ? '1 palabra'
+                                        : '$wordCount palabras${wordCount >= 300 ? ' ✓' : wordCount >= 200 ? ' • Casi listo para Ghost Writer (300+)' : ''}',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: colorScheme.onSurfaceVariant
+                                      .withValues(alpha: 0.75),
+                                  fontWeight: wordCount >= 300
+                                      ? FontWeight.w600
+                                      : FontWeight.w500,
+                                  letterSpacing: 0.2,
                                 ),
                               ),
                             ),
-                        ],
+                            // Indicador visual de progreso para Ghost Writer
+                            if (wordCount > 0 && wordCount < 300)
+                              Container(
+                                width: isCompact ? 60 : 80,
+                                height: 4,
+                                decoration: BoxDecoration(
+                                  color: colorScheme.surfaceContainerHighest,
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
+                                child: FractionallySizedBox(
+                                  alignment: Alignment.centerLeft,
+                                  widthFactor:
+                                      (wordCount / 300).clamp(0.0, 1.0),
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color: wordCount >= 200
+                                          ? colorScheme.primary
+                                          : colorScheme.tertiary,
+                                      borderRadius: BorderRadius.circular(2),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
                 ),
               ),
               SizedBox(height: verticalSpacing),
@@ -3278,7 +3409,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                 children: [
                   Showcase(
                     key: _ghostWriterButtonKey,
-                    description: 'El Ghost Writer es tu asistente de IA personal. Pulirá tu historia manteniendo tu voz y emociones. Escribe al menos 300 palabras para usarlo.',
+                    description:
+                        'El Ghost Writer es tu asistente de IA personal. Pulirá tu historia manteniendo tu voz y emociones. Escribe al menos 300 palabras para usarlo.',
                     descTextStyle: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
@@ -3326,7 +3458,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                   ),
                   Showcase(
                     key: _suggestionsButtonKey,
-                    description: 'Recibe ideas y preguntas de la IA para enriquecer tu historia. Perfectas para cuando no sabes qué escribir o quieres agregar más detalles.',
+                    description:
+                        'Recibe ideas y preguntas de la IA para enriquecer tu historia. Perfectas para cuando no sabes qué escribir o quieres agregar más detalles.',
                     descTextStyle: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
@@ -5958,111 +6091,116 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                        Row(
-                          children: [
-                            Icon(
-                              _isRecorderConnecting
-                                  ? Icons.hourglass_top
-                                  : (_isRecording && !_isPaused
-                                      ? Icons.mic
-                                      : Icons.play_arrow),
-                              color: _isRecorderConnecting
-                                  ? Theme.of(context).colorScheme.outline
-                                  : (_isRecording && !_isPaused
-                                      ? Colors.red
-                                      : Theme.of(context).colorScheme.primary),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(_recorderStatusLabel),
-                            const Spacer(),
-                            IconButton(
-                              tooltip: _isRecorderConnecting
-                                  ? 'Preparando...'
-                                  : (_isPaused ? 'Reanudar' : 'Pausar'),
-                              onPressed: _isRecorderConnecting
-                                  ? null
-                                  : () async {
-                                      FocusScope.of(sheetContext)
-                                          .requestFocus(FocusNode());
-                                      await _togglePauseResume();
-                                      setSheetState(() {});
-                                    },
-                              icon: Icon(
-                                _isPaused || !_isRecording
-                                    ? Icons.play_arrow
-                                    : Icons.pause,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        if (_isRecorderConnecting ||
-                            _isRecording ||
-                            _isPaused ||
-                            _recordedAudioBytes != null)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 12),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    AnimatedContainer(
-                                      duration:
-                                          const Duration(milliseconds: 220),
-                                      width: 12,
-                                      height: 12,
-                                      decoration: BoxDecoration(
-                                        color: (_isRecording && !_isPaused)
+                              Row(
+                                children: [
+                                  Icon(
+                                    _isRecorderConnecting
+                                        ? Icons.hourglass_top
+                                        : (_isRecording && !_isPaused
+                                            ? Icons.mic
+                                            : Icons.play_arrow),
+                                    color: _isRecorderConnecting
+                                        ? Theme.of(context).colorScheme.outline
+                                        : (_isRecording && !_isPaused
                                             ? Colors.red
                                             : Theme.of(context)
                                                 .colorScheme
-                                                .primary
-                                                .withValues(alpha: 0.6),
-                                        shape: BoxShape.circle,
-                                      ),
+                                                .primary),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(_recorderStatusLabel),
+                                  const Spacer(),
+                                  IconButton(
+                                    tooltip: _isRecorderConnecting
+                                        ? 'Preparando...'
+                                        : (_isPaused ? 'Reanudar' : 'Pausar'),
+                                    onPressed: _isRecorderConnecting
+                                        ? null
+                                        : () async {
+                                            FocusScope.of(sheetContext)
+                                                .requestFocus(FocusNode());
+                                            await _togglePauseResume();
+                                            setSheetState(() {});
+                                          },
+                                    icon: Icon(
+                                      _isPaused || !_isRecording
+                                          ? Icons.play_arrow
+                                          : Icons.pause,
                                     ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      _formatDuration(_recordingDuration),
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleMedium,
-                                    ),
-                                    if (_isPaused) ...[
-                                      const SizedBox(width: 8),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 10,
-                                          vertical: 4,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .surfaceVariant,
-                                          borderRadius:
-                                              BorderRadius.circular(12),
-                                        ),
-                                        child: Text(
-                                          'Pausado',
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .bodySmall,
-                                        ),
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                                const SizedBox(height: 8),
-                                _buildWaveformBars(context),
-                                if (_recordedAudioBytes != null) ...[
-                                  const SizedBox(height: 12),
-                                  _buildPlaybackControls(context),
+                                  ),
                                 ],
-                              ],
-                            ),
-                          ),
+                              ),
+                              const SizedBox(height: 12),
+                              if (_isRecorderConnecting ||
+                                  _isRecording ||
+                                  _isPaused ||
+                                  _recordedAudioBytes != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 12),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          AnimatedContainer(
+                                            duration: const Duration(
+                                                milliseconds: 220),
+                                            width: 12,
+                                            height: 12,
+                                            decoration: BoxDecoration(
+                                              color: (_isRecording &&
+                                                      !_isPaused)
+                                                  ? Colors.red
+                                                  : Theme.of(context)
+                                                      .colorScheme
+                                                      .primary
+                                                      .withValues(alpha: 0.6),
+                                              shape: BoxShape.circle,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            _formatDuration(_recordingDuration),
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .titleMedium,
+                                          ),
+                                          if (_isPaused) ...[
+                                            const SizedBox(width: 8),
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                horizontal: 10,
+                                                vertical: 4,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .surfaceVariant,
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                              ),
+                                              child: Text(
+                                                'Pausado',
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .bodySmall,
+                                              ),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                      const SizedBox(height: 8),
+                                      _buildWaveformBars(context),
+                                      if (_recordedAudioBytes != null) ...[
+                                        const SizedBox(height: 12),
+                                        _buildPlaybackControls(context),
+                                      ],
+                                    ],
+                                  ),
+                                ),
                               Container(
                                 width: double.infinity,
                                 constraints: const BoxConstraints(
@@ -6085,7 +6223,9 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                                       _liveTranscript.isEmpty
                                           ? 'Empieza a hablar…'
                                           : _liveTranscript,
-                                      style: Theme.of(builderContext).textTheme.bodyLarge,
+                                      style: Theme.of(builderContext)
+                                          .textTheme
+                                          .bodyLarge,
                                     ),
                                   ),
                                 ),
@@ -6106,7 +6246,9 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                                       const SizedBox(width: 8),
                                       Text(
                                         'Procesando audio…',
-                                        style: Theme.of(builderContext).textTheme.bodyMedium,
+                                        style: Theme.of(builderContext)
+                                            .textTheme
+                                            .bodyMedium,
                                       ),
                                     ],
                                   ),
@@ -6122,7 +6264,9 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                           color: Theme.of(builderContext).colorScheme.surface,
                           border: Border(
                             top: BorderSide(
-                              color: Theme.of(builderContext).colorScheme.outlineVariant,
+                              color: Theme.of(builderContext)
+                                  .colorScheme
+                                  .outlineVariant,
                               width: 1,
                             ),
                           ),
@@ -6182,7 +6326,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                                   ? null
                                   : () async {
                                       final shouldClose =
-                                          await _handleDictationDismiss(sheetContext);
+                                          await _handleDictationDismiss(
+                                              sheetContext);
                                       if (!shouldClose) {
                                         return;
                                       }
@@ -7289,9 +7434,9 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       // Get user profile for display name
       final profile = await UserService.getCurrentUserProfile();
       final authorName = profile?['display_name'] as String? ??
-                        profile?['name'] as String? ??
-                        user.email?.split('@').first ??
-                        'Tu autor en Narra';
+          profile?['name'] as String? ??
+          user.email?.split('@').first ??
+          'Tu autor en Narra';
 
       // Send emails
       await SubscriberEmailService.sendStoryPublished(
@@ -7431,7 +7576,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       await StoryServiceNew.unpublishStory(_currentStory!.id);
 
       // Recargar la historia actualizada
-      final updatedStory = await StoryServiceNew.getStoryById(_currentStory!.id);
+      final updatedStory =
+          await StoryServiceNew.getStoryById(_currentStory!.id);
       if (updatedStory != null) {
         setState(() {
           _currentStory = updatedStory;
@@ -7442,7 +7588,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Historia despublicada. Los suscriptores ya no tienen acceso.'),
+            content: Text(
+                'Historia despublicada. Los suscriptores ya no tienen acceso.'),
           ),
         );
       }
@@ -8008,7 +8155,10 @@ class _StoryEditorPageState extends State<StoryEditorPage>
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.4),
+                  color: Theme.of(context)
+                      .colorScheme
+                      .primaryContainer
+                      .withValues(alpha: 0.4),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
@@ -8023,8 +8173,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                       child: Text(
                         'Se insertará $placeholderText en tu texto. Al publicar la historia, se mostrará la imagen real.',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurface,
-                        ),
+                              color: Theme.of(context).colorScheme.onSurface,
+                            ),
                       ),
                     ),
                   ],
@@ -8035,85 +8185,86 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                 child: ListView.builder(
                   itemCount: paragraphs.length,
                   itemBuilder: (context, paragraphIndex) {
-              final paragraph = paragraphs[paragraphIndex];
-              final preview = paragraph['preview'] as String;
-              final isExpanded =
-                  false; // We could add state for expansion if needed
+                    final paragraph = paragraphs[paragraphIndex];
+                    final preview = paragraph['preview'] as String;
+                    final isExpanded =
+                        false; // We could add state for expansion if needed
 
-              return Card(
-                margin: const EdgeInsets.only(bottom: 8),
-                child: Column(
-                  children: [
-                    // Main paragraph card with tap functionality
-                    InkWell(
-                      onTap: () {
-                        // Show before/after dialog for quick selection
-                        _showBeforeAfterDialog(
-                            context, imageIndex, paragraph, paragraphIndex + 1);
-                      },
-                      borderRadius: BorderRadius.circular(8),
-                      child: Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    'Párrafo ${paragraphIndex + 1}',
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.w600),
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: Column(
+                        children: [
+                          // Main paragraph card with tap functionality
+                          InkWell(
+                            onTap: () {
+                              // Show before/after dialog for quick selection
+                              _showBeforeAfterDialog(context, imageIndex,
+                                  paragraph, paragraphIndex + 1);
+                            },
+                            borderRadius: BorderRadius.circular(8),
+                            child: Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          'Párrafo ${paragraphIndex + 1}',
+                                          style: const TextStyle(
+                                              fontWeight: FontWeight.w600),
+                                        ),
+                                      ),
+                                      // Expansion arrow (optional - for full text view)
+                                      IconButton(
+                                        icon: const Icon(Icons.expand_more),
+                                        onPressed: () {
+                                          _showFullParagraphDialog(
+                                              context,
+                                              imageIndex,
+                                              paragraph,
+                                              paragraphIndex + 1);
+                                        },
+                                        iconSize: 20,
+                                      ),
+                                    ],
                                   ),
-                                ),
-                                // Expansion arrow (optional - for full text view)
-                                IconButton(
-                                  icon: const Icon(Icons.expand_more),
-                                  onPressed: () {
-                                    _showFullParagraphDialog(
-                                        context,
-                                        imageIndex,
-                                        paragraph,
-                                        paragraphIndex + 1);
-                                  },
-                                  iconSize: 20,
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              preview,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
-                                  ?.copyWith(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSurface
-                                        .withValues(alpha: 0.7),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    preview,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.copyWith(
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onSurface
+                                              .withValues(alpha: 0.7),
+                                        ),
                                   ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Toca para seleccionar dónde colocar la imagen',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
-                                  ?.copyWith(
-                                    color:
-                                        Theme.of(context).colorScheme.primary,
-                                    fontStyle: FontStyle.italic,
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Toca para seleccionar dónde colocar la imagen',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.copyWith(
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .primary,
+                                          fontStyle: FontStyle.italic,
+                                        ),
                                   ),
+                                ],
+                              ),
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
-                    ),
-                  ],
-                ),
-              );
+                    );
                   },
                 ),
               ),
@@ -8161,7 +8312,10 @@ class _StoryEditorPageState extends State<StoryEditorPage>
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.4),
+                color: Theme.of(context)
+                    .colorScheme
+                    .primaryContainer
+                    .withValues(alpha: 0.4),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
@@ -8176,8 +8330,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                     child: Text(
                       'Se insertará $placeholderText. Al publicar, se mostrará la imagen.',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
+                            color: Theme.of(context).colorScheme.onSurface,
+                          ),
                     ),
                   ),
                 ],
@@ -8243,7 +8397,10 @@ class _StoryEditorPageState extends State<StoryEditorPage>
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.4),
+                  color: Theme.of(context)
+                      .colorScheme
+                      .primaryContainer
+                      .withValues(alpha: 0.4),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
@@ -8258,8 +8415,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                       child: Text(
                         'Se insertará $placeholderText. Al publicar, se mostrará la imagen.',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurface,
-                        ),
+                              color: Theme.of(context).colorScheme.onSurface,
+                            ),
                       ),
                     ),
                   ],
@@ -8371,7 +8528,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('✓ Se colocó la etiqueta $photoPlaceholder. Al publicar la historia, los suscriptores verán la imagen en ese espacio.'),
+        content: Text(
+            '✓ Se colocó la etiqueta $photoPlaceholder. Al publicar la historia, los suscriptores verán la imagen en ese espacio.'),
         duration: const Duration(seconds: 4),
         action: SnackBarAction(
           label: 'Ver',
@@ -8462,7 +8620,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
             // Show error message
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                content: Text('La fecha de fin no puede ser anterior a la fecha de inicio'),
+                content: Text(
+                    'La fecha de fin no puede ser anterior a la fecha de inicio'),
                 duration: Duration(seconds: 2),
               ),
             );
@@ -10095,7 +10254,8 @@ class _EditorSegmentedControl extends StatelessWidget {
           if (photosTabKey != null)
             Showcase(
               key: photosTabKey!,
-              description: 'Agrega fotos a tu historia para enriquecerla visualmente. Las imágenes ayudan a tu familia a revivir los momentos.',
+              description:
+                  'Agrega fotos a tu historia para enriquecerla visualmente. Las imágenes ayudan a tu familia a revivir los momentos.',
               descTextStyle: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
@@ -10109,12 +10269,9 @@ class _EditorSegmentedControl extends StatelessWidget {
               overlayColor: Colors.black,
               overlayOpacity: 0.60,
               disableDefaultTargetGestures: true,
-              onTargetClick: () =>
-                  unawaited(onWalkthroughAdvance()),
-              onToolTipClick: () =>
-                  unawaited(onWalkthroughAdvance()),
-              onBarrierClick: () =>
-                  unawaited(onWalkthroughAdvance()),
+              onTargetClick: () => unawaited(onWalkthroughAdvance()),
+              onToolTipClick: () => unawaited(onWalkthroughAdvance()),
+              onBarrierClick: () => unawaited(onWalkthroughAdvance()),
               child: const Tab(text: 'Fotos'),
             )
           else
@@ -10122,7 +10279,8 @@ class _EditorSegmentedControl extends StatelessWidget {
           if (datesTabKey != null)
             Showcase(
               key: datesTabKey!,
-              description: 'Especifica cuándo ocurrió tu historia. Puedes elegir el año, mes o día exacto. ¡Ayuda a organizar tus recuerdos cronológicamente!',
+              description:
+                  'Especifica cuándo ocurrió tu historia. Puedes elegir el año, mes o día exacto. ¡Ayuda a organizar tus recuerdos cronológicamente!',
               descTextStyle: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
@@ -10136,12 +10294,9 @@ class _EditorSegmentedControl extends StatelessWidget {
               overlayColor: Colors.black,
               overlayOpacity: 0.60,
               disableDefaultTargetGestures: true,
-              onTargetClick: () =>
-                  unawaited(onWalkthroughAdvance()),
-              onToolTipClick: () =>
-                  unawaited(onWalkthroughAdvance()),
-              onBarrierClick: () =>
-                  unawaited(onWalkthroughAdvance()),
+              onTargetClick: () => unawaited(onWalkthroughAdvance()),
+              onToolTipClick: () => unawaited(onWalkthroughAdvance()),
+              onBarrierClick: () => unawaited(onWalkthroughAdvance()),
               child: const Tab(text: 'Fechas'),
             )
           else
@@ -10149,7 +10304,8 @@ class _EditorSegmentedControl extends StatelessWidget {
           if (tagsTabKey != null)
             Showcase(
               key: tagsTabKey!,
-              description: 'Etiqueta tu historia por temas como "familia", "viajes" o "infancia". Esto ayuda a tus suscriptores a navegar y encontrar historias relacionadas.',
+              description:
+                  'Etiqueta tu historia por temas como "familia", "viajes" o "infancia". Esto ayuda a tus suscriptores a navegar y encontrar historias relacionadas.',
               descTextStyle: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
@@ -10163,12 +10319,9 @@ class _EditorSegmentedControl extends StatelessWidget {
               overlayColor: Colors.black,
               overlayOpacity: 0.60,
               disableDefaultTargetGestures: true,
-              onTargetClick: () =>
-                  unawaited(onWalkthroughAdvance()),
-              onToolTipClick: () =>
-                  unawaited(onWalkthroughAdvance()),
-              onBarrierClick: () =>
-                  unawaited(onWalkthroughAdvance()),
+              onTargetClick: () => unawaited(onWalkthroughAdvance()),
+              onToolTipClick: () => unawaited(onWalkthroughAdvance()),
+              onBarrierClick: () => unawaited(onWalkthroughAdvance()),
               child: const Tab(text: 'Etiquetas'),
             )
           else
@@ -10259,7 +10412,8 @@ class _EditorBottomBar extends StatelessWidget {
             if (microphoneButtonKey != null) {
               return Showcase(
                 key: microphoneButtonKey!,
-                description: '🎙️ Dicta tu historia en lugar de escribir. Puedes alternar entre dictar y escribir en cualquier momento. ¡Habla con naturalidad y la IA convertirá tu voz en texto!',
+                description:
+                    '🎙️ Dicta tu historia en lugar de escribir. Puedes alternar entre dictar y escribir en cualquier momento. ¡Habla con naturalidad y la IA convertirá tu voz en texto!',
                 descTextStyle: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
@@ -10273,12 +10427,9 @@ class _EditorBottomBar extends StatelessWidget {
                 overlayColor: Colors.black,
                 overlayOpacity: 0.60,
                 disableDefaultTargetGestures: true,
-                onTargetClick: () =>
-                    unawaited(onWalkthroughAdvance()),
-                onToolTipClick: () =>
-                    unawaited(onWalkthroughAdvance()),
-                onBarrierClick: () =>
-                    unawaited(onWalkthroughAdvance()),
+                onTargetClick: () => unawaited(onWalkthroughAdvance()),
+                onToolTipClick: () => unawaited(onWalkthroughAdvance()),
+                onBarrierClick: () => unawaited(onWalkthroughAdvance()),
                 child: button,
               );
             }
@@ -10355,7 +10506,8 @@ class _EditorBottomBar extends StatelessWidget {
             if (saveButtonKey != null) {
               return Showcase(
                 key: saveButtonKey!,
-                description: 'Guarda tu historia como borrador. Podrás seguir editándola más tarde antes de publicarla.',
+                description:
+                    'Guarda tu historia como borrador. Podrás seguir editándola más tarde antes de publicarla.',
                 descTextStyle: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
@@ -10369,12 +10521,9 @@ class _EditorBottomBar extends StatelessWidget {
                 overlayColor: Colors.black,
                 overlayOpacity: 0.60,
                 disableDefaultTargetGestures: true,
-                onTargetClick: () =>
-                    unawaited(onWalkthroughAdvance()),
-                onToolTipClick: () =>
-                    unawaited(onWalkthroughAdvance()),
-                onBarrierClick: () =>
-                    unawaited(onWalkthroughAdvance()),
+                onTargetClick: () => unawaited(onWalkthroughAdvance()),
+                onToolTipClick: () => unawaited(onWalkthroughAdvance()),
+                onBarrierClick: () => unawaited(onWalkthroughAdvance()),
                 child: wrappedButton,
               );
             }
@@ -10458,7 +10607,8 @@ class _EditorBottomBar extends StatelessWidget {
             if (publishButtonKey != null) {
               return Showcase(
                 key: publishButtonKey!,
-                description: '¡Publica tu historia! Tu historia está segura: solo tus suscriptores podrán verla. Ellos la recibirán por email y podrán leerla, comentar y reaccionar.',
+                description:
+                    '¡Publica tu historia! Tu historia está segura: solo tus suscriptores podrán verla. Ellos la recibirán por email y podrán leerla, comentar y reaccionar.',
                 descTextStyle: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
@@ -10472,12 +10622,9 @@ class _EditorBottomBar extends StatelessWidget {
                 overlayColor: Colors.black,
                 overlayOpacity: 0.60,
                 disableDefaultTargetGestures: true,
-                onTargetClick: () =>
-                    unawaited(onWalkthroughAdvance()),
-                onToolTipClick: () =>
-                    unawaited(onWalkthroughAdvance()),
-                onBarrierClick: () =>
-                    unawaited(onWalkthroughAdvance()),
+                onTargetClick: () => unawaited(onWalkthroughAdvance()),
+                onToolTipClick: () => unawaited(onWalkthroughAdvance()),
+                onBarrierClick: () => unawaited(onWalkthroughAdvance()),
                 child: wrappedButton,
               );
             }

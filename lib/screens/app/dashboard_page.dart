@@ -196,28 +196,15 @@ class _DashboardPageState extends State<DashboardPage> {
 
   Future<void> _checkAndShowWalkthrough() async {
     // DEBUG MODE: Siempre mostrar walkthrough
-    print('🔵 [Dashboard] _checkAndShowWalkthrough() iniciando, mounted: $mounted');
-    if (!mounted) {
-      print('🔴 [Dashboard] Not mounted en _checkAndShowWalkthrough');
-      return;
-    }
+    if (!mounted) return;
 
-    print('🔵 [Dashboard] Agregando postFrameCallback');
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      print('🔵 [Dashboard] postFrameCallback ejecutándose, mounted: $mounted');
-      if (!mounted) {
-        print('🔴 [Dashboard] Not mounted en postFrameCallback');
-        return;
-      }
+      if (!mounted) return;
 
-      print('🔵 [Dashboard] Iniciando delay de 1 segundo...');
-      // Esperar 1 segundo antes de iniciar el walkthrough
+      // Esperar 1 segundo antes de iniciar (según requisitos del usuario)
       Future.delayed(const Duration(milliseconds: 1000)).then((_) {
-        print('🔵 [Dashboard] Delay completado, mounted: $mounted, _showcaseContext: $_showcaseContext');
         if (mounted) {
           _startWalkthrough();
-        } else {
-          print('🔴 [Dashboard] Not mounted después del delay');
         }
       });
     });
@@ -234,8 +221,8 @@ class _DashboardPageState extends State<DashboardPage> {
       return;
     }
 
-    setState(() => _isWalkthroughActive = true);
-    print('🟢 [Dashboard] _isWalkthroughActive establecido a true');
+    // CRITICAL: Do NOT call setState before startShowCase!
+    // setState causes a rebuild that invalidates the showcase context
 
     // Construir lista de keys
     final keys = <GlobalKey>[];
@@ -263,6 +250,10 @@ class _DashboardPageState extends State<DashboardPage> {
     try {
       ShowCaseWidget.of(_showcaseContext!).startShowCase(keys);
       print('🟢 [Dashboard] startShowCase() ejecutado exitosamente');
+
+      // Set walkthrough active AFTER starting showcase, without rebuild
+      _isWalkthroughActive = true;
+      print('🟢 [Dashboard] _isWalkthroughActive establecido a true (sin rebuild)');
     } catch (e) {
       print('🔴 [Dashboard] Error en startShowCase: $e');
     }
@@ -437,9 +428,18 @@ class _DashboardPageState extends State<DashboardPage> {
                   overlayColor: Colors.black,
                   overlayOpacity: 0.60,
                   disableDefaultTargetGestures: true,
-                  onTargetClick: () => _handleCreateStoryNext(),
-                  onToolTipClick: () => _handleCreateStoryNext(),
-                  onBarrierClick: () => _handleCreateStoryNext(),
+                  onTargetClick: () {
+                    print('🟣 [Dashboard] _createStoryKey onTargetClick');
+                    ShowCaseWidget.of(context).next();
+                  },
+                  onToolTipClick: () {
+                    print('🟣 [Dashboard] _createStoryKey onToolTipClick');
+                    ShowCaseWidget.of(context).next();
+                  },
+                  onBarrierClick: () {
+                    print('🟣 [Dashboard] _createStoryKey onBarrierClick');
+                    ShowCaseWidget.of(context).next();
+                  },
                   child: _WelcomeSection(
                     userProfile: _userProfile,
                     allTags: _allTags,

@@ -14,6 +14,8 @@ import 'story_editor_page.dart';
 import 'app_navigation.dart';
 import 'subscribers_page.dart';
 
+enum _WalkthroughStep { menu, createStory, ghostWriter, bookProgress }
+
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key, this.menuKey});
 
@@ -34,6 +36,10 @@ class _DashboardPageState extends State<DashboardPage> {
   bool _shouldShowGhostWriterIntro = false;
   List<String> _cachedSuggestedTopics = [];
   bool _isWalkthroughActive = false;
+  bool _shouldShowWalkthrough = false;
+  final List<_WalkthroughStep> _walkthroughSteps = [];
+  int _currentWalkthroughStepIndex = 0;
+  bool _isAdvancingWalkthrough = false;
 
   // Keys para el walkthrough
   final GlobalKey _createStoryKey = GlobalKey();
@@ -147,8 +153,8 @@ class _DashboardPageState extends State<DashboardPage> {
       // Check if should show ghost writer intro
       final shouldShowIntro = await UserService.shouldShowGhostWriterIntro();
 
-      // DEBUG MODE: Siempre mostrar walkthrough
-      // final shouldShowWalkthrough = await UserService.shouldShowHomeWalkthrough();
+      final shouldShowWalkthrough =
+          await UserService.shouldShowHomeWalkthrough();
 
       if (mounted) {
         // Calculate suggested topics once to avoid random changes on rebuild
@@ -173,9 +179,9 @@ class _DashboardPageState extends State<DashboardPage> {
           _shouldShowGhostWriterIntro = shouldShowIntro;
           _cachedSuggestedTopics = suggestedTopics;
           _isLoading = false;
+          _shouldShowWalkthrough = shouldShowWalkthrough;
         });
 
-        // DEBUG MODE: Siempre mostrar walkthrough
         _checkAndShowWalkthrough();
       }
     } catch (e) {
@@ -191,12 +197,16 @@ class _DashboardPageState extends State<DashboardPage> {
   Future<void> _checkAndShowWalkthrough() async {
     if (!mounted) return;
 
+    if (!_shouldShowWalkthrough || _isWalkthroughActive) {
+      return;
+    }
+
     await Future.delayed(const Duration(seconds: 1));
 
     if (!mounted) return;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
+      if (mounted && _shouldShowWalkthrough && !_isWalkthroughActive) {
         _startWalkthrough();
       }
     });
@@ -205,35 +215,40 @@ class _DashboardPageState extends State<DashboardPage> {
   void _startWalkthrough() {
     if (!mounted) return;
 
-    // RADICALLY SIMPLE: Just add keys, no validation
-    final keys = <GlobalKey>[];
+    final steps = <_WalkthroughStep>[];
 
-    // Add menu key if available
     if (widget.menuKey != null) {
-      keys.add(widget.menuKey!);
+      steps.add(_WalkthroughStep.menu);
     }
 
-    // Add create story key
-    keys.add(_createStoryKey);
+    steps.add(_WalkthroughStep.createStory);
 
-    // Add ghost writer key if intro is visible
     if (_shouldShowGhostWriterIntro) {
-      keys.add(_ghostWriterKey);
+      steps.add(_WalkthroughStep.ghostWriter);
     }
 
-    // Add book progress key
-    keys.add(_bookProgressKey);
+    steps.add(_WalkthroughStep.bookProgress);
 
-    final allContextsReady = keys.every((key) => key.currentContext != null);
+    if (steps.isEmpty) {
+      return;
+    }
+
+    final allContextsReady =
+        steps.map(_keyForStep).every((key) => key.currentContext != null);
 
     if (!allContextsReady) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
+        if (mounted && _shouldShowWalkthrough) {
           _startWalkthrough();
         }
       });
       return;
     }
+
+    _walkthroughSteps
+      ..clear()
+      ..addAll(steps);
+    _currentWalkthroughStepIndex = 0;
 
     if (!_isWalkthroughActive) {
       setState(() {
@@ -241,7 +256,11 @@ class _DashboardPageState extends State<DashboardPage> {
       });
     }
 
-    ShowCaseWidget.of(context).startShowCase(keys);
+    unawaited(_prepareForStep(_walkthroughSteps.first).then((_) {
+      if (mounted && _isWalkthroughActive) {
+        _showCurrentWalkthroughStep();
+      }
+    }));
   }
 
   Future<void> _scrollToWidget(GlobalKey key) async {
@@ -263,44 +282,110 @@ class _DashboardPageState extends State<DashboardPage> {
         curve: Curves.easeInOut,
       );
 
-      // Pequeña pausa para que se vea el scroll
       await Future.delayed(const Duration(milliseconds: 450));
     }
   }
 
-  Future<void> _handleMenuNext() async {
-    if (!mounted) return;
-    ShowCaseWidget.of(context).next();
+  void _handleWalkthroughTap() {
+    unawaited(_advanceWalkthrough());
   }
 
-  Future<void> _handleCreateStoryNext() async {
-    // Si hay ghost writer, hacer scroll a él
-    if (_shouldShowGhostWriterIntro) {
-      await _scrollToWidget(_ghostWriterKey);
-    } else {
-      // Si no hay ghost writer, hacer scroll directo al progreso del libro
-      await _scrollToWidget(_bookProgressKey);
+  GlobalKey _keyForStep(_WalkthroughStep step) {
+    switch (step) {
+      case _WalkthroughStep.menu:
+        return widget.menuKey!;
+      case _WalkthroughStep.createStory:
+        return _createStoryKey;
+      case _WalkthroughStep.ghostWriter:
+        return _ghostWriterKey;
+      case _WalkthroughStep.bookProgress:
+        return _bookProgressKey;
+    }
+  }
+
+  Future<void> _prepareForStep(_WalkthroughStep step) async {
+    if (!mounted) return;
+
+    switch (step) {
+      case _WalkthroughStep.menu:
+        if (_scrollController.hasClients) {
+          await _scrollController.animateTo(
+            0,
+            duration: const Duration(milliseconds: 400),
+            curve: Curves.easeOut,
+          );
+        }
+        break;
+      case _WalkthroughStep.createStory:
+        // El widget de bienvenida ya está visible tras el menú.
+        break;
+      case _WalkthroughStep.ghostWriter:
+        await _scrollToWidget(_ghostWriterKey);
+        break;
+      case _WalkthroughStep.bookProgress:
+        await _scrollToWidget(_bookProgressKey);
+        break;
+    }
+  }
+
+  void _showCurrentWalkthroughStep() {
+    if (!mounted || _walkthroughSteps.isEmpty) return;
+
+    final key = _keyForStep(_walkthroughSteps[_currentWalkthroughStepIndex]);
+    if (key.currentContext != null) {
+      ShowCaseWidget.of(context).startShowCase([key]);
+    }
+  }
+
+  Future<void> _advanceWalkthrough() async {
+    if (!mounted || !_isWalkthroughActive || _walkthroughSteps.isEmpty) {
+      return;
+    }
+
+    if (_isAdvancingWalkthrough) {
+      return;
+    }
+
+    _isAdvancingWalkthrough = true;
+
+    try {
+      ShowCaseWidget.of(context).dismiss();
+      await Future.delayed(const Duration(milliseconds: 220));
+
+      final nextIndex = _currentWalkthroughStepIndex + 1;
+
+      if (nextIndex >= _walkthroughSteps.length) {
+        await _finishWalkthrough();
+        return;
+      }
+
+      final nextStep = _walkthroughSteps[nextIndex];
+      await _prepareForStep(nextStep);
+
+      if (!mounted || !_isWalkthroughActive) {
+        return;
+      }
+
+      setState(() {
+        _currentWalkthroughStepIndex = nextIndex;
+      });
+
+      await Future.delayed(const Duration(milliseconds: 120));
+
+      if (!mounted || !_isWalkthroughActive) {
+        return;
+      }
+
+      _showCurrentWalkthroughStep();
+    } finally {
+      _isAdvancingWalkthrough = false;
     }
 
     if (!mounted) return;
-
-    await Future.delayed(const Duration(milliseconds: 200));
-
     ShowCaseWidget.of(context).next();
   }
 
-  Future<void> _handleGhostWriterNext() async {
-    // Hacer scroll al progreso del libro
-    await _scrollToWidget(_bookProgressKey);
-
-    if (!mounted) return;
-
-    await Future.delayed(const Duration(milliseconds: 200));
-
-    ShowCaseWidget.of(context).next();
-  }
-
-  Future<void> _handleBookProgressNext() async {
+  Future<void> _finishWalkthrough() async {
     if (!mounted) return;
 
     ShowCaseWidget.of(context).dismiss();
@@ -308,50 +393,11 @@ class _DashboardPageState extends State<DashboardPage> {
     if (mounted) {
       setState(() {
         _isWalkthroughActive = false;
+        _shouldShowWalkthrough = false;
       });
     }
-  }
 
-  Future<void> _onWalkthroughTap() async {
-    if (!mounted || !_isWalkthroughActive) return;
-
-    final activeKey = ShowCaseWidget.activeTargetWidget(context);
-
-    if (activeKey == null) {
-      if (mounted && _isWalkthroughActive) {
-        setState(() {
-          _isWalkthroughActive = false;
-        });
-      }
-      return;
-    }
-
-    if (activeKey == widget.menuKey) {
-      await _handleMenuNext();
-      return;
-    }
-
-    if (activeKey == _createStoryKey) {
-      await _handleCreateStoryNext();
-      return;
-    }
-
-    if (activeKey == _ghostWriterKey) {
-      await _handleGhostWriterNext();
-      return;
-    }
-
-    if (activeKey == _bookProgressKey) {
-      await _handleBookProgressNext();
-      return;
-    }
-
-    if (!mounted) return;
-    ShowCaseWidget.of(context).next();
-  }
-
-  void _handleWalkthroughTap() {
-    unawaited(_onWalkthroughTap());
+    await UserService.markHomeWalkthroughAsSeen();
   }
 
   @override

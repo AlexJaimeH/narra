@@ -75,8 +75,10 @@ class _AppNavigationState extends State<AppNavigation> {
     final uri = Uri.base;
     final errorInFragment = uri.fragment.contains('error=');
     final errorDescription = uri.fragment.contains('error_description=')
-        ? Uri.decodeComponent(
-            uri.fragment.split('error_description=')[1].split('&')[0].replaceAll('+', ' '))
+        ? Uri.decodeComponent(uri.fragment
+            .split('error_description=')[1]
+            .split('&')[0]
+            .replaceAll('+', ' '))
         : null;
 
     // Verificar si ya hay una sesión
@@ -99,7 +101,8 @@ class _AppNavigationState extends State<AppNavigation> {
       });
 
       // Mostrar mensaje amigable según el tipo de error
-      String friendlyMessage = 'El enlace de inicio de sesión no es válido o ya expiró. '
+      String friendlyMessage =
+          'El enlace de inicio de sesión no es válido o ya expiró. '
           'Por favor, solicita un nuevo correo de inicio de sesión.';
 
       if (errorDescription != null) {
@@ -119,7 +122,8 @@ class _AppNavigationState extends State<AppNavigation> {
               content: Text(friendlyMessage),
               backgroundColor: Colors.orange.shade700,
               behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
               duration: const Duration(seconds: 8),
               action: SnackBarAction(
                 label: 'Entendido',
@@ -140,7 +144,8 @@ class _AppNavigationState extends State<AppNavigation> {
 
     // Si no hay sesión, suscribirse a cambios de auth por un tiempo limitado
     bool sessionDetected = false;
-    var authSubscription = SupabaseConfig.client.auth.onAuthStateChange.listen((data) {
+    var authSubscription =
+        SupabaseConfig.client.auth.onAuthStateChange.listen((data) {
       final authSession = data.session;
       if (authSession != null && mounted && !sessionDetected) {
         sessionDetected = true;
@@ -220,17 +225,20 @@ class _AppNavigationState extends State<AppNavigation> {
           blurValue: 4,
           disableBarrierInteraction: false,
           onStart: (index, key) {
-            // Hacer scroll al elemento cuando se muestre
-            if (key.currentContext != null) {
-              Future.delayed(const Duration(milliseconds: 300), () {
+            if (key != _menuKey || key.currentContext == null) {
+              return;
+            }
+
+            Future.delayed(const Duration(milliseconds: 300), () {
+              if (key.currentContext != null) {
                 Scrollable.ensureVisible(
                   key.currentContext!,
                   duration: const Duration(milliseconds: 400),
                   curve: Curves.easeInOut,
-                  alignment: 0.5, // Centrar el elemento
+                  alignment: 0.5,
                 );
-              });
-            }
+              }
+            });
           },
           builder: (context) => Scaffold(
             backgroundColor: Theme.of(context).colorScheme.surface,

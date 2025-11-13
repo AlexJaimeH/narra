@@ -9,6 +9,9 @@ import { PurchasePage } from './pages/PurchasePage';
 import { PurchaseCheckoutPage } from './pages/PurchaseCheckoutPage';
 import { PurchaseSuccessPage } from './pages/PurchaseSuccessPage';
 import { GiftManagementPage } from './pages/GiftManagementPage';
+import { TermsPage } from './pages/TermsPage';
+import { PrivacyPage } from './pages/PrivacyPage';
+import { ContactPage } from './pages/ContactPage';
 
 const App: React.FC = () => {
   return (
@@ -23,6 +26,9 @@ const App: React.FC = () => {
         <Route path="/purchase/checkout" element={<PurchaseCheckoutPage />} />
         <Route path="/purchase/success" element={<PurchaseSuccessPage />} />
         <Route path="/gift-management" element={<GiftManagementPage />} />
+        <Route path="/terminos" element={<TermsPage />} />
+        <Route path="/privacidad" element={<PrivacyPage />} />
+        <Route path="/contacto" element={<ContactPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

@@ -41,6 +41,9 @@ class _DashboardPageState extends State<DashboardPage> {
   final List<_WalkthroughStep> _walkthroughSteps = [];
   int _currentWalkthroughStepIndex = 0;
   bool _isAdvancingWalkthrough = false;
+  DateTime? _lastWalkthroughTap;
+
+  static const _walkthroughTapCooldown = Duration(milliseconds: 400);
 
   // Keys para el walkthrough
   final GlobalKey _createStoryKey = GlobalKey();
@@ -252,6 +255,7 @@ class _DashboardPageState extends State<DashboardPage> {
       ..clear()
       ..addAll(steps);
     _currentWalkthroughStepIndex = 0;
+    _lastWalkthroughTap = null;
 
     if (!_isWalkthroughActive) {
       setState(() {
@@ -290,6 +294,18 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   void _handleWalkthroughTap() {
+    if (_isAdvancingWalkthrough) {
+      return;
+    }
+
+    final now = DateTime.now();
+    if (_lastWalkthroughTap != null &&
+        now.difference(_lastWalkthroughTap!) < _walkthroughTapCooldown) {
+      return;
+    }
+
+    _lastWalkthroughTap = now;
+
     unawaited(_advanceWalkthrough());
   }
 
@@ -409,6 +425,8 @@ class _DashboardPageState extends State<DashboardPage> {
         _shouldShowWalkthrough = false;
       });
     }
+
+    _lastWalkthroughTap = null;
 
     await UserService.markHomeWalkthroughAsSeen();
   }

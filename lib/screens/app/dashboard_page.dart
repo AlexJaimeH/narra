@@ -22,6 +22,8 @@ enum _DashboardWalkthroughStep {
   bookProgress,
 }
 
+enum _WalkthroughStep { menu, createStory, ghostWriter, bookProgress }
+
 class DashboardPage extends StatefulWidget {
   const DashboardPage({
     super.key,
@@ -415,6 +417,19 @@ class _DashboardPageState extends State<DashboardPage> {
     } finally {
       _isAdvancingWalkthrough = false;
     }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_isWalkthroughActive) {
+        return;
+      }
+
+      final showcase = ShowCaseWidget.of(context);
+      if (showcase == null) {
+        return;
+      }
+
+      showcase.startShowCase([key]);
+    });
   }
 
   Future<void> _finishWalkthrough() async {

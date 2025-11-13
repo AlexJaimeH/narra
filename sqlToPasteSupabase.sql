@@ -2174,3 +2174,62 @@ comment on column public.user_settings.has_seen_subscribers_walkthrough is 'Indi
 commit;
 
 -- Fin de migración de walkthrough de suscriptores
+
+-- ============================================================
+-- Tabla de mensajes de contacto (Fecha: 2025-11-13)
+-- ============================================================
+-- Esta tabla almacena los mensajes de contacto enviados desde
+-- el formulario público. Los usuarios no autenticados pueden
+-- insertar pero no leer. Solo el service role puede leer.
+begin;
+
+-- Crear tabla de mensajes de contacto
+create table if not exists public.contact_messages (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  email text not null,
+  message text not null,
+  is_current_client boolean not null default false,
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+-- Índices para búsqueda eficiente
+create index if not exists contact_messages_created_at_idx
+  on public.contact_messages (created_at desc);
+
+create index if not exists contact_messages_email_idx
+  on public.contact_messages (email);
+
+-- Habilitar RLS
+alter table public.contact_messages enable row level security;
+
+-- Política: Cualquiera puede insertar (sin autenticación)
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'contact_messages'
+      and policyname = 'Anyone can insert contact messages'
+  ) then
+    create policy "Anyone can insert contact messages"
+      on public.contact_messages
+      for insert
+      with check (true);
+  end if;
+end
+$$;
+
+-- Política: Solo service role puede leer (administradores)
+-- No creamos política pública de SELECT, solo service role puede leer
+
+-- Comentarios
+comment on table public.contact_messages is 'Mensajes de contacto enviados desde el formulario público';
+comment on column public.contact_messages.name is 'Nombre de la persona que envía el mensaje';
+comment on column public.contact_messages.email is 'Email de contacto para responder';
+comment on column public.contact_messages.message is 'Contenido del mensaje, sugerencia, queja o ayuda';
+comment on column public.contact_messages.is_current_client is 'Indica si la persona es cliente actual de Narra';
+
+commit;
+
+-- Fin de migración de contact_messages

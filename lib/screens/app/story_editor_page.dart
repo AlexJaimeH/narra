@@ -48,6 +48,18 @@ enum _GhostWriterResultAction { apply, retry, cancel }
 
 enum _EditorExitDecision { cancel, discard, save }
 
+enum _EditorWalkthroughStep {
+  content,
+  ghostWriter,
+  suggestions,
+  photosTab,
+  datesTab,
+  tagsTab,
+  microphone,
+  saveDraft,
+  publish,
+}
+
 class StoryCoachSection {
   const StoryCoachSection({
     required this.title,
@@ -605,6 +617,16 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   static const String _personalTagsTitle = 'Tus etiquetas únicas';
 
   bool _isWalkthroughActive = false;
+  bool _shouldShowWalkthrough = false;
+  bool _hasStartedWalkthrough = false;
+  bool _isWalkthroughStartPending = false;
+  DateTime? _lastWalkthroughTap;
+  static const _walkthroughTapCooldown = Duration(milliseconds: 400);
+  final List<_EditorWalkthroughStep> _walkthroughSteps = [];
+  final List<GlobalKey> _walkthroughKeys = [];
+  int _currentWalkthroughStepIndex = 0;
+  int? _pendingWalkthroughStepIndex;
+  bool _isAdvancingWalkthrough = false;
 
   // GlobalKeys para el walkthrough del editor
   final GlobalKey _contentFieldKey = GlobalKey();
@@ -717,47 +739,340 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     // Siempre mostrar walkthrough
     if (!mounted) return;
 
+    setState(() {
+      _shouldShowWalkthrough = true;
+      _hasStartedWalkthrough = false;
+      _lastWalkthroughTap = null;
+      _isWalkthroughStartPending = false;
+    });
+
+    await Future.delayed(const Duration(seconds: 1));
+
+    if (!mounted || !_shouldShowWalkthrough || _isWalkthroughActive || _hasStartedWalkthrough) {
+      return;
+    }
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _startWalkthrough();
+      if (!mounted || !_shouldShowWalkthrough || _isWalkthroughActive || _hasStartedWalkthrough) {
+        return;
+      }
+
+      _startWalkthrough();
     });
   }
 
   void _startWalkthrough() {
-    if (_showcaseContext == null) return;
+    if (_showcaseContext == null || _isWalkthroughActive) {
+      return;
+    }
 
-    setState(() => _isWalkthroughActive = true);
+    if (!_hasStartedWalkthrough) {
+      setState(() {
+        _hasStartedWalkthrough = true;
+        _lastWalkthroughTap = null;
+      });
+    }
 
-    // Orden completo del walkthrough
-    final keys = <GlobalKey>[
-      _contentFieldKey,
-      _ghostWriterButtonKey,
-      _suggestionsButtonKey,
-      _photosTabKey,
-      _datesTabKey,
-      _tagsTabKey,
-      _microphoneButtonKey,
-      _saveButtonKey,
-      if (_getWordCount() >= 300) _publishButtonKey,
-    ];
+    final steps = _buildWalkthroughSteps();
+    if (steps.isEmpty) {
+      if (mounted) {
+        setState(() {
+          _shouldShowWalkthrough = false;
+          _hasStartedWalkthrough = false;
+        });
+      } else {
+        _shouldShowWalkthrough = false;
+        _hasStartedWalkthrough = false;
+      }
+      return;
+    }
 
-    ShowCaseWidget.of(_showcaseContext!).startShowCase(keys);
+    final keys = steps.map(_keyForWalkthroughStep).toList(growable: false);
+    final allContextsReady =
+        keys.every((key) => key.currentContext != null);
+
+    if (!allContextsReady) {
+      if (_isWalkthroughStartPending) {
+        return;
+      }
+
+      _isWalkthroughStartPending = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _isWalkthroughStartPending = false;
+
+        if (!mounted || !_shouldShowWalkthrough || _isWalkthroughActive) {
+          return;
+        }
+
+        _startWalkthrough();
+      });
+      return;
+    }
+
+    setState(() {
+      _isWalkthroughActive = true;
+    });
+
+    _walkthroughSteps
+      ..clear()
+      ..addAll(steps);
+    _walkthroughKeys
+      ..clear()
+      ..addAll(keys);
+    _currentWalkthroughStepIndex = 0;
+    _pendingWalkthroughStepIndex = null;
+    _isAdvancingWalkthrough = false;
+    _lastWalkthroughTap = null;
+
+    unawaited(_startShowcaseSequence());
   }
 
-  Future<void> _handleContentFieldClick(BuildContext context) async {
-    // Hacer scroll hasta abajo antes de mostrar el ghost writer
-    if (_editorScrollController.hasClients && _ghostWriterButtonKey.currentContext != null) {
-      await _editorScrollController.animateTo(
-        _editorScrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 500),
-        curve: Curves.easeInOut,
-      );
+  List<_EditorWalkthroughStep> _buildWalkthroughSteps() {
+    final steps = <_EditorWalkthroughStep>[
+      _EditorWalkthroughStep.content,
+      _EditorWalkthroughStep.ghostWriter,
+      _EditorWalkthroughStep.suggestions,
+      _EditorWalkthroughStep.photosTab,
+      _EditorWalkthroughStep.datesTab,
+      _EditorWalkthroughStep.tagsTab,
+      _EditorWalkthroughStep.microphone,
+      _EditorWalkthroughStep.saveDraft,
+    ];
 
-      await Future.delayed(const Duration(milliseconds: 300));
+    if (_getWordCount() >= 300) {
+      steps.add(_EditorWalkthroughStep.publish);
     }
 
-    if (_showcaseContext != null && mounted) {
+    return steps;
+  }
+
+  GlobalKey _keyForWalkthroughStep(_EditorWalkthroughStep step) {
+    switch (step) {
+      case _EditorWalkthroughStep.content:
+        return _contentFieldKey;
+      case _EditorWalkthroughStep.ghostWriter:
+        return _ghostWriterButtonKey;
+      case _EditorWalkthroughStep.suggestions:
+        return _suggestionsButtonKey;
+      case _EditorWalkthroughStep.photosTab:
+        return _photosTabKey;
+      case _EditorWalkthroughStep.datesTab:
+        return _datesTabKey;
+      case _EditorWalkthroughStep.tagsTab:
+        return _tagsTabKey;
+      case _EditorWalkthroughStep.microphone:
+        return _microphoneButtonKey;
+      case _EditorWalkthroughStep.saveDraft:
+        return _saveButtonKey;
+      case _EditorWalkthroughStep.publish:
+        return _publishButtonKey;
+    }
+  }
+
+  double _alignmentForWalkthroughStep(_EditorWalkthroughStep step) {
+    switch (step) {
+      case _EditorWalkthroughStep.content:
+        return 0.1;
+      case _EditorWalkthroughStep.ghostWriter:
+      case _EditorWalkthroughStep.suggestions:
+        return 0.35;
+      case _EditorWalkthroughStep.photosTab:
+      case _EditorWalkthroughStep.datesTab:
+      case _EditorWalkthroughStep.tagsTab:
+        return 0.1;
+      case _EditorWalkthroughStep.microphone:
+      case _EditorWalkthroughStep.saveDraft:
+      case _EditorWalkthroughStep.publish:
+        return 0.85;
+    }
+  }
+
+  Future<void> _scrollToKey(
+    GlobalKey key, {
+    double alignment = 0.5,
+  }) async {
+    final context = key.currentContext;
+    if (context == null) {
+      return;
+    }
+
+    await Scrollable.ensureVisible(
+      context,
+      duration: const Duration(milliseconds: 400),
+      curve: Curves.easeInOut,
+      alignment: alignment,
+    );
+  }
+
+  Future<void> _prepareForStep(_EditorWalkthroughStep step) async {
+    if (!mounted) {
+      return;
+    }
+
+    final key = _keyForWalkthroughStep(step);
+    final context = key.currentContext;
+    if (context == null) {
+      return;
+    }
+
+    await _scrollToKey(
+      key,
+      alignment: _alignmentForWalkthroughStep(step),
+    );
+  }
+
+  Future<void> _startShowcaseSequence() async {
+    if (_walkthroughSteps.isEmpty) {
+      return;
+    }
+
+    await _prepareForStep(_walkthroughSteps.first);
+
+    if (!mounted || !_isWalkthroughActive || _showcaseContext == null) {
+      return;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_isWalkthroughActive || _showcaseContext == null) {
+        return;
+      }
+
+      ShowCaseWidget.of(_showcaseContext!)
+          .startShowCase(List<GlobalKey>.from(_walkthroughKeys));
+    });
+  }
+
+  bool get _isWalkthroughOverlayVisible =>
+      _shouldShowWalkthrough || _isWalkthroughActive;
+
+  void _handleShowcaseStepStarted(GlobalKey key) {
+    final index = _walkthroughKeys.indexOf(key);
+    if (index == -1) {
+      return;
+    }
+
+    if (_pendingWalkthroughStepIndex != null &&
+        index == _pendingWalkthroughStepIndex) {
+      _pendingWalkthroughStepIndex = null;
+      _isAdvancingWalkthrough = false;
+      _lastWalkthroughTap = DateTime.now();
+    }
+
+    if (_currentWalkthroughStepIndex != index) {
+      _currentWalkthroughStepIndex = index;
+    }
+
+    if (index < 0 || index >= _walkthroughSteps.length) {
+      return;
+    }
+
+    final step = _walkthroughSteps[index];
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_isWalkthroughActive || key.currentContext == null) {
+        return;
+      }
+
+      unawaited(_scrollToKey(
+        key,
+        alignment: _alignmentForWalkthroughStep(step),
+      ));
+    });
+  }
+
+  Future<void> _handleWalkthroughAdvanceRequest() async {
+    if (!_isWalkthroughActive || _showcaseContext == null) {
+      return;
+    }
+
+    final now = DateTime.now();
+    if (_lastWalkthroughTap != null &&
+        now.difference(_lastWalkthroughTap!) < _walkthroughTapCooldown) {
+      return;
+    }
+
+    _lastWalkthroughTap = now;
+
+    if (_isAdvancingWalkthrough) {
+      return;
+    }
+
+    final nextIndex = _currentWalkthroughStepIndex + 1;
+
+    if (nextIndex >= _walkthroughSteps.length) {
+      _isAdvancingWalkthrough = true;
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!_isWalkthroughActive || _showcaseContext == null) {
+          _isAdvancingWalkthrough = false;
+          return;
+        }
+
+        ShowCaseWidget.of(_showcaseContext!).next();
+        _isAdvancingWalkthrough = false;
+      });
+      return;
+    }
+
+    _isAdvancingWalkthrough = true;
+    _pendingWalkthroughStepIndex = nextIndex;
+
+    try {
+      await _prepareForStep(_walkthroughSteps[nextIndex]);
+
+      if (!_isWalkthroughActive || _showcaseContext == null) {
+        _pendingWalkthroughStepIndex = null;
+        return;
+      }
+
       ShowCaseWidget.of(_showcaseContext!).next();
+    } finally {
+      if (_pendingWalkthroughStepIndex == null || !_isWalkthroughActive) {
+        _isAdvancingWalkthrough = false;
+      }
     }
+  }
+
+  void _handleOverlayTap() {
+    if (!_isWalkthroughOverlayVisible) {
+      return;
+    }
+
+    if (!_isWalkthroughActive) {
+      _startWalkthrough();
+      return;
+    }
+
+    unawaited(_handleWalkthroughAdvanceRequest());
+  }
+
+  void _handleWalkthroughFinished() {
+    _walkthroughSteps.clear();
+    _walkthroughKeys.clear();
+    _pendingWalkthroughStepIndex = null;
+    _isAdvancingWalkthrough = false;
+    _isWalkthroughStartPending = false;
+    _currentWalkthroughStepIndex = 0;
+    _lastWalkthroughTap = null;
+
+    if (mounted) {
+      setState(() {
+        _isWalkthroughActive = false;
+        _shouldShowWalkthrough = false;
+        _hasStartedWalkthrough = false;
+      });
+    } else {
+      _isWalkthroughActive = false;
+      _shouldShowWalkthrough = false;
+      _hasStartedWalkthrough = false;
+    }
+
+    // DEBUG MODE: Mantener comentario para mostrar siempre el walkthrough
+    // unawaited(UserService.markEditorWalkthroughAsSeen());
+  }
+
+  Future<void> _handleContentFieldClick() async {
+    await _handleWalkthroughAdvanceRequest();
   }
 
   bool _handleScrollNotification(ScrollNotification notification) {
@@ -2308,145 +2623,174 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     return ShowCaseWidget(
       blurValue: 4,
       disableBarrierInteraction: false,
-      onFinish: () {
-        setState(() => _isWalkthroughActive = false);
-        // DEBUG MODE: No marcar como visto para que siempre se muestre
-        // UserService.markEditorWalkthroughAsSeen();
+      enableAutoScroll: false,
+      onStart: (index, key) {
+        if (key is GlobalKey) {
+          _handleShowcaseStepStarted(key);
+        }
       },
+      onFinish: _handleWalkthroughFinished,
       builder: (showcaseContext) {
         _showcaseContext = showcaseContext;
-        return PopScope(
-        canPop: !_hasChanges,
-        onPopInvoked: (didPop) {
-          if (!didPop && _hasChanges) {
-            _showDiscardChangesDialog();
-          }
-        },
-        child: _isLoading
-          ? const Scaffold(
-              body: Center(child: CircularProgressIndicator()),
-            )
-          : Scaffold(
-              backgroundColor: Theme.of(context).colorScheme.surface,
-              body: SafeArea(
-                bottom: false,
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final tabContent = _buildActiveTabContent();
-                    const List<AppNavigationItem> navItems = [
-                      AppNavigationItem(label: 'Inicio', icon: Icons.dashboard),
-                      AppNavigationItem(
-                        label: 'Historias',
-                        icon: Icons.library_books,
-                      ),
-                      AppNavigationItem(label: 'Personas', icon: Icons.people),
-                      AppNavigationItem(
-                        label: 'Suscriptores',
-                        icon: Icons.email,
-                      ),
-                      AppNavigationItem(label: 'Ajustes', icon: Icons.settings),
-                    ];
-                    final isCompactNav = constraints.maxWidth < 840;
+        return Stack(
+          children: [
+            PopScope(
+              canPop: !_hasChanges,
+              onPopInvoked: (didPop) {
+                if (!didPop && _hasChanges) {
+                  _showDiscardChangesDialog();
+                }
+              },
+              child: _isLoading
+                  ? const Scaffold(
+                      body: Center(child: CircularProgressIndicator()),
+                    )
+                  : Scaffold(
+                      backgroundColor: Theme.of(context).colorScheme.surface,
+                      body: SafeArea(
+                        bottom: false,
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            final tabContent = _buildActiveTabContent();
+                            const List<AppNavigationItem> navItems = [
+                              AppNavigationItem(
+                                  label: 'Inicio', icon: Icons.dashboard),
+                              AppNavigationItem(
+                                label: 'Historias',
+                                icon: Icons.library_books,
+                              ),
+                              AppNavigationItem(
+                                  label: 'Personas', icon: Icons.people),
+                              AppNavigationItem(
+                                label: 'Suscriptores',
+                                icon: Icons.email,
+                              ),
+                              AppNavigationItem(
+                                  label: 'Ajustes', icon: Icons.settings),
+                            ];
+                            final isCompactNav =
+                                constraints.maxWidth < 840;
 
-                    List<Widget> buildEditorSlivers(double extraBottomPadding) {
-                      final slivers = <Widget>[
-                        SliverPadding(
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          sliver: SliverToBoxAdapter(
-                            child: _EditorHeader(
-                              controller: _tabController,
-                              isNewStory: widget.storyId == null,
-                              photosTabKey: _photosTabKey,
-                              datesTabKey: _datesTabKey,
-                              tagsTabKey: _tagsTabKey,
-                            ),
-                          ),
-                        ),
-                        const SliverToBoxAdapter(
-                          child: SizedBox(height: 12),
-                        ),
-                        SliverPadding(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: isCompactNav ? 12 : 24,
-                          ),
-                          sliver: SliverToBoxAdapter(child: tabContent),
-                        ),
-                      ];
+                            List<Widget> buildEditorSlivers(
+                                double extraBottomPadding) {
+                              final slivers = <Widget>[
+                                SliverPadding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12),
+                                  sliver: SliverToBoxAdapter(
+                                    child: _EditorHeader(
+                                      controller: _tabController,
+                                      isNewStory: widget.storyId == null,
+                                      photosTabKey: _photosTabKey,
+                                      datesTabKey: _datesTabKey,
+                                      tagsTabKey: _tagsTabKey,
+                                      onWalkthroughAdvance:
+                                          _handleWalkthroughAdvanceRequest,
+                                    ),
+                                  ),
+                                ),
+                                const SliverToBoxAdapter(
+                                  child: SizedBox(height: 12),
+                                ),
+                                SliverPadding(
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: isCompactNav ? 12 : 24,
+                                  ),
+                                  sliver:
+                                      SliverToBoxAdapter(child: tabContent),
+                                ),
+                              ];
 
-                      if (extraBottomPadding > 0) {
-                        slivers.add(
-                          SliverToBoxAdapter(
-                            child: SizedBox(height: extraBottomPadding),
-                          ),
-                        );
-                      }
+                              if (extraBottomPadding > 0) {
+                                slivers.add(
+                                  SliverToBoxAdapter(
+                                    child:
+                                        SizedBox(height: extraBottomPadding),
+                                  ),
+                                );
+                              }
 
-                      return slivers;
-                    }
+                              return slivers;
+                            }
 
-                    Widget buildScrollableBody(
-                        {double extraBottomPadding = 0}) {
-                      final scrollView = CustomScrollView(
-                        controller: _editorScrollController,
-                        physics: const ClampingScrollPhysics(),
-                        slivers: buildEditorSlivers(extraBottomPadding),
-                      );
+                            Widget buildScrollableBody(
+                                {double extraBottomPadding = 0}) {
+                              final scrollView = CustomScrollView(
+                                controller: _editorScrollController,
+                                physics: const ClampingScrollPhysics(),
+                                slivers:
+                                    buildEditorSlivers(extraBottomPadding),
+                              );
 
-                      final decoratedScrollView = isCompactNav
-                          ? scrollView
-                          : Scrollbar(
-                              controller: _editorScrollController,
-                              child: scrollView,
+                              final decoratedScrollView = isCompactNav
+                                  ? scrollView
+                                  : Scrollbar(
+                                      controller: _editorScrollController,
+                                      child: scrollView,
+                                    );
+
+                              return NotificationListener<ScrollNotification>(
+                                onNotification: _handleScrollNotification,
+                                child: decoratedScrollView,
+                              );
+                            }
+
+                            return Column(
+                              children: [
+                                AppTopNavigationBar(
+                                  items: navItems,
+                                  currentIndex: 1,
+                                  isCompact: isCompactNav,
+                                  isMenuOpen: _isTopMenuOpen,
+                                  isScrolled: _isTopBarElevated,
+                                  onItemSelected: _handleTopNavSelection,
+                                  onCreateStory: _handleTopNavCreateStory,
+                                  onToggleMenu: _toggleTopMenu,
+                                ),
+                                const SizedBox(height: 8),
+                                Expanded(
+                                  child: buildScrollableBody(
+                                    extraBottomPadding:
+                                        isCompactNav ? 16 : 0,
+                                  ),
+                                ),
+                                if (isCompactNav)
+                                  _buildBottomBarShell(
+                                    maxWidth: constraints.maxWidth,
+                                    isCompactNav: true,
+                                  ),
+                              ],
                             );
-
-                      return NotificationListener<ScrollNotification>(
-                        onNotification: _handleScrollNotification,
-                        child: decoratedScrollView,
-                      );
-                    }
-
-                    return Column(
-                      children: [
-                        AppTopNavigationBar(
-                          items: navItems,
-                          currentIndex: 1,
-                          isCompact: isCompactNav,
-                          isMenuOpen: _isTopMenuOpen,
-                          isScrolled: _isTopBarElevated,
-                          onItemSelected: _handleTopNavSelection,
-                          onCreateStory: _handleTopNavCreateStory,
-                          onToggleMenu: _toggleTopMenu,
+                          },
                         ),
-                        const SizedBox(height: 8),
-                        Expanded(
-                          child: buildScrollableBody(
-                            extraBottomPadding: isCompactNav ? 16 : 0,
-                          ),
-                        ),
-                        if (isCompactNav)
-                          _buildBottomBarShell(
+                      ),
+                      bottomNavigationBar: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final isCompactNav =
+                              constraints.maxWidth < 840;
+                          if (isCompactNav) {
+                            return const SizedBox.shrink();
+                          }
+
+                          return _buildBottomBarShell(
                             maxWidth: constraints.maxWidth,
-                            isCompactNav: true,
-                          ),
-                      ],
-                    );
-                  },
+                            isCompactNav: false,
+                          );
+                        },
+                      ),
+                    ),
+            ),
+            if (_isWalkthroughOverlayVisible)
+              Positioned.fill(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: _handleOverlayTap,
+                  child: Container(
+                    color: Colors.black.withValues(alpha: 0.04),
+                  ),
                 ),
               ),
-              bottomNavigationBar: LayoutBuilder(
-                builder: (context, constraints) {
-                  final isCompactNav = constraints.maxWidth < 840;
-                  if (isCompactNav) {
-                    return const SizedBox.shrink();
-                  }
-
-                  return _buildBottomBarShell(
-                    maxWidth: constraints.maxWidth,
-                    isCompactNav: false,
-                  );
-                },
-              ),
-            ),
+          ],
         );
       },
     );
@@ -2483,6 +2827,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
             microphoneButtonKey: _microphoneButtonKey,
             saveButtonKey: _saveButtonKey,
             publishButtonKey: _publishButtonKey,
+            onWalkthroughAdvance: _handleWalkthroughAdvanceRequest,
           ),
         ),
       ),
@@ -2783,9 +3128,10 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                 overlayColor: Colors.black,
                 overlayOpacity: 0.60,
                 disableDefaultTargetGestures: true,
-                onTargetClick: () => _handleContentFieldClick(context),
-                onToolTipClick: () => _handleContentFieldClick(context),
-                onBarrierClick: () => ShowCaseWidget.of(context).next(),
+                onTargetClick: () => unawaited(_handleContentFieldClick()),
+                onToolTipClick: () => unawaited(_handleContentFieldClick()),
+                onBarrierClick: () =>
+                    unawaited(_handleWalkthroughAdvanceRequest()),
                 child: Container(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(isCompact ? 20 : 24),
@@ -2946,9 +3292,12 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                     overlayColor: Colors.black,
                     overlayOpacity: 0.60,
                     disableDefaultTargetGestures: true,
-                    onTargetClick: () => ShowCaseWidget.of(context).next(),
-                    onToolTipClick: () => ShowCaseWidget.of(context).next(),
-                    onBarrierClick: () => ShowCaseWidget.of(context).next(),
+                    onTargetClick: () =>
+                        unawaited(_handleWalkthroughAdvanceRequest()),
+                    onToolTipClick: () =>
+                        unawaited(_handleWalkthroughAdvanceRequest()),
+                    onBarrierClick: () =>
+                        unawaited(_handleWalkthroughAdvanceRequest()),
                     child: buildActionButton(
                       isCompact: isCompact,
                       onPressed: _isGhostWriterProcessing
@@ -2991,9 +3340,12 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                     overlayColor: Colors.black,
                     overlayOpacity: 0.60,
                     disableDefaultTargetGestures: true,
-                    onTargetClick: () => ShowCaseWidget.of(context).next(),
-                    onToolTipClick: () => ShowCaseWidget.of(context).next(),
-                    onBarrierClick: () => ShowCaseWidget.of(context).next(),
+                    onTargetClick: () =>
+                        unawaited(_handleWalkthroughAdvanceRequest()),
+                    onToolTipClick: () =>
+                        unawaited(_handleWalkthroughAdvanceRequest()),
+                    onBarrierClick: () =>
+                        unawaited(_handleWalkthroughAdvanceRequest()),
                     child: buildActionButton(
                       isCompact: isCompact,
                       onPressed: () {
@@ -9596,6 +9948,7 @@ class _EditorHeader extends StatelessWidget {
   const _EditorHeader({
     required this.controller,
     required this.isNewStory,
+    required this.onWalkthroughAdvance,
     this.photosTabKey,
     this.datesTabKey,
     this.tagsTabKey,
@@ -9603,6 +9956,7 @@ class _EditorHeader extends StatelessWidget {
 
   final TabController controller;
   final bool isNewStory;
+  final Future<void> Function() onWalkthroughAdvance;
   final GlobalKey? photosTabKey;
   final GlobalKey? datesTabKey;
   final GlobalKey? tagsTabKey;
@@ -9674,6 +10028,7 @@ class _EditorHeader extends StatelessWidget {
               photosTabKey: photosTabKey,
               datesTabKey: datesTabKey,
               tagsTabKey: tagsTabKey,
+              onWalkthroughAdvance: onWalkthroughAdvance,
             ),
           ],
         ),
@@ -9686,6 +10041,7 @@ class _EditorSegmentedControl extends StatelessWidget {
   const _EditorSegmentedControl({
     required this.controller,
     required this.theme,
+    required this.onWalkthroughAdvance,
     this.photosTabKey,
     this.datesTabKey,
     this.tagsTabKey,
@@ -9693,6 +10049,7 @@ class _EditorSegmentedControl extends StatelessWidget {
 
   final TabController controller;
   final ThemeData theme;
+  final Future<void> Function() onWalkthroughAdvance;
   final GlobalKey? photosTabKey;
   final GlobalKey? datesTabKey;
   final GlobalKey? tagsTabKey;
@@ -9752,9 +10109,12 @@ class _EditorSegmentedControl extends StatelessWidget {
               overlayColor: Colors.black,
               overlayOpacity: 0.60,
               disableDefaultTargetGestures: true,
-              onTargetClick: () => ShowCaseWidget.of(context).next(),
-              onToolTipClick: () => ShowCaseWidget.of(context).next(),
-              onBarrierClick: () => ShowCaseWidget.of(context).next(),
+              onTargetClick: () =>
+                  unawaited(onWalkthroughAdvance()),
+              onToolTipClick: () =>
+                  unawaited(onWalkthroughAdvance()),
+              onBarrierClick: () =>
+                  unawaited(onWalkthroughAdvance()),
               child: const Tab(text: 'Fotos'),
             )
           else
@@ -9776,9 +10136,12 @@ class _EditorSegmentedControl extends StatelessWidget {
               overlayColor: Colors.black,
               overlayOpacity: 0.60,
               disableDefaultTargetGestures: true,
-              onTargetClick: () => ShowCaseWidget.of(context).next(),
-              onToolTipClick: () => ShowCaseWidget.of(context).next(),
-              onBarrierClick: () => ShowCaseWidget.of(context).next(),
+              onTargetClick: () =>
+                  unawaited(onWalkthroughAdvance()),
+              onToolTipClick: () =>
+                  unawaited(onWalkthroughAdvance()),
+              onBarrierClick: () =>
+                  unawaited(onWalkthroughAdvance()),
               child: const Tab(text: 'Fechas'),
             )
           else
@@ -9800,9 +10163,12 @@ class _EditorSegmentedControl extends StatelessWidget {
               overlayColor: Colors.black,
               overlayOpacity: 0.60,
               disableDefaultTargetGestures: true,
-              onTargetClick: () => ShowCaseWidget.of(context).next(),
-              onToolTipClick: () => ShowCaseWidget.of(context).next(),
-              onBarrierClick: () => ShowCaseWidget.of(context).next(),
+              onTargetClick: () =>
+                  unawaited(onWalkthroughAdvance()),
+              onToolTipClick: () =>
+                  unawaited(onWalkthroughAdvance()),
+              onBarrierClick: () =>
+                  unawaited(onWalkthroughAdvance()),
               child: const Tab(text: 'Etiquetas'),
             )
           else
@@ -9823,6 +10189,7 @@ class _EditorBottomBar extends StatelessWidget {
     required this.canPublish,
     required this.isPublished,
     required this.hasChanges,
+    required this.onWalkthroughAdvance,
     this.microphoneButtonKey,
     this.saveButtonKey,
     this.publishButtonKey,
@@ -9836,6 +10203,7 @@ class _EditorBottomBar extends StatelessWidget {
   final bool canPublish;
   final bool isPublished;
   final bool hasChanges;
+  final Future<void> Function() onWalkthroughAdvance;
   final GlobalKey? microphoneButtonKey;
   final GlobalKey? saveButtonKey;
   final GlobalKey? publishButtonKey;
@@ -9905,9 +10273,12 @@ class _EditorBottomBar extends StatelessWidget {
                 overlayColor: Colors.black,
                 overlayOpacity: 0.60,
                 disableDefaultTargetGestures: true,
-                onTargetClick: () => ShowCaseWidget.of(context).next(),
-                onToolTipClick: () => ShowCaseWidget.of(context).next(),
-                onBarrierClick: () => ShowCaseWidget.of(context).next(),
+                onTargetClick: () =>
+                    unawaited(onWalkthroughAdvance()),
+                onToolTipClick: () =>
+                    unawaited(onWalkthroughAdvance()),
+                onBarrierClick: () =>
+                    unawaited(onWalkthroughAdvance()),
                 child: button,
               );
             }
@@ -9998,9 +10369,12 @@ class _EditorBottomBar extends StatelessWidget {
                 overlayColor: Colors.black,
                 overlayOpacity: 0.60,
                 disableDefaultTargetGestures: true,
-                onTargetClick: () => ShowCaseWidget.of(context).next(),
-                onToolTipClick: () => ShowCaseWidget.of(context).next(),
-                onBarrierClick: () => ShowCaseWidget.of(context).next(),
+                onTargetClick: () =>
+                    unawaited(onWalkthroughAdvance()),
+                onToolTipClick: () =>
+                    unawaited(onWalkthroughAdvance()),
+                onBarrierClick: () =>
+                    unawaited(onWalkthroughAdvance()),
                 child: wrappedButton,
               );
             }
@@ -10098,9 +10472,12 @@ class _EditorBottomBar extends StatelessWidget {
                 overlayColor: Colors.black,
                 overlayOpacity: 0.60,
                 disableDefaultTargetGestures: true,
-                onTargetClick: () => ShowCaseWidget.of(context).next(),
-                onToolTipClick: () => ShowCaseWidget.of(context).next(),
-                onBarrierClick: () => ShowCaseWidget.of(context).next(),
+                onTargetClick: () =>
+                    unawaited(onWalkthroughAdvance()),
+                onToolTipClick: () =>
+                    unawaited(onWalkthroughAdvance()),
+                onBarrierClick: () =>
+                    unawaited(onWalkthroughAdvance()),
                 child: wrappedButton,
               );
             }

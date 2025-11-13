@@ -43,6 +43,7 @@ class _DashboardPageState extends State<DashboardPage> {
   final List<GlobalKey> _walkthroughKeys = [];
   bool _isAdvancingWalkthrough = false;
   DateTime? _lastWalkthroughTap;
+  int? _pendingWalkthroughStepIndex;
 
   static const _walkthroughTapCooldown = Duration(milliseconds: 400);
 
@@ -61,6 +62,8 @@ class _DashboardPageState extends State<DashboardPage> {
     DashboardWalkthroughController.registerStepStarted(
         _handleShowcaseStepStarted);
     DashboardWalkthroughController.registerFinished(_handleShowcaseFinished);
+    DashboardWalkthroughController.registerStart(
+        _handleWalkthroughStartRequest);
     _loadDashboardData();
   }
 
@@ -70,8 +73,25 @@ class _DashboardPageState extends State<DashboardPage> {
     DashboardWalkthroughController.unregisterStepStarted(
         _handleShowcaseStepStarted);
     DashboardWalkthroughController.unregisterFinished(_handleShowcaseFinished);
+    DashboardWalkthroughController.unregisterStart(
+        _handleWalkthroughStartRequest);
+    DashboardWalkthroughController.notifyBlockingChanged(false);
     _scrollController.dispose();
     super.dispose();
+  }
+
+  void _handleWalkthroughStartRequest() {
+    if (!_shouldShowWalkthrough || _isWalkthroughActive) {
+      return;
+    }
+
+    _startWalkthrough();
+  }
+
+  void _updateWalkthroughBlocking() {
+    DashboardWalkthroughController.notifyBlockingChanged(
+      _shouldShowWalkthrough || _isWalkthroughActive,
+    );
   }
 
   List<String> _calculateSuggestedTopics(List<StoryTag> allTags) {
@@ -195,6 +215,7 @@ class _DashboardPageState extends State<DashboardPage> {
           _shouldShowWalkthrough = shouldShowWalkthrough;
         });
 
+        _updateWalkthroughBlocking();
         _checkAndShowWalkthrough();
       }
     } catch (e) {
@@ -243,6 +264,12 @@ class _DashboardPageState extends State<DashboardPage> {
     steps.add(_WalkthroughStep.bookProgress);
 
     if (steps.isEmpty) {
+      if (_shouldShowWalkthrough) {
+        setState(() {
+          _shouldShowWalkthrough = false;
+        });
+        _updateWalkthroughBlocking();
+      }
       return;
     }
 
@@ -271,6 +298,7 @@ class _DashboardPageState extends State<DashboardPage> {
       setState(() {
         _isWalkthroughActive = true;
       });
+      _updateWalkthroughBlocking();
     }
 
     unawaited(() async {
@@ -333,20 +361,28 @@ class _DashboardPageState extends State<DashboardPage> {
     unawaited(() async {
       try {
         if (nextIndex >= _walkthroughSteps.length) {
+          _pendingWalkthroughStepIndex = null;
           await _finishWalkthrough();
           return;
         }
 
         final nextStep = _walkthroughSteps[nextIndex];
+        _pendingWalkthroughStepIndex = nextIndex;
         await _prepareForStep(nextStep);
 
         if (!mounted || !_isWalkthroughActive) {
+          _pendingWalkthroughStepIndex = null;
           return;
         }
 
         ShowCaseWidget.of(context).next();
-      } finally {
+      } catch (_) {
+        _pendingWalkthroughStepIndex = null;
         _isAdvancingWalkthrough = false;
+      } finally {
+        if (_pendingWalkthroughStepIndex == null || !_isWalkthroughActive) {
+          _isAdvancingWalkthrough = false;
+        }
       }
     }());
   }
@@ -357,7 +393,18 @@ class _DashboardPageState extends State<DashboardPage> {
     }
 
     final index = _walkthroughKeys.indexOf(key);
-    if (index == -1 || index == _currentWalkthroughStepIndex) {
+    if (index == -1) {
+      return;
+    }
+
+    if (_pendingWalkthroughStepIndex != null &&
+        index == _pendingWalkthroughStepIndex) {
+      _pendingWalkthroughStepIndex = null;
+      _isAdvancingWalkthrough = false;
+      _lastWalkthroughTap = DateTime.now();
+    }
+
+    if (index == _currentWalkthroughStepIndex) {
       return;
     }
 
@@ -433,6 +480,9 @@ class _DashboardPageState extends State<DashboardPage> {
 
     _lastWalkthroughTap = null;
     _isAdvancingWalkthrough = false;
+    _pendingWalkthroughStepIndex = null;
+
+    _updateWalkthroughBlocking();
 
     await UserService.markHomeWalkthroughAsSeen();
   }
@@ -662,19 +712,7 @@ class _DashboardPageState extends State<DashboardPage> {
       ),
     );
 
-    return Stack(
-      children: [
-        scaffold,
-        if (_shouldShowWalkthrough)
-          Positioned.fill(
-            child: AbsorbPointer(
-              child: Container(
-                color: Colors.black.withOpacity(0.04),
-              ),
-            ),
-          ),
-      ],
-    );
+    return scaffold;
   }
 }
 

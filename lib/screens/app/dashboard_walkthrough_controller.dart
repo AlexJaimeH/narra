@@ -6,9 +6,28 @@ import 'package:flutter/widgets.dart';
 class DashboardWalkthroughController {
   DashboardWalkthroughController._();
 
+  static VoidCallback? _startCallback;
   static VoidCallback? _advanceCallback;
   static ValueChanged<GlobalKey>? _stepStartedCallback;
   static VoidCallback? _finishedCallback;
+  static ValueChanged<bool>? _blockingChangedCallback;
+
+  /// Registra un callback para iniciar el walkthrough cuando se solicite.
+  static void registerStart(VoidCallback callback) {
+    _startCallback = callback;
+  }
+
+  /// Elimina el callback registrado para iniciar el walkthrough.
+  static void unregisterStart(VoidCallback callback) {
+    if (identical(_startCallback, callback)) {
+      _startCallback = null;
+    }
+  }
+
+  /// Notifica que se solicitó iniciar el walkthrough.
+  static void triggerStart() {
+    _startCallback?.call();
+  }
 
   /// Registra el callback que debe ejecutarse cuando se solicite avanzar.
   static void registerAdvance(VoidCallback callback) {
@@ -59,5 +78,24 @@ class DashboardWalkthroughController {
   /// Notifica que el walkthrough terminó en el ShowCase principal.
   static void notifyFinished() {
     _finishedCallback?.call();
+  }
+
+  /// Registra un callback para escuchar cuando el overlay bloqueador debe
+  /// mostrarse u ocultarse.
+  static void registerBlockingChanged(ValueChanged<bool> callback) {
+    _blockingChangedCallback = callback;
+  }
+
+  /// Cancela el callback de cambio de overlay si coincide con el registrado.
+  static void unregisterBlockingChanged(ValueChanged<bool> callback) {
+    if (identical(_blockingChangedCallback, callback)) {
+      _blockingChangedCallback = null;
+    }
+  }
+
+  /// Notifica que el overlay bloqueador debe mostrarse (true) u ocultarse
+  /// (false).
+  static void notifyBlockingChanged(bool shouldBlock) {
+    _blockingChangedCallback?.call(shouldBlock);
   }
 }

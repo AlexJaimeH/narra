@@ -435,6 +435,8 @@ class _DashboardPageState extends State<DashboardPage> {
     _lastWalkthroughTap = null;
     _isAdvancingWalkthrough = false;
 
+    _lastWalkthroughTap = null;
+
     await UserService.markHomeWalkthroughAsSeen();
   }
 

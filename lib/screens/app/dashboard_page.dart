@@ -333,11 +333,6 @@ class _DashboardPageState extends State<DashboardPage> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isMobile = screenWidth < 600;
-
     return ShowCaseWidget(
       blurValue: 4,
       disableBarrierInteraction: false,
@@ -349,16 +344,24 @@ class _DashboardPageState extends State<DashboardPage> {
       builder: (showcaseContext) {
         _showcaseContext = showcaseContext;
         print('🟡 [Dashboard] ShowCaseWidget builder ejecutado, contexto guardado: $showcaseContext');
+        return _buildContent(showcaseContext);
+      },
+    );
+  }
 
-        // Check loading state inside builder
-        if (_isLoading) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
-        }
+  Widget _buildContent(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
-        return Scaffold(
-          body: RefreshIndicator(
+    // Check loading state
+    if (_isLoading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    return Scaffold(
+      body: RefreshIndicator(
         onRefresh: _loadDashboardData,
         child: SingleChildScrollView(
           controller: _scrollController,
@@ -570,8 +573,6 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
         ),
       ),
-        );
-      },
     );
   }
 }

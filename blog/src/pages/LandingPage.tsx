@@ -239,8 +239,8 @@ export const LandingPage: React.FC = () => {
             >
               <div className="rounded-3xl overflow-hidden shadow-2xl">
                 <img
-                  src="https://images.unsplash.com/photo-1434030216411-0b793f4b4173?q=80&w=1600&auto=format&fit=crop"
-                  alt="Persona mayor escribiendo sus memorias con calidez"
+                  src="https://images.unsplash.com/photo-1524504388940-b1c1722653e1?q=80&w=1600&auto=format&fit=crop"
+                  alt="Abuela latina abrazando a su nieta mientras escriben juntas"
                   className="w-full h-[500px] object-cover"
                 />
               </div>
@@ -356,28 +356,32 @@ export const LandingPage: React.FC = () => {
               icon="🎤"
               title="Habla o escribe"
               description="Cuenta tus recuerdos como prefieras: escribiendo o usando tu voz con transcripción automática"
-              image="https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?q=80&w=800&auto=format&fit=crop"
+              image="https://images.unsplash.com/photo-1525182008055-f88b95ff7980?q=80&w=800&auto=format&fit=crop"
+              imageAlt="Mujer mayor latina dictando sus memorias con el apoyo de un celular"
             />
             <HowStepCard
               number="2"
               icon="✨"
               title="La IA te ayuda"
               description="El Ghost Writer sugiere mejoras, organiza tus ideas y te hace preguntas para enriquecer tu historia"
-              image="https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?q=80&w=800&auto=format&fit=crop"
+              image="https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?q=80&w=800&auto=format&fit=crop"
+              imageAlt="Facilitadora joven ayudando a una autora mayor en su tablet"
             />
             <HowStepCard
               number="3"
               icon="📷"
               title="Añade recuerdos visuales"
               description="Sube fotos antiguas o recientes. Cada historia puede tener múltiples imágenes"
-              image="https://images.unsplash.com/photo-1533093818801-37e26055840c?q=80&w=800&auto=format&fit=crop"
+              image="https://images.unsplash.com/photo-1545239351-1141bd82e8a6?q=80&w=800&auto=format&fit=crop"
+              imageAlt="Manos familiares revisando un álbum de fotos antiguas"
             />
             <HowStepCard
               number="4"
               icon="📖"
               title="Comparte y publica"
               description="Tus suscriptores reciben cada historia. Al completar 20, recibes tu libro digital"
-              image="https://images.unsplash.com/photo-1531983412531-1f49a365ffed?q=80&w=800&auto=format&fit=crop"
+              image="https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?q=80&w=800&auto=format&fit=crop"
+              imageAlt="Familia latina reunida leyendo historias en una tableta"
             />
           </motion.div>
         </div>
@@ -433,8 +437,8 @@ export const LandingPage: React.FC = () => {
             >
               <div className="rounded-3xl overflow-hidden shadow-2xl">
                 <img
-                  src="https://images.unsplash.com/photo-1609220136736-443140cffec6?q=80&w=1600&auto=format&fit=crop"
-                  alt="Familia multigeneracional compartiendo historias juntos"
+                  src="https://images.unsplash.com/photo-1523580846011-d3a5bc25702b?q=80&w=1600&auto=format&fit=crop"
+                  alt="Familia multigeneracional latina sonriendo en casa mientras comparten recuerdos"
                   className="w-full h-[600px] object-cover"
                 />
               </div>
@@ -723,7 +727,7 @@ export const LandingPage: React.FC = () => {
       {/* Final CTA Section */}
       <section className="py-24 px-6 bg-white relative overflow-hidden">
         <div className="absolute inset-0 opacity-5" style={{
-          backgroundImage: 'url("https://images.unsplash.com/photo-1509909756405-ac7aa7e4a6b2?q=80&w=1600&auto=format&fit=crop")',
+          backgroundImage: 'url("https://images.unsplash.com/photo-1529158062015-cad636e69505?q=80&w=1600&auto=format&fit=crop")',
           backgroundSize: 'cover',
           backgroundPosition: 'center'
         }}></div>
@@ -825,8 +829,14 @@ export const LandingPage: React.FC = () => {
 
 // Helper Components
 
-const HowStepCard: React.FC<{ number: string; icon: string; title: string; description: string; image: string }> =
-  ({ number, icon, title, description, image }) => (
+const HowStepCard: React.FC<{
+  number: string;
+  icon: string;
+  title: string;
+  description: string;
+  image: string;
+  imageAlt?: string;
+}> = ({ number, icon, title, description, image, imageAlt }) => (
   <motion.div
     variants={scaleUp}
     whileHover={{ y: -10, boxShadow: '0 30px 60px rgba(0, 0, 0, 0.15)' }}
@@ -835,7 +845,7 @@ const HowStepCard: React.FC<{ number: string; icon: string; title: string; descr
     <div className="h-48 overflow-hidden">
       <motion.img
         src={image}
-        alt={title}
+        alt={imageAlt ?? title}
         className="w-full h-full object-cover"
         whileHover={{ scale: 1.1 }}
         transition={{ duration: 0.4 }}

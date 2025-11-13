@@ -435,8 +435,6 @@ class _DashboardPageState extends State<DashboardPage> {
     _lastWalkthroughTap = null;
     _isAdvancingWalkthrough = false;
 
-    _lastWalkthroughTap = null;
-
     await UserService.markHomeWalkthroughAsSeen();
   }
 
@@ -668,7 +666,7 @@ class _DashboardPageState extends State<DashboardPage> {
     return Stack(
       children: [
         scaffold,
-        if (_isWalkthroughActive)
+        if (_shouldShowWalkthrough)
           Positioned.fill(
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
@@ -680,7 +678,7 @@ class _DashboardPageState extends State<DashboardPage> {
               onHorizontalDragStart: (_) {},
               onHorizontalDragUpdate: (_) {},
               child: Container(
-                color: Colors.black.withOpacity(0.02),
+                color: Colors.black.withOpacity(0.04),
               ),
             ),
           ),

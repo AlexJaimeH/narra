@@ -13,6 +13,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'story_editor_page.dart';
 import 'app_navigation.dart';
 import 'subscribers_page.dart';
+import 'dashboard_walkthrough_controller.dart';
 
 enum _WalkthroughStep { menu, createStory, ghostWriter, bookProgress }
 
@@ -52,11 +53,13 @@ class _DashboardPageState extends State<DashboardPage> {
   @override
   void initState() {
     super.initState();
+    DashboardWalkthroughController.register(_handleWalkthroughTap);
     _loadDashboardData();
   }
 
   @override
   void dispose() {
+    DashboardWalkthroughController.unregister(_handleWalkthroughTap);
     _scrollController.dispose();
     super.dispose();
   }

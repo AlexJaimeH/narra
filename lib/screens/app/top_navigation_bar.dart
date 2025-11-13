@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:showcaseview/showcaseview.dart';
 
+import 'dashboard_walkthrough_controller.dart';
+
 class AppNavigationItem {
   const AppNavigationItem({
     required this.label,
@@ -23,6 +25,7 @@ class AppTopNavigationBar extends StatelessWidget {
     required this.onCreateStory,
     required this.isScrolled,
     this.menuKey,
+    this.walkthroughController,
   });
 
   final List<AppNavigationItem> items;
@@ -34,6 +37,7 @@ class AppTopNavigationBar extends StatelessWidget {
   final VoidCallback onCreateStory;
   final bool isScrolled;
   final GlobalKey? menuKey;
+  final DashboardWalkthroughController? walkthroughController;
 
   @override
   Widget build(BuildContext context) {
@@ -58,6 +62,7 @@ class AppTopNavigationBar extends StatelessWidget {
                   onToggleMenu: onToggleMenu,
                   onCreateStory: onCreateStory,
                   menuKey: menuKey,
+                  walkthroughController: walkthroughController,
                 )
               : _DesktopNav(
                   items: items,
@@ -65,6 +70,7 @@ class AppTopNavigationBar extends StatelessWidget {
                   onItemSelected: onItemSelected,
                   onCreateStory: onCreateStory,
                   menuKey: menuKey,
+                  walkthroughController: walkthroughController,
                 ),
         ),
       ),
@@ -79,6 +85,7 @@ class _DesktopNav extends StatelessWidget {
     required this.onItemSelected,
     required this.onCreateStory,
     this.menuKey,
+    this.walkthroughController,
   });
 
   final List<AppNavigationItem> items;
@@ -86,6 +93,7 @@ class _DesktopNav extends StatelessWidget {
   final ValueChanged<int> onItemSelected;
   final VoidCallback onCreateStory;
   final GlobalKey? menuKey;
+  final DashboardWalkthroughController? walkthroughController;
 
   @override
   Widget build(BuildContext context) {
@@ -133,9 +141,24 @@ class _DesktopNav extends StatelessWidget {
                 overlayColor: Colors.black,
                 overlayOpacity: 0.60,
                 disableDefaultTargetGestures: true,
-                onTargetClick: () => ShowCaseWidget.of(context).next(),
-                onToolTipClick: () => ShowCaseWidget.of(context).next(),
-                onBarrierClick: () => ShowCaseWidget.of(context).next(),
+                onTargetClick: () {
+                  final handled = walkthroughController?.handleTap() ?? false;
+                  if (!handled) {
+                    ShowCaseWidget.of(context).next();
+                  }
+                },
+                onToolTipClick: () {
+                  final handled = walkthroughController?.handleTap() ?? false;
+                  if (!handled) {
+                    ShowCaseWidget.of(context).next();
+                  }
+                },
+                onBarrierClick: () {
+                  final handled = walkthroughController?.handleTap() ?? false;
+                  if (!handled) {
+                    ShowCaseWidget.of(context).next();
+                  }
+                },
                 child: navRow,
               )
             : navRow,
@@ -154,6 +177,7 @@ class _MobileNav extends StatelessWidget {
     required this.onToggleMenu,
     required this.onCreateStory,
     this.menuKey,
+    this.walkthroughController,
   });
 
   final List<AppNavigationItem> items;
@@ -163,6 +187,7 @@ class _MobileNav extends StatelessWidget {
   final VoidCallback onToggleMenu;
   final VoidCallback onCreateStory;
   final GlobalKey? menuKey;
+  final DashboardWalkthroughController? walkthroughController;
 
   @override
   Widget build(BuildContext context) {
@@ -203,9 +228,27 @@ class _MobileNav extends StatelessWidget {
                     overlayColor: Colors.black,
                     overlayOpacity: 0.60,
                     disableDefaultTargetGestures: true,
-                    onTargetClick: () => ShowCaseWidget.of(context).next(),
-                    onToolTipClick: () => ShowCaseWidget.of(context).next(),
-                    onBarrierClick: () => ShowCaseWidget.of(context).next(),
+                    onTargetClick: () {
+                      final handled =
+                          walkthroughController?.handleTap() ?? false;
+                      if (!handled) {
+                        ShowCaseWidget.of(context).next();
+                      }
+                    },
+                    onToolTipClick: () {
+                      final handled =
+                          walkthroughController?.handleTap() ?? false;
+                      if (!handled) {
+                        ShowCaseWidget.of(context).next();
+                      }
+                    },
+                    onBarrierClick: () {
+                      final handled =
+                          walkthroughController?.handleTap() ?? false;
+                      if (!handled) {
+                        ShowCaseWidget.of(context).next();
+                      }
+                    },
                     child: menuButton,
                   )
                 : menuButton,
@@ -221,7 +264,8 @@ class _MobileNav extends StatelessWidget {
             padding: const EdgeInsets.only(top: 12),
             child: DecoratedBox(
               decoration: BoxDecoration(
-                color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                color:
+                    colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Column(

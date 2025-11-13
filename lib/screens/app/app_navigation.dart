@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:showcaseview/showcaseview.dart';
 import 'package:narra/supabase/supabase_config.dart';
 import 'dashboard_page.dart';
+import 'dashboard_walkthrough_controller.dart';
 import 'stories_list_page.dart';
 import 'subscribers_page.dart';
 import 'settings_page.dart';
@@ -22,6 +23,7 @@ class _AppNavigationState extends State<AppNavigation> {
   bool _isMenuOpen = false;
   bool _isScrolled = false;
   bool _isCheckingAuth = true;
+  bool _isWalkthroughBlocking = false;
 
   // Key para el showcase del menú
   final GlobalKey _menuKey = GlobalKey();
@@ -64,7 +66,31 @@ class _AppNavigationState extends State<AppNavigation> {
       ),
       growable: false,
     );
+    DashboardWalkthroughController.registerBlockingChanged(
+      _handleWalkthroughBlockingChanged,
+    );
     _checkAuthentication();
+  }
+
+  @override
+  void dispose() {
+    DashboardWalkthroughController.unregisterBlockingChanged(
+      _handleWalkthroughBlockingChanged,
+    );
+    super.dispose();
+  }
+
+  void _handleWalkthroughBlockingChanged(bool shouldBlock) {
+    if (!mounted) {
+      _isWalkthroughBlocking = shouldBlock;
+      return;
+    }
+
+    if (_isWalkthroughBlocking != shouldBlock) {
+      setState(() {
+        _isWalkthroughBlocking = shouldBlock;
+      });
+    }
   }
 
   void _checkAuthentication() async {
@@ -226,6 +252,8 @@ class _AppNavigationState extends State<AppNavigation> {
           disableBarrierInteraction: false,
           enableAutoScroll: false,
           onStart: (index, key) {
+            DashboardWalkthroughController.notifyStepStarted(key);
+
             if (key != _menuKey || key.currentContext == null) {
               return;
             }
@@ -241,64 +269,82 @@ class _AppNavigationState extends State<AppNavigation> {
               }
             });
           },
-          builder: (context) => Scaffold(
-            backgroundColor: Theme.of(context).colorScheme.surface,
-            body: SafeArea(
-              child: Column(
-                children: [
-                  AppTopNavigationBar(
-                    items: _items
-                        .map((item) => item.asNavigationItem)
-                        .toList(growable: false),
-                    currentIndex: _currentIndex,
-                    isCompact: isCompact,
-                    isMenuOpen: _isMenuOpen,
-                    isScrolled: _isScrolled,
-                    menuKey: _menuKey,
-                    onItemSelected: _handleNavigationTap,
-                    onCreateStory: _startNewStory,
-                    onToggleMenu: () {
-                      setState(() {
-                        _isMenuOpen = !_isMenuOpen;
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 4),
-                  Expanded(
-                    child: NotificationListener<ScrollNotification>(
-                      onNotification: (notification) {
-                        final didScroll = notification.metrics.pixels > 12;
-
-                        if (didScroll != _isScrolled) {
+          onFinish: DashboardWalkthroughController.notifyFinished,
+          builder: (context) => Stack(
+            children: [
+              Scaffold(
+                backgroundColor: Theme.of(context).colorScheme.surface,
+                body: SafeArea(
+                  child: Column(
+                    children: [
+                      AppTopNavigationBar(
+                        items: _items
+                            .map((item) => item.asNavigationItem)
+                            .toList(growable: false),
+                        currentIndex: _currentIndex,
+                        isCompact: isCompact,
+                        isMenuOpen: _isMenuOpen,
+                        isScrolled: _isScrolled,
+                        menuKey: _menuKey,
+                        onItemSelected: _handleNavigationTap,
+                        onCreateStory: _startNewStory,
+                        onToggleMenu: () {
                           setState(() {
-                            _isScrolled = didScroll;
+                            _isMenuOpen = !_isMenuOpen;
                           });
-                        }
+                        },
+                      ),
+                      const SizedBox(height: 4),
+                      Expanded(
+                        child: NotificationListener<ScrollNotification>(
+                          onNotification: (notification) {
+                            final didScroll = notification.metrics.pixels > 12;
 
-                        if (_isMenuOpen && didScroll) {
-                          setState(() {
-                            _isMenuOpen = false;
-                          });
-                        }
+                            if (didScroll != _isScrolled) {
+                              setState(() {
+                                _isScrolled = didScroll;
+                              });
+                            }
 
-                        return false;
-                      },
-                      child: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 250),
-                        switchInCurve: Curves.easeOut,
-                        switchOutCurve: Curves.easeIn,
-                        child: _PageContainer(
-                          key: ValueKey(
-                            '$_currentIndex-${_pageVersions[_currentIndex]}',
+                            if (_isMenuOpen && didScroll) {
+                              setState(() {
+                                _isMenuOpen = false;
+                              });
+                            }
+
+                            return false;
+                          },
+                          child: AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 250),
+                            switchInCurve: Curves.easeOut,
+                            switchOutCurve: Curves.easeIn,
+                            child: _PageContainer(
+                              key: ValueKey(
+                                '$_currentIndex-${_pageVersions[_currentIndex]}',
+                              ),
+                              child: _pages[_currentIndex],
+                            ),
                           ),
-                          child: _pages[_currentIndex],
                         ),
                       ),
+                    ],
+                  ),
+                ),
+              ),
+              if (_isWalkthroughBlocking)
+                Positioned.fill(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () {
+                      DashboardWalkthroughController.triggerStart();
+                      DashboardWalkthroughController.triggerAdvance();
+                    },
+                    child: Container(
+                      color: Colors.black.withValues(alpha: 0.04),
                     ),
                   ),
-                ],
-              ),
-            ),
+                ),
+            ],
           ),
         );
       },

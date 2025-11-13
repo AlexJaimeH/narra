@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:showcaseview/showcaseview.dart';
 
+import 'dashboard_walkthrough_controller.dart';
+
 class AppNavigationItem {
   const AppNavigationItem({
     required this.label,
@@ -133,9 +135,9 @@ class _DesktopNav extends StatelessWidget {
                 overlayColor: Colors.black,
                 overlayOpacity: 0.60,
                 disableDefaultTargetGestures: true,
-                onTargetClick: () => ShowCaseWidget.of(context).next(),
-                onToolTipClick: () => ShowCaseWidget.of(context).next(),
-                onBarrierClick: () => ShowCaseWidget.of(context).next(),
+                onTargetClick: DashboardWalkthroughController.triggerAdvance,
+                onToolTipClick: DashboardWalkthroughController.triggerAdvance,
+                onBarrierClick: DashboardWalkthroughController.triggerAdvance,
                 child: navRow,
               )
             : navRow,
@@ -203,9 +205,9 @@ class _MobileNav extends StatelessWidget {
                     overlayColor: Colors.black,
                     overlayOpacity: 0.60,
                     disableDefaultTargetGestures: true,
-                    onTargetClick: () => ShowCaseWidget.of(context).next(),
-                    onToolTipClick: () => ShowCaseWidget.of(context).next(),
-                    onBarrierClick: () => ShowCaseWidget.of(context).next(),
+                    onTargetClick: DashboardWalkthroughController.triggerAdvance,
+                    onToolTipClick: DashboardWalkthroughController.triggerAdvance,
+                    onBarrierClick: DashboardWalkthroughController.triggerAdvance,
                     child: menuButton,
                   )
                 : menuButton,

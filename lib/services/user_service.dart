@@ -143,12 +143,12 @@ class UserService {
 
   // Verificar si debe mostrar el walkthrough de inicio
   static Future<bool> shouldShowHomeWalkthrough() async {
-    // DEBUG MODE: Siempre mostrar walkthrough
-    return true;
-    // final settings = await getUserSettings();
-    // if (settings == null) return true;
-    // final hasSeenWalkthrough = settings['has_seen_home_walkthrough'] as bool? ?? false;
-    // return !hasSeenWalkthrough;
+    final settings = await getUserSettings();
+    if (settings == null) return true;
+
+    final hasSeenWalkthrough =
+        settings['has_seen_home_walkthrough'] as bool? ?? false;
+    return !hasSeenWalkthrough;
   }
 
   // Marcar que el usuario vio el walkthrough del editor

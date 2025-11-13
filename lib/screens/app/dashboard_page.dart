@@ -344,7 +344,6 @@ class _DashboardPageState extends State<DashboardPage> {
           return;
         }
 
-        _lastWalkthroughTap = null;
         ShowCaseWidget.of(context).next();
       } finally {
         _isAdvancingWalkthrough = false;
@@ -668,15 +667,7 @@ class _DashboardPageState extends State<DashboardPage> {
         scaffold,
         if (_shouldShowWalkthrough)
           Positioned.fill(
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: _handleWalkthroughTap,
-              onPanStart: (_) {},
-              onPanUpdate: (_) {},
-              onVerticalDragStart: (_) {},
-              onVerticalDragUpdate: (_) {},
-              onHorizontalDragStart: (_) {},
-              onHorizontalDragUpdate: (_) {},
+            child: AbsorbPointer(
               child: Container(
                 color: Colors.black.withOpacity(0.04),
               ),

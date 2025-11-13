@@ -217,6 +217,8 @@ class _AppNavigationState extends State<AppNavigation> {
         }
 
         return ShowCaseWidget(
+          blurValue: 4,
+          disableBarrierInteraction: false,
           onStart: (index, key) {
             // Hacer scroll al elemento cuando se muestre
             if (key.currentContext != null) {

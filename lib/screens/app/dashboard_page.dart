@@ -380,6 +380,9 @@ class _DashboardPageState extends State<DashboardPage> {
     } finally {
       _isAdvancingWalkthrough = false;
     }
+
+    if (!mounted) return;
+    ShowCaseWidget.of(context).next();
   }
 
   Future<void> _finishWalkthrough() async {

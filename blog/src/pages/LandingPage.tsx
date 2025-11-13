@@ -800,15 +800,15 @@ export const LandingPage: React.FC = () => {
               <a href="/app" className="text-gray-400 hover:text-white transition">
                 Iniciar sesión
               </a>
-              <button className="text-gray-400 hover:text-white transition">
+              <a href="/privacidad" className="text-gray-400 hover:text-white transition">
                 Privacidad
-              </button>
-              <button className="text-gray-400 hover:text-white transition">
+              </a>
+              <a href="/terminos" className="text-gray-400 hover:text-white transition">
                 Términos
-              </button>
-              <button className="text-gray-400 hover:text-white transition">
+              </a>
+              <a href="/contacto" className="text-gray-400 hover:text-white transition">
                 Contacto
-              </button>
+              </a>
             </div>
           </div>
 

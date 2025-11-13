@@ -13,6 +13,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'story_editor_page.dart';
 import 'app_navigation.dart';
 import 'subscribers_page.dart';
+import 'dashboard_walkthrough_controller.dart';
 
 enum _WalkthroughStep { menu, createStory, ghostWriter, bookProgress }
 
@@ -39,7 +40,12 @@ class _DashboardPageState extends State<DashboardPage> {
   bool _shouldShowWalkthrough = false;
   final List<_WalkthroughStep> _walkthroughSteps = [];
   int _currentWalkthroughStepIndex = 0;
+  final List<GlobalKey> _walkthroughKeys = [];
   bool _isAdvancingWalkthrough = false;
+  DateTime? _lastWalkthroughTap;
+  int? _pendingWalkthroughStepIndex;
+
+  static const _walkthroughTapCooldown = Duration(milliseconds: 400);
 
   // Keys para el walkthrough
   final GlobalKey _createStoryKey = GlobalKey();
@@ -52,13 +58,40 @@ class _DashboardPageState extends State<DashboardPage> {
   @override
   void initState() {
     super.initState();
+    DashboardWalkthroughController.registerAdvance(_handleWalkthroughTap);
+    DashboardWalkthroughController.registerStepStarted(
+        _handleShowcaseStepStarted);
+    DashboardWalkthroughController.registerFinished(_handleShowcaseFinished);
+    DashboardWalkthroughController.registerStart(
+        _handleWalkthroughStartRequest);
     _loadDashboardData();
   }
 
   @override
   void dispose() {
+    DashboardWalkthroughController.unregisterAdvance(_handleWalkthroughTap);
+    DashboardWalkthroughController.unregisterStepStarted(
+        _handleShowcaseStepStarted);
+    DashboardWalkthroughController.unregisterFinished(_handleShowcaseFinished);
+    DashboardWalkthroughController.unregisterStart(
+        _handleWalkthroughStartRequest);
+    DashboardWalkthroughController.notifyBlockingChanged(false);
     _scrollController.dispose();
     super.dispose();
+  }
+
+  void _handleWalkthroughStartRequest() {
+    if (!_shouldShowWalkthrough || _isWalkthroughActive) {
+      return;
+    }
+
+    _startWalkthrough();
+  }
+
+  void _updateWalkthroughBlocking() {
+    DashboardWalkthroughController.notifyBlockingChanged(
+      _shouldShowWalkthrough || _isWalkthroughActive,
+    );
   }
 
   List<String> _calculateSuggestedTopics(List<StoryTag> allTags) {
@@ -182,6 +215,7 @@ class _DashboardPageState extends State<DashboardPage> {
           _shouldShowWalkthrough = shouldShowWalkthrough;
         });
 
+        _updateWalkthroughBlocking();
         _checkAndShowWalkthrough();
       }
     } catch (e) {
@@ -230,6 +264,12 @@ class _DashboardPageState extends State<DashboardPage> {
     steps.add(_WalkthroughStep.bookProgress);
 
     if (steps.isEmpty) {
+      if (_shouldShowWalkthrough) {
+        setState(() {
+          _shouldShowWalkthrough = false;
+        });
+        _updateWalkthroughBlocking();
+      }
       return;
     }
 
@@ -248,19 +288,35 @@ class _DashboardPageState extends State<DashboardPage> {
     _walkthroughSteps
       ..clear()
       ..addAll(steps);
+    _walkthroughKeys
+      ..clear()
+      ..addAll(steps.map(_keyForStep));
     _currentWalkthroughStepIndex = 0;
+    _lastWalkthroughTap = null;
 
     if (!_isWalkthroughActive) {
       setState(() {
         _isWalkthroughActive = true;
       });
+      _updateWalkthroughBlocking();
     }
 
-    unawaited(_prepareForStep(_walkthroughSteps.first).then((_) {
-      if (mounted && _isWalkthroughActive) {
-        _showCurrentWalkthroughStep();
+    unawaited(() async {
+      await _prepareForStep(_walkthroughSteps.first);
+
+      if (!mounted || !_isWalkthroughActive) {
+        return;
       }
-    }));
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_isWalkthroughActive || _walkthroughKeys.isEmpty) {
+          return;
+        }
+
+        final showcase = ShowCaseWidget.of(context);
+        showcase.startShowCase(List<GlobalKey>.from(_walkthroughKeys));
+      });
+    }());
   }
 
   Future<void> _scrollToWidget(GlobalKey key) async {
@@ -287,7 +343,82 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   void _handleWalkthroughTap() {
-    unawaited(_advanceWalkthrough());
+    if (!_isWalkthroughActive || _isAdvancingWalkthrough) {
+      return;
+    }
+
+    final now = DateTime.now();
+    if (_lastWalkthroughTap != null &&
+        now.difference(_lastWalkthroughTap!) < _walkthroughTapCooldown) {
+      return;
+    }
+
+    _lastWalkthroughTap = now;
+
+    final nextIndex = _currentWalkthroughStepIndex + 1;
+    _isAdvancingWalkthrough = true;
+
+    unawaited(() async {
+      try {
+        if (nextIndex >= _walkthroughSteps.length) {
+          _pendingWalkthroughStepIndex = null;
+          await _finishWalkthrough();
+          return;
+        }
+
+        final nextStep = _walkthroughSteps[nextIndex];
+        _pendingWalkthroughStepIndex = nextIndex;
+        await _prepareForStep(nextStep);
+
+        if (!mounted || !_isWalkthroughActive) {
+          _pendingWalkthroughStepIndex = null;
+          return;
+        }
+
+        ShowCaseWidget.of(context).next();
+      } catch (_) {
+        _pendingWalkthroughStepIndex = null;
+        _isAdvancingWalkthrough = false;
+      } finally {
+        if (_pendingWalkthroughStepIndex == null || !_isWalkthroughActive) {
+          _isAdvancingWalkthrough = false;
+        }
+      }
+    }());
+  }
+
+  void _handleShowcaseStepStarted(GlobalKey key) {
+    if (!_isWalkthroughActive) {
+      return;
+    }
+
+    final index = _walkthroughKeys.indexOf(key);
+    if (index == -1) {
+      return;
+    }
+
+    if (_pendingWalkthroughStepIndex != null &&
+        index == _pendingWalkthroughStepIndex) {
+      _pendingWalkthroughStepIndex = null;
+      _isAdvancingWalkthrough = false;
+      _lastWalkthroughTap = DateTime.now();
+    }
+
+    if (index == _currentWalkthroughStepIndex) {
+      return;
+    }
+
+    setState(() {
+      _currentWalkthroughStepIndex = index;
+    });
+  }
+
+  void _handleShowcaseFinished() {
+    if (!_isWalkthroughActive) {
+      return;
+    }
+
+    unawaited(_finishWalkthrough());
   }
 
   GlobalKey _keyForStep(_WalkthroughStep step) {
@@ -328,84 +459,30 @@ class _DashboardPageState extends State<DashboardPage> {
     }
   }
 
-  void _showCurrentWalkthroughStep() {
-    if (!mounted || _walkthroughSteps.isEmpty) return;
-
-    final key = _keyForStep(_walkthroughSteps[_currentWalkthroughStepIndex]);
-    if (key.currentContext == null) {
-      return;
-    }
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_isWalkthroughActive) {
-        return;
-      }
-
-      final showcase = ShowCaseWidget.of(context);
-      if (showcase == null) {
-        return;
-      }
-
-      showcase.startShowCase([key]);
-    });
-  }
-
-  Future<void> _advanceWalkthrough() async {
-    if (!mounted || !_isWalkthroughActive || _walkthroughSteps.isEmpty) {
-      return;
-    }
-
-    if (_isAdvancingWalkthrough) {
-      return;
-    }
-
-    _isAdvancingWalkthrough = true;
-
-    try {
-      ShowCaseWidget.of(context).dismiss();
-      await Future.delayed(const Duration(milliseconds: 220));
-
-      final nextIndex = _currentWalkthroughStepIndex + 1;
-
-      if (nextIndex >= _walkthroughSteps.length) {
-        await _finishWalkthrough();
-        return;
-      }
-
-      final nextStep = _walkthroughSteps[nextIndex];
-      await _prepareForStep(nextStep);
-
-      if (!mounted || !_isWalkthroughActive) {
-        return;
-      }
-
-      setState(() {
-        _currentWalkthroughStepIndex = nextIndex;
-      });
-
-      await Future.delayed(const Duration(milliseconds: 120));
-
-      if (!mounted || !_isWalkthroughActive) {
-        return;
-      }
-
-      _showCurrentWalkthroughStep();
-    } finally {
-      _isAdvancingWalkthrough = false;
-    }
-  }
-
   Future<void> _finishWalkthrough() async {
-    if (!mounted) return;
+    if (!mounted || !_isWalkthroughActive) {
+      return;
+    }
 
     ShowCaseWidget.of(context).dismiss();
 
-    if (mounted) {
-      setState(() {
-        _isWalkthroughActive = false;
-        _shouldShowWalkthrough = false;
-      });
+    if (!mounted) {
+      return;
     }
+
+    setState(() {
+      _isWalkthroughActive = false;
+      _shouldShowWalkthrough = false;
+      _walkthroughSteps.clear();
+      _walkthroughKeys.clear();
+      _currentWalkthroughStepIndex = 0;
+    });
+
+    _lastWalkthroughTap = null;
+    _isAdvancingWalkthrough = false;
+    _pendingWalkthroughStepIndex = null;
+
+    _updateWalkthroughBlocking();
 
     await UserService.markHomeWalkthroughAsSeen();
   }
@@ -635,27 +712,7 @@ class _DashboardPageState extends State<DashboardPage> {
       ),
     );
 
-    return Stack(
-      children: [
-        scaffold,
-        if (_isWalkthroughActive)
-          Positioned.fill(
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: _handleWalkthroughTap,
-              onPanStart: (_) {},
-              onPanUpdate: (_) {},
-              onVerticalDragStart: (_) {},
-              onVerticalDragUpdate: (_) {},
-              onHorizontalDragStart: (_) {},
-              onHorizontalDragUpdate: (_) {},
-              child: Container(
-                color: Colors.black.withOpacity(0.02),
-              ),
-            ),
-          ),
-      ],
-    );
+    return scaffold;
   }
 }
 

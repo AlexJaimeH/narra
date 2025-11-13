@@ -229,22 +229,48 @@ class _DashboardPageState extends State<DashboardPage> {
 
     // Primero explicar el menú si está disponible
     if (widget.menuKey != null) {
-      keys.add(widget.menuKey!);
-      print('🟢 [Dashboard] Agregado menuKey');
+      print('🟢 [Dashboard] Verificando menuKey.currentContext: ${widget.menuKey!.currentContext}');
+      if (widget.menuKey!.currentContext == null) {
+        print('🔴 [Dashboard] menuKey NO TIENE CONTEXT - widget no renderizado!');
+      } else {
+        keys.add(widget.menuKey!);
+        print('🟢 [Dashboard] Agregado menuKey con context válido');
+      }
     }
 
-    keys.add(_createStoryKey);
-    print('🟢 [Dashboard] Agregado _createStoryKey');
+    print('🟢 [Dashboard] Verificando _createStoryKey.currentContext: ${_createStoryKey.currentContext}');
+    if (_createStoryKey.currentContext == null) {
+      print('🔴 [Dashboard] _createStoryKey NO TIENE CONTEXT - widget no renderizado!');
+    } else {
+      keys.add(_createStoryKey);
+      print('🟢 [Dashboard] Agregado _createStoryKey con context válido');
+    }
 
     if (_shouldShowGhostWriterIntro) {
-      keys.add(_ghostWriterKey);
-      print('🟢 [Dashboard] Agregado _ghostWriterKey');
+      print('🟢 [Dashboard] Verificando _ghostWriterKey.currentContext: ${_ghostWriterKey.currentContext}');
+      if (_ghostWriterKey.currentContext == null) {
+        print('🔴 [Dashboard] _ghostWriterKey NO TIENE CONTEXT - widget no renderizado!');
+      } else {
+        keys.add(_ghostWriterKey);
+        print('🟢 [Dashboard] Agregado _ghostWriterKey con context válido');
+      }
     }
 
-    keys.add(_bookProgressKey);
-    print('🟢 [Dashboard] Agregado _bookProgressKey');
+    print('🟢 [Dashboard] Verificando _bookProgressKey.currentContext: ${_bookProgressKey.currentContext}');
+    if (_bookProgressKey.currentContext == null) {
+      print('🔴 [Dashboard] _bookProgressKey NO TIENE CONTEXT - widget no renderizado!');
+    } else {
+      keys.add(_bookProgressKey);
+      print('🟢 [Dashboard] Agregado _bookProgressKey con context válido');
+    }
 
-    print('🟢 [Dashboard] Total keys: ${keys.length}');
+    print('🟢 [Dashboard] Total keys CON CONTEXT VÁLIDO: ${keys.length}');
+
+    if (keys.isEmpty) {
+      print('🔴 [Dashboard] NO HAY KEYS VÁLIDAS - abortando walkthrough');
+      return;
+    }
+
     print('🟢 [Dashboard] Llamando a ShowCaseWidget.of(_showcaseContext!).startShowCase(keys)');
 
     try {
@@ -254,8 +280,9 @@ class _DashboardPageState extends State<DashboardPage> {
       // Set walkthrough active AFTER starting showcase, without rebuild
       _isWalkthroughActive = true;
       print('🟢 [Dashboard] _isWalkthroughActive establecido a true (sin rebuild)');
-    } catch (e) {
+    } catch (e, stackTrace) {
       print('🔴 [Dashboard] Error en startShowCase: $e');
+      print('🔴 [Dashboard] StackTrace: $stackTrace');
     }
   }
 

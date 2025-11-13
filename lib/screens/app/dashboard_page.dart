@@ -1,5 +1,6 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:showcaseview/showcaseview.dart';
 import 'package:narra/api/narra_api.dart';
 import 'package:narra/repositories/user_repository.dart';
@@ -9,16 +10,27 @@ import 'package:narra/services/subscriber_service.dart';
 import 'package:narra/services/story_share_link_builder.dart';
 import 'package:narra/services/user_service.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'dart:math' as math;
 import 'story_editor_page.dart';
 import 'app_navigation.dart';
-import 'stories_list_page.dart';
 import 'subscribers_page.dart';
+import 'dashboard_walkthrough_controller.dart';
+
+enum _DashboardWalkthroughStep {
+  menu,
+  createStory,
+  ghostWriter,
+  bookProgress,
+}
 
 class DashboardPage extends StatefulWidget {
-  const DashboardPage({super.key, this.menuKey});
+  const DashboardPage({
+    super.key,
+    this.menuKey,
+    this.walkthroughController,
+  });
 
   final GlobalKey? menuKey;
+  final DashboardWalkthroughController? walkthroughController;
 
   @override
   State<DashboardPage> createState() => _DashboardPageState();
@@ -33,16 +45,17 @@ class _DashboardPageState extends State<DashboardPage> {
   Story? _lastPublishedStory;
   bool _isLoading = true;
   bool _shouldShowGhostWriterIntro = false;
-  bool _isWalkthroughActive = false;
   List<String> _cachedSuggestedTopics = [];
+  bool _isWalkthroughActive = false;
+  bool _shouldShowWalkthrough = false;
+  final List<_DashboardWalkthroughStep> _walkthroughSteps = [];
+  int _currentWalkthroughStepIndex = 0;
+  bool _isAdvancingWalkthrough = false;
 
   // Keys para el walkthrough
   final GlobalKey _createStoryKey = GlobalKey();
   final GlobalKey _ghostWriterKey = GlobalKey();
   final GlobalKey _bookProgressKey = GlobalKey();
-
-  // Contexto del ShowCaseWidget builder
-  BuildContext? _showcaseContext;
 
   // ScrollController para el walkthrough
   final ScrollController _scrollController = ScrollController();
@@ -55,6 +68,7 @@ class _DashboardPageState extends State<DashboardPage> {
 
   @override
   void dispose() {
+    widget.walkthroughController?.setTapHandler(null);
     _scrollController.dispose();
     super.dispose();
   }
@@ -142,18 +156,17 @@ class _DashboardPageState extends State<DashboardPage> {
       );
 
       // Get last published story
-      final publishedStories = allStories
-          .where((s) => s.isPublished)
-          .toList()
+      final publishedStories = allStories.where((s) => s.isPublished).toList()
         ..sort((a, b) => (b.publishedAt ?? b.updatedAt)
             .compareTo(a.publishedAt ?? a.updatedAt));
-      final lastPublished = publishedStories.isNotEmpty ? publishedStories.first : null;
+      final lastPublished =
+          publishedStories.isNotEmpty ? publishedStories.first : null;
 
       // Check if should show ghost writer intro
       final shouldShowIntro = await UserService.shouldShowGhostWriterIntro();
 
-      // DEBUG MODE: Siempre mostrar walkthrough
-      // final shouldShowWalkthrough = await UserService.shouldShowHomeWalkthrough();
+      final shouldShowWalkthrough =
+          await UserService.shouldShowHomeWalkthrough();
 
       if (mounted) {
         // Calculate suggested topics once to avoid random changes on rebuild
@@ -178,9 +191,9 @@ class _DashboardPageState extends State<DashboardPage> {
           _shouldShowGhostWriterIntro = shouldShowIntro;
           _cachedSuggestedTopics = suggestedTopics;
           _isLoading = false;
+          _shouldShowWalkthrough = shouldShowWalkthrough;
         });
 
-        // DEBUG MODE: Siempre mostrar walkthrough
         _checkAndShowWalkthrough();
       }
     } catch (e) {
@@ -194,39 +207,81 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Future<void> _checkAndShowWalkthrough() async {
-    // DEBUG MODE: Siempre mostrar walkthrough
+    if (!mounted) return;
+
+    if (!_shouldShowWalkthrough || _isWalkthroughActive) {
+      return;
+    }
+
+    await Future.delayed(const Duration(seconds: 1));
+
     if (!mounted) return;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _startWalkthrough();
+      if (mounted && _shouldShowWalkthrough && !_isWalkthroughActive) {
+        _startWalkthrough();
+      }
     });
   }
 
+  void _updateWalkthroughControllerBinding() {
+    widget.walkthroughController?.setTapHandler(
+      _isWalkthroughActive ? _handleWalkthroughTap : null,
+    );
+  }
+
   void _startWalkthrough() {
-    if (_showcaseContext == null) return;
+    if (!mounted) return;
 
-    setState(() => _isWalkthroughActive = true);
+    final steps = <_DashboardWalkthroughStep>[];
 
-    // RADICALLY SIMPLE: Just add keys, no validation
-    final keys = <GlobalKey>[];
-
-    // Add menu key if available
     if (widget.menuKey != null) {
-      keys.add(widget.menuKey!);
+      steps.add(_DashboardWalkthroughStep.menu);
     }
 
-    // Add create story key
-    keys.add(_createStoryKey);
+    steps.add(_DashboardWalkthroughStep.createStory);
 
-    // Add ghost writer key if intro is visible
     if (_shouldShowGhostWriterIntro) {
-      keys.add(_ghostWriterKey);
+      steps.add(_DashboardWalkthroughStep.ghostWriter);
     }
 
-    // Add book progress key
-    keys.add(_bookProgressKey);
+    steps.add(_DashboardWalkthroughStep.bookProgress);
 
-    ShowCaseWidget.of(_showcaseContext!).startShowCase(keys);
+    if (steps.isEmpty) {
+      return;
+    }
+
+    final allContextsReady = steps
+        .map(_keyForStep)
+        .every((stepKey) => stepKey.currentContext != null);
+
+    if (!allContextsReady) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _shouldShowWalkthrough) {
+          _startWalkthrough();
+        }
+      });
+      return;
+    }
+
+    _walkthroughSteps
+      ..clear()
+      ..addAll(steps);
+    _currentWalkthroughStepIndex = 0;
+
+    if (!_isWalkthroughActive) {
+      setState(() {
+        _isWalkthroughActive = true;
+      });
+    }
+
+    _updateWalkthroughControllerBinding();
+
+    unawaited(_prepareForStep(_walkthroughSteps.first).then((_) {
+      if (mounted && _isWalkthroughActive) {
+        _showCurrentWalkthroughStep();
+      }
+    }));
   }
 
   Future<void> _scrollToWidget(GlobalKey key) async {
@@ -237,58 +292,158 @@ class _DashboardPageState extends State<DashboardPage> {
       final position = box.localToGlobal(Offset.zero);
       final screenHeight = MediaQuery.of(context).size.height;
       // Calcular el offset para centrar el widget
-      final targetScroll = _scrollController.offset + position.dy - (screenHeight / 2) + (box.size.height / 2);
+      final targetScroll = _scrollController.offset +
+          position.dy -
+          (screenHeight / 2) +
+          (box.size.height / 2);
 
       await _scrollController.animateTo(
         targetScroll.clamp(0, _scrollController.position.maxScrollExtent),
-        duration: const Duration(milliseconds: 500),
+        duration: const Duration(milliseconds: 750),
         curve: Curves.easeInOut,
       );
 
-      // Pequeña pausa para que se vea el scroll
-      await Future.delayed(const Duration(milliseconds: 300));
+      await Future.delayed(const Duration(milliseconds: 450));
     }
   }
 
-  Future<void> _handleCreateStoryNext() async {
-    // Si hay ghost writer, hacer scroll a él
-    if (_shouldShowGhostWriterIntro) {
-      await _scrollToWidget(_ghostWriterKey);
-    } else {
-      // Si no hay ghost writer, hacer scroll directo al progreso del libro
-      await _scrollToWidget(_bookProgressKey);
-    }
+  void _handleWalkthroughTap() {
+    unawaited(_advanceWalkthrough());
+  }
 
-    if (_showcaseContext != null && mounted) {
-      ShowCaseWidget.of(_showcaseContext!).next();
+  GlobalKey _keyForStep(_DashboardWalkthroughStep step) {
+    switch (step) {
+      case _DashboardWalkthroughStep.menu:
+        return widget.menuKey!;
+      case _DashboardWalkthroughStep.createStory:
+        return _createStoryKey;
+      case _DashboardWalkthroughStep.ghostWriter:
+        return _ghostWriterKey;
+      case _DashboardWalkthroughStep.bookProgress:
+        return _bookProgressKey;
     }
   }
 
-  Future<void> _handleGhostWriterNext() async {
-    // Hacer scroll al progreso del libro
-    await _scrollToWidget(_bookProgressKey);
+  Future<void> _prepareForStep(_DashboardWalkthroughStep step) async {
+    if (!mounted) return;
 
-    if (_showcaseContext != null && mounted) {
-      ShowCaseWidget.of(_showcaseContext!).next();
+    switch (step) {
+      case _DashboardWalkthroughStep.menu:
+        if (_scrollController.hasClients) {
+          await _scrollController.animateTo(
+            0,
+            duration: const Duration(milliseconds: 400),
+            curve: Curves.easeOut,
+          );
+        }
+        break;
+      case _DashboardWalkthroughStep.createStory:
+        // El widget de bienvenida ya está visible tras el menú.
+        break;
+      case _DashboardWalkthroughStep.ghostWriter:
+        await _scrollToWidget(_ghostWriterKey);
+        break;
+      case _DashboardWalkthroughStep.bookProgress:
+        await _scrollToWidget(_bookProgressKey);
+        break;
     }
   }
 
+  void _showCurrentWalkthroughStep() {
+    if (!mounted || _walkthroughSteps.isEmpty) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_isWalkthroughActive) {
+        return;
+      }
+
+      final GlobalKey targetKey =
+          _keyForStep(_walkthroughSteps[_currentWalkthroughStepIndex]);
+
+      if (targetKey.currentContext == null) {
+        Future.delayed(const Duration(milliseconds: 60), () {
+          if (!mounted || !_isWalkthroughActive) {
+            return;
+          }
+
+          _showCurrentWalkthroughStep();
+        });
+        return;
+      }
+
+      final showcase = ShowCaseWidget.of(context);
+      if (showcase == null) {
+        return;
+      }
+
+      showcase.startShowCase([targetKey]);
+    });
+  }
+
+  Future<void> _advanceWalkthrough() async {
+    if (!mounted || !_isWalkthroughActive || _walkthroughSteps.isEmpty) {
+      return;
+    }
+
+    if (_isAdvancingWalkthrough) {
+      return;
+    }
+
+    _isAdvancingWalkthrough = true;
+
+    try {
+      ShowCaseWidget.of(context).dismiss();
+      await Future.delayed(const Duration(milliseconds: 220));
+
+      final nextIndex = _currentWalkthroughStepIndex + 1;
+
+      if (nextIndex >= _walkthroughSteps.length) {
+        await _finishWalkthrough();
+        return;
+      }
+
+      final nextStep = _walkthroughSteps[nextIndex];
+      await _prepareForStep(nextStep);
+
+      if (!mounted || !_isWalkthroughActive) {
+        return;
+      }
+
+      setState(() {
+        _currentWalkthroughStepIndex = nextIndex;
+      });
+
+      await Future.delayed(const Duration(milliseconds: 120));
+
+      if (!mounted || !_isWalkthroughActive) {
+        return;
+      }
+
+      _showCurrentWalkthroughStep();
+    } finally {
+      _isAdvancingWalkthrough = false;
+    }
+  }
+
+  Future<void> _finishWalkthrough() async {
+    if (!mounted) return;
+
+    ShowCaseWidget.of(context).dismiss();
+
+    if (mounted) {
+      setState(() {
+        _isWalkthroughActive = false;
+        _shouldShowWalkthrough = false;
+      });
+      _updateWalkthroughControllerBinding();
+    }
+
+    await UserService.markHomeWalkthroughAsSeen();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return ShowCaseWidget(
-      blurValue: 4,
-      disableBarrierInteraction: false,
-      onFinish: () {
-        setState(() => _isWalkthroughActive = false);
-        // DEBUG MODE: No marcar como visto para que siempre se muestre
-        // UserService.markHomeWalkthroughAsSeen();
-      },
-      builder: (showcaseContext) {
-        _showcaseContext = showcaseContext;
-        return _buildContent(showcaseContext);
-      },
-    );
+    return _buildContent(context);
   }
 
   Widget _buildContent(BuildContext context) {
@@ -302,7 +457,7 @@ class _DashboardPageState extends State<DashboardPage> {
       );
     }
 
-    return Scaffold(
+    final scaffold = Scaffold(
       body: RefreshIndicator(
         onRefresh: _loadDashboardData,
         child: SingleChildScrollView(
@@ -386,7 +541,8 @@ class _DashboardPageState extends State<DashboardPage> {
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Showcase(
                   key: _createStoryKey,
-                  description: 'Aquí puedes crear tus historias. Toca el botón verde para empezar a escribir tus recuerdos.',
+                  description:
+                      'Aquí puedes crear tus historias. Toca el botón verde para empezar a escribir tus recuerdos.',
                   descTextStyle: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w500,
@@ -400,9 +556,9 @@ class _DashboardPageState extends State<DashboardPage> {
                   overlayColor: Colors.black,
                   overlayOpacity: 0.60,
                   disableDefaultTargetGestures: true,
-                  onTargetClick: () => _handleCreateStoryNext(),
-                  onToolTipClick: () => _handleCreateStoryNext(),
-                  onBarrierClick: () => _handleCreateStoryNext(),
+                  onTargetClick: _handleWalkthroughTap,
+                  onToolTipClick: _handleWalkthroughTap,
+                  onBarrierClick: _handleWalkthroughTap,
                   child: _WelcomeSection(
                     userProfile: _userProfile,
                     allTags: _allTags,
@@ -421,7 +577,8 @@ class _DashboardPageState extends State<DashboardPage> {
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Showcase(
                     key: _ghostWriterKey,
-                    description: 'Tu Ghost Writer es un asistente inteligente que te ayuda a mejorar tus historias. Haz clic en Configurar para personalizarlo.',
+                    description:
+                        'Tu Ghost Writer es un asistente inteligente que te ayuda a mejorar tus historias. Haz clic en Configurar para personalizarlo.',
                     descTextStyle: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
@@ -435,9 +592,9 @@ class _DashboardPageState extends State<DashboardPage> {
                     overlayColor: Colors.black,
                     overlayOpacity: 0.60,
                     disableDefaultTargetGestures: true,
-                    onTargetClick: () => _handleGhostWriterNext(),
-                    onToolTipClick: () => _handleGhostWriterNext(),
-                    onBarrierClick: () => _handleGhostWriterNext(),
+                    onTargetClick: _handleWalkthroughTap,
+                    onToolTipClick: _handleWalkthroughTap,
+                    onBarrierClick: _handleWalkthroughTap,
                     child: _GhostWriterIntroCard(
                       onDismiss: () {
                         setState(() => _shouldShowGhostWriterIntro = false);
@@ -465,7 +622,8 @@ class _DashboardPageState extends State<DashboardPage> {
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Showcase(
                   key: _bookProgressKey,
-                  description: '¡Tu meta es escribir al menos 20 historias para publicar tu libro digital! Pero no te preocupes, puedes publicarlo con más historias si lo deseas. Cada historia cuenta para tu progreso.',
+                  description:
+                      '¡Tu meta es escribir al menos 20 historias para publicar tu libro digital! Pero no te preocupes, puedes publicarlo con más historias si lo deseas. Cada historia cuenta para tu progreso.',
                   descTextStyle: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w500,
@@ -479,9 +637,9 @@ class _DashboardPageState extends State<DashboardPage> {
                   overlayColor: Colors.black,
                   overlayOpacity: 0.60,
                   disableDefaultTargetGestures: true,
-                  onTargetClick: () => ShowCaseWidget.of(context).next(),
-                  onToolTipClick: () => ShowCaseWidget.of(context).next(),
-                  onBarrierClick: () => ShowCaseWidget.of(context).next(),
+                  onTargetClick: _handleWalkthroughTap,
+                  onToolTipClick: _handleWalkthroughTap,
+                  onBarrierClick: _handleWalkthroughTap,
                   child: _BookProgressSection(
                     stats: _dashboardStats,
                     lastPublishedStory: _lastPublishedStory,
@@ -507,6 +665,38 @@ class _DashboardPageState extends State<DashboardPage> {
         ),
       ),
     );
+
+    return Stack(
+      children: [
+        scaffold,
+        if (_isWalkthroughActive)
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: _handleWalkthroughTap,
+              onPanStart: (_) {},
+              onPanUpdate: (_) {},
+              onVerticalDragStart: (_) {},
+              onVerticalDragUpdate: (_) {},
+              onHorizontalDragStart: (_) {},
+              onHorizontalDragUpdate: (_) {},
+              child: Container(
+                color: Colors.black.withValues(alpha: 0.02),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant DashboardPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.walkthroughController != widget.walkthroughController) {
+      oldWidget.walkthroughController?.setTapHandler(null);
+      _updateWalkthroughControllerBinding();
+    }
   }
 }
 
@@ -620,7 +810,8 @@ class _WelcomeSection extends StatelessWidget {
                                     ? '${draftStories.length} borrador${draftStories.length > 1 ? 'es' : ''} esperando por ti'
                                     : '¿Qué historia compartirás hoy?',
                             style: theme.textTheme.bodyMedium?.copyWith(
-                              color: colorScheme.primary.withValues(alpha: 0.75),
+                              color:
+                                  colorScheme.primary.withValues(alpha: 0.75),
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -705,7 +896,8 @@ class _WelcomeSection extends StatelessWidget {
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: colorScheme.primary.withValues(alpha: 0.08),
+                              color:
+                                  colorScheme.primary.withValues(alpha: 0.08),
                               blurRadius: 4,
                               offset: const Offset(0, 2),
                             ),
@@ -749,7 +941,8 @@ class _WelcomeSection extends StatelessWidget {
                             borderRadius: BorderRadius.circular(16),
                           ),
                           elevation: 3,
-                          shadowColor: colorScheme.primary.withValues(alpha: 0.4),
+                          shadowColor:
+                              colorScheme.primary.withValues(alpha: 0.4),
                         ),
                       ),
                     ),
@@ -1241,7 +1434,8 @@ class _RecentActivitiesSection extends StatelessWidget {
               );
 
               if (await canLaunchUrl(magicLink)) {
-                await launchUrl(magicLink, mode: LaunchMode.externalApplication);
+                await launchUrl(magicLink,
+                    mode: LaunchMode.externalApplication);
               }
             };
           }
@@ -1293,7 +1487,8 @@ class _RecentActivitiesSection extends StatelessWidget {
               );
 
               if (await canLaunchUrl(magicLink)) {
-                await launchUrl(magicLink, mode: LaunchMode.externalApplication);
+                await launchUrl(magicLink,
+                    mode: LaunchMode.externalApplication);
               }
             };
           }
@@ -1417,7 +1612,8 @@ class _RecentActivitiesSection extends StatelessWidget {
                     borderRadius: BorderRadius.circular(12),
                     onTap: activity.onTap,
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 6),
                       child: Row(
                         children: [
                           Container(
@@ -1461,7 +1657,8 @@ class _RecentActivitiesSection extends StatelessWidget {
                             Icon(
                               Icons.chevron_right,
                               size: 20,
-                              color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+                              color: colorScheme.onSurfaceVariant
+                                  .withValues(alpha: 0.5),
                             ),
                         ],
                       ),
@@ -1740,7 +1937,8 @@ class _GhostWriterIntroCard extends StatelessWidget {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (context) => const AppNavigation(initialIndex: 3),
+                                builder: (context) =>
+                                    const AppNavigation(initialIndex: 3),
                               ),
                             );
                           }

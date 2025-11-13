@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:showcaseview/showcaseview.dart';
 import 'package:narra/services/email/email_service.dart';
@@ -72,6 +74,7 @@ void _showSnackBar(BuildContext context, String message,
 class _SubscribersPageState extends State<SubscribersPage>
     with SingleTickerProviderStateMixin {
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
 
   bool _isLoading = true;
   bool _isRefreshing = false;
@@ -83,6 +86,11 @@ class _SubscribersPageState extends State<SubscribersPage>
   final Set<String> _sendingInviteIds = <String>{};
   late AnimationController _fabController;
   bool _isWalkthroughActive = false;
+  bool _shouldShowWalkthrough = false;
+  bool _hasStartedWalkthrough = false;
+  DateTime? _lastWalkthroughTap;
+
+  static const _walkthroughTapCooldown = Duration(milliseconds: 400);
 
   // GlobalKeys para el walkthrough
   final GlobalKey _addButtonKey = GlobalKey();
@@ -105,43 +113,130 @@ class _SubscribersPageState extends State<SubscribersPage>
   }
 
   Future<void> _checkAndShowWalkthrough() async {
-    // DEBUG MODE: Siempre mostrar walkthrough
-    // final shouldShow = await UserService.shouldShowSubscribersWalkthrough();
-    // if (!shouldShow || !mounted) return;
-
-    // Siempre mostrar walkthrough
+    final shouldShow = await UserService.shouldShowSubscribersWalkthrough();
     if (!mounted) return;
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _startWalkthrough();
-    });
+    if (_shouldShowWalkthrough != shouldShow) {
+      setState(() {
+        _shouldShowWalkthrough = shouldShow;
+        if (!shouldShow) {
+          _hasStartedWalkthrough = false;
+          _lastWalkthroughTap = null;
+        }
+      });
+    } else if (!shouldShow &&
+        (_hasStartedWalkthrough || _lastWalkthroughTap != null)) {
+      setState(() {
+        _hasStartedWalkthrough = false;
+        _lastWalkthroughTap = null;
+      });
+    }
   }
 
   void _startWalkthrough() {
-    if (_showcaseContext == null) return;
+    if (_showcaseContext == null || _isWalkthroughActive) return;
 
-    setState(() => _isWalkthroughActive = true);
+    final keys = _buildWalkthroughKeys();
+    if (keys.isEmpty) {
+      setState(() {
+        _shouldShowWalkthrough = false;
+        _hasStartedWalkthrough = false;
+      });
+      return;
+    }
 
-    // RADICALLY SIMPLE: Just add keys, no validation
+    setState(() {
+      _isWalkthroughActive = true;
+      _hasStartedWalkthrough = true;
+      _lastWalkthroughTap = null;
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _showcaseContext == null) return;
+
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          0,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+
+      ShowCaseWidget.of(_showcaseContext!).startShowCase(keys);
+    });
+  }
+
+  List<GlobalKey> _buildWalkthroughKeys() {
     final keys = <GlobalKey>[
       _addButtonKey,
       _statsCardsKey,
       _filterChipsKey,
     ];
 
-    // Only add list key if there are subscribers
     if ((_dashboard?.totalSubscribersIncludingUnsubscribed ?? 0) > 0) {
       keys.add(_subscribersListKey);
     }
 
-    // Note: searchFieldKey removed from walkthrough - no longer needed
-    ShowCaseWidget.of(_showcaseContext!).startShowCase(keys);
+    return keys;
+  }
+
+  bool get _isWalkthroughOverlayVisible =>
+      _shouldShowWalkthrough || _isWalkthroughActive;
+
+  void _advanceWalkthrough() {
+    if (!_hasStartedWalkthrough || _showcaseContext == null) {
+      return;
+    }
+
+    final now = DateTime.now();
+    if (_lastWalkthroughTap != null &&
+        now.difference(_lastWalkthroughTap!) < _walkthroughTapCooldown) {
+      return;
+    }
+
+    _lastWalkthroughTap = now;
+
+    final showcase = ShowCaseWidget.of(_showcaseContext!);
+    showcase.next(playAnimation: true);
+  }
+
+  void _handleOverlayTap() {
+    if (!_isWalkthroughOverlayVisible) {
+      return;
+    }
+
+    if (!_hasStartedWalkthrough) {
+      _startWalkthrough();
+    } else {
+      _advanceWalkthrough();
+    }
+  }
+
+  void _handleStepStarted(GlobalKey key) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || key.currentContext == null) {
+        return;
+      }
+
+      final scrollable = Scrollable.of(key.currentContext!);
+      if (scrollable == null) {
+        return;
+      }
+
+      Scrollable.ensureVisible(
+        key.currentContext!,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeInOut,
+        alignment: 0.5,
+      );
+    });
   }
 
   @override
   void dispose() {
     _searchController.dispose();
     _fabController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -443,7 +538,8 @@ class _SubscribersPageState extends State<SubscribersPage>
                           if (trimmed.isEmpty) {
                             return 'El correo es necesario para el enlace mágico.';
                           }
-                          if (!trimmed.contains('@') || !trimmed.contains('.')) {
+                          if (!trimmed.contains('@') ||
+                              !trimmed.contains('.')) {
                             return 'Ingresa un correo válido.';
                           }
                           return null;
@@ -467,7 +563,8 @@ class _SubscribersPageState extends State<SubscribersPage>
               ),
               actions: [
                 TextButton(
-                  onPressed: isSaving ? null : () => Navigator.of(context).pop(),
+                  onPressed:
+                      isSaving ? null : () => Navigator.of(context).pop(),
                   child: const Text('Cancelar'),
                 ),
                 FilledButton.icon(
@@ -604,14 +701,46 @@ class _SubscribersPageState extends State<SubscribersPage>
     return ShowCaseWidget(
       blurValue: 4,
       disableBarrierInteraction: false,
+      enableAutoScroll: false,
+      onStart: (index, key) {
+        if (key is GlobalKey) {
+          _handleStepStarted(key);
+        }
+      },
       onFinish: () {
-        setState(() => _isWalkthroughActive = false);
-        // DEBUG MODE: No marcar como visto para que siempre se muestre
-        // UserService.markSubscribersWalkthroughAsSeen();
+        if (mounted) {
+          setState(() {
+            _isWalkthroughActive = false;
+            _shouldShowWalkthrough = false;
+            _hasStartedWalkthrough = false;
+          });
+        } else {
+          _isWalkthroughActive = false;
+          _shouldShowWalkthrough = false;
+          _hasStartedWalkthrough = false;
+        }
+
+        _lastWalkthroughTap = null;
+
+        unawaited(UserService.markSubscribersWalkthroughAsSeen());
       },
       builder: (showcaseContext) {
         _showcaseContext = showcaseContext;
-        return _buildContent(showcaseContext);
+        return Stack(
+          children: [
+            _buildContent(showcaseContext),
+            if (_isWalkthroughOverlayVisible)
+              Positioned.fill(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: _handleOverlayTap,
+                  child: Container(
+                    color: Colors.black.withValues(alpha: 0.04),
+                  ),
+                ),
+              ),
+          ],
+        );
       },
     );
   }
@@ -670,12 +799,14 @@ class _SubscribersPageState extends State<SubscribersPage>
 
     final dashboard = _dashboard;
     final subscribers = _filteredSubscribers;
-    final hasAnySubscribers = (dashboard?.totalSubscribersIncludingUnsubscribed ?? 0) > 0;
+    final hasAnySubscribers =
+        (dashboard?.totalSubscribersIncludingUnsubscribed ?? 0) > 0;
 
     return Scaffold(
       body: RefreshIndicator(
         onRefresh: _onRefresh,
         child: CustomScrollView(
+          controller: _scrollController,
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
             SliverToBoxAdapter(
@@ -697,7 +828,8 @@ class _SubscribersPageState extends State<SubscribersPage>
                             Container(
                               padding: const EdgeInsets.all(10),
                               decoration: BoxDecoration(
-                                color: colorScheme.primary.withValues(alpha: 0.12),
+                                color:
+                                    colorScheme.primary.withValues(alpha: 0.12),
                                 borderRadius: BorderRadius.circular(18),
                               ),
                               child: Icon(
@@ -713,7 +845,8 @@ class _SubscribersPageState extends State<SubscribersPage>
                                 children: [
                                   Text(
                                     'Suscriptores',
-                                    style: theme.textTheme.headlineSmall?.copyWith(
+                                    style:
+                                        theme.textTheme.headlineSmall?.copyWith(
                                       fontWeight: FontWeight.w700,
                                       letterSpacing: -0.2,
                                     ),
@@ -730,7 +863,9 @@ class _SubscribersPageState extends State<SubscribersPage>
                             ),
                             const SizedBox(width: 6),
                             IconButton(
-                              onPressed: _isRefreshing ? null : () => _loadDashboard(silent: true),
+                              onPressed: _isRefreshing
+                                  ? null
+                                  : () => _loadDashboard(silent: true),
                               tooltip: 'Actualizar suscriptores',
                               icon: _isRefreshing
                                   ? SizedBox(
@@ -765,7 +900,8 @@ class _SubscribersPageState extends State<SubscribersPage>
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                 child: Showcase(
                   key: _statsCardsKey,
-                  description: '¡Tus estadísticas al instante! Ve cuántos suscriptores tienes en total, cuántos confirmaron su invitación y cuántos están pendientes.',
+                  description:
+                      '¡Tus estadísticas al instante! Ve cuántos suscriptores tienes en total, cuántos confirmaron su invitación y cuántos están pendientes.',
                   descTextStyle: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
@@ -827,7 +963,8 @@ class _SubscribersPageState extends State<SubscribersPage>
                     const SizedBox(height: 12),
                     Showcase(
                       key: _filterChipsKey,
-                      description: 'Filtra tus suscriptores: ve todos, solo confirmados, pendientes de confirmación o los que se dieron de baja.',
+                      description:
+                          'Filtra tus suscriptores: ve todos, solo confirmados, pendientes de confirmación o los que se dieron de baja.',
                       descTextStyle: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
@@ -845,16 +982,16 @@ class _SubscribersPageState extends State<SubscribersPage>
                       onToolTipClick: () => ShowCaseWidget.of(context).next(),
                       onBarrierClick: () => ShowCaseWidget.of(context).next(),
                       child: _FilterChips(
-                      current: _filter,
-                      onChanged: (filter) {
-                        setState(() => _filter = filter);
-                      },
-                      counts: (
-                        total: dashboard?.totalSubscribers ?? 0,
-                        confirmed: dashboard?.confirmedSubscribers ?? 0,
-                        pending: dashboard?.pendingSubscribers ?? 0,
-                        unsubscribed: dashboard?.unsubscribedSubscribers ?? 0,
-                      ),
+                        current: _filter,
+                        onChanged: (filter) {
+                          setState(() => _filter = filter);
+                        },
+                        counts: (
+                          total: dashboard?.totalSubscribers ?? 0,
+                          confirmed: dashboard?.confirmedSubscribers ?? 0,
+                          pending: dashboard?.pendingSubscribers ?? 0,
+                          unsubscribed: dashboard?.unsubscribedSubscribers ?? 0,
+                        ),
                       ),
                     ),
                   ],
@@ -887,7 +1024,8 @@ class _SubscribersPageState extends State<SubscribersPage>
                   delegate: SliverChildBuilderDelegate(
                     (context, index) {
                       final subscriber = subscribers[index];
-                      final engagement = dashboard?.engagementFor(subscriber.id);
+                      final engagement =
+                          dashboard?.engagementFor(subscriber.id);
 
                       // Envolver el primer item con Showcase
                       final card = _SubscriberCard(
@@ -904,7 +1042,8 @@ class _SubscribersPageState extends State<SubscribersPage>
                         child: index == 0
                             ? Showcase(
                                 key: _subscribersListKey,
-                                description: 'Aquí están todos tus suscriptores. Toca uno para ver detalles, reenviar invitación o editar su información. Ve sus reacciones y comentarios.',
+                                description:
+                                    'Aquí están todos tus suscriptores. Toca uno para ver detalles, reenviar invitación o editar su información. Ve sus reacciones y comentarios.',
                                 descTextStyle: const TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w600,
@@ -918,9 +1057,12 @@ class _SubscribersPageState extends State<SubscribersPage>
                                 overlayColor: Colors.black,
                                 overlayOpacity: 0.60,
                                 disableDefaultTargetGestures: true,
-                                onTargetClick: () => ShowCaseWidget.of(context).next(),
-                                onToolTipClick: () => ShowCaseWidget.of(context).next(),
-                                onBarrierClick: () => ShowCaseWidget.of(context).next(),
+                                onTargetClick: () =>
+                                    ShowCaseWidget.of(context).next(),
+                                onToolTipClick: () =>
+                                    ShowCaseWidget.of(context).next(),
+                                onBarrierClick: () =>
+                                    ShowCaseWidget.of(context).next(),
                                 child: card,
                               )
                             : card,
@@ -935,7 +1077,8 @@ class _SubscribersPageState extends State<SubscribersPage>
       ),
       floatingActionButton: Showcase(
         key: _addButtonKey,
-        description: '¡Aquí puedes agregar nuevos suscriptores! Solo necesitas su nombre y email. Ellos recibirán una invitación y podrán ver únicamente tus historias PUBLICADAS.',
+        description:
+            '¡Aquí puedes agregar nuevos suscriptores! Solo necesitas su nombre y email. Ellos recibirán una invitación y podrán ver únicamente tus historias PUBLICADAS.',
         descTextStyle: const TextStyle(
           fontSize: 16,
           fontWeight: FontWeight.w600,
@@ -1317,8 +1460,8 @@ class _RecentActivity extends StatelessWidget {
                               reaction.subscriberName ?? 'Suscriptor',
                               style: theme.textTheme.bodySmall,
                             ),
-                            backgroundColor:
-                                colorScheme.secondaryContainer.withValues(alpha: 0.5),
+                            backgroundColor: colorScheme.secondaryContainer
+                                .withValues(alpha: 0.5),
                             side: BorderSide.none,
                           ))
                       .toList(),
@@ -1523,7 +1666,8 @@ class _SubscriberCard extends StatelessWidget {
                             value: hearts,
                             color: colorScheme.secondary,
                           ),
-                        if (hearts > 0 && comments > 0) const SizedBox(width: 8),
+                        if (hearts > 0 && comments > 0)
+                          const SizedBox(width: 8),
                         if (comments > 0)
                           _MiniMetric(
                             icon: Icons.chat_bubble,
@@ -1545,8 +1689,8 @@ class _SubscriberCard extends StatelessWidget {
                                 )
                               : Icon(Icons.send, color: colorScheme.primary),
                           style: IconButton.styleFrom(
-                            backgroundColor:
-                                colorScheme.primaryContainer.withValues(alpha: 0.5),
+                            backgroundColor: colorScheme.primaryContainer
+                                .withValues(alpha: 0.5),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
@@ -1678,8 +1822,7 @@ class _NoResultsPlaceholder extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.search_off_rounded,
-              size: 64, color: colorScheme.outline),
+          Icon(Icons.search_off_rounded, size: 64, color: colorScheme.outline),
           const SizedBox(height: 16),
           Text(
             'No encontramos resultados',
@@ -1818,7 +1961,8 @@ class _SubscriberDetailSheetState extends State<_SubscriberDetailSheet>
                         width: 40,
                         height: 4,
                         decoration: BoxDecoration(
-                          color: colorScheme.onSurfaceVariant.withValues(alpha: 0.3),
+                          color: colorScheme.onSurfaceVariant
+                              .withValues(alpha: 0.3),
                           borderRadius: BorderRadius.circular(2),
                         ),
                       ),
@@ -1829,7 +1973,8 @@ class _SubscriberDetailSheetState extends State<_SubscriberDetailSheet>
                             tag: 'subscriber-${subscriber.id}',
                             child: CircleAvatar(
                               radius: 32,
-                              backgroundColor: statusColor.withValues(alpha: 0.15),
+                              backgroundColor:
+                                  statusColor.withValues(alpha: 0.15),
                               child: Text(
                                 initials.isEmpty ? '?' : initials,
                                 style: theme.textTheme.headlineSmall?.copyWith(
@@ -1846,7 +1991,8 @@ class _SubscriberDetailSheetState extends State<_SubscriberDetailSheet>
                               children: [
                                 Text(
                                   subscriber.name,
-                                  style: theme.textTheme.headlineSmall?.copyWith(
+                                  style:
+                                      theme.textTheme.headlineSmall?.copyWith(
                                     fontWeight: FontWeight.w700,
                                   ),
                                 ),
@@ -1857,7 +2003,8 @@ class _SubscriberDetailSheetState extends State<_SubscriberDetailSheet>
                                     color: colorScheme.onSurfaceVariant,
                                   ),
                                 ),
-                                if (subscriber.relationship?.isNotEmpty == true) ...[
+                                if (subscriber.relationship?.isNotEmpty ==
+                                    true) ...[
                                   const SizedBox(height: 4),
                                   Container(
                                     padding: const EdgeInsets.symmetric(
@@ -1871,7 +2018,8 @@ class _SubscriberDetailSheetState extends State<_SubscriberDetailSheet>
                                     ),
                                     child: Text(
                                       subscriber.relationship!,
-                                      style: theme.textTheme.labelMedium?.copyWith(
+                                      style:
+                                          theme.textTheme.labelMedium?.copyWith(
                                         color: colorScheme.onSecondaryContainer,
                                       ),
                                     ),
@@ -1958,7 +2106,8 @@ class _SubscriberDetailSheetState extends State<_SubscriberDetailSheet>
                                     }
                                   } finally {
                                     if (mounted) {
-                                      setState(() => _localSendingInvite = false);
+                                      setState(
+                                          () => _localSendingInvite = false);
                                     }
                                   }
                                 },
@@ -1966,7 +2115,8 @@ class _SubscriberDetailSheetState extends State<_SubscriberDetailSheet>
                               ? const SizedBox(
                                   width: 20,
                                   height: 20,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                  child:
+                                      CircularProgressIndicator(strokeWidth: 2),
                                 )
                               : const Icon(Icons.send),
                           label: Text(
@@ -2133,7 +2283,8 @@ class _CommentsTab extends StatelessWidget {
           color: theme.colorScheme.secondary,
           title: comment.subscriberName ?? subscriber.name,
           content: comment.content,
-          metadata: '${comment.storyTitle} • ${_formatRelativeDate(comment.createdAt)}',
+          metadata:
+              '${comment.storyTitle} • ${_formatRelativeDate(comment.createdAt)}',
         );
       },
     );
@@ -2187,7 +2338,8 @@ class _CommentsTabContent extends StatelessWidget {
               color: theme.colorScheme.secondary,
               title: comment.subscriberName ?? subscriber.name,
               content: comment.content,
-              metadata: '${comment.storyTitle} • ${_formatRelativeDate(comment.createdAt)}',
+              metadata:
+                  '${comment.storyTitle} • ${_formatRelativeDate(comment.createdAt)}',
             ),
           );
         }),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:showcaseview/showcaseview.dart';
 import 'package:narra/supabase/supabase_config.dart';
 import 'dashboard_page.dart';
+import 'dashboard_walkthrough_controller.dart';
 import 'stories_list_page.dart';
 import 'subscribers_page.dart';
 import 'settings_page.dart';
@@ -226,6 +227,8 @@ class _AppNavigationState extends State<AppNavigation> {
           disableBarrierInteraction: false,
           enableAutoScroll: false,
           onStart: (index, key) {
+            DashboardWalkthroughController.notifyStepStarted(key);
+
             if (key != _menuKey || key.currentContext == null) {
               return;
             }
@@ -241,6 +244,7 @@ class _AppNavigationState extends State<AppNavigation> {
               }
             });
           },
+          onFinish: DashboardWalkthroughController.notifyFinished,
           builder: (context) => Scaffold(
             backgroundColor: Theme.of(context).colorScheme.surface,
             body: SafeArea(

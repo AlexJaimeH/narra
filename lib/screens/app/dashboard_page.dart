@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:showcaseview/showcaseview.dart';
 import 'package:narra/api/narra_api.dart';
 import 'package:narra/repositories/user_repository.dart';
@@ -9,10 +8,8 @@ import 'package:narra/services/subscriber_service.dart';
 import 'package:narra/services/story_share_link_builder.dart';
 import 'package:narra/services/user_service.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'dart:math' as math;
 import 'story_editor_page.dart';
 import 'app_navigation.dart';
-import 'stories_list_page.dart';
 import 'subscribers_page.dart';
 
 class DashboardPage extends StatefulWidget {
@@ -33,16 +30,12 @@ class _DashboardPageState extends State<DashboardPage> {
   Story? _lastPublishedStory;
   bool _isLoading = true;
   bool _shouldShowGhostWriterIntro = false;
-  bool _isWalkthroughActive = false;
   List<String> _cachedSuggestedTopics = [];
 
   // Keys para el walkthrough
   final GlobalKey _createStoryKey = GlobalKey();
   final GlobalKey _ghostWriterKey = GlobalKey();
   final GlobalKey _bookProgressKey = GlobalKey();
-
-  // Contexto del ShowCaseWidget builder
-  BuildContext? _showcaseContext;
 
   // ScrollController para el walkthrough
   final ScrollController _scrollController = ScrollController();
@@ -194,18 +187,21 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Future<void> _checkAndShowWalkthrough() async {
-    // DEBUG MODE: Siempre mostrar walkthrough
+    if (!mounted) return;
+
+    await Future.delayed(const Duration(seconds: 1));
+
     if (!mounted) return;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _startWalkthrough();
+      if (mounted) {
+        _startWalkthrough();
+      }
     });
   }
 
   void _startWalkthrough() {
-    if (_showcaseContext == null) return;
-
-    setState(() => _isWalkthroughActive = true);
+    if (!mounted) return;
 
     // RADICALLY SIMPLE: Just add keys, no validation
     final keys = <GlobalKey>[];
@@ -226,7 +222,18 @@ class _DashboardPageState extends State<DashboardPage> {
     // Add book progress key
     keys.add(_bookProgressKey);
 
-    ShowCaseWidget.of(_showcaseContext!).startShowCase(keys);
+    final allContextsReady = keys.every((key) => key.currentContext != null);
+
+    if (!allContextsReady) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _startWalkthrough();
+        }
+      });
+      return;
+    }
+
+    ShowCaseWidget.of(context).startShowCase(keys);
   }
 
   Future<void> _scrollToWidget(GlobalKey key) async {
@@ -259,36 +266,24 @@ class _DashboardPageState extends State<DashboardPage> {
       await _scrollToWidget(_bookProgressKey);
     }
 
-    if (_showcaseContext != null && mounted) {
-      ShowCaseWidget.of(_showcaseContext!).next();
-    }
+    if (!mounted) return;
+
+    ShowCaseWidget.of(context).next();
   }
 
   Future<void> _handleGhostWriterNext() async {
     // Hacer scroll al progreso del libro
     await _scrollToWidget(_bookProgressKey);
 
-    if (_showcaseContext != null && mounted) {
-      ShowCaseWidget.of(_showcaseContext!).next();
-    }
+    if (!mounted) return;
+
+    ShowCaseWidget.of(context).next();
   }
 
 
   @override
   Widget build(BuildContext context) {
-    return ShowCaseWidget(
-      blurValue: 4,
-      disableBarrierInteraction: false,
-      onFinish: () {
-        setState(() => _isWalkthroughActive = false);
-        // DEBUG MODE: No marcar como visto para que siempre se muestre
-        // UserService.markHomeWalkthroughAsSeen();
-      },
-      builder: (showcaseContext) {
-        _showcaseContext = showcaseContext;
-        return _buildContent(showcaseContext);
-      },
-    );
+    return _buildContent(context);
   }
 
   Widget _buildContent(BuildContext context) {

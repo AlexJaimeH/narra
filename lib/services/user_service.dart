@@ -155,6 +155,26 @@ class UserService {
     return !hasSeenWalkthrough;
   }
 
+  // Verificar si debe mostrar el prompt para poner nombre (usuarios nuevos)
+  static Future<bool> shouldShowSetNamePrompt() async {
+    final settings = await getUserSettings();
+    if (settings == null) return true;
+
+    final publicAuthorName = settings['public_author_name'] as String?;
+    // Mostrar solo si el nombre público está vacío o es null
+    return publicAuthorName == null || publicAuthorName.trim().isEmpty;
+  }
+
+  // Guardar nombre público del usuario
+  static Future<void> savePublicAuthorName(String name) async {
+    final userId = SupabaseAuth.currentUser?.id;
+    if (userId == null) return;
+
+    await updateUserSettings({
+      'public_author_name': name.trim(),
+    });
+  }
+
   // Marcar que el usuario vio el walkthrough del editor
   static Future<void> markEditorWalkthroughAsSeen() async {
     final userId = SupabaseAuth.currentUser?.id;

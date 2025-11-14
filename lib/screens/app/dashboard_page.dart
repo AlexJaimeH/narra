@@ -35,6 +35,7 @@ class _DashboardPageState extends State<DashboardPage> {
   Story? _lastPublishedStory;
   bool _isLoading = true;
   bool _shouldShowGhostWriterIntro = false;
+  bool _shouldShowSetNamePrompt = false;
   List<String> _cachedSuggestedTopics = [];
   bool _isWalkthroughActive = false;
   bool _shouldShowWalkthrough = false;
@@ -186,6 +187,9 @@ class _DashboardPageState extends State<DashboardPage> {
       // Check if should show ghost writer intro
       final shouldShowIntro = await UserService.shouldShowGhostWriterIntro();
 
+      // Check if should show set name prompt (new users)
+      final shouldShowSetName = await UserService.shouldShowSetNamePrompt();
+
       final shouldShowWalkthrough =
           await UserService.shouldShowHomeWalkthrough();
 
@@ -210,6 +214,7 @@ class _DashboardPageState extends State<DashboardPage> {
           _subscriberDashboard = subscriberDashboard;
           _lastPublishedStory = lastPublished;
           _shouldShowGhostWriterIntro = shouldShowIntro;
+          _shouldShowSetNamePrompt = shouldShowSetName;
           _cachedSuggestedTopics = suggestedTopics;
           _isLoading = false;
           _shouldShowWalkthrough = shouldShowWalkthrough;
@@ -581,6 +586,20 @@ class _DashboardPageState extends State<DashboardPage> {
               ),
 
               const SizedBox(height: 16),
+
+              // Widget para que usuarios nuevos pongan su nombre
+              if (_shouldShowSetNamePrompt)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: _SetNameCard(
+                    onSaved: () {
+                      setState(() => _shouldShowSetNamePrompt = false);
+                      _loadDashboardData();
+                    },
+                  ),
+                ),
+
+              if (_shouldShowSetNamePrompt) const SizedBox(height: 16),
 
               // Sección de bienvenida mejorada
               Padding(
@@ -2054,6 +2073,285 @@ class _GhostWriterIntroCard extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Widget para que usuarios nuevos pongan su nombre
+class _SetNameCard extends StatefulWidget {
+  final VoidCallback onSaved;
+
+  const _SetNameCard({required this.onSaved});
+
+  @override
+  State<_SetNameCard> createState() => _SetNameCardState();
+}
+
+class _SetNameCardState extends State<_SetNameCard> {
+  final TextEditingController _nameController = TextEditingController();
+  bool _isSaving = false;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _saveName() async {
+    final name = _nameController.text.trim();
+
+    if (name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Por favor ingresa tu nombre'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isSaving = true);
+
+    try {
+      await UserService.savePublicAuthorName(name);
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('¡Nombre guardado exitosamente!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+
+      widget.onSaved();
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() => _isSaving = false);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al guardar nombre: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Card(
+      elevation: 4,
+      shadowColor: colorScheme.primary.withValues(alpha: 0.3),
+      color: colorScheme.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(28),
+        side: BorderSide(
+          color: colorScheme.primary.withValues(alpha: 0.25),
+          width: 2,
+        ),
+      ),
+      child: Stack(
+        children: [
+          // Fondo decorativo sutil
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(28),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    colorScheme.primary.withValues(alpha: 0.06),
+                    colorScheme.primaryContainer.withValues(alpha: 0.04),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header con ícono y título
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            colorScheme.primary,
+                            colorScheme.primary.withValues(alpha: 0.85),
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: colorScheme.primary.withValues(alpha: 0.25),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.person_add_rounded,
+                        color: Colors.white,
+                        size: 32,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '¡Bienvenido a Narra!',
+                            style: theme.textTheme.headlineSmall?.copyWith(
+                              fontWeight: FontWeight.w800,
+                              color: colorScheme.primary,
+                              height: 1.1,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Empecemos con tu nombre',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: colorScheme.primary.withValues(alpha: 0.75),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 20),
+
+                // Mensaje principal
+                Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: colorScheme.primary.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: colorScheme.primary.withValues(alpha: 0.15),
+                      width: 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.info_outline,
+                        color: colorScheme.primary,
+                        size: 24,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Este nombre será visible para las personas con quienes compartas tus historias. Puedes cambiarlo después en ajustes.',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: colorScheme.onSurface,
+                            height: 1.5,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+
+                // Campo de texto para el nombre
+                TextField(
+                  controller: _nameController,
+                  enabled: !_isSaving,
+                  decoration: InputDecoration(
+                    labelText: 'Tu nombre',
+                    hintText: 'Ej. María García',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide(
+                        color: colorScheme.primary,
+                        width: 2,
+                      ),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide(
+                        color: colorScheme.primary.withValues(alpha: 0.3),
+                        width: 2,
+                      ),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide(
+                        color: colorScheme.primary,
+                        width: 2,
+                      ),
+                    ),
+                    prefixIcon: Icon(
+                      Icons.person_outline,
+                      color: colorScheme.primary,
+                    ),
+                    filled: true,
+                    fillColor: colorScheme.surface,
+                  ),
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _isSaving ? null : _saveName(),
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+
+                // Botón para guardar
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: _isSaving ? null : _saveName,
+                    icon: _isSaving
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          )
+                        : const Icon(Icons.check_circle, size: 22),
+                    label: Text(
+                      _isSaving ? 'Guardando...' : 'Guardar nombre',
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: colorScheme.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      elevation: 3,
+                      shadowColor: colorScheme.primary.withValues(alpha: 0.4),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

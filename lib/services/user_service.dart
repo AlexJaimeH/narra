@@ -69,11 +69,13 @@ class UserService {
     if (userId == null) return;
 
     if (writingTone != null) {
-      await SupabaseService.update('users', userId, { 'writing_tone': writingTone });
+      await SupabaseService.update(
+          'users', userId, {'writing_tone': writingTone});
     }
 
     final settings = <String, dynamic>{};
-    if (extraInstructions != null) settings['ai_extra_instructions'] = extraInstructions;
+    if (extraInstructions != null)
+      settings['ai_extra_instructions'] = extraInstructions;
     if (noBadWords != null) settings['ai_no_bad_words'] = noBadWords;
     if (narrativePerson != null) settings['ai_person'] = narrativePerson;
     if (editingStyle != null) settings['ai_fidelity'] = editingStyle;
@@ -124,8 +126,10 @@ class UserService {
     if (settings == null) return true;
 
     final hasUsed = settings['has_used_ghost_writer'] as bool? ?? false;
-    final hasConfigured = settings['has_configured_ghost_writer'] as bool? ?? false;
-    final hasDismissed = settings['has_dismissed_ghost_writer_intro'] as bool? ?? false;
+    final hasConfigured =
+        settings['has_configured_ghost_writer'] as bool? ?? false;
+    final hasDismissed =
+        settings['has_dismissed_ghost_writer_intro'] as bool? ?? false;
 
     // Mostrar solo si NO ha usado, NO ha configurado y NO ha cerrado la intro
     return !hasUsed && !hasConfigured && !hasDismissed;
@@ -163,12 +167,12 @@ class UserService {
 
   // Verificar si debe mostrar el walkthrough del editor
   static Future<bool> shouldShowEditorWalkthrough() async {
-    // DEBUG MODE: Siempre mostrar walkthrough
-    return true;
-    // final settings = await getUserSettings();
-    // if (settings == null) return true;
-    // final hasSeenWalkthrough = settings['has_seen_editor_walkthrough'] as bool? ?? false;
-    // return !hasSeenWalkthrough;
+    final settings = await getUserSettings();
+    if (settings == null) return true;
+
+    final hasSeenWalkthrough =
+        settings['has_seen_editor_walkthrough'] as bool? ?? false;
+    return !hasSeenWalkthrough;
   }
 
   // Marcar que el usuario vio el walkthrough de suscriptores
@@ -185,12 +189,11 @@ class UserService {
 
   // Verificar si debe mostrar el walkthrough de suscriptores
   static Future<bool> shouldShowSubscribersWalkthrough() async {
-    // DEBUG MODE: Siempre mostrar walkthrough
-    return true;
-    // final settings = await getUserSettings();
-    // if (settings == null) return true;
-    // final hasSeenWalkthrough = settings['has_seen_subscribers_walkthrough'] as bool? ?? false;
-    // return !hasSeenWalkthrough;
+    final settings = await getUserSettings();
+    if (settings == null) return true;
+    final hasSeenWalkthrough =
+        settings['has_seen_subscribers_walkthrough'] as bool? ?? false;
+    return !hasSeenWalkthrough;
   }
 
   // Obtener configuraciones del usuario
@@ -216,9 +219,10 @@ class UserService {
 
     // Buscar configuraciones existentes
     final existing = await getUserSettings();
-    
+
     if (existing != null) {
-      return await SupabaseService.update('user_settings', existing['id'], updates);
+      return await SupabaseService.update(
+          'user_settings', existing['id'], updates);
     } else {
       // Crear nuevas configuraciones si no existen
       return await SupabaseService.insert('user_settings', {
@@ -236,7 +240,8 @@ class UserService {
     // Simular pago exitoso - en producción aquí iría la integración con Stripe
     await SupabaseService.update('users', userId, {
       'plan_type': 'premium',
-      'plan_expires_at': DateTime.now().add(const Duration(days: 365)).toIso8601String(),
+      'plan_expires_at':
+          DateTime.now().add(const Duration(days: 365)).toIso8601String(),
     });
   }
 
@@ -249,7 +254,7 @@ class UserService {
     final expiresAt = profile['plan_expires_at'];
 
     if (planType != 'premium') return false;
-    
+
     if (expiresAt != null) {
       final expiry = DateTime.parse(expiresAt);
       return expiry.isAfter(DateTime.now());
@@ -308,7 +313,8 @@ class UserService {
       eqValue: userId,
     );
 
-    final activeSubscribers = subscribers.where((s) => s['status'] == 'confirmed').length;
+    final activeSubscribers =
+        subscribers.where((s) => s['status'] == 'confirmed').length;
 
     // Actividad reciente
     final recentActivity = await getRecentActivity(limit: 5);
@@ -333,7 +339,7 @@ class UserService {
 
     // En Supabase, las eliminaciones en cascada se encargarán de limpiar los datos relacionados
     await SupabaseService.delete('users', userId);
-    
+
     // Cerrar sesión
     await SupabaseAuth.signOut();
   }
@@ -352,7 +358,8 @@ class UserService {
       'high_contrast': false,
       'reduce_motion': false,
       // Defaults para asistente IA (optimizados para calidad profesional)
-      'ai_no_bad_words': true, // Cambiado a true para historias de calidad publicable
+      'ai_no_bad_words':
+          true, // Cambiado a true para historias de calidad publicable
       'ai_person': 'first',
       'ai_fidelity': 'balanced',
       // Tracking de uso del ghost writer
@@ -370,7 +377,7 @@ class UserService {
   static int _getThisWeekCount(List<Map<String, dynamic>> stories) {
     final now = DateTime.now();
     final weekStart = now.subtract(Duration(days: now.weekday - 1));
-    
+
     return stories.where((story) {
       final createdAt = DateTime.parse(story['created_at']);
       return createdAt.isAfter(weekStart);

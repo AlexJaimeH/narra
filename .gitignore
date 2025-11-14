@@ -29,5 +29,6 @@ DerivedData/
 # Web
 
 # Blog React
+node_modules/
 blog/node_modules/
 blog/dist/

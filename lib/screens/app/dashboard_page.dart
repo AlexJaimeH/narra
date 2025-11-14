@@ -2214,8 +2214,8 @@ class _SetNameCardState extends State<_SetNameCard> {
                           ),
                         ],
                       ),
-                      child: Icon(
-                        Icons.front_hand,
+                      child: const Icon(
+                        Icons.badge,
                         color: Colors.white,
                         size: 32,
                       ),

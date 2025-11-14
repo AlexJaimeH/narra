@@ -1,15 +1,15 @@
 import React, { useState, useRef } from 'react';
 import { motion, useInView } from 'framer-motion';
 
-// Animation variants
+// Animation variants - Optimized for subtlety
 const fadeInUp = {
-  hidden: { opacity: 0, y: 60 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.6 } }
+  hidden: { opacity: 0, y: 20 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.4 } }
 };
 
 const fadeIn = {
   hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { duration: 0.8 } }
+  visible: { opacity: 1, transition: { duration: 0.5 } }
 };
 
 const staggerContainer = {
@@ -17,14 +17,14 @@ const staggerContainer = {
   visible: {
     opacity: 1,
     transition: {
-      staggerChildren: 0.15
+      staggerChildren: 0.08
     }
   }
 };
 
 const scaleUp = {
-  hidden: { opacity: 0, scale: 0.8 },
-  visible: { opacity: 1, scale: 1, transition: { duration: 0.5 } }
+  hidden: { opacity: 0, scale: 0.95 },
+  visible: { opacity: 1, scale: 1, transition: { duration: 0.4 } }
 };
 
 // Component with animation
@@ -61,9 +61,9 @@ export const LandingPage: React.FC = () => {
     <div className="min-h-screen" style={{ background: 'linear-gradient(135deg, #fdfbf7 0%, #f0ebe3 100%)' }}>
       {/* Header */}
       <motion.header
-        initial={{ y: -100 }}
-        animate={{ y: 0 }}
-        transition={{ duration: 0.6 }}
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
         className="fixed top-0 left-0 right-0 bg-white/95 backdrop-blur-sm shadow-sm z-50 border-b"
         style={{ borderColor: '#e5e7eb' }}
       >
@@ -99,8 +99,8 @@ export const LandingPage: React.FC = () => {
                 href="/purchase?type=gift"
                 className="px-6 py-2.5 text-white rounded-xl font-semibold shadow-lg"
                 style={{ background: 'linear-gradient(135deg, #4DB3A8 0%, #38827A 100%)' }}
-                whileHover={{ scale: 1.05, boxShadow: '0 20px 40px rgba(77, 179, 168, 0.3)' }}
-                whileTap={{ scale: 0.95 }}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
               >
                 Comprar
               </motion.a>
@@ -163,9 +163,9 @@ export const LandingPage: React.FC = () => {
             {/* Left: Text Content */}
             <div className="text-center lg:text-left">
               <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2, duration: 0.6 }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.1, duration: 0.4 }}
                 className="inline-block mb-6 px-4 py-2 rounded-full"
                 style={{ background: '#E8F5F4' }}
               >
@@ -173,9 +173,9 @@ export const LandingPage: React.FC = () => {
               </motion.div>
 
               <motion.h1
-                initial={{ opacity: 0, y: 30 }}
+                initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3, duration: 0.6 }}
+                transition={{ delay: 0.15, duration: 0.4 }}
                 className="text-5xl md:text-6xl lg:text-7xl font-bold mb-6 leading-tight"
                 style={{ color: '#1F2937' }}
               >
@@ -184,9 +184,9 @@ export const LandingPage: React.FC = () => {
               </motion.h1>
 
               <motion.p
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.4, duration: 0.6 }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.2, duration: 0.4 }}
                 className="text-xl md:text-2xl mb-8 leading-relaxed"
                 style={{ color: '#4B5563' }}
               >
@@ -194,17 +194,17 @@ export const LandingPage: React.FC = () => {
               </motion.p>
 
               <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.5, duration: 0.6 }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.25, duration: 0.4 }}
                 className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start mb-8"
               >
                 <motion.a
                   href="/purchase?type=gift"
                   className="px-8 py-4 text-white rounded-xl font-bold text-lg shadow-xl"
                   style={{ background: 'linear-gradient(135deg, #4DB3A8 0%, #38827A 100%)' }}
-                  whileHover={{ scale: 1.05, boxShadow: '0 25px 50px rgba(77, 179, 168, 0.4)' }}
-                  whileTap={{ scale: 0.95 }}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
                 >
                   Regala una historia
                 </motion.a>
@@ -212,8 +212,8 @@ export const LandingPage: React.FC = () => {
                   href="/app"
                   className="px-8 py-4 bg-white rounded-xl font-bold text-lg shadow-lg border-2"
                   style={{ color: '#4DB3A8', borderColor: '#4DB3A8' }}
-                  whileHover={{ scale: 1.05, boxShadow: '0 20px 40px rgba(0, 0, 0, 0.1)' }}
-                  whileTap={{ scale: 0.95 }}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
                 >
                   Iniciar sesión
                 </motion.a>
@@ -222,7 +222,7 @@ export const LandingPage: React.FC = () => {
               <motion.p
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                transition={{ delay: 0.6, duration: 0.6 }}
+                transition={{ delay: 0.3, duration: 0.4 }}
                 className="text-sm"
                 style={{ color: '#9CA3AF' }}
               >
@@ -232,9 +232,9 @@ export const LandingPage: React.FC = () => {
 
             {/* Right: Hero Image */}
             <motion.div
-              initial={{ opacity: 0, x: 50 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.4, duration: 0.8 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.2, duration: 0.5 }}
               className="relative"
             >
               <div className="rounded-3xl overflow-hidden shadow-2xl">
@@ -246,9 +246,9 @@ export const LandingPage: React.FC = () => {
               </div>
               {/* Floating card */}
               <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.8, duration: 0.6 }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.4, duration: 0.4 }}
                 className="absolute -bottom-6 -left-6 bg-white rounded-2xl p-6 shadow-xl max-w-xs hidden lg:block"
               >
                 <div className="flex items-center gap-4">
@@ -288,7 +288,7 @@ export const LandingPage: React.FC = () => {
             {/* Para el Narrador */}
             <motion.div
               variants={scaleUp}
-              whileHover={{ y: -8, boxShadow: '0 25px 50px rgba(77, 179, 168, 0.15)' }}
+              whileHover={{ y: -4 }}
               className="bg-white rounded-3xl p-8 shadow-xl border-2 transition-all"
               style={{ borderColor: '#E8F5F4' }}
             >
@@ -310,7 +310,7 @@ export const LandingPage: React.FC = () => {
             {/* Para el Comprador */}
             <motion.div
               variants={scaleUp}
-              whileHover={{ y: -8, boxShadow: '0 25px 50px rgba(77, 179, 168, 0.15)' }}
+              whileHover={{ y: -4 }}
               className="bg-white rounded-3xl p-8 shadow-xl border-2 transition-all"
               style={{ borderColor: '#E8F5F4' }}
             >
@@ -429,10 +429,10 @@ export const LandingPage: React.FC = () => {
             </AnimatedSection>
 
             <motion.div
-              initial={{ opacity: 0, x: 50 }}
-              whileInView={{ opacity: 1, x: 0 }}
+              initial={{ opacity: 0 }}
+              whileInView={{ opacity: 1 }}
               viewport={{ once: true }}
-              transition={{ duration: 0.8 }}
+              transition={{ duration: 0.5 }}
               className="relative"
             >
               <div className="rounded-3xl overflow-hidden shadow-2xl">
@@ -566,10 +566,10 @@ export const LandingPage: React.FC = () => {
           </AnimatedSection>
 
           <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            whileInView={{ opacity: 1, scale: 1 }}
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
             viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
+            transition={{ duration: 0.5 }}
             className="bg-white rounded-3xl p-10 shadow-2xl border-2 relative overflow-hidden"
             style={{ borderColor: '#4DB3A8' }}
           >
@@ -613,8 +613,8 @@ export const LandingPage: React.FC = () => {
                 href="/purchase?type=gift"
                 className="w-full py-5 text-white rounded-2xl font-bold text-xl shadow-xl block text-center"
                 style={{ background: 'linear-gradient(135deg, #4DB3A8 0%, #38827A 100%)' }}
-                whileHover={{ scale: 1.02, boxShadow: '0 30px 60px rgba(77, 179, 168, 0.4)' }}
-                whileTap={{ scale: 0.98 }}
+                whileHover={{ scale: 1.01 }}
+                whileTap={{ scale: 0.99 }}
               >
                 🎁 Comprar para regalar
               </motion.a>
@@ -622,8 +622,8 @@ export const LandingPage: React.FC = () => {
                 href="/purchase?type=self"
                 className="w-full py-5 bg-white rounded-2xl font-bold text-xl shadow-lg border-2 block text-center"
                 style={{ color: '#4DB3A8', borderColor: '#4DB3A8' }}
-                whileHover={{ scale: 1.02, boxShadow: '0 25px 50px rgba(0, 0, 0, 0.1)' }}
-                whileTap={{ scale: 0.98 }}
+                whileHover={{ scale: 1.01 }}
+                whileTap={{ scale: 0.99 }}
               >
                 ✍️ Comprar para mí
               </motion.a>
@@ -746,18 +746,18 @@ export const LandingPage: React.FC = () => {
           </AnimatedSection>
 
           <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
             viewport={{ once: true }}
-            transition={{ delay: 0.2, duration: 0.6 }}
+            transition={{ delay: 0.1, duration: 0.4 }}
             className="flex flex-col sm:flex-row gap-6 justify-center mb-8"
           >
             <motion.a
               href="/purchase?type=self"
               className="px-12 py-5 text-white rounded-2xl font-bold text-xl shadow-2xl"
               style={{ background: 'linear-gradient(135deg, #4DB3A8 0%, #38827A 100%)' }}
-              whileHover={{ scale: 1.05, boxShadow: '0 35px 70px rgba(77, 179, 168, 0.4)' }}
-              whileTap={{ scale: 0.95 }}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
             >
               Comienza tu historia ahora
             </motion.a>
@@ -765,8 +765,8 @@ export const LandingPage: React.FC = () => {
               href="/app"
               className="px-12 py-5 bg-white rounded-2xl font-bold text-xl shadow-xl border-2"
               style={{ color: '#4DB3A8', borderColor: '#4DB3A8' }}
-              whileHover={{ scale: 1.05, boxShadow: '0 30px 60px rgba(0, 0, 0, 0.15)' }}
-              whileTap={{ scale: 0.95 }}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
             >
               Ya tengo cuenta
             </motion.a>
@@ -839,16 +839,14 @@ const HowStepCard: React.FC<{
 }> = ({ number, icon, title, description, image, imageAlt }) => (
   <motion.div
     variants={scaleUp}
-    whileHover={{ y: -10, boxShadow: '0 30px 60px rgba(0, 0, 0, 0.15)' }}
+    whileHover={{ y: -4 }}
     className="bg-white rounded-2xl overflow-hidden shadow-xl transition-all"
   >
     <div className="h-48 overflow-hidden">
-      <motion.img
+      <img
         src={image}
         alt={imageAlt ?? title}
-        className="w-full h-full object-cover"
-        whileHover={{ scale: 1.1 }}
-        transition={{ duration: 0.4 }}
+        className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
       />
     </div>
     <div className="p-6">
@@ -887,7 +885,7 @@ const EmotionalBenefit: React.FC<{ icon: string; text: string }> = ({ icon, text
 const FeatureCard: React.FC<{ icon: string; title: string; description: string }> = ({ icon, title, description }) => (
   <motion.div
     variants={scaleUp}
-    whileHover={{ y: -5, boxShadow: '0 20px 40px rgba(77, 179, 168, 0.15)' }}
+    whileHover={{ y: -3 }}
     className="bg-white rounded-2xl p-6 shadow-lg border transition-all"
     style={{ borderColor: '#E8F5F4' }}
   >
@@ -903,7 +901,7 @@ const TestimonialCard: React.FC<{ quote: string; name: string; role: string }> =
   ({ quote, name, role }) => (
   <motion.div
     variants={scaleUp}
-    whileHover={{ y: -8, boxShadow: '0 25px 50px rgba(0, 0, 0, 0.1)' }}
+    whileHover={{ y: -4 }}
     className="bg-white rounded-2xl p-8 shadow-xl transition-all"
   >
     <div className="mb-6">
@@ -933,7 +931,6 @@ const PricingFeature: React.FC<{ text: string }> = ({ text }) => (
 const FaqItem: React.FC<{ question: string; answer: string }> = ({ question, answer }) => (
   <motion.div
     variants={scaleUp}
-    whileHover={{ scale: 1.02, boxShadow: '0 20px 40px rgba(0, 0, 0, 0.08)' }}
     className="bg-white rounded-2xl p-8 shadow-lg transition-all"
   >
     <h3 className="font-bold text-xl mb-3" style={{ color: '#1F2937' }}>{question}</h3>

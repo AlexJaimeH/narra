@@ -1,5 +1,6 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { motion, useInView } from 'framer-motion';
+import { useLocation } from 'react-router-dom';
 
 // Animation variants - Optimized for subtlety
 const fadeInUp = {
@@ -47,6 +48,7 @@ const AnimatedSection: React.FC<{ children: React.ReactNode; className?: string 
 
 export const LandingPage: React.FC = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const location = useLocation();
   const howRef = useRef<HTMLDivElement>(null);
   const featuresRef = useRef<HTMLDivElement>(null);
   const testimonialsRef = useRef<HTMLDivElement>(null);
@@ -56,6 +58,22 @@ export const LandingPage: React.FC = () => {
     ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     setIsMenuOpen(false);
   };
+
+  // Handle hash navigation when coming from other pages
+  useEffect(() => {
+    if (location.hash) {
+      // Remove the # from the hash
+      const id = location.hash.substring(1);
+
+      // Wait a bit for the page to render
+      setTimeout(() => {
+        const element = document.getElementById(id);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 100);
+    }
+  }, [location]);
 
   return (
     <div className="min-h-screen" style={{ background: 'linear-gradient(135deg, #fdfbf7 0%, #f0ebe3 100%)' }}>

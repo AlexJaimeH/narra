@@ -733,12 +733,37 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   }
 
   Future<void> _checkAndShowWalkthrough() async {
-    // DEBUG MODE: Siempre mostrar walkthrough
-    // final shouldShow = await UserService.shouldShowEditorWalkthrough();
-    // if (!shouldShow || !mounted) return;
+    final shouldShow = await UserService.shouldShowEditorWalkthrough();
 
-    // Siempre mostrar walkthrough
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
+
+    if (!shouldShow) {
+      setState(() {
+        _shouldShowWalkthrough = false;
+        _hasStartedWalkthrough = false;
+        _isWalkthroughStartPending = false;
+        _lastWalkthroughTap = null;
+      });
+      return;
+    }
+
+    setState(() {
+      _shouldShowWalkthrough = true;
+      _hasStartedWalkthrough = false;
+      _lastWalkthroughTap = null;
+      _isWalkthroughStartPending = false;
+    });
+
+    await Future.delayed(const Duration(seconds: 1));
+
+    if (!mounted ||
+        !_shouldShowWalkthrough ||
+        _isWalkthroughActive ||
+        _hasStartedWalkthrough) {
+      return;
+    }
 
     setState(() {
       _shouldShowWalkthrough = true;
@@ -1126,6 +1151,43 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         _isAdvancingWalkthrough = false;
       }
     }
+  }
+
+  void _handleWalkthroughOverlayTap() {
+    if (!_isWalkthroughOverlayVisible) {
+      return;
+    }
+
+    if (!_isWalkthroughActive) {
+      _startWalkthrough();
+      return;
+    }
+
+    unawaited(_handleWalkthroughAdvanceRequest());
+  }
+
+  void _handleWalkthroughCompleted() {
+    _walkthroughSteps.clear();
+    _walkthroughKeys.clear();
+    _pendingWalkthroughStepIndex = null;
+    _isAdvancingWalkthrough = false;
+    _isWalkthroughStartPending = false;
+    _currentWalkthroughStepIndex = 0;
+    _lastWalkthroughTap = null;
+
+    if (mounted) {
+      setState(() {
+        _isWalkthroughActive = false;
+        _shouldShowWalkthrough = false;
+        _hasStartedWalkthrough = false;
+      });
+    } else {
+      _isWalkthroughActive = false;
+      _shouldShowWalkthrough = false;
+      _hasStartedWalkthrough = false;
+    }
+
+    unawaited(UserService.markEditorWalkthroughAsSeen());
   }
 
   void _onWalkthroughOverlayTap() {
@@ -2763,7 +2825,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
           _handleShowcaseStepStarted(key);
         }
       },
-      onFinish: _onWalkthroughFinished,
+      onFinish: _handleWalkthroughCompleted,
       builder: (showcaseContext) {
         _showcaseContext = showcaseContext;
         return Stack(
@@ -2912,7 +2974,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
               Positioned.fill(
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
-                  onTap: _onWalkthroughOverlayTap,
+                  onTap: _handleWalkthroughOverlayTap,
                   child: Container(
                     color: Colors.black.withValues(alpha: 0.04),
                   ),
@@ -3257,10 +3319,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                 overlayColor: Colors.black,
                 overlayOpacity: 0.60,
                 disableDefaultTargetGestures: true,
-                onTargetClick: () => unawaited(_onWalkthroughContentFieldTap()),
-                onToolTipClick: () => unawaited(_onWalkthroughContentFieldTap()),
-                onBarrierClick: () =>
-                    unawaited(_handleWalkthroughAdvanceRequest()),
                 child: Container(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(isCompact ? 20 : 24),
@@ -3424,12 +3482,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                     overlayColor: Colors.black,
                     overlayOpacity: 0.60,
                     disableDefaultTargetGestures: true,
-                    onTargetClick: () =>
-                        unawaited(_handleWalkthroughAdvanceRequest()),
-                    onToolTipClick: () =>
-                        unawaited(_handleWalkthroughAdvanceRequest()),
-                    onBarrierClick: () =>
-                        unawaited(_handleWalkthroughAdvanceRequest()),
                     child: buildActionButton(
                       isCompact: isCompact,
                       onPressed: _isGhostWriterProcessing
@@ -3473,12 +3525,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                     overlayColor: Colors.black,
                     overlayOpacity: 0.60,
                     disableDefaultTargetGestures: true,
-                    onTargetClick: () =>
-                        unawaited(_handleWalkthroughAdvanceRequest()),
-                    onToolTipClick: () =>
-                        unawaited(_handleWalkthroughAdvanceRequest()),
-                    onBarrierClick: () =>
-                        unawaited(_handleWalkthroughAdvanceRequest()),
                     child: buildActionButton(
                       isCompact: isCompact,
                       onPressed: () {
@@ -10269,9 +10315,6 @@ class _EditorSegmentedControl extends StatelessWidget {
               overlayColor: Colors.black,
               overlayOpacity: 0.60,
               disableDefaultTargetGestures: true,
-              onTargetClick: () => unawaited(onWalkthroughAdvance()),
-              onToolTipClick: () => unawaited(onWalkthroughAdvance()),
-              onBarrierClick: () => unawaited(onWalkthroughAdvance()),
               child: const Tab(text: 'Fotos'),
             )
           else
@@ -10294,9 +10337,6 @@ class _EditorSegmentedControl extends StatelessWidget {
               overlayColor: Colors.black,
               overlayOpacity: 0.60,
               disableDefaultTargetGestures: true,
-              onTargetClick: () => unawaited(onWalkthroughAdvance()),
-              onToolTipClick: () => unawaited(onWalkthroughAdvance()),
-              onBarrierClick: () => unawaited(onWalkthroughAdvance()),
               child: const Tab(text: 'Fechas'),
             )
           else
@@ -10319,9 +10359,6 @@ class _EditorSegmentedControl extends StatelessWidget {
               overlayColor: Colors.black,
               overlayOpacity: 0.60,
               disableDefaultTargetGestures: true,
-              onTargetClick: () => unawaited(onWalkthroughAdvance()),
-              onToolTipClick: () => unawaited(onWalkthroughAdvance()),
-              onBarrierClick: () => unawaited(onWalkthroughAdvance()),
               child: const Tab(text: 'Etiquetas'),
             )
           else
@@ -10427,9 +10464,6 @@ class _EditorBottomBar extends StatelessWidget {
                 overlayColor: Colors.black,
                 overlayOpacity: 0.60,
                 disableDefaultTargetGestures: true,
-                onTargetClick: () => unawaited(onWalkthroughAdvance()),
-                onToolTipClick: () => unawaited(onWalkthroughAdvance()),
-                onBarrierClick: () => unawaited(onWalkthroughAdvance()),
                 child: button,
               );
             }
@@ -10521,9 +10555,6 @@ class _EditorBottomBar extends StatelessWidget {
                 overlayColor: Colors.black,
                 overlayOpacity: 0.60,
                 disableDefaultTargetGestures: true,
-                onTargetClick: () => unawaited(onWalkthroughAdvance()),
-                onToolTipClick: () => unawaited(onWalkthroughAdvance()),
-                onBarrierClick: () => unawaited(onWalkthroughAdvance()),
                 child: wrappedButton,
               );
             }
@@ -10622,9 +10653,6 @@ class _EditorBottomBar extends StatelessWidget {
                 overlayColor: Colors.black,
                 overlayOpacity: 0.60,
                 disableDefaultTargetGestures: true,
-                onTargetClick: () => unawaited(onWalkthroughAdvance()),
-                onToolTipClick: () => unawaited(onWalkthroughAdvance()),
-                onBarrierClick: () => unawaited(onWalkthroughAdvance()),
                 child: wrappedButton,
               );
             }

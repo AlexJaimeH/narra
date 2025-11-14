@@ -1558,7 +1558,8 @@ class _SettingsPageState extends State<SettingsPage> {
         throw Exception('Error al eliminar cuenta: ${response.statusCode}');
       }
 
-      // Account deleted successfully, redirect to landing page
+      // Account deleted successfully, sign out and redirect to landing page
+      await SupabaseAuth.signOut();
       html.window.location.href = '/';
     } catch (e) {
       if (mounted) {

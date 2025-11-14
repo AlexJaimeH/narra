@@ -2144,14 +2144,17 @@ class _SetNameCardState extends State<_SetNameCard> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
+    // Color naranja cálido para dar la bienvenida
+    const welcomeColor = Color(0xFFF59E0B);
+
     return Card(
       elevation: 4,
-      shadowColor: colorScheme.primary.withValues(alpha: 0.3),
+      shadowColor: welcomeColor.withValues(alpha: 0.3),
       color: colorScheme.surface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(28),
         side: BorderSide(
-          color: colorScheme.primary.withValues(alpha: 0.25),
+          color: welcomeColor.withValues(alpha: 0.25),
           width: 2,
         ),
       ),
@@ -2166,8 +2169,8 @@ class _SetNameCardState extends State<_SetNameCard> {
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
-                    colorScheme.primary.withValues(alpha: 0.06),
-                    colorScheme.primaryContainer.withValues(alpha: 0.04),
+                    welcomeColor.withValues(alpha: 0.06),
+                    welcomeColor.withValues(alpha: 0.04),
                   ],
                 ),
               ),
@@ -2189,21 +2192,21 @@ class _SetNameCardState extends State<_SetNameCard> {
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                           colors: [
-                            colorScheme.primary,
-                            colorScheme.primary.withValues(alpha: 0.85),
+                            welcomeColor,
+                            welcomeColor.withValues(alpha: 0.85),
                           ],
                         ),
                         borderRadius: BorderRadius.circular(20),
                         boxShadow: [
                           BoxShadow(
-                            color: colorScheme.primary.withValues(alpha: 0.25),
+                            color: welcomeColor.withValues(alpha: 0.25),
                             blurRadius: 12,
                             offset: const Offset(0, 4),
                           ),
                         ],
                       ),
                       child: const Icon(
-                        Icons.person_add_rounded,
+                        Icons.waving_hand,
                         color: Colors.white,
                         size: 32,
                       ),
@@ -2217,7 +2220,7 @@ class _SetNameCardState extends State<_SetNameCard> {
                             '¡Bienvenido a Narra!',
                             style: theme.textTheme.headlineSmall?.copyWith(
                               fontWeight: FontWeight.w800,
-                              color: colorScheme.primary,
+                              color: welcomeColor,
                               height: 1.1,
                             ),
                           ),
@@ -2225,7 +2228,7 @@ class _SetNameCardState extends State<_SetNameCard> {
                           Text(
                             'Empecemos con tu nombre',
                             style: theme.textTheme.bodyMedium?.copyWith(
-                              color: colorScheme.primary.withValues(alpha: 0.75),
+                              color: welcomeColor.withValues(alpha: 0.75),
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -2241,10 +2244,10 @@ class _SetNameCardState extends State<_SetNameCard> {
                 Container(
                   padding: const EdgeInsets.all(18),
                   decoration: BoxDecoration(
-                    color: colorScheme.primary.withValues(alpha: 0.08),
+                    color: welcomeColor.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
-                      color: colorScheme.primary.withValues(alpha: 0.15),
+                      color: welcomeColor.withValues(alpha: 0.15),
                       width: 1,
                     ),
                   ),
@@ -2252,7 +2255,7 @@ class _SetNameCardState extends State<_SetNameCard> {
                     children: [
                       Icon(
                         Icons.info_outline,
-                        color: colorScheme.primary,
+                        color: welcomeColor,
                         size: 24,
                       ),
                       const SizedBox(width: 12),
@@ -2282,27 +2285,27 @@ class _SetNameCardState extends State<_SetNameCard> {
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
                       borderSide: BorderSide(
-                        color: colorScheme.primary,
+                        color: welcomeColor,
                         width: 2,
                       ),
                     ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
                       borderSide: BorderSide(
-                        color: colorScheme.primary.withValues(alpha: 0.3),
+                        color: welcomeColor.withValues(alpha: 0.3),
                         width: 2,
                       ),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
                       borderSide: BorderSide(
-                        color: colorScheme.primary,
+                        color: welcomeColor,
                         width: 2,
                       ),
                     ),
                     prefixIcon: Icon(
                       Icons.person_outline,
-                      color: colorScheme.primary,
+                      color: welcomeColor,
                     ),
                     filled: true,
                     fillColor: colorScheme.surface,
@@ -2336,14 +2339,14 @@ class _SetNameCardState extends State<_SetNameCard> {
                       style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
                     style: FilledButton.styleFrom(
-                      backgroundColor: colorScheme.primary,
+                      backgroundColor: welcomeColor,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
                       ),
                       elevation: 3,
-                      shadowColor: colorScheme.primary.withValues(alpha: 0.4),
+                      shadowColor: welcomeColor.withValues(alpha: 0.4),
                     ),
                   ),
                 ),

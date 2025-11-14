@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { motion } from 'framer-motion';
+import { NavigationHeader } from './NavigationHeader';
 
 interface LegalPageLayoutProps {
   children: React.ReactNode;
@@ -7,104 +8,10 @@ interface LegalPageLayoutProps {
 }
 
 export const LegalPageLayout: React.FC<LegalPageLayoutProps> = ({ children, title }) => {
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-
-  const scrollToTop = () => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
   return (
     <div className="min-h-screen" style={{ background: 'linear-gradient(135deg, #fdfbf7 0%, #f0ebe3 100%)' }}>
       {/* Header */}
-      <motion.header
-        initial={{ y: -100 }}
-        animate={{ y: 0 }}
-        transition={{ duration: 0.6 }}
-        className="fixed top-0 left-0 right-0 bg-white/95 backdrop-blur-sm shadow-sm z-50 border-b"
-        style={{ borderColor: '#e5e7eb' }}
-      >
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            {/* Logo */}
-            <a href="/" className="flex items-center cursor-pointer" onClick={scrollToTop}>
-              <img
-                src="/logo-horizontal.png"
-                alt="Narra - Todos tienen una historia"
-                className="h-10 w-auto object-contain"
-              />
-            </a>
-
-            {/* Desktop Navigation */}
-            <nav className="hidden md:flex items-center gap-6">
-              <a href="/#como-funciona" className="text-gray-700 hover:text-[#4DB3A8] font-medium transition">
-                Cómo funciona
-              </a>
-              <a href="/#caracteristicas" className="text-gray-700 hover:text-[#4DB3A8] font-medium transition">
-                Características
-              </a>
-              <a href="/#precio" className="text-gray-700 hover:text-[#4DB3A8] font-medium transition">
-                Precio
-              </a>
-              <a href="/app" className="text-gray-700 hover:text-[#4DB3A8] font-medium transition">
-                Iniciar sesión
-              </a>
-              <motion.a
-                href="/purchase?type=gift"
-                className="px-6 py-2.5 text-white rounded-xl font-semibold shadow-lg"
-                style={{ background: 'linear-gradient(135deg, #4DB3A8 0%, #38827A 100%)' }}
-                whileHover={{ scale: 1.05, boxShadow: '0 20px 40px rgba(77, 179, 168, 0.3)' }}
-                whileTap={{ scale: 0.95 }}
-              >
-                Comprar
-              </motion.a>
-            </nav>
-
-            {/* Mobile Menu Button */}
-            <button
-              onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="md:hidden p-2 text-gray-700"
-            >
-              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                {isMenuOpen ? (
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                ) : (
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                )}
-              </svg>
-            </button>
-          </div>
-
-          {/* Mobile Menu */}
-          {isMenuOpen && (
-            <motion.nav
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="md:hidden mt-4 pb-4 flex flex-col gap-3"
-            >
-              <a href="/#como-funciona" className="text-left py-2 text-gray-700 hover:text-[#4DB3A8]">
-                Cómo funciona
-              </a>
-              <a href="/#caracteristicas" className="text-left py-2 text-gray-700 hover:text-[#4DB3A8]">
-                Características
-              </a>
-              <a href="/#precio" className="text-left py-2 text-gray-700 hover:text-[#4DB3A8]">
-                Precio
-              </a>
-              <a href="/app" className="text-left py-2 text-gray-700 hover:text-[#4DB3A8]">
-                Iniciar sesión
-              </a>
-              <a
-                href="/purchase?type=gift"
-                className="px-6 py-3 text-white rounded-xl text-center font-semibold"
-                style={{ background: 'linear-gradient(135deg, #4DB3A8 0%, #38827A 100%)' }}
-              >
-                Comprar
-              </a>
-            </motion.nav>
-          )}
-        </div>
-      </motion.header>
+      <NavigationHeader />
 
       {/* Page Title */}
       <section className="pt-32 pb-12 px-6">

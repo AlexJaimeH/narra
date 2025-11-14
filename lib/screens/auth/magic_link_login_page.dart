@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:url_launcher/url_launcher.dart';
 
 class MagicLinkLoginPage extends StatefulWidget {
   const MagicLinkLoginPage({super.key});
@@ -376,6 +377,10 @@ class _MagicLinkLoginPageState extends State<MagicLinkLoginPage> {
               ],
             ),
           ),
+          const SizedBox(height: 40),
+
+          // Sección informativa sobre Narra
+          _buildAboutNarra(theme, colorScheme, isDesktop),
         ],
       ),
     );
@@ -595,6 +600,164 @@ class _MagicLinkLoginPageState extends State<MagicLinkLoginPage> {
                 color: colorScheme.onSurface,
               ),
             ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAboutNarra(ThemeData theme, ColorScheme colorScheme, bool isDesktop) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: colorScheme.primaryContainer.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: colorScheme.primary.withValues(alpha: 0.2),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.auto_stories_rounded,
+                color: colorScheme.primary,
+                size: 28,
+              ),
+              const SizedBox(width: 12),
+              Text(
+                '¿Qué es Narra?',
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: colorScheme.onSurface,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Narra es tu compañero para escribir y preservar tus historias de vida. Un lugar seguro donde tus recuerdos se convierten en un legado digital para compartir con las personas que amas.',
+            style: theme.textTheme.bodyLarge?.copyWith(
+              fontSize: isDesktop ? 16 : 15,
+              height: 1.6,
+              color: colorScheme.onSurface.withValues(alpha: 0.85),
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // Características principales
+          _buildFeatureItem(
+            theme,
+            colorScheme,
+            Icons.edit_note_rounded,
+            'Editor simple y poderoso',
+            'Diseñado para personas de todas las edades',
+          ),
+          const SizedBox(height: 12),
+          _buildFeatureItem(
+            theme,
+            colorScheme,
+            Icons.photo_library_rounded,
+            'Fotos y audios',
+            'Agrega hasta 8 fotos y grabaciones de voz',
+          ),
+          const SizedBox(height: 12),
+          _buildFeatureItem(
+            theme,
+            colorScheme,
+            Icons.smart_toy_rounded,
+            'Asistente de IA',
+            'Ghost Writer te ayuda a mejorar tu redacción',
+          ),
+          const SizedBox(height: 12),
+          _buildFeatureItem(
+            theme,
+            colorScheme,
+            Icons.family_restroom_rounded,
+            'Comparte con familia',
+            'Invita a tus seres queridos a leer y comentar',
+          ),
+
+          const SizedBox(height: 20),
+          Center(
+            child: TextButton.icon(
+              onPressed: () async {
+                // Abrir landing page en el navegador
+                final Uri url = Uri.parse('https://narra.mx');
+                if (await canLaunchUrl(url)) {
+                  await launchUrl(url, mode: LaunchMode.externalApplication);
+                }
+              },
+              icon: Icon(
+                Icons.open_in_new_rounded,
+                size: 20,
+                color: colorScheme.primary,
+              ),
+              label: Text(
+                'Conocer más sobre Narra',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: colorScheme.primary,
+                ),
+              ),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFeatureItem(
+    ThemeData theme,
+    ColorScheme colorScheme,
+    IconData icon,
+    String title,
+    String description,
+  ) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: colorScheme.primary.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(
+            icon,
+            color: colorScheme.primary,
+            size: 20,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 15,
+                  color: colorScheme.onSurface,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                description,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontSize: 14,
+                  color: colorScheme.onSurface.withValues(alpha: 0.7),
+                ),
+              ),
+            ],
           ),
         ),
       ],

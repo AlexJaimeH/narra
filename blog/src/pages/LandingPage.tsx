@@ -333,7 +333,7 @@ export const LandingPage: React.FC = () => {
       </section>
 
       {/* How It Works */}
-      <section ref={howRef} className="py-20 px-6">
+      <section id="como-funciona" ref={howRef} className="py-20 px-6">
         <div className="max-w-7xl mx-auto">
           <AnimatedSection>
             <h2 className="text-4xl md:text-5xl font-bold text-center mb-4" style={{ color: '#1F2937' }}>
@@ -448,7 +448,7 @@ export const LandingPage: React.FC = () => {
       </section>
 
       {/* Features Section */}
-      <section ref={featuresRef} className="py-20 px-6 bg-white">
+      <section id="caracteristicas" ref={featuresRef} className="py-20 px-6 bg-white">
         <div className="max-w-7xl mx-auto">
           <AnimatedSection>
             <h2 className="text-4xl md:text-5xl font-bold text-center mb-4" style={{ color: '#1F2937' }}>
@@ -516,7 +516,7 @@ export const LandingPage: React.FC = () => {
       </section>
 
       {/* Testimonials */}
-      <section ref={testimonialsRef} className="py-20 px-6" style={{ background: 'linear-gradient(135deg, #fdfbf7 0%, #f0ebe3 100%)' }}>
+      <section id="testimonios" ref={testimonialsRef} className="py-20 px-6" style={{ background: 'linear-gradient(135deg, #fdfbf7 0%, #f0ebe3 100%)' }}>
         <div className="max-w-7xl mx-auto">
           <AnimatedSection>
             <h2 className="text-4xl md:text-5xl font-bold text-center mb-4" style={{ color: '#1F2937' }}>
@@ -554,7 +554,7 @@ export const LandingPage: React.FC = () => {
       </section>
 
       {/* Pricing Section */}
-      <section ref={pricingRef} className="py-20 px-6 bg-white">
+      <section id="precio" ref={pricingRef} className="py-20 px-6 bg-white">
         <div className="max-w-4xl mx-auto">
           <AnimatedSection>
             <h2 className="text-4xl md:text-5xl font-bold text-center mb-4" style={{ color: '#1F2937' }}>

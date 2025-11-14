@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { NarraColors } from '../styles/colors';
+import { NavigationHeader } from '../components/NavigationHeader';
 
 type PurchaseType = 'self' | 'gift';
 
@@ -60,20 +61,10 @@ export const PurchasePage: React.FC = () => {
       style={{ background: 'linear-gradient(135deg, #fdfbf7 0%, #f0ebe3 100%)' }}
     >
       {/* Header */}
-      <header className="bg-white/95 backdrop-blur-sm shadow-sm border-b" style={{ borderColor: '#e5e7eb' }}>
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <a href="/" className="flex items-center">
-            <img
-              src="/logo-horizontal.png"
-              alt="Narra"
-              className="h-10 w-auto object-contain"
-            />
-          </a>
-        </div>
-      </header>
+      <NavigationHeader />
 
       {/* Main Content */}
-      <div className="max-w-5xl mx-auto px-6 py-12">
+      <div className="max-w-5xl mx-auto px-6 pt-28 pb-12">
         {/* Hero Section */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -163,6 +154,29 @@ export const PurchasePage: React.FC = () => {
               Quiero regalárselo a alguien especial para que preserve sus memorias
             </p>
           </motion.div>
+        </motion.div>
+
+        {/* Buy Button after Selection */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.3 }}
+          className="text-center mb-12"
+        >
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => navigate(`/purchase/checkout?type=${selectedType}`)}
+            className="px-12 py-4 rounded-xl font-bold text-white text-lg shadow-lg"
+            style={{
+              background: 'linear-gradient(135deg, #4DB3A8 0%, #38827A 100%)',
+            }}
+          >
+            {selectedType === 'self' ? '🚀 Continuar con mi Compra' : '🎁 Continuar con el Regalo'}
+          </motion.button>
+          <p className="text-sm mt-4" style={{ color: NarraColors.text.light }}>
+            Solo $300 MXN • Pago único • Sin suscripciones
+          </p>
         </motion.div>
 
         {/* Features Grid */}

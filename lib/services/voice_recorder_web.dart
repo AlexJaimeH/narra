@@ -1084,6 +1084,11 @@ class VoiceRecorder {
       return false;
     }
 
+    // Filtrar ruido de transcripción inicial (como "grabación de video", "subtítulos generados", etc.)
+    if (_isTranscriptionNoise(transcriptCandidate)) {
+      return false;
+    }
+
     return _transcript.apply(
       transcriptCandidate,
       forceFull: forceFull,
@@ -1172,6 +1177,35 @@ class VoiceRecorder {
     final normalized = value.replaceAll('\n', ' ');
     final collapsed = normalized.replaceAll(RegExp(r'\s+'), ' ').trim();
     return collapsed;
+  }
+
+  bool _isTranscriptionNoise(String text) {
+    // Detecta patrones conocidos de ruido en transcripciones iniciales
+    final lowercaseText = text.toLowerCase();
+
+    // Patrones de ruido comunes al inicio de las transcripciones
+    final noisePatterns = [
+      'grabaci[oó]n de video',
+      'grabaci[oó]n de v[ií]deo',
+      'subt[ií]tulos generados',
+      'subtitulos generados automaticamente',
+      'subtítulos generados automáticamente',
+      'subt[ií]tulos generados por',
+      'transcripci[oó]n autom[aá]tica',
+      'generado autom[aá]ticamente',
+    ];
+
+    for (final pattern in noisePatterns) {
+      if (RegExp(pattern, caseSensitive: false).hasMatch(lowercaseText)) {
+        _log(
+          'Transcripción descartada por contener ruido inicial: "$text"',
+          level: 'debug',
+        );
+        return true;
+      }
+    }
+
+    return false;
   }
 
   double _parseTimestamp(dynamic value, double fallback) {

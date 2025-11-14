@@ -28,6 +28,7 @@ class DashboardPage extends StatefulWidget {
 
 class _DashboardPageState extends State<DashboardPage> {
   Map<String, dynamic>? _userProfile;
+  Map<String, dynamic>? _userSettings;
   Map<String, dynamic>? _dashboardStats;
   List<Story> _draftStories = [];
   List<StoryTag> _allTags = [];
@@ -168,6 +169,7 @@ class _DashboardPageState extends State<DashboardPage> {
   Future<void> _loadDashboardData() async {
     try {
       final profile = await NarraAPI.getCurrentUserProfile();
+      final settings = await UserService.getUserSettings();
       final dashboardStats = await NarraAPI.getDashboardStats();
       final allStories = await StoryServiceNew.getStories();
       final draftStories = allStories.where((s) => s.isDraft).toList();
@@ -199,6 +201,7 @@ class _DashboardPageState extends State<DashboardPage> {
 
         setState(() {
           _userProfile = profile?.toMap();
+          _userSettings = settings;
           _dashboardStats = {
             'total_stories': dashboardStats.totalStories,
             'published_stories': dashboardStats.publishedStories,
@@ -626,6 +629,7 @@ class _DashboardPageState extends State<DashboardPage> {
                   onBarrierClick: _handleWalkthroughTap,
                   child: _WelcomeSection(
                     userProfile: _userProfile,
+                    userSettings: _userSettings,
                     allTags: _allTags,
                     draftStories: _draftStories,
                     stats: _dashboardStats,
@@ -738,6 +742,7 @@ class _DashboardPageState extends State<DashboardPage> {
 /// Sección de bienvenida mejorada con sugerencias
 class _WelcomeSection extends StatelessWidget {
   final Map<String, dynamic>? userProfile;
+  final Map<String, dynamic>? userSettings;
   final List<StoryTag> allTags;
   final List<Story> draftStories;
   final Map<String, dynamic>? stats;
@@ -745,6 +750,7 @@ class _WelcomeSection extends StatelessWidget {
 
   const _WelcomeSection({
     required this.userProfile,
+    required this.userSettings,
     required this.allTags,
     required this.draftStories,
     required this.stats,
@@ -755,8 +761,11 @@ class _WelcomeSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    // Corregido: usar nombre completo en lugar de solo el primer nombre
-    final userName = userProfile?['name'] ?? 'Usuario';
+    // Usar public_author_name de settings si existe, sino usar name del perfil
+    final publicName = userSettings?['public_author_name'] as String?;
+    final userName = (publicName != null && publicName.trim().isNotEmpty)
+        ? publicName
+        : (userProfile?['name'] ?? 'Usuario');
     final hasDrafts = draftStories.isNotEmpty;
     final totalStories = stats?['total_stories'] ?? 0;
 
@@ -2205,8 +2214,8 @@ class _SetNameCardState extends State<_SetNameCard> {
                           ),
                         ],
                       ),
-                      child: const Icon(
-                        Icons.waving_hand,
+                      child: Icon(
+                        Icons.front_hand,
                         color: Colors.white,
                         size: 32,
                       ),

@@ -119,7 +119,7 @@ class NarraSupabaseClient {
   /// Ensure user profile exists, create if missing
   static Future<void> ensureUserProfileExists() async {
     final user = currentUser;
-    if (user == null) throw Exception('User not authenticated');
+    if (user == null) throw Exception('Debes iniciar sesión para continuar');
 
     try {
       final existingProfile = await getUserProfile(user.id);
@@ -147,7 +147,7 @@ class NarraSupabaseClient {
     Map<String, dynamic> updates,
   ) async {
     final userId = currentUser?.id;
-    if (userId == null) throw Exception('User not authenticated');
+    if (userId == null) throw Exception('Debes iniciar sesión para continuar');
 
     // Ensure user profile exists
     await ensureUserProfileExists();
@@ -167,7 +167,7 @@ class NarraSupabaseClient {
   /// Delete user account and all related data
   static Future<void> deleteUserAccount() async {
     final userId = currentUser?.id;
-    if (userId == null) throw Exception('User not authenticated');
+    if (userId == null) throw Exception('Debes iniciar sesión para continuar');
 
     // Delete user profile (cascade will handle related data)
     await _client.from('users').delete().eq('id', userId);
@@ -189,7 +189,7 @@ class NarraSupabaseClient {
     int? offset,
   }) async {
     final userId = currentUser?.id;
-    if (userId == null) throw Exception('User not authenticated');
+    if (userId == null) throw Exception('Debes iniciar sesión para continuar');
 
     // Ensure user profile exists
     await ensureUserProfileExists();
@@ -250,7 +250,7 @@ class NarraSupabaseClient {
   /// Get story by ID with full details
   static Future<Map<String, dynamic>?> getStoryById(String storyId) async {
     final userId = currentUser?.id;
-    if (userId == null) throw Exception('User not authenticated');
+    if (userId == null) throw Exception('Debes iniciar sesión para continuar');
 
     final result = await _client.from('stories').select('''
           *,
@@ -398,7 +398,7 @@ class NarraSupabaseClient {
   static Future<List<Map<String, dynamic>>> getStoryVersions(
       String storyId) async {
     final userId = currentUser?.id;
-    if (userId == null) throw Exception('User not authenticated');
+    if (userId == null) throw Exception('Debes iniciar sesión para continuar');
 
     final List<dynamic> result = await _client
         .from('story_versions')
@@ -424,7 +424,7 @@ class NarraSupabaseClient {
     List<Map<String, dynamic>>? photos,
   }) async {
     final userId = currentUser?.id;
-    if (userId == null) throw Exception('User not authenticated');
+    if (userId == null) throw Exception('Debes iniciar sesión para continuar');
 
     final payload = <String, dynamic>{
       'story_id': storyId,
@@ -464,7 +464,7 @@ class NarraSupabaseClient {
     String status = 'draft',
   }) async {
     final userId = currentUser?.id;
-    if (userId == null) throw Exception('User not authenticated');
+    if (userId == null) throw Exception('Debes iniciar sesión para continuar');
 
     // Ensure user profile exists before creating story
     await ensureUserProfileExists();
@@ -512,7 +512,7 @@ class NarraSupabaseClient {
     Map<String, dynamic> updates,
   ) async {
     final userId = currentUser?.id;
-    if (userId == null) throw Exception('User not authenticated');
+    if (userId == null) throw Exception('Debes iniciar sesión para continuar');
 
     updates['updated_at'] = DateTime.now().toIso8601String();
 
@@ -530,7 +530,7 @@ class NarraSupabaseClient {
   /// Delete story and all related data
   static Future<void> deleteStory(String storyId) async {
     final userId = currentUser?.id;
-    if (userId == null) throw Exception('User not authenticated');
+    if (userId == null) throw Exception('Debes iniciar sesión para continuar');
 
     await _client
         .from('stories')
@@ -542,7 +542,7 @@ class NarraSupabaseClient {
   /// Publish story
   static Future<Map<String, dynamic>> publishStory(String storyId) async {
     final userId = currentUser?.id;
-    if (userId == null) throw Exception('User not authenticated');
+    if (userId == null) throw Exception('Debes iniciar sesión para continuar');
 
     final now = DateTime.now().toIso8601String();
     final baseUpdate = {
@@ -590,7 +590,7 @@ class NarraSupabaseClient {
   /// Unpublish story (convert back to draft)
   static Future<Map<String, dynamic>> unpublishStory(String storyId) async {
     final userId = currentUser?.id;
-    if (userId == null) throw Exception('User not authenticated');
+    if (userId == null) throw Exception('Debes iniciar sesión para continuar');
 
     final now = DateTime.now().toIso8601String();
     final baseUpdate = {
@@ -642,7 +642,7 @@ class NarraSupabaseClient {
   /// Get all tags for current user
   static Future<List<Map<String, dynamic>>> getUserTags() async {
     final userId = currentUser?.id;
-    if (userId == null) throw Exception('User not authenticated');
+    if (userId == null) throw Exception('Debes iniciar sesión para continuar');
 
     final results =
         await _client.from('tags').select().eq('user_id', userId).order('name');
@@ -656,7 +656,7 @@ class NarraSupabaseClient {
     String? color,
   }) async {
     final userId = currentUser?.id;
-    if (userId == null) throw Exception('User not authenticated');
+    if (userId == null) throw Exception('Debes iniciar sesión para continuar');
 
     final tagData = {
       'name': name,
@@ -673,7 +673,7 @@ class NarraSupabaseClient {
   /// Get or create tag by name
   static Future<Map<String, dynamic>> getOrCreateTag(String name) async {
     final userId = currentUser?.id;
-    if (userId == null) throw Exception('User not authenticated');
+    if (userId == null) throw Exception('Debes iniciar sesión para continuar');
 
     // Try to find existing tag
     final existing = await _client
@@ -697,7 +697,7 @@ class NarraSupabaseClient {
     Map<String, dynamic> updates,
   ) async {
     final userId = currentUser?.id;
-    if (userId == null) throw Exception('User not authenticated');
+    if (userId == null) throw Exception('Debes iniciar sesión para continuar');
 
     final result = await _client
         .from('tags')
@@ -713,7 +713,7 @@ class NarraSupabaseClient {
   /// Delete tag
   static Future<void> deleteTag(String tagId) async {
     final userId = currentUser?.id;
-    if (userId == null) throw Exception('User not authenticated');
+    if (userId == null) throw Exception('Debes iniciar sesión para continuar');
 
     await _client.from('tags').delete().eq('id', tagId).eq('user_id', userId);
   }
@@ -725,7 +725,7 @@ class NarraSupabaseClient {
   /// Get all people for current user
   static Future<List<Map<String, dynamic>>> getUserPeople() async {
     final userId = currentUser?.id;
-    if (userId == null) throw Exception('User not authenticated');
+    if (userId == null) throw Exception('Debes iniciar sesión para continuar');
 
     final results = await _client
         .from('people')
@@ -744,7 +744,7 @@ class NarraSupabaseClient {
     String? notes,
   }) async {
     final userId = currentUser?.id;
-    if (userId == null) throw Exception('User not authenticated');
+    if (userId == null) throw Exception('Debes iniciar sesión para continuar');
 
     final personData = {
       'name': name,
@@ -767,7 +767,7 @@ class NarraSupabaseClient {
     Map<String, dynamic> updates,
   ) async {
     final userId = currentUser?.id;
-    if (userId == null) throw Exception('User not authenticated');
+    if (userId == null) throw Exception('Debes iniciar sesión para continuar');
 
     final result = await _client
         .from('people')
@@ -783,7 +783,7 @@ class NarraSupabaseClient {
   /// Delete person
   static Future<void> deletePerson(String personId) async {
     final userId = currentUser?.id;
-    if (userId == null) throw Exception('User not authenticated');
+    if (userId == null) throw Exception('Debes iniciar sesión para continuar');
 
     await _client
         .from('people')
@@ -799,7 +799,7 @@ class NarraSupabaseClient {
   /// Get all subscribers for current user
   static Future<List<Map<String, dynamic>>> getUserSubscribers() async {
     final userId = currentUser?.id;
-    if (userId == null) throw Exception('User not authenticated');
+    if (userId == null) throw Exception('Debes iniciar sesión para continuar');
 
     final results = await _client
         .from('subscribers')
@@ -818,7 +818,7 @@ class NarraSupabaseClient {
     String? relationship,
   }) async {
     final userId = currentUser?.id;
-    if (userId == null) throw Exception('User not authenticated');
+    if (userId == null) throw Exception('Debes iniciar sesión para continuar');
 
     final subscriberData = {
       'name': name,
@@ -845,7 +845,7 @@ class NarraSupabaseClient {
     Map<String, dynamic> updates,
   ) async {
     final userId = currentUser?.id;
-    if (userId == null) throw Exception('User not authenticated');
+    if (userId == null) throw Exception('Debes iniciar sesión para continuar');
 
     final result = await _client
         .from('subscribers')
@@ -861,7 +861,7 @@ class NarraSupabaseClient {
   /// Delete subscriber
   static Future<void> deleteSubscriber(String subscriberId) async {
     final userId = currentUser?.id;
-    if (userId == null) throw Exception('User not authenticated');
+    if (userId == null) throw Exception('Debes iniciar sesión para continuar');
 
     await _client
         .from('subscribers')
@@ -882,7 +882,7 @@ class NarraSupabaseClient {
     int position = 0,
   }) async {
     final userId = currentUser?.id;
-    if (userId == null) throw Exception('User not authenticated');
+    if (userId == null) throw Exception('Debes iniciar sesión para continuar');
 
     final photoData = {
       'story_id': storyId,
@@ -901,7 +901,7 @@ class NarraSupabaseClient {
   /// Remove photo from story
   static Future<void> removePhotoFromStory(String photoId) async {
     final userId = currentUser?.id;
-    if (userId == null) throw Exception('User not authenticated');
+    if (userId == null) throw Exception('Debes iniciar sesión para continuar');
 
     await _client.from('story_photos').delete().eq('id', photoId);
   }
@@ -909,7 +909,7 @@ class NarraSupabaseClient {
   /// Add tag to story
   static Future<void> addTagToStory(String storyId, String tagId) async {
     final userId = currentUser?.id;
-    if (userId == null) throw Exception('User not authenticated');
+    if (userId == null) throw Exception('Debes iniciar sesión para continuar');
 
     await _client.from('story_tags').insert({
       'story_id': storyId,
@@ -920,7 +920,7 @@ class NarraSupabaseClient {
   /// Remove tag from story
   static Future<void> removeTagFromStory(String storyId, String tagId) async {
     final userId = currentUser?.id;
-    if (userId == null) throw Exception('User not authenticated');
+    if (userId == null) throw Exception('Debes iniciar sesión para continuar');
 
     await _client
         .from('story_tags')
@@ -932,7 +932,7 @@ class NarraSupabaseClient {
   /// Add person to story
   static Future<void> addPersonToStory(String storyId, String personId) async {
     final userId = currentUser?.id;
-    if (userId == null) throw Exception('User not authenticated');
+    if (userId == null) throw Exception('Debes iniciar sesión para continuar');
 
     await _client.from('story_people').insert({
       'story_id': storyId,
@@ -944,7 +944,7 @@ class NarraSupabaseClient {
   static Future<void> removePersonFromStory(
       String storyId, String personId) async {
     final userId = currentUser?.id;
-    if (userId == null) throw Exception('User not authenticated');
+    if (userId == null) throw Exception('Debes iniciar sesión para continuar');
 
     await _client
         .from('story_people')
@@ -960,7 +960,7 @@ class NarraSupabaseClient {
   /// Get dashboard statistics
   static Future<Map<String, dynamic>> getDashboardStats() async {
     final userId = currentUser?.id;
-    if (userId == null) throw Exception('User not authenticated');
+    if (userId == null) throw Exception('Debes iniciar sesión para continuar');
 
     // Get user profile with stats
     final userProfile = await getUserProfile(userId);
@@ -998,7 +998,7 @@ class NarraSupabaseClient {
   /// Get user settings
   static Future<Map<String, dynamic>?> getUserSettings() async {
     final userId = currentUser?.id;
-    if (userId == null) throw Exception('User not authenticated');
+    if (userId == null) throw Exception('Debes iniciar sesión para continuar');
 
     final result = await _client
         .from('user_settings')
@@ -1014,7 +1014,7 @@ class NarraSupabaseClient {
     Map<String, dynamic> settings,
   ) async {
     final userId = currentUser?.id;
-    if (userId == null) throw Exception('User not authenticated');
+    if (userId == null) throw Exception('Debes iniciar sesión para continuar');
 
     // Try to update first
     final existing = await _client

@@ -5711,26 +5711,30 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   }
 
   void _scrollTranscriptToBottom() {
-    if (!_transcriptScrollController.hasClients) {
+    if (!mounted || !_transcriptScrollController.hasClients) {
       return;
     }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_transcriptScrollController.hasClients) {
+      if (!mounted || !_transcriptScrollController.hasClients) {
         return;
       }
 
-      final position = _transcriptScrollController.position;
-      final target = position.maxScrollExtent;
-      if (position.pixels >= target) {
-        return;
-      }
+      try {
+        final position = _transcriptScrollController.position;
+        final target = position.maxScrollExtent;
+        if (position.pixels >= target) {
+          return;
+        }
 
-      _transcriptScrollController.animateTo(
-        target,
-        duration: const Duration(milliseconds: 160),
-        curve: Curves.easeOut,
-      );
+        _transcriptScrollController.animateTo(
+          target,
+          duration: const Duration(milliseconds: 160),
+          curve: Curves.easeOut,
+        );
+      } catch (_) {
+        // Silenciar errores si el scroll controller no está disponible
+      }
     });
   }
 
@@ -5760,9 +5764,10 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       } catch (_) {
         _sheetStateUpdater.remove('dictation');
       }
+    } else {
+      // Si el sheet no está abierto, hacer scroll de todas formas
+      _scrollTranscriptToBottom();
     }
-
-    _scrollTranscriptToBottom();
 
     if (sanitized.isEmpty) {
       return;

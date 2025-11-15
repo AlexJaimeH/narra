@@ -694,36 +694,51 @@ class VoiceRecorder {
     }
 
     try {
-      // Acceder a AudioContext directamente desde js.context en lugar de html.window
-      // para evitar problemas con conversiones de JsObject
-      Object? ctor;
+      // Acceder a AudioContext directamente desde el contexto global de JavaScript
+      // Evitamos usar las funciones helper para este caso específico
       final jsWindow = js.context;
+
+      // Intentar obtener el constructor de AudioContext
+      dynamic ctor;
       if (jsWindow.hasProperty('AudioContext')) {
         ctor = jsWindow['AudioContext'];
-      }
-      if (ctor == null && jsWindow.hasProperty('webkitAudioContext')) {
+      } else if (jsWindow.hasProperty('webkitAudioContext')) {
         ctor = jsWindow['webkitAudioContext'];
       }
 
       if (ctor == null) {
-        throw UnsupportedError('AudioContext no disponible');
+        throw UnsupportedError('AudioContext no disponible en este navegador');
       }
 
-      final context = _callConstructor(ctor, const []);
-      final source =
-          _callMethod(context, 'createMediaStreamSource', [stream]);
-      final analyser = _callMethod(context, 'createAnalyser', const []);
-      _setProperty(analyser, 'fftSize', 512);
-      _setProperty(analyser, 'smoothingTimeConstant', 0.22);
-      _callMethod(source, 'connect', [analyser]);
+      // Crear instancia de AudioContext (equivalente a: new AudioContext())
+      final context = js.JsObject(ctor as dynamic, []);
 
-      final binCount = _getProperty(analyser, 'frequencyBinCount');
+      // Crear source node desde el MediaStream
+      final source = context.callMethod('createMediaStreamSource', [stream]);
+
+      // Crear analyser node
+      final analyser = context.callMethod('createAnalyser', []);
+
+      // Configurar el analyser
+      analyser['fftSize'] = 512;
+      analyser['smoothingTimeConstant'] = 0.22;
+
+      // Conectar source al analyser
+      source.callMethod('connect', [analyser]);
+
+      // Obtener el tamaño del buffer de frecuencias
+      final binCount = analyser['frequencyBinCount'];
       final count = binCount is int ? binCount : int.tryParse('$binCount') ?? 0;
 
+      // Guardar referencias
       _audioContext = context;
       _audioSourceNode = source;
       _audioAnalyser = analyser;
       _levelDataBuffer = Uint8List(count > 0 ? count : 512);
+
+      _log('Monitor de audio iniciado correctamente', level: 'info');
+
+      // Iniciar el timer que lee los niveles de audio
       _levelTimer = Timer.periodic(
         const Duration(milliseconds: 16),
         (_) => _emitAudioLevel(),
@@ -731,8 +746,8 @@ class VoiceRecorder {
     } catch (error) {
       _teardownLevelMonitoring();
       _log(
-        'No se pudo iniciar el visualizador de audio',
-        level: 'warning',
+        'Error al iniciar el monitor de audio: $error',
+        level: 'error',
         error: error,
       );
     }
@@ -747,10 +762,14 @@ class VoiceRecorder {
     }
 
     try {
-      _callMethod(analyser, 'getByteTimeDomainData', [buffer]);
-    } catch (_) {
+      // Llamar directamente al método del JsObject sin usar helper
+      (analyser as js.JsObject).callMethod('getByteTimeDomainData', [buffer]);
+    } catch (error) {
+      // Si falla, el analyser no está configurado correctamente
       return;
     }
+
+    // Calcular el RMS (Root Mean Square) del audio
     var sum = 0.0;
     for (var i = 0; i < buffer.length; i++) {
       final normalized = (buffer[i] - 128) / 128.0;
@@ -763,9 +782,14 @@ class VoiceRecorder {
     final eased = (previous * 0.28) + (level * 0.72);
 
     _lastEmittedLevel = eased;
+
+    // Detectar cuando empieza a hablar (threshold de 0.065)
     if (!_hasDetectedSpeech && eased > 0.065) {
       _hasDetectedSpeech = true;
+      _log('Voz detectada, activando transcripción continua', level: 'info');
     }
+
+    // Emitir el nivel al callback
     onLevel(eased);
   }
 
@@ -778,8 +802,11 @@ class VoiceRecorder {
     final source = _audioSourceNode;
     if (source != null) {
       try {
-        _callMethod(source, 'disconnect', const []);
-      } catch (_) {}
+        // Desconectar source node usando JsObject directamente
+        (source as js.JsObject).callMethod('disconnect', const []);
+      } catch (_) {
+        // Ignorar errores al desconectar
+      }
     }
     _audioSourceNode = null;
     _audioAnalyser = null;
@@ -788,15 +815,20 @@ class VoiceRecorder {
     _audioContext = null;
     if (context != null) {
       try {
-        final closeResult = _callMethod(context, 'close', const []);
+        // Cerrar el AudioContext usando JsObject directamente
+        final closeResult = (context as js.JsObject).callMethod('close', const []);
         if (closeResult is Future) {
           closeResult.catchError((_) {});
         } else if (closeResult != null) {
           try {
             _promiseToFuture(closeResult).catchError((_) {});
-          } catch (_) {}
+          } catch (_) {
+            // Ignorar errores al convertir promise
+          }
         }
-      } catch (_) {}
+      } catch (_) {
+        // Ignorar errores al cerrar el contexto
+      }
     }
   }
 

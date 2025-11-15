@@ -10,29 +10,36 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 
 // Helper functions to replace dart:js_util
+js.JsObject _asJsObject(Object object) {
+  if (object is js.JsObject) {
+    return object;
+  }
+  return js.JsObject.fromBrowserObject(object);
+}
+
 T _getProperty<T>(Object object, String property) {
-  return (object as js.JsObject)[property] as T;
+  return _asJsObject(object)[property] as T;
 }
 
 void _setProperty(Object object, String property, Object? value) {
-  (object as js.JsObject)[property] = value;
+  _asJsObject(object)[property] = value;
 }
 
 T _callMethod<T>(Object object, String method, List<Object?> args) {
-  return (object as js.JsObject).callMethod(method, args) as T;
+  return _asJsObject(object).callMethod(method, args) as T;
 }
 
 Object _callConstructor(Object constructor, List<Object?> args) {
-  return js.JsObject.fromBrowserObject(constructor).callMethod('new', args);
+  return _asJsObject(constructor).callMethod('new', args);
 }
 
 bool _hasProperty(Object object, String property) {
-  return (object as js.JsObject).hasProperty(property);
+  return _asJsObject(object).hasProperty(property);
 }
 
 Future<T> _promiseToFuture<T>(Object promise) {
   final completer = Completer<T>();
-  final jsPromise = promise as js.JsObject;
+  final jsPromise = _asJsObject(promise);
 
   jsPromise.callMethod('then', [
     (result) => completer.complete(result as T),

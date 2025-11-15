@@ -708,14 +708,12 @@ class VoiceRecorder {
     }
 
     try {
-      html.window.console.info('📊 [VoiceRecorder] Paso 1: Accediendo a js.context...');
-      // Acceder a AudioContext directamente desde el contexto global de JavaScript
-      // Evitamos usar las funciones helper para este caso específico
-      final jsWindow = js.context;
+      html.window.console.info('📊 [VoiceRecorder] Paso 1: Accediendo al constructor de AudioContext...');
 
-      html.window.console.info('📊 [VoiceRecorder] Paso 2: Buscando constructor de AudioContext...');
-      // Intentar obtener el constructor de AudioContext
+      // Acceder al constructor de AudioContext desde el contexto global de JavaScript
+      final jsWindow = js.context;
       dynamic ctor;
+
       if (jsWindow.hasProperty('AudioContext')) {
         ctor = jsWindow['AudioContext'];
         html.window.console.info('✓ [VoiceRecorder] Encontrado: AudioContext');
@@ -728,35 +726,30 @@ class VoiceRecorder {
         throw UnsupportedError('AudioContext no disponible en este navegador');
       }
 
-      html.window.console.info('📊 [VoiceRecorder] Paso 3: Creando instancia de AudioContext...');
-      // Crear instancia de AudioContext (equivalente a: new AudioContext())
+      html.window.console.info('📊 [VoiceRecorder] Paso 2: Creando instancia de AudioContext...');
+      // Crear instancia usando new AudioContext()
       final context = js.JsObject(ctor as dynamic, []);
 
-      html.window.console.info('📊 [VoiceRecorder] Paso 4: Creando source node...');
-      // Crear source node desde el MediaStream
+      html.window.console.info('📊 [VoiceRecorder] Paso 3: Creando source node desde MediaStream...');
+      // IMPORTANTE: El stream de dart:html se puede pasar directamente a JS
       final source = context.callMethod('createMediaStreamSource', [stream]);
 
-      html.window.console.info('📊 [VoiceRecorder] Paso 5: Creando analyser node...');
-      // Crear analyser node
+      html.window.console.info('📊 [VoiceRecorder] Paso 4: Creando analyser node...');
       final analyser = context.callMethod('createAnalyser', []);
 
-      html.window.console.info('📊 [VoiceRecorder] Paso 6: Configurando analyser...');
-      // Configurar el analyser
+      html.window.console.info('📊 [VoiceRecorder] Paso 5: Configurando analyser...');
       analyser['fftSize'] = 512;
       analyser['smoothingTimeConstant'] = 0.22;
 
-      html.window.console.info('📊 [VoiceRecorder] Paso 7: Conectando source a analyser...');
-      // Conectar source al analyser
+      html.window.console.info('📊 [VoiceRecorder] Paso 6: Conectando source a analyser...');
       source.callMethod('connect', [analyser]);
 
-      html.window.console.info('📊 [VoiceRecorder] Paso 8: Obteniendo tamaño del buffer...');
-      // Obtener el tamaño del buffer de frecuencias
+      html.window.console.info('📊 [VoiceRecorder] Paso 7: Obteniendo tamaño del buffer...');
       final binCount = analyser['frequencyBinCount'];
       final count = binCount is int ? binCount : int.tryParse('$binCount') ?? 0;
       html.window.console.info('📊 [VoiceRecorder] Buffer size: $count');
 
-      html.window.console.info('📊 [VoiceRecorder] Paso 9: Guardando referencias...');
-      // Guardar referencias
+      html.window.console.info('📊 [VoiceRecorder] Paso 8: Guardando referencias...');
       _audioContext = context;
       _audioSourceNode = source;
       _audioAnalyser = analyser;
@@ -802,11 +795,11 @@ class VoiceRecorder {
     }
 
     try {
-      // Llamar directamente al método del JsObject sin usar helper
+      // Llamar a getByteTimeDomainData usando JsObject
       (analyser as js.JsObject).callMethod('getByteTimeDomainData', [buffer]);
     } catch (error) {
       // Si falla, el analyser no está configurado correctamente
-      _log('Error en getByteTimeDomainData: $error', level: 'error');
+      html.window.console.error('❌ [VoiceRecorder] Error en getByteTimeDomainData: $error');
       return;
     }
 
@@ -857,7 +850,7 @@ class VoiceRecorder {
     final source = _audioSourceNode;
     if (source != null) {
       try {
-        // Desconectar source node usando JsObject directamente
+        // Desconectar source node usando JsObject
         (source as js.JsObject).callMethod('disconnect', const []);
       } catch (_) {
         // Ignorar errores al desconectar
@@ -870,7 +863,7 @@ class VoiceRecorder {
     _audioContext = null;
     if (context != null) {
       try {
-        // Cerrar el AudioContext usando JsObject directamente
+        // Cerrar el AudioContext usando JsObject
         final closeResult = (context as js.JsObject).callMethod('close', const []);
         if (closeResult is Future) {
           closeResult.catchError((_) {});

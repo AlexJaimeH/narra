@@ -694,13 +694,15 @@ class VoiceRecorder {
     }
 
     try {
+      // Acceder a AudioContext directamente desde js.context en lugar de html.window
+      // para evitar problemas con conversiones de JsObject
       Object? ctor;
-      if (_hasProperty(html.window, 'AudioContext')) {
-        ctor = _getProperty(html.window, 'AudioContext');
+      final jsWindow = js.context;
+      if (jsWindow.hasProperty('AudioContext')) {
+        ctor = jsWindow['AudioContext'];
       }
-      if (ctor == null &&
-          _hasProperty(html.window, 'webkitAudioContext')) {
-        ctor = _getProperty(html.window, 'webkitAudioContext');
+      if (ctor == null && jsWindow.hasProperty('webkitAudioContext')) {
+        ctor = jsWindow['webkitAudioContext'];
       }
 
       if (ctor == null) {

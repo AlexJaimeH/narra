@@ -5754,20 +5754,19 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       _liveTranscript = sanitized;
     });
 
+    // Actualizar el bottom sheet si está abierto
     final sheetUpdater = _sheetStateUpdater['dictation'];
     if (sheetUpdater != null) {
       try {
-        sheetUpdater(() {
-          if (!mounted) return;
-          _scrollTranscriptToBottom();
-        });
+        // Solo forzar rebuild del sheet, NO ejecutar _scrollTranscriptToBottom dentro del setState
+        sheetUpdater(() {});
       } catch (_) {
         _sheetStateUpdater.remove('dictation');
       }
-    } else {
-      // Si el sheet no está abierto, hacer scroll de todas formas
-      _scrollTranscriptToBottom();
     }
+
+    // Hacer scroll DESPUÉS del rebuild, no durante
+    _scrollTranscriptToBottom();
 
     if (sanitized.isEmpty) {
       return;

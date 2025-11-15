@@ -5763,6 +5763,9 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       } catch (_) {
         _sheetStateUpdater.remove('dictation');
       }
+    } else {
+      // Si el sheet no está abierto, hacer scroll de todas formas
+      _scrollTranscriptToBottom();
     }
 
     // Hacer scroll DESPUÉS del rebuild, no durante

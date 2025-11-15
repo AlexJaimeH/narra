@@ -5778,6 +5778,9 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     // Hacer scroll DESPUÉS del rebuild, no durante
     _scrollTranscriptToBottom();
 
+    // Hacer scroll DESPUÉS del rebuild, no durante
+    _scrollTranscriptToBottom();
+
     if (sanitized.isEmpty) {
       return;
     }

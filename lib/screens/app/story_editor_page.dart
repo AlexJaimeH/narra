@@ -549,6 +549,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   static const int _visualizerBarCount = 72;
   final Queue<double> _levelHistory = ListQueue<double>(_visualizerBarCount)
     ..addAll(List<double>.filled(_visualizerBarCount, 0.0));
+  DateTime? _lastSheetRebuildTime;
+  static const _sheetRebuildThrottle = Duration(milliseconds: 50); // Max 20 rebuilds/segundo
   DateTime? _recordingStartedAt;
   Duration _recordingAccumulated = Duration.zero;
   Duration _recordingDuration = Duration.zero;
@@ -4812,15 +4814,31 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     }
   }
 
-  bool _refreshDictationSheet({VoidCallback? mutateState}) {
+  bool _refreshDictationSheet({VoidCallback? mutateState, bool force = false}) {
     mutateState?.call();
     final updater = _sheetStateUpdater['dictation'];
     if (updater != null) {
+      // Throttle: solo rebuild si ha pasado suficiente tiempo desde el último
+      if (!force) {
+        final now = DateTime.now();
+        final lastRebuild = _lastSheetRebuildTime;
+        if (lastRebuild != null &&
+            now.difference(lastRebuild) < _sheetRebuildThrottle) {
+          return true; // Skip rebuild pero reportar que el sheet está abierto
+        }
+        _lastSheetRebuildTime = now;
+      }
+
       try {
-        updater(() {});
+        // Solo actualizar si el widget está montado
+        if (mounted) {
+          updater(() {});
+        }
         return true;
-      } catch (_) {
-        // Ignore errors when the sheet is closing.
+      } catch (e) {
+        // Si hay error, remover el updater para evitar errores en cascada
+        _sheetStateUpdater.remove('dictation');
+        return false;
       }
     }
     return false;
@@ -5754,19 +5772,11 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       _liveTranscript = sanitized;
     });
 
-    // Actualizar el bottom sheet si está abierto
-    final sheetUpdater = _sheetStateUpdater['dictation'];
-    if (sheetUpdater != null) {
-      try {
-        // Solo forzar rebuild del sheet, NO ejecutar _scrollTranscriptToBottom dentro del setState
-        sheetUpdater(() {});
-      } catch (_) {
-        _sheetStateUpdater.remove('dictation');
-      }
-    } else {
-      // Si el sheet no está abierto, hacer scroll de todas formas
-      _scrollTranscriptToBottom();
-    }
+    // Actualizar el bottom sheet si está abierto (force=true porque el transcript cambió)
+    _refreshDictationSheet(force: true);
+
+    // Hacer scroll DESPUÉS del rebuild, no durante
+    _scrollTranscriptToBottom();
 
     // Hacer scroll DESPUÉS del rebuild, no durante
     _scrollTranscriptToBottom();
@@ -6267,21 +6277,33 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                                       .surfaceContainerHighest,
                                   borderRadius: BorderRadius.circular(12),
                                 ),
-                                child: Scrollbar(
-                                  controller: _transcriptScrollController,
-                                  thumbVisibility: true,
-                                  child: SingleChildScrollView(
-                                    controller: _transcriptScrollController,
-                                    child: Text(
-                                      _liveTranscript.isEmpty
-                                          ? 'Empieza a hablar…'
-                                          : _liveTranscript,
-                                      style: Theme.of(builderContext)
-                                          .textTheme
-                                          .bodyLarge,
-                                    ),
-                                  ),
-                                ),
+                                child: _transcriptScrollController.hasClients
+                                    ? Scrollbar(
+                                        controller: _transcriptScrollController,
+                                        thumbVisibility: true,
+                                        child: SingleChildScrollView(
+                                          controller:
+                                              _transcriptScrollController,
+                                          child: Text(
+                                            _liveTranscript.isEmpty
+                                                ? 'Empieza a hablar…'
+                                                : _liveTranscript,
+                                            style: Theme.of(builderContext)
+                                                .textTheme
+                                                .bodyLarge,
+                                          ),
+                                        ),
+                                      )
+                                    : SingleChildScrollView(
+                                        child: Text(
+                                          _liveTranscript.isEmpty
+                                              ? 'Empieza a hablar…'
+                                              : _liveTranscript,
+                                          style: Theme.of(builderContext)
+                                              .textTheme
+                                              .bodyLarge,
+                                        ),
+                                      ),
                               ),
                               const SizedBox(height: 12),
                               if (_isProcessingAudio)

@@ -731,10 +731,9 @@ class VoiceRecorder {
       final context = js.JsObject(ctor as dynamic, []);
 
       html.window.console.info('📊 [VoiceRecorder] Paso 3: Creando source node desde MediaStream...');
-      // Convertir el MediaStream de Dart al objeto JS nativo para que
-      // AudioContext lo reconozca y evitar el error de tipo durante el setup.
-      final jsStream = js.JsObject.fromBrowserObject(stream);
-      final source = context.callMethod('createMediaStreamSource', [jsStream]);
+      // El html.MediaStream ya es un objeto JS nativo, pasarlo directamente
+      // sin conversión para que AudioContext lo reconozca correctamente
+      final source = context.callMethod('createMediaStreamSource', [stream]);
 
       html.window.console.info('📊 [VoiceRecorder] Paso 4: Creando analyser node...');
       final analyser = context.callMethod('createAnalyser', []);

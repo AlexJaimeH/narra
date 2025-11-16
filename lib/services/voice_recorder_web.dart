@@ -697,66 +697,84 @@ class VoiceRecorder {
   void _setupLevelMonitoring(html.MediaStream stream) {
     _teardownLevelMonitoring();
 
-    // Log directo a consola del navegador
-    html.window.console.info('🔊 [VoiceRecorder] Iniciando configuración del monitor de audio... onLevel=${_onLevel != null ? "configurado" : "NULL"}');
-    _log('Iniciando configuración del monitor de audio... onLevel=${_onLevel != null ? "configurado" : "NULL"}', level: 'info');
+    html.window.console.info('🔊 [VoiceRecorder] Iniciando configuración del monitor de audio...');
 
     if (_onLevel == null) {
-      html.window.console.error('❌ [VoiceRecorder] ERROR CRÍTICO: onLevel es NULL, no se puede configurar el monitor de audio');
-      _log('ERROR CRÍTICO: onLevel es NULL, no se puede configurar el monitor de audio', level: 'error');
+      html.window.console.error('❌ [VoiceRecorder] ERROR: onLevel es NULL');
       return;
     }
 
     try {
-      html.window.console.info('📊 [VoiceRecorder] Paso 1: Accediendo al constructor de AudioContext...');
+      // Usar JavaScript eval para crear el setup completo en una sola llamada
+      // Esto evita problemas de conversión de tipos entre dart:html y dart:js
+      final setupScript = '''
+        (function(stream) {
+          try {
+            // 1. Crear AudioContext
+            const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContextClass) {
+              throw new Error('AudioContext no soportado');
+            }
+            const ctx = new AudioContextClass();
 
-      // Acceder al constructor de AudioContext desde el contexto global de JavaScript
-      final jsWindow = js.context;
-      dynamic ctor;
+            // 2. Crear source desde MediaStream
+            const source = ctx.createMediaStreamSource(stream);
 
-      if (jsWindow.hasProperty('AudioContext')) {
-        ctor = jsWindow['AudioContext'];
-        html.window.console.info('✓ [VoiceRecorder] Encontrado: AudioContext');
-      } else if (jsWindow.hasProperty('webkitAudioContext')) {
-        ctor = jsWindow['webkitAudioContext'];
-        html.window.console.info('✓ [VoiceRecorder] Encontrado: webkitAudioContext');
+            // 3. Crear analyser
+            const analyser = ctx.createAnalyser();
+            analyser.fftSize = 512;
+            analyser.smoothingTimeConstant = 0.22;
+
+            // 4. Conectar source a analyser
+            source.connect(analyser);
+
+            // 5. Retornar objeto con referencias
+            return {
+              context: ctx,
+              source: source,
+              analyser: analyser,
+              bufferSize: analyser.frequencyBinCount
+            };
+          } catch (error) {
+            console.error('❌ Error en setup de audio:', error);
+            return null;
+          }
+        })
+      ''';
+
+      // Evaluar la función y llamarla con el stream
+      final setupFunction = js.context.callMethod('eval', [setupScript]);
+      if (setupFunction == null) {
+        throw Exception('No se pudo crear la función de setup');
       }
 
-      if (ctor == null) {
-        throw UnsupportedError('AudioContext no disponible en este navegador');
+      html.window.console.info('📊 [VoiceRecorder] Llamando función de setup con MediaStream...');
+
+      // Pasar el stream directamente - html.MediaStream es compatible con JS
+      final result = (setupFunction as js.JsFunction).apply([stream]);
+
+      if (result == null || result is! js.JsObject) {
+        throw Exception('Setup retornó null o tipo inválido');
       }
 
-      html.window.console.info('📊 [VoiceRecorder] Paso 2: Creando instancia de AudioContext...');
-      // Crear instancia usando new AudioContext()
-      final context = js.JsObject(ctor as dynamic, []);
+      // Extraer referencias del objeto retornado
+      final context = result['context'];
+      final source = result['source'];
+      final analyser = result['analyser'];
+      final bufferSize = result['bufferSize'];
 
-      html.window.console.info('📊 [VoiceRecorder] Paso 3: Creando source node desde MediaStream...');
-      // El html.MediaStream ya es un objeto JS nativo, pasarlo directamente
-      // sin conversión para que AudioContext lo reconozca correctamente
-      final source = context.callMethod('createMediaStreamSource', [stream]);
+      if (context == null || source == null || analyser == null) {
+        throw Exception('Setup retornó objetos nulos');
+      }
 
-      html.window.console.info('📊 [VoiceRecorder] Paso 4: Creando analyser node...');
-      final analyser = context.callMethod('createAnalyser', []);
+      html.window.console.info('✅ [VoiceRecorder] Setup completado. Buffer size: $bufferSize');
 
-      html.window.console.info('📊 [VoiceRecorder] Paso 5: Configurando analyser...');
-      analyser['fftSize'] = 512;
-      analyser['smoothingTimeConstant'] = 0.22;
-
-      html.window.console.info('📊 [VoiceRecorder] Paso 6: Conectando source a analyser...');
-      source.callMethod('connect', [analyser]);
-
-      html.window.console.info('📊 [VoiceRecorder] Paso 7: Obteniendo tamaño del buffer...');
-      final binCount = analyser['frequencyBinCount'];
-      final count = binCount is int ? binCount : int.tryParse('$binCount') ?? 0;
-      html.window.console.info('📊 [VoiceRecorder] Buffer size: $count');
-
-      html.window.console.info('📊 [VoiceRecorder] Paso 8: Guardando referencias...');
+      // Guardar referencias
       _audioContext = context;
       _audioSourceNode = source;
       _audioAnalyser = analyser;
-      _levelDataBuffer = Uint8List(count > 0 ? count : 512);
+      _levelDataBuffer = Uint8List(bufferSize is int ? bufferSize : 256);
 
-      html.window.console.info('📊 [VoiceRecorder] Paso 10: Creando timer periódico (16ms)...');
       // Iniciar el timer que lee los niveles de audio
       _levelTimer = Timer.periodic(
         const Duration(milliseconds: 16),
@@ -764,80 +782,67 @@ class VoiceRecorder {
       );
 
       html.window.console.info('✅ [VoiceRecorder] Monitor de audio iniciado correctamente');
-      _log('✓ Monitor de audio iniciado correctamente', level: 'info');
-    } catch (error) {
-      html.window.console.error('❌ [VoiceRecorder] ERROR al iniciar el monitor de audio: $error');
+      _log('Monitor de audio iniciado correctamente', level: 'info');
+    } catch (error, stackTrace) {
+      html.window.console.error('❌ [VoiceRecorder] ERROR al iniciar monitor: $error');
+      html.window.console.error('Stack: $stackTrace');
       _teardownLevelMonitoring();
-      _log(
-        'ERROR al iniciar el monitor de audio: $error',
-        level: 'error',
-        error: error,
-      );
+      _log('ERROR al iniciar el monitor de audio: $error', level: 'error', error: error);
     }
   }
 
   void _emitAudioLevel() {
     _emitLevelCallCount++;
 
-    // Solo loguear cada 60 llamadas (~1 segundo)
-    if (_emitLevelCallCount % 60 == 1) {
-      html.window.console.info('🎵 [VoiceRecorder] _emitAudioLevel() llamado (contador: $_emitLevelCallCount)');
-    }
-
     final analyser = _audioAnalyser;
     final buffer = _levelDataBuffer;
     final onLevel = _onLevel;
 
     if (analyser == null || buffer == null || onLevel == null) {
-      if (_emitLevelCallCount % 60 == 1) {
-        html.window.console.warn('⚠️ [VoiceRecorder] _emitAudioLevel: analyser=$analyser, buffer=${buffer != null}, onLevel=${onLevel != null}');
-      }
       return;
     }
 
     try {
-      // Llamar a getByteTimeDomainData usando JsObject
+      // Llamar a getByteTimeDomainData en el analyser JavaScript
       (analyser as js.JsObject).callMethod('getByteTimeDomainData', [buffer]);
-    } catch (error) {
-      // Si falla, el analyser no está configurado correctamente
-      html.window.console.error('❌ [VoiceRecorder] Error en getByteTimeDomainData: $error');
-      return;
-    }
 
-    // Calcular el RMS (Root Mean Square) del audio
-    var sum = 0.0;
-    for (var i = 0; i < buffer.length; i++) {
-      final normalized = (buffer[i] - 128) / 128.0;
-      sum += normalized * normalized;
-    }
+      // Calcular el RMS (Root Mean Square) del audio
+      var sum = 0.0;
+      for (var i = 0; i < buffer.length; i++) {
+        final normalized = (buffer[i] - 128) / 128.0;
+        sum += normalized * normalized;
+      }
 
-    final rms = math.sqrt(sum / buffer.length);
-    final level = (rms * 1.35).clamp(0.0, 1.0);
-    final previous = _lastEmittedLevel;
-    final eased = (previous * 0.28) + (level * 0.72);
+      final rms = math.sqrt(sum / buffer.length);
+      final level = (rms * 1.35).clamp(0.0, 1.0);
+      final previous = _lastEmittedLevel;
+      final eased = (previous * 0.28) + (level * 0.72);
 
-    _lastEmittedLevel = eased;
+      _lastEmittedLevel = eased;
 
-    // Detectar cuando empieza a hablar (threshold de 0.065)
-    if (!_hasDetectedSpeech && eased > 0.065) {
-      _hasDetectedSpeech = true;
-      html.window.console.info('🎤 [VoiceRecorder] Voz detectada (level=$eased), activando transcripción continua');
-      _log('🎤 Voz detectada (level=$eased), activando transcripción continua', level: 'info');
-    }
+      // Detectar cuando empieza a hablar (threshold de 0.065)
+      if (!_hasDetectedSpeech && eased > 0.065) {
+        _hasDetectedSpeech = true;
+        html.window.console.info('🎤 [VoiceRecorder] Voz detectada, activando transcripción');
+      }
 
-    // Loguear niveles altos para debugging
-    if (_emitLevelCallCount % 60 == 1) {
-      html.window.console.info('🎵 [VoiceRecorder] Nivel de audio: ${(eased * 100).toStringAsFixed(1)}%');
-    }
+      // Log cada segundo para debugging
+      if (_emitLevelCallCount % 60 == 0) {
+        html.window.console.info('🎵 [VoiceRecorder] Nivel: ${(eased * 100).toStringAsFixed(1)}%');
+      }
 
-    // Emitir el nivel al callback
-    try {
+      // Emitir el nivel al callback
       onLevel(eased);
+
+      // Log primera llamada exitosa
       if (_emitLevelCallCount == 1) {
-        html.window.console.info('✅ [VoiceRecorder] Primera llamada a onLevel() exitosa con nivel: ${(eased * 100).toStringAsFixed(1)}%');
+        html.window.console.info('✅ [VoiceRecorder] onLevel() funcionando correctamente');
       }
     } catch (error) {
-      html.window.console.error('❌ [VoiceRecorder] Error al llamar onLevel callback: $error');
+      // Solo loguear el primer error para no spam en consola
+      if (_emitLevelCallCount == 1) {
+        html.window.console.error('❌ [VoiceRecorder] Error en _emitAudioLevel: $error');
+      }
     }
   }
 

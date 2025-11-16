@@ -705,63 +705,30 @@ class VoiceRecorder {
     }
 
     try {
-      // Usar JavaScript eval para crear el setup completo en una sola llamada
-      // Esto evita problemas de conversión de tipos entre dart:html y dart:js
-      final setupScript = '''
-        (function(stream) {
-          try {
-            // 1. Crear AudioContext
-            const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-            if (!AudioContextClass) {
-              throw new Error('AudioContext no soportado');
-            }
-            const ctx = new AudioContextClass();
+      // Llamar a la función global window.audioMonitorSetup(stream)
+      // Esta función está definida en audio_monitor_helper.js
+      final setupFn = js.context['audioMonitorSetup'];
 
-            // 2. Crear source desde MediaStream
-            const source = ctx.createMediaStreamSource(stream);
-
-            // 3. Crear analyser
-            const analyser = ctx.createAnalyser();
-            analyser.fftSize = 512;
-            analyser.smoothingTimeConstant = 0.22;
-
-            // 4. Conectar source a analyser
-            source.connect(analyser);
-
-            // 5. Retornar objeto con referencias
-            return {
-              context: ctx,
-              source: source,
-              analyser: analyser,
-              bufferSize: analyser.frequencyBinCount
-            };
-          } catch (error) {
-            console.error('❌ Error en setup de audio:', error);
-            return null;
-          }
-        })
-      ''';
-
-      // Evaluar la función y llamarla con el stream
-      final setupFunction = js.context.callMethod('eval', [setupScript]);
-      if (setupFunction == null) {
-        throw Exception('No se pudo crear la función de setup');
+      if (setupFn == null) {
+        throw Exception('audioMonitorSetup no está disponible. Verifica que audio_monitor_helper.js esté cargado.');
       }
 
-      html.window.console.info('📊 [VoiceRecorder] Llamando función de setup con MediaStream...');
+      html.window.console.info('📊 [VoiceRecorder] Llamando window.audioMonitorSetup()...');
 
-      // Pasar el stream directamente - html.MediaStream es compatible con JS
-      final result = (setupFunction as js.JsFunction).apply([stream]);
+      // Llamar a la función JavaScript con el MediaStream
+      final result = (setupFn as js.JsFunction).apply([stream]);
 
-      if (result == null || result is! js.JsObject) {
-        throw Exception('Setup retornó null o tipo inválido');
+      if (result == null) {
+        throw Exception('audioMonitorSetup retornó null');
       }
+
+      final setupObj = result as js.JsObject;
 
       // Extraer referencias del objeto retornado
-      final context = result['context'];
-      final source = result['source'];
-      final analyser = result['analyser'];
-      final bufferSize = result['bufferSize'];
+      final context = setupObj['context'];
+      final source = setupObj['source'];
+      final analyser = setupObj['analyser'];
+      final bufferSize = setupObj['bufferSize'];
 
       if (context == null || source == null || analyser == null) {
         throw Exception('Setup retornó objetos nulos');
@@ -770,7 +737,7 @@ class VoiceRecorder {
       html.window.console.info('✅ [VoiceRecorder] Setup completado. Buffer size: $bufferSize');
 
       // Guardar referencias
-      _audioContext = context;
+      _audioContext = setupObj; // Guardamos todo el objeto setup para cleanup
       _audioSourceNode = source;
       _audioAnalyser = analyser;
       _levelDataBuffer = Uint8List(bufferSize is int ? bufferSize : 256);
@@ -803,8 +770,20 @@ class VoiceRecorder {
     }
 
     try {
-      // Llamar a getByteTimeDomainData en el analyser JavaScript
-      (analyser as js.JsObject).callMethod('getByteTimeDomainData', [buffer]);
+      // Usar la función global window.audioMonitorGetData() para obtener datos
+      final getDataFn = js.context['audioMonitorGetData'];
+      if (getDataFn != null) {
+        final success = (getDataFn as js.JsFunction).apply([analyser, buffer]);
+        if (success != true) {
+          if (_emitLevelCallCount == 1) {
+            html.window.console.error('❌ [VoiceRecorder] audioMonitorGetData falló');
+          }
+          return;
+        }
+      } else {
+        // Fallback: llamar directamente al método
+        (analyser as js.JsObject).callMethod('getByteTimeDomainData', [buffer]);
+      }
 
       // Calcular el RMS (Root Mean Square) del audio
       var sum = 0.0;
@@ -853,35 +832,21 @@ class VoiceRecorder {
     _lastEmittedLevel = 0;
     _emitLevelCallCount = 0;
 
-    final source = _audioSourceNode;
-    if (source != null) {
-      try {
-        // Desconectar source node usando JsObject
-        (source as js.JsObject).callMethod('disconnect', const []);
-      } catch (_) {
-        // Ignorar errores al desconectar
-      }
-    }
+    final setupObj = _audioContext;
     _audioSourceNode = null;
     _audioAnalyser = null;
-
-    final context = _audioContext;
     _audioContext = null;
-    if (context != null) {
+
+    if (setupObj != null) {
       try {
-        // Cerrar el AudioContext usando JsObject
-        final closeResult = (context as js.JsObject).callMethod('close', const []);
-        if (closeResult is Future) {
-          closeResult.catchError((_) {});
-        } else if (closeResult != null) {
-          try {
-            _promiseToFuture(closeResult).catchError((_) {});
-          } catch (_) {
-            // Ignorar errores al convertir promise
-          }
+        // Usar la función global window.audioMonitorCleanup() para limpiar
+        final cleanupFn = js.context['audioMonitorCleanup'];
+        if (cleanupFn != null) {
+          (cleanupFn as js.JsFunction).apply([setupObj]);
+          html.window.console.info('✓ [VoiceRecorder] Cleanup completado');
         }
-      } catch (_) {
-        // Ignorar errores al cerrar el contexto
+      } catch (error) {
+        html.window.console.warn('⚠️ [VoiceRecorder] Error en cleanup: $error');
       }
     }
   }

@@ -173,6 +173,38 @@ console.log('🚀 [AudioMonitorHelper] === INICIANDO CARGA DEL SCRIPT ===');
         }
     }
 
+    // Función para extraer MediaStream nativo de DartObject
+    function unwrapMediaStream(stream) {
+        console.log('🔍 [unwrapMediaStream] Inspeccionando stream...');
+        console.log('   Tipo:', typeof stream);
+        console.log('   Constructor:', stream?.constructor?.name);
+
+        // Si es un DartObject de Flutter Web, extraer el stream nativo
+        if (stream && typeof stream === 'object') {
+            // DartObject tiene una propiedad 'o' que contiene el objeto nativo
+            if (stream.o && stream.o instanceof MediaStream) {
+                console.log('   ✓ Detectado DartObject, extrayendo stream.o');
+                console.log('   ✓ stream.o es MediaStream:', stream.o instanceof MediaStream);
+                return stream.o;
+            }
+
+            // Si ya es un MediaStream nativo, devolverlo directamente
+            if (stream instanceof MediaStream) {
+                console.log('   ✓ Ya es MediaStream nativo');
+                return stream;
+            }
+
+            // Intentar extraer de otras propiedades posibles
+            if (stream._nativeObject instanceof MediaStream) {
+                console.log('   ✓ Extrayendo de _nativeObject');
+                return stream._nativeObject;
+            }
+        }
+
+        console.warn('   ⚠️ No se pudo extraer MediaStream nativo, devolviendo original');
+        return stream;
+    }
+
     // API Pública: startAudioMonitor
     window.startAudioMonitor = function(stream) {
         console.log('📞 [startAudioMonitor] === FUNCIÓN LLAMADA ===');
@@ -191,8 +223,13 @@ console.log('🚀 [AudioMonitorHelper] === INICIANDO CARGA DEL SCRIPT ===');
             return false;
         }
 
-        // Inicializar monitor
-        const success = initializeMonitor(stream);
+        // CRÍTICO: Extraer MediaStream nativo del DartObject
+        const nativeStream = unwrapMediaStream(stream);
+        console.log('   Stream después de unwrap:', nativeStream);
+        console.log('   ¿Es MediaStream?', nativeStream instanceof MediaStream);
+
+        // Inicializar monitor con el stream nativo
+        const success = initializeMonitor(nativeStream);
 
         if (success) {
             console.log('✅ [startAudioMonitor] Monitor iniciado exitosamente');

@@ -6142,11 +6142,13 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                     top: Radius.circular(16),
                   ),
                 ),
-                child: SafeArea(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.max,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
+                child: Stack(
+                  children: [
+                    SafeArea(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.max,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
                       // Header scrollable
                       Expanded(
                         child: SingleChildScrollView(
@@ -6417,6 +6419,41 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                       ),
                     ],
                   ),
+                ),
+                    // Overlay de loading cuando se está guardando
+                    if (_isFinalizingRecording)
+                      Positioned.fill(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.5),
+                            borderRadius: const BorderRadius.vertical(
+                              top: Radius.circular(16),
+                            ),
+                          ),
+                          child: Center(
+                            child: Card(
+                              elevation: 8,
+                              child: Padding(
+                                padding: const EdgeInsets.all(24),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const CircularProgressIndicator(),
+                                    const SizedBox(height: 16),
+                                    Text(
+                                      'Guardando grabación...',
+                                      style: Theme.of(builderContext)
+                                          .textTheme
+                                          .titleMedium,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
             );
@@ -6753,6 +6790,14 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         'info',
         'Sin transcripción, descartando sin confirmar...',
       );
+
+      if (mounted) {
+        setState(() {
+          _isFinalizingRecording = true;
+        });
+      }
+      _sheetStateUpdater['dictation']?.call(() {});
+
       try {
         _appendRecorderLog(
           'info',
@@ -6765,8 +6810,22 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         );
       } catch (error) {
         _appendRecorderLog('error', '❌ Error al descartar: $error');
+        if (mounted) {
+          setState(() {
+            _isFinalizingRecording = false;
+          });
+        }
+        _sheetStateUpdater['dictation']?.call(() {});
         return false;
+      } finally {
+        if (mounted) {
+          setState(() {
+            _isFinalizingRecording = false;
+          });
+        }
+        _sheetStateUpdater['dictation']?.call(() {});
       }
+
       if (mounted) {
         setState(() {
           _isProcessingAudio = false;
@@ -6813,6 +6872,14 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         'info',
         'Usuario confirmó, descartando grabación...',
       );
+
+      if (mounted) {
+        setState(() {
+          _isFinalizingRecording = true;
+        });
+      }
+      _sheetStateUpdater['dictation']?.call(() {});
+
       try {
         _appendRecorderLog(
           'info',
@@ -6825,8 +6892,22 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         );
       } catch (error) {
         _appendRecorderLog('error', '❌ Error al descartar: $error');
+        if (mounted) {
+          setState(() {
+            _isFinalizingRecording = false;
+          });
+        }
+        _sheetStateUpdater['dictation']?.call(() {});
         return false;
+      } finally {
+        if (mounted) {
+          setState(() {
+            _isFinalizingRecording = false;
+          });
+        }
+        _sheetStateUpdater['dictation']?.call(() {});
       }
+
       if (mounted) {
         setState(() {
           _isProcessingAudio = false;

@@ -1,20 +1,22 @@
-// Audio Monitor Helper for Narra - VERSIÓN AUTÓNOMA
-// Este script maneja TODO el ciclo de vida del monitor de audio
-// Dart solo registra un callback y recibe niveles calculados
+// Audio Monitor Helper for Narra - VERSIÓN POLLING
+// JavaScript calcula niveles y los expone en window.currentAudioLevel
+// Dart lee periódicamente con un Timer
 
 (function() {
     'use strict';
+
+    // Variable global que Dart leerá
+    window.currentAudioLevel = 0.0;
 
     // Estado global del monitor
     let activeMonitor = null;
 
     // Clase que encapsula TODO el monitor de audio
     class AudioMonitor {
-        constructor(stream, onLevelCallback) {
+        constructor(stream) {
             console.log('🔊 [AudioMonitor] Inicializando con stream:', stream);
 
             this.stream = stream;
-            this.onLevelCallback = onLevelCallback;
             this.isActive = false;
             this.intervalId = null;
 
@@ -110,6 +112,9 @@
                 const eased = (this.lastLevel * 0.28) + (level * 0.72);
                 this.lastLevel = eased;
 
+                // ESCRIBIR en variable global que Dart leerá
+                window.currentAudioLevel = eased;
+
                 // Log cada segundo
                 if (this.callCount % 60 === 0) {
                     console.log('🎵 [AudioMonitor] Nivel:', (eased * 100).toFixed(1) + '%', 'Llamadas:', this.callCount);
@@ -118,15 +123,7 @@
                 // Primera llamada
                 if (this.callCount === 1) {
                     console.log('✅ [AudioMonitor] Primera lectura exitosa, nivel:', (eased * 100).toFixed(1) + '%');
-                }
-
-                // Llamar al callback de Dart con el nivel calculado
-                if (this.onLevelCallback) {
-                    try {
-                        this.onLevelCallback(eased);
-                    } catch (error) {
-                        console.error('❌ [AudioMonitor] Error llamando callback de Dart:', error);
-                    }
+                    console.log('✅ [AudioMonitor] window.currentAudioLevel está siendo actualizado');
                 }
 
             } catch (error) {
@@ -148,8 +145,12 @@
                 this.intervalId = null;
             }
 
+            // Resetear nivel
+            window.currentAudioLevel = 0.0;
+
             console.log('⏸️ [AudioMonitor] Loop detenido');
         }
+    };
 
         cleanup() {
             console.log('🧹 [AudioMonitor] Limpiando recursos...');
@@ -176,8 +177,6 @@
                 this.context = null;
             }
 
-            this.onLevelCallback = null;
-
             console.log('✅ [AudioMonitor] Cleanup completado');
         }
     }
@@ -187,11 +186,10 @@
     /**
      * Inicia el monitor de audio
      * @param {MediaStream} stream - Stream de audio del micrófono
-     * @param {Function} onLevelCallback - Callback que recibe niveles (0.0 - 1.0)
      * @returns {boolean} true si se inició correctamente
      */
-    window.startAudioMonitor = function(stream, onLevelCallback) {
-        console.log('🎬 [startAudioMonitor] Llamado con stream:', stream, 'callback:', typeof onLevelCallback);
+    window.startAudioMonitor = function(stream) {
+        console.log('🎬 [startAudioMonitor] Llamado con stream:', stream);
 
         // Detener monitor anterior si existe
         if (activeMonitor) {
@@ -205,14 +203,10 @@
             return false;
         }
 
-        if (typeof onLevelCallback !== 'function') {
-            console.error('❌ [startAudioMonitor] Callback no es una función:', typeof onLevelCallback);
-            return false;
-        }
-
         try {
-            activeMonitor = new AudioMonitor(stream, onLevelCallback);
+            activeMonitor = new AudioMonitor(stream);
             console.log('✅ [startAudioMonitor] Monitor creado y activo');
+            console.log('ℹ️ [startAudioMonitor] Dart debe leer window.currentAudioLevel periódicamente');
             return true;
         } catch (error) {
             console.error('❌ [startAudioMonitor] Error creando monitor:', error);
@@ -237,5 +231,6 @@
     };
 
     console.log('✅ [AudioMonitorHelper] Funciones globales registradas: startAudioMonitor, stopAudioMonitor');
+    console.log('ℹ️ [AudioMonitorHelper] Dart leerá window.currentAudioLevel para obtener niveles');
 
 })();

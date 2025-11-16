@@ -238,6 +238,7 @@ class VoiceRecorder {
 
   Completer<void>? _stopCompleter;
 
+  Object? _audioMonitorCallback;
   Object? _audioContext;
   Object? _audioAnalyser;
   Object? _audioSourceNode;
@@ -432,6 +433,7 @@ class VoiceRecorder {
   void _resetState() {
     _teardownLevelMonitoring();
     _onLevel = null;
+    _audioMonitorCallback = null;
     _levelDataBuffer = null;
     _lastEmittedLevel = 0;
     _hasDetectedSpeech = false;
@@ -697,59 +699,61 @@ class VoiceRecorder {
   void _setupLevelMonitoring(html.MediaStream stream) {
     _teardownLevelMonitoring();
 
-    html.window.console.info('🔊 [VoiceRecorder] Iniciando configuración del monitor de audio...');
+    html.window.console.info('🔊 [VoiceRecorder] Configurando monitor de audio...');
 
     if (_onLevel == null) {
-      html.window.console.error('❌ [VoiceRecorder] ERROR: onLevel es NULL');
+      html.window.console.error('❌ [VoiceRecorder] ERROR: onLevel callback es NULL');
       return;
     }
 
     try {
-      // Llamar a la función global window.audioMonitorSetup(stream)
-      // Esta función está definida en audio_monitor_helper.js
-      final setupFn = js.context['audioMonitorSetup'];
+      // Exponer función Dart globalmente para que JavaScript pueda llamarla
+      // JavaScript llamará a window.dartAudioLevelCallback(level)
+      js.context['dartAudioLevelCallback'] = (num level) {
+        final onLevel = _onLevel;
+        if (onLevel == null) return;
 
-      if (setupFn == null) {
-        throw Exception('audioMonitorSetup no está disponible. Verifica que audio_monitor_helper.js esté cargado.');
+        _emitLevelCallCount++;
+        final levelDouble = level.toDouble();
+        _lastEmittedLevel = levelDouble;
+
+        // Detectar voz
+        if (!_hasDetectedSpeech && levelDouble > 0.065) {
+          _hasDetectedSpeech = true;
+          html.window.console.info('🎤 [VoiceRecorder] Voz detectada (nivel: ${(levelDouble * 100).toStringAsFixed(1)}%)');
+        }
+
+        // Llamar al callback original
+        onLevel(levelDouble);
+
+        // Log primera llamada
+        if (_emitLevelCallCount == 1) {
+          html.window.console.info('✅ [VoiceRecorder] Callback de Dart funcionando, nivel: ${(levelDouble * 100).toStringAsFixed(1)}%');
+        }
+      };
+
+      html.window.console.info('📊 [VoiceRecorder] Callback global registrado como window.dartAudioLevelCallback');
+
+      // Llamar a la función global window.startAudioMonitor(stream, callback)
+      final startFn = js.context['startAudioMonitor'];
+
+      if (startFn == null) {
+        throw Exception('startAudioMonitor no está disponible. Verifica que audio_monitor_helper.js esté cargado.');
       }
 
-      html.window.console.info('📊 [VoiceRecorder] Llamando window.audioMonitorSetup()...');
+      html.window.console.info('📊 [VoiceRecorder] Llamando window.startAudioMonitor()...');
 
-      // Llamar a la función JavaScript con el MediaStream
-      final result = (setupFn as js.JsFunction).apply([stream]);
+      // Pasar referencia a la función global
+      final callbackRef = js.context['dartAudioLevelCallback'];
+      final success = (startFn as js.JsFunction).apply([stream, callbackRef]);
 
-      if (result == null) {
-        throw Exception('audioMonitorSetup retornó null');
+      if (success != true) {
+        throw Exception('startAudioMonitor retornó false');
       }
 
-      final setupObj = result as js.JsObject;
-
-      // Extraer referencias del objeto retornado
-      final context = setupObj['context'];
-      final source = setupObj['source'];
-      final analyser = setupObj['analyser'];
-      final bufferSize = setupObj['bufferSize'];
-
-      if (context == null || source == null || analyser == null) {
-        throw Exception('Setup retornó objetos nulos');
-      }
-
-      html.window.console.info('✅ [VoiceRecorder] Setup completado. Buffer size: $bufferSize');
-
-      // Guardar referencias
-      _audioContext = setupObj; // Guardamos todo el objeto setup para cleanup
-      _audioSourceNode = source;
-      _audioAnalyser = analyser;
-      _levelDataBuffer = Uint8List(bufferSize is int ? bufferSize : 256);
-
-      // Iniciar el timer que lee los niveles de audio
-      _levelTimer = Timer.periodic(
-        const Duration(milliseconds: 16),
-        (_) => _emitAudioLevel(),
-      );
-
-      html.window.console.info('✅ [VoiceRecorder] Monitor de audio iniciado correctamente');
+      html.window.console.info('✅ [VoiceRecorder] Monitor de audio iniciado - JavaScript está manejando todo');
       _log('Monitor de audio iniciado correctamente', level: 'info');
+
     } catch (error, stackTrace) {
       html.window.console.error('❌ [VoiceRecorder] ERROR al iniciar monitor: $error');
       html.window.console.error('Stack: $stackTrace');
@@ -758,72 +762,8 @@ class VoiceRecorder {
     }
   }
 
-  void _emitAudioLevel() {
-    _emitLevelCallCount++;
-
-    final analyser = _audioAnalyser;
-    final buffer = _levelDataBuffer;
-    final onLevel = _onLevel;
-
-    if (analyser == null || buffer == null || onLevel == null) {
-      return;
-    }
-
-    try {
-      // Usar la función global window.audioMonitorGetData() para obtener datos
-      final getDataFn = js.context['audioMonitorGetData'];
-      if (getDataFn != null) {
-        final success = (getDataFn as js.JsFunction).apply([analyser, buffer]);
-        if (success != true) {
-          if (_emitLevelCallCount == 1) {
-            html.window.console.error('❌ [VoiceRecorder] audioMonitorGetData falló');
-          }
-          return;
-        }
-      } else {
-        // Fallback: llamar directamente al método
-        (analyser as js.JsObject).callMethod('getByteTimeDomainData', [buffer]);
-      }
-
-      // Calcular el RMS (Root Mean Square) del audio
-      var sum = 0.0;
-      for (var i = 0; i < buffer.length; i++) {
-        final normalized = (buffer[i] - 128) / 128.0;
-        sum += normalized * normalized;
-      }
-
-      final rms = math.sqrt(sum / buffer.length);
-      final level = (rms * 1.35).clamp(0.0, 1.0);
-      final previous = _lastEmittedLevel;
-      final eased = (previous * 0.28) + (level * 0.72);
-
-      _lastEmittedLevel = eased;
-
-      // Detectar cuando empieza a hablar (threshold de 0.065)
-      if (!_hasDetectedSpeech && eased > 0.065) {
-        _hasDetectedSpeech = true;
-        html.window.console.info('🎤 [VoiceRecorder] Voz detectada, activando transcripción');
-      }
-
-      // Log cada segundo para debugging
-      if (_emitLevelCallCount % 60 == 0) {
-        html.window.console.info('🎵 [VoiceRecorder] Nivel: ${(eased * 100).toStringAsFixed(1)}%');
-      }
-
-      // Emitir el nivel al callback
-      onLevel(eased);
-
-      // Log primera llamada exitosa
-      if (_emitLevelCallCount == 1) {
-        html.window.console.info('✅ [VoiceRecorder] onLevel() funcionando correctamente');
-      }
-    } catch (error) {
-      // Solo loguear el primer error para no spam en consola
-      if (_emitLevelCallCount == 1) {
-        html.window.console.error('❌ [VoiceRecorder] Error en _emitAudioLevel: $error');
-      }
-    }
-  }
+  // _emitAudioLevel() ELIMINADA - JavaScript maneja todo el cálculo y llama
+  // al callback directamente. Ver audio_monitor_helper.js
 
   void _teardownLevelMonitoring() {
     _levelTimer?.cancel();
@@ -831,23 +771,24 @@ class VoiceRecorder {
     _levelDataBuffer = null;
     _lastEmittedLevel = 0;
     _emitLevelCallCount = 0;
-
-    final setupObj = _audioContext;
+    _audioMonitorCallback = null;
     _audioSourceNode = null;
     _audioAnalyser = null;
     _audioContext = null;
 
-    if (setupObj != null) {
-      try {
-        // Usar la función global window.audioMonitorCleanup() para limpiar
-        final cleanupFn = js.context['audioMonitorCleanup'];
-        if (cleanupFn != null) {
-          (cleanupFn as js.JsFunction).apply([setupObj]);
-          html.window.console.info('✓ [VoiceRecorder] Cleanup completado');
-        }
-      } catch (error) {
-        html.window.console.warn('⚠️ [VoiceRecorder] Error en cleanup: $error');
+    try {
+      // Llamar a la función global window.stopAudioMonitor()
+      // JavaScript limpiará TODOS los recursos
+      final stopFn = js.context['stopAudioMonitor'];
+      if (stopFn != null) {
+        (stopFn as js.JsFunction).apply([]);
+        html.window.console.info('✓ [VoiceRecorder] Monitor detenido vía JavaScript');
       }
+
+      // Limpiar callback global
+      js.context['dartAudioLevelCallback'] = null;
+    } catch (error) {
+      html.window.console.warn('⚠️ [VoiceRecorder] Error en cleanup: $error');
     }
   }
 

@@ -1,90 +1,241 @@
-// Audio Monitor Helper for Narra
-// Expone funciones globales para monitorear niveles de audio desde MediaStream
-// Usado por voice_recorder_web.dart
+// Audio Monitor Helper for Narra - VERSIÓN AUTÓNOMA
+// Este script maneja TODO el ciclo de vida del monitor de audio
+// Dart solo registra un callback y recibe niveles calculados
 
-window.audioMonitorSetup = function(stream) {
-    try {
-        console.log('🔊 [AudioMonitorHelper] Iniciando setup con MediaStream:', stream);
+(function() {
+    'use strict';
 
-        // 1. Crear AudioContext
-        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-        if (!AudioContextClass) {
-            console.error('❌ [AudioMonitorHelper] AudioContext no disponible');
-            return null;
+    // Estado global del monitor
+    let activeMonitor = null;
+
+    // Clase que encapsula TODO el monitor de audio
+    class AudioMonitor {
+        constructor(stream, onLevelCallback) {
+            console.log('🔊 [AudioMonitor] Inicializando con stream:', stream);
+
+            this.stream = stream;
+            this.onLevelCallback = onLevelCallback;
+            this.isActive = false;
+            this.intervalId = null;
+
+            this.context = null;
+            this.source = null;
+            this.analyser = null;
+            this.dataArray = null;
+
+            this.lastLevel = 0;
+            this.callCount = 0;
+
+            this._init();
         }
 
-        const ctx = new AudioContextClass();
-        console.log('✓ [AudioMonitorHelper] AudioContext creado');
+        _init() {
+            try {
+                // 1. Crear AudioContext
+                const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                if (!AudioContextClass) {
+                    throw new Error('AudioContext no soportado en este navegador');
+                }
 
-        // 2. Crear source node desde MediaStream
-        const source = ctx.createMediaStreamSource(stream);
-        console.log('✓ [AudioMonitorHelper] MediaStreamSource creado');
+                this.context = new AudioContextClass();
+                console.log('✓ [AudioMonitor] AudioContext creado:', this.context);
 
-        // 3. Crear analyser node
-        const analyser = ctx.createAnalyser();
-        analyser.fftSize = 512;
-        analyser.smoothingTimeConstant = 0.22;
-        console.log('✓ [AudioMonitorHelper] Analyser configurado (fftSize=512)');
+                // 2. Crear source desde MediaStream
+                this.source = this.context.createMediaStreamSource(this.stream);
+                console.log('✓ [AudioMonitor] MediaStreamSource creado');
 
-        // 4. Conectar source a analyser
-        source.connect(analyser);
-        console.log('✓ [AudioMonitorHelper] Source conectado a analyser');
+                // 3. Crear y configurar analyser
+                this.analyser = this.context.createAnalyser();
+                this.analyser.fftSize = 512;
+                this.analyser.smoothingTimeConstant = 0.22;
+                console.log('✓ [AudioMonitor] Analyser configurado');
 
-        // 5. Retornar objeto con todas las referencias necesarias
-        const result = {
-            context: ctx,
-            source: source,
-            analyser: analyser,
-            bufferSize: analyser.frequencyBinCount
-        };
+                // 4. Conectar
+                this.source.connect(this.analyser);
+                console.log('✓ [AudioMonitor] Source conectado a analyser');
 
-        console.log('✅ [AudioMonitorHelper] Setup completado exitosamente. Buffer size:', result.bufferSize);
-        return result;
+                // 5. Preparar buffer para datos
+                this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
+                console.log('✓ [AudioMonitor] Buffer creado, tamaño:', this.dataArray.length);
 
-    } catch (error) {
-        console.error('❌ [AudioMonitorHelper] Error en setup:', error);
-        console.error('Stack:', error.stack);
-        return null;
+                // 6. Iniciar loop de lectura
+                this.start();
+
+                console.log('✅ [AudioMonitor] Inicialización COMPLETA');
+
+            } catch (error) {
+                console.error('❌ [AudioMonitor] Error en inicialización:', error);
+                console.error(error.stack);
+                this.cleanup();
+                throw error;
+            }
+        }
+
+        start() {
+            if (this.isActive) {
+                console.warn('⚠️ [AudioMonitor] Ya está activo');
+                return;
+            }
+
+            this.isActive = true;
+
+            // Iniciar loop que lee niveles cada 16ms (~60 FPS)
+            this.intervalId = setInterval(() => this._readLevel(), 16);
+
+            console.log('▶️ [AudioMonitor] Loop iniciado (16ms)');
+        }
+
+        _readLevel() {
+            if (!this.isActive || !this.analyser || !this.dataArray) {
+                return;
+            }
+
+            this.callCount++;
+
+            try {
+                // Leer datos del analyser
+                this.analyser.getByteTimeDomainData(this.dataArray);
+
+                // Calcular RMS (Root Mean Square)
+                let sum = 0;
+                for (let i = 0; i < this.dataArray.length; i++) {
+                    const normalized = (this.dataArray[i] - 128) / 128.0;
+                    sum += normalized * normalized;
+                }
+
+                const rms = Math.sqrt(sum / this.dataArray.length);
+                const level = Math.min(1.0, Math.max(0.0, rms * 1.35));
+
+                // Aplicar smoothing (easing)
+                const eased = (this.lastLevel * 0.28) + (level * 0.72);
+                this.lastLevel = eased;
+
+                // Log cada segundo
+                if (this.callCount % 60 === 0) {
+                    console.log('🎵 [AudioMonitor] Nivel:', (eased * 100).toFixed(1) + '%', 'Llamadas:', this.callCount);
+                }
+
+                // Primera llamada
+                if (this.callCount === 1) {
+                    console.log('✅ [AudioMonitor] Primera lectura exitosa, nivel:', (eased * 100).toFixed(1) + '%');
+                }
+
+                // Llamar al callback de Dart con el nivel calculado
+                if (this.onLevelCallback) {
+                    try {
+                        this.onLevelCallback(eased);
+                    } catch (error) {
+                        console.error('❌ [AudioMonitor] Error llamando callback de Dart:', error);
+                    }
+                }
+
+            } catch (error) {
+                if (this.callCount === 1) {
+                    console.error('❌ [AudioMonitor] Error leyendo nivel:', error);
+                }
+            }
+        }
+
+        stop() {
+            if (!this.isActive) {
+                return;
+            }
+
+            this.isActive = false;
+
+            if (this.intervalId) {
+                clearInterval(this.intervalId);
+                this.intervalId = null;
+            }
+
+            console.log('⏸️ [AudioMonitor] Loop detenido');
+        }
+
+        cleanup() {
+            console.log('🧹 [AudioMonitor] Limpiando recursos...');
+
+            this.stop();
+
+            if (this.source) {
+                try {
+                    this.source.disconnect();
+                    console.log('✓ [AudioMonitor] Source desconectado');
+                } catch (e) {
+                    console.warn('⚠️ [AudioMonitor] Error desconectando source:', e);
+                }
+                this.source = null;
+            }
+
+            this.analyser = null;
+            this.dataArray = null;
+
+            if (this.context && this.context.state !== 'closed') {
+                this.context.close()
+                    .then(() => console.log('✓ [AudioMonitor] AudioContext cerrado'))
+                    .catch(e => console.warn('⚠️ [AudioMonitor] Error cerrando context:', e));
+                this.context = null;
+            }
+
+            this.onLevelCallback = null;
+
+            console.log('✅ [AudioMonitor] Cleanup completado');
+        }
     }
-};
 
-// Función auxiliar para obtener datos de audio del analyser
-// El buffer (Uint8List de Dart) se pasa por referencia y se modifica in-place
-window.audioMonitorGetData = function(analyser, buffer) {
-    try {
-        if (!analyser || !buffer) {
+    // API Pública
+
+    /**
+     * Inicia el monitor de audio
+     * @param {MediaStream} stream - Stream de audio del micrófono
+     * @param {Function} onLevelCallback - Callback que recibe niveles (0.0 - 1.0)
+     * @returns {boolean} true si se inició correctamente
+     */
+    window.startAudioMonitor = function(stream, onLevelCallback) {
+        console.log('🎬 [startAudioMonitor] Llamado con stream:', stream, 'callback:', typeof onLevelCallback);
+
+        // Detener monitor anterior si existe
+        if (activeMonitor) {
+            console.log('⚠️ [startAudioMonitor] Monitor anterior existe, limpiando...');
+            activeMonitor.cleanup();
+            activeMonitor = null;
+        }
+
+        if (!stream) {
+            console.error('❌ [startAudioMonitor] Stream es null');
             return false;
         }
-        analyser.getByteTimeDomainData(buffer);
-        return true;
-    } catch (error) {
-        console.error('❌ [AudioMonitorHelper] Error obteniendo datos:', error);
-        return false;
-    }
-};
 
-// Función auxiliar para desconectar y limpiar recursos
-window.audioMonitorCleanup = function(setup) {
-    try {
-        if (!setup) {
-            return;
+        if (typeof onLevelCallback !== 'function') {
+            console.error('❌ [startAudioMonitor] Callback no es una función:', typeof onLevelCallback);
+            return false;
         }
 
-        if (setup.source) {
-            setup.source.disconnect();
-            console.log('✓ [AudioMonitorHelper] Source desconectado');
+        try {
+            activeMonitor = new AudioMonitor(stream, onLevelCallback);
+            console.log('✅ [startAudioMonitor] Monitor creado y activo');
+            return true;
+        } catch (error) {
+            console.error('❌ [startAudioMonitor] Error creando monitor:', error);
+            activeMonitor = null;
+            return false;
         }
+    };
 
-        if (setup.context && setup.context.state !== 'closed') {
-            setup.context.close().then(function() {
-                console.log('✓ [AudioMonitorHelper] AudioContext cerrado');
-            }).catch(function(error) {
-                console.warn('⚠️ [AudioMonitorHelper] Error cerrando AudioContext:', error);
-            });
+    /**
+     * Detiene el monitor de audio
+     */
+    window.stopAudioMonitor = function() {
+        console.log('🛑 [stopAudioMonitor] Llamado');
+
+        if (activeMonitor) {
+            activeMonitor.cleanup();
+            activeMonitor = null;
+            console.log('✅ [stopAudioMonitor] Monitor detenido');
+        } else {
+            console.log('ℹ️ [stopAudioMonitor] No hay monitor activo');
         }
-    } catch (error) {
-        console.warn('⚠️ [AudioMonitorHelper] Error en cleanup:', error);
-    }
-};
+    };
 
-console.log('✅ [AudioMonitorHelper] Funciones globales registradas: audioMonitorSetup, audioMonitorGetData, audioMonitorCleanup');
+    console.log('✅ [AudioMonitorHelper] Funciones globales registradas: startAudioMonitor, stopAudioMonitor');
+
+})();

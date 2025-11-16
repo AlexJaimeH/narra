@@ -2,8 +2,12 @@
 // JavaScript calcula niveles y los expone en window.currentAudioLevel
 // Dart lee periódicamente con un Timer
 
+console.log('🚀 [AudioMonitorHelper] Iniciando carga del script...');
+
 (function() {
     'use strict';
+
+    console.log('🚀 [AudioMonitorHelper] IIFE ejecutándose...');
 
     // Variable global que Dart leerá
     window.currentAudioLevel = 0.0;

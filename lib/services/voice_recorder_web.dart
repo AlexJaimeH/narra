@@ -707,34 +707,32 @@ class VoiceRecorder {
     }
 
     try {
-      // Crear callback Dart que JavaScript llamará con niveles (0.0-1.0)
-      void dartLevelCallback(double level) {
+      // Exponer función Dart globalmente para que JavaScript pueda llamarla
+      // JavaScript llamará a window.dartAudioLevelCallback(level)
+      js.context['dartAudioLevelCallback'] = (num level) {
         final onLevel = _onLevel;
         if (onLevel == null) return;
 
         _emitLevelCallCount++;
-        _lastEmittedLevel = level;
+        final levelDouble = level.toDouble();
+        _lastEmittedLevel = levelDouble;
 
         // Detectar voz
-        if (!_hasDetectedSpeech && level > 0.065) {
+        if (!_hasDetectedSpeech && levelDouble > 0.065) {
           _hasDetectedSpeech = true;
-          html.window.console.info('🎤 [VoiceRecorder] Voz detectada (nivel: ${(level * 100).toStringAsFixed(1)}%)');
+          html.window.console.info('🎤 [VoiceRecorder] Voz detectada (nivel: ${(levelDouble * 100).toStringAsFixed(1)}%)');
         }
 
         // Llamar al callback original
-        onLevel(level);
+        onLevel(levelDouble);
 
         // Log primera llamada
         if (_emitLevelCallCount == 1) {
-          html.window.console.info('✅ [VoiceRecorder] Callback de Dart funcionando, nivel: ${(level * 100).toStringAsFixed(1)}%');
+          html.window.console.info('✅ [VoiceRecorder] Callback de Dart funcionando, nivel: ${(levelDouble * 100).toStringAsFixed(1)}%');
         }
-      }
+      };
 
-      // Convertir callback Dart a función JavaScript usando allowInterop
-      final jsCallback = js.allowInterop<void Function(num)>((num level) {
-        dartLevelCallback(level.toDouble());
-      });
-      _audioMonitorCallback = jsCallback;
+      html.window.console.info('📊 [VoiceRecorder] Callback global registrado como window.dartAudioLevelCallback');
 
       // Llamar a la función global window.startAudioMonitor(stream, callback)
       final startFn = js.context['startAudioMonitor'];
@@ -745,8 +743,9 @@ class VoiceRecorder {
 
       html.window.console.info('📊 [VoiceRecorder] Llamando window.startAudioMonitor()...');
 
-      // Llamar a JavaScript - él manejará TODO
-      final success = (startFn as js.JsFunction).apply([stream, jsCallback]);
+      // Pasar referencia a la función global
+      final callbackRef = js.context['dartAudioLevelCallback'];
+      final success = (startFn as js.JsFunction).apply([stream, callbackRef]);
 
       if (success != true) {
         throw Exception('startAudioMonitor retornó false');
@@ -785,6 +784,9 @@ class VoiceRecorder {
         (stopFn as js.JsFunction).apply([]);
         html.window.console.info('✓ [VoiceRecorder] Monitor detenido vía JavaScript');
       }
+
+      // Limpiar callback global
+      js.context['dartAudioLevelCallback'] = null;
     } catch (error) {
       html.window.console.warn('⚠️ [VoiceRecorder] Error en cleanup: $error');
     }

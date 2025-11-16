@@ -253,18 +253,13 @@ class VoiceRecorder {
       OnRecorderLog? onLog,
       OnLevel? onLevel,
       OnTranscriptionState? onTranscriptionState}) async {
-    html.window.console.info('🎙️ [VoiceRecorder.start] Iniciando... onLevel=${onLevel != null ? "recibido" : "NULL"}');
-
     _onText = onText;
     _onLog = onLog;
     _onTranscriptionState = onTranscriptionState;
 
-    html.window.console.info('🎙️ [VoiceRecorder.start] Callbacks asignados, llamando _resetState()...');
     _resetState();
-    html.window.console.info('🎙️ [VoiceRecorder.start] _resetState() completado, asignando _onLevel...');
     _introPlaceholdersRemaining = _introSuppressionCount;
     _onLevel = onLevel;
-    html.window.console.info('🎙️ [VoiceRecorder.start] _onLevel asignado. _onLevel=${_onLevel != null ? "configurado" : "NULL"}');
     _transcript.emitReset(_onText);
     _onLevel?.call(0);
     _reportTranscriptionState(false);
@@ -699,45 +694,31 @@ class VoiceRecorder {
   void _setupLevelMonitoring(html.MediaStream stream) {
     _teardownLevelMonitoring();
 
-    html.window.console.info('🔊 [VoiceRecorder] Configurando monitor de audio...');
-
     if (_onLevel == null) {
-      html.window.console.error('❌ [VoiceRecorder] ERROR: onLevel callback es NULL');
       return;
     }
 
     try {
-      // Llamar a la función global window.startAudioMonitor(stream)
-      // JavaScript NO necesita callback, escribe en window.currentAudioLevel
       final startFn = js.context['startAudioMonitor'];
 
       if (startFn == null) {
-        throw Exception('startAudioMonitor no está disponible. Verifica que audio_monitor_helper.js esté cargado.');
+        throw Exception('startAudioMonitor no está disponible');
       }
 
-      html.window.console.info('📊 [VoiceRecorder] Llamando window.startAudioMonitor()...');
-
-      // Llamar sin callback - JavaScript escribe en variable global
       final success = (startFn as js.JsFunction).apply([stream]);
 
       if (success != true) {
         throw Exception('startAudioMonitor retornó false');
       }
 
-      html.window.console.info('✅ [VoiceRecorder] Monitor iniciado - JavaScript escribe en window.currentAudioLevel');
-
-      // Iniciar timer que LEE window.currentAudioLevel cada 16ms
       _levelTimer = Timer.periodic(
         const Duration(milliseconds: 16),
         (_) => _readAudioLevel(),
       );
 
-      html.window.console.info('✅ [VoiceRecorder] Timer de polling iniciado (16ms)');
       _log('Monitor de audio iniciado correctamente', level: 'info');
 
     } catch (error, stackTrace) {
-      html.window.console.error('❌ [VoiceRecorder] ERROR al iniciar monitor: $error');
-      html.window.console.error('Stack: $stackTrace');
       _teardownLevelMonitoring();
       _log('ERROR al iniciar el monitor de audio: $error', level: 'error', error: error);
     }
@@ -752,7 +733,6 @@ class VoiceRecorder {
     }
 
     try {
-      // Leer el nivel desde la variable global de JavaScript
       final jsLevel = js.context['currentAudioLevel'];
       if (jsLevel == null) {
         return;
@@ -761,29 +741,14 @@ class VoiceRecorder {
       final level = (jsLevel as num).toDouble();
       _lastEmittedLevel = level;
 
-      // Detectar voz
       if (!_hasDetectedSpeech && level > 0.065) {
         _hasDetectedSpeech = true;
-        html.window.console.info('🎤 [VoiceRecorder] Voz detectada (nivel: ${(level * 100).toStringAsFixed(1)}%)');
       }
 
-      // Llamar al callback
       onLevel(level);
 
-      // Log primera llamada
-      if (_emitLevelCallCount == 1) {
-        html.window.console.info('✅ [VoiceRecorder] Lectura de niveles funcionando, nivel: ${(level * 100).toStringAsFixed(1)}%');
-      }
-
-      // Log periódico
-      if (_emitLevelCallCount % 60 == 0) {
-        html.window.console.info('🎵 [VoiceRecorder] Nivel: ${(level * 100).toStringAsFixed(1)}%');
-      }
-
     } catch (error) {
-      if (_emitLevelCallCount == 1) {
-        html.window.console.error('❌ [VoiceRecorder] Error leyendo nivel: $error');
-      }
+      // Silenciar error
     }
   }
 
@@ -802,14 +767,12 @@ class VoiceRecorder {
     _audioContext = null;
 
     try {
-      // Llamar a window.stopAudioMonitor() para limpiar recursos JS
       final stopFn = js.context['stopAudioMonitor'];
       if (stopFn != null) {
         (stopFn as js.JsFunction).apply([]);
-        html.window.console.info('✓ [VoiceRecorder] Monitor detenido vía JavaScript');
       }
     } catch (error) {
-      html.window.console.warn('⚠️ [VoiceRecorder] Error en cleanup: $error');
+      // Silenciar error
     }
   }
 
@@ -924,7 +887,7 @@ class VoiceRecorder {
 
     final hasTranscript = _transcript.value.isNotEmpty;
     final minBytes =
-        forceFull ? 0 : (_hasDetectedSpeech || hasTranscript ? 2400 : 4800);
+        forceFull ? 0 : (_hasDetectedSpeech || hasTranscript ? 1200 : 2400);
     if (!forceFull && slice.bytes.length < minBytes) {
       _log(
         'Transcripción pospuesta: acumulando más audio (${slice.bytes.length} bytes < $minBytes bytes mínimos)',

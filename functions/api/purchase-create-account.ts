@@ -60,6 +60,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     const purchaseType = (payload as any).purchaseType as string;
     const authorEmail = ((payload as any).authorEmail as string || '').toLowerCase().trim();
     const buyerEmail = purchaseType === 'gift' ? ((payload as any).buyerEmail as string || '').toLowerCase().trim() : null;
+    const buyerName = purchaseType === 'gift' ? ((payload as any).buyerName as string || '').trim() : null;
+    const giftMessage = purchaseType === 'gift' && (payload as any).giftMessage ? ((payload as any).giftMessage as string).trim() : null;
 
     // Validate
     if (purchaseType !== 'self' && purchaseType !== 'gift') {
@@ -72,6 +74,10 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
     if (purchaseType === 'gift' && (!buyerEmail || !buyerEmail.includes('@'))) {
       return json({ error: 'Email válido del comprador es requerido' }, 400);
+    }
+
+    if (purchaseType === 'gift' && (!buyerName || buyerName === '')) {
+      return json({ error: 'Nombre del comprador es requerido' }, 400);
     }
 
     console.log(`[purchase-create-account] Creating account for ${authorEmail}, type: ${purchaseType}`);
@@ -285,8 +291,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     } else {
       // Gift: Send two emails
       // 1. To author
-      const authorEmailHtml = buildGiftAuthorEmail(authorEmail, magicLink);
-      const authorEmailText = buildGiftAuthorEmailText(authorEmail, magicLink);
+      const authorEmailHtml = buildGiftAuthorEmail(authorEmail, magicLink, buyerName || '', giftMessage);
+      const authorEmailText = buildGiftAuthorEmailText(authorEmail, magicLink, buyerName || '', giftMessage);
 
       const authorEmailResponse = await fetch('https://api.resend.com/emails', {
         method: 'POST',
@@ -468,7 +474,9 @@ ${recoveryPortalUrl}
   return text;
 }
 
-function buildGiftAuthorEmail(email: string, magicLink: string): string {
+function buildGiftAuthorEmail(email: string, magicLink: string, buyerName: string, giftMessage: string | null): string {
+  const hasMessage = giftMessage && giftMessage.trim() !== '';
+
   return `<!DOCTYPE html>
 <html lang="es">
   <head>
@@ -489,12 +497,22 @@ function buildGiftAuthorEmail(email: string, magicLink: string): string {
               <td style="padding:0;">
                 <div style="background:linear-gradient(135deg, #4DB3A8 0%, #38827A 100%);padding:48px 36px;text-align:center;">
                   <div style="text-align:center;margin-bottom:20px;font-size:80px;line-height:1;">🎁</div>
-                  <h1 style="font-size:32px;line-height:1.2;margin:0;font-weight:800;color:#ffffff;text-shadow:0 2px 8px rgba(0,0,0,0.15);">¡Te han regalado Narra!</h1>
+                  <h1 style="font-size:32px;line-height:1.2;margin:0;font-weight:800;color:#ffffff;text-shadow:0 2px 8px rgba(0,0,0,0.15);">¡${buyerName} te ha regalado Narra!</h1>
                 </div>
 
                 <div style="padding:40px 36px;">
                   <p style="margin:0 0 24px 0;font-size:18px;line-height:1.65;color:#374151;font-weight:500;">Hola,</p>
-                  <p style="margin:0 0 28px 0;font-size:17px;line-height:1.7;color:#4b5563;">Alguien especial te ha regalado acceso de por vida a <strong>Narra</strong>, una plataforma para preservar y compartir tus historias con tu familia.</p>
+                  <p style="margin:0 0 28px 0;font-size:17px;line-height:1.7;color:#4b5563;"><strong>${buyerName}</strong> te ha regalado acceso de por vida a <strong>Narra</strong>, una plataforma para preservar y compartir tus historias con tu familia.</p>
+
+                  ${hasMessage ? `
+                  <div style="background:linear-gradient(135deg, #FFF8F0 0%, #FFE8D6 100%);border-left:4px solid #F59E0B;border-radius:16px;padding:28px;margin:32px 0;position:relative;">
+                    <div style="text-align:center;margin-bottom:16px;font-size:32px;line-height:1;">💌</div>
+                    <p style="margin:0 0 12px 0;font-size:15px;line-height:1.6;color:#92400E;font-weight:700;text-align:center;">Mensaje especial de ${buyerName}</p>
+                    <div style="background:#ffffff;border-radius:12px;padding:20px;margin-top:16px;">
+                      <p style="margin:0;font-size:16px;line-height:1.7;color:#374151;font-style:italic;text-align:center;">"${giftMessage}"</p>
+                    </div>
+                  </div>
+                  ` : ''}
 
                   <div style="background:#E8F5F4;border-left:4px solid #4DB3A8;border-radius:16px;padding:24px;margin:32px 0;">
                     <p style="margin:0 0 12px 0;font-size:15px;line-height:1.6;color:#38827A;font-weight:700;">✨ ¿Qué es Narra?</p>
@@ -536,15 +554,32 @@ function buildGiftAuthorEmail(email: string, magicLink: string): string {
 </html>`;
 }
 
-function buildGiftAuthorEmailText(email: string, magicLink: string): string {
-  return `¡Te han regalado Narra!
+function buildGiftAuthorEmailText(email: string, magicLink: string, buyerName: string, giftMessage: string | null): string {
+  const hasMessage = giftMessage && giftMessage.trim() !== '';
 
-Alguien especial te ha regalado acceso de por vida a Narra, una plataforma para preservar y compartir tus historias con tu familia.
+  let text = `¡${buyerName} te ha regalado Narra!
+
+${buyerName} te ha regalado acceso de por vida a Narra, una plataforma para preservar y compartir tus historias con tu familia.`;
+
+  if (hasMessage) {
+    text += `
+
+---
+MENSAJE ESPECIAL DE ${buyerName.toUpperCase()}
+
+"${giftMessage}"
+---
+`;
+  }
+
+  text += `
 
 Para comenzar, haz clic en este enlace:
 ${magicLink}
 
 ¿Necesitas ayuda? Escríbenos a hola@narra.mx`;
+
+  return text;
 }
 
 function buildGiftBuyerEmail(buyerEmail: string, authorEmail: string, managementUrl: string): string {

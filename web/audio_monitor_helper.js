@@ -150,6 +150,7 @@
 
             console.log('⏸️ [AudioMonitor] Loop detenido');
         }
+    };
 
         cleanup() {
             console.log('🧹 [AudioMonitor] Limpiando recursos...');

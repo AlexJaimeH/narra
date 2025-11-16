@@ -433,6 +433,7 @@ class VoiceRecorder {
   void _resetState() {
     _teardownLevelMonitoring();
     _onLevel = null;
+    _audioMonitorCallback = null;
     _levelDataBuffer = null;
     _lastEmittedLevel = 0;
     _hasDetectedSpeech = false;

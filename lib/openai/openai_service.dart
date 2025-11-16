@@ -503,7 +503,7 @@ Responde SOLO con un objeto JSON válido que cumpla exactamente el siguiente esq
 
     final prompt = '''
 Actúa como "Narra Ghost Writer", editor senior de memorias autobiográficas reales.
-Tu misión es pulir el texto para que pueda publicarse en un libro manteniendo la verdad y la voz auténtica del autor.
+Tu misión es transformar el texto del autor en un capítulo digno de un libro publicado, manteniendo la verdad y la voz auténtica del autor.
 
 ## Parámetros clave
 - Título de referencia: "$title"
@@ -516,12 +516,24 @@ ${additionalInstructions.isNotEmpty ? additionalInstructions.join('\n') + '\n' :
 ## Texto original
 """$originalTextForPrompt"""
 
+## IMPORTANTE: Contexto del autor
+El autor puede haber escrito sus ideas en desorden, puede haber puesto juntas cosas que no tienen mucho sentido juntas, o puede haber saltado entre diferentes momentos o ideas. Tu trabajo es tomar todo ese contenido y organizarlo para que sea un relato coherente, profesional y digno de ser publicado en un libro.
+
 ## Tareas
-1. Corrige ortografía, gramática, puntuación y acentos.
-2. Mejora la fluidez, las transiciones y la estructura de párrafos para lectura editorial.
-3. Refuerza la emoción y los detalles sensoriales solo cuando surjan naturalmente del texto original.
-4. Evita repeticiones innecesarias y frases redundantes.
-5. Mantén el ritmo y la extensión general; no inventes ni alteres hechos.
+1. **Organización narrativa**: Si el texto está desordenado, reorganiza el contenido de manera cronológica o lógica para que tenga una secuencia narrativa clara y natural. Agrupa ideas relacionadas y separa las que no lo están.
+
+2. **Coherencia y fluidez**: Identifica saltos abruptos, ideas inconexas o cambios de tema sin transición. Crea conexiones suaves entre párrafos y asegúrate de que la historia fluya de principio a fin como un capítulo profesional.
+
+3. **Estructura profesional**: Organiza el texto en párrafos bien definidos con una introducción clara, desarrollo coherente y, si corresponde, una reflexión o cierre que le dé sentido al relato.
+
+4. **Corrección técnica**: Corrige ortografía, gramática, puntuación y acentos.
+
+5. **Calidad literaria**: Mejora la redacción para que suene profesional y publicable. Refuerza la emoción y los detalles sensoriales solo cuando surjan naturalmente del texto original. Evita repeticiones innecesarias y frases redundantes.
+
+6. **Fidelidad absoluta**: NUNCA inventes hechos, nombres, fechas, lugares o eventos que no estén en el texto original. Solo reorganiza, conecta y pule lo que el autor ya escribió.
+
+## Resultado esperado
+El texto final debe leerse como un capítulo completo y profesional de un libro publicado: bien narrado, en orden, entendible, coherente y emocionalmente resonante.
 
 ## Formato de salida
 Devuelve EXCLUSIVAMENTE un JSON válido con la forma:
@@ -533,8 +545,8 @@ Devuelve EXCLUSIVAMENTE un JSON válido con la forma:
   "word_count": 123
 }
 
-- "polished_text": versión final lista para reemplazar el borrador, escrita en $languageLabel.
-- "changes_summary": resumen breve (máx. 3 frases) de las mejoras aplicadas.
+- "polished_text": versión final lista para reemplazar el borrador, escrita en $languageLabel. Debe ser un texto completo, organizado, coherente y profesional.
+- "changes_summary": resumen breve (máx. 3 frases) de las mejoras aplicadas, especialmente si reorganizaste el contenido.
 - "suggestions": hasta 3 sugerencias concretas para continuar mejorando.
 - "tone_analysis": explica cómo aplicaste el tono solicitado.
 - "word_count": número de palabras del texto mejorado.

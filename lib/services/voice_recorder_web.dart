@@ -731,7 +731,9 @@ class VoiceRecorder {
       }
 
       // Convertir callback Dart a función JavaScript usando allowInterop
-      final jsCallback = js.allowInterop(dartLevelCallback);
+      final jsCallback = js.allowInterop<void Function(num)>((num level) {
+        dartLevelCallback(level.toDouble());
+      });
       _audioMonitorCallback = jsCallback;
 
       // Llamar a la función global window.startAudioMonitor(stream, callback)

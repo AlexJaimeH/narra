@@ -15,6 +15,8 @@ export const PurchaseCheckoutPage: React.FC = () => {
   const [authorEmailConfirm, setAuthorEmailConfirm] = useState('');
   const [buyerEmail, setBuyerEmail] = useState('');
   const [buyerEmailConfirm, setBuyerEmailConfirm] = useState('');
+  const [buyerName, setBuyerName] = useState('');
+  const [giftMessage, setGiftMessage] = useState('');
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState('');
@@ -59,6 +61,10 @@ export const PurchaseCheckoutPage: React.FC = () => {
         setError('Tus emails no coinciden');
         return false;
       }
+      if (!buyerName || buyerName.trim() === '') {
+        setError('Por favor ingresa tu nombre');
+        return false;
+      }
       const emailRegex = /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/;
       if (!emailRegex.test(authorEmail) || !emailRegex.test(buyerEmail)) {
         setError('Por favor ingresa emails válidos');
@@ -99,6 +105,8 @@ export const PurchaseCheckoutPage: React.FC = () => {
           purchaseType,
           authorEmail: authorEmail.toLowerCase().trim(),
           buyerEmail: purchaseType === 'gift' ? buyerEmail.toLowerCase().trim() : null,
+          buyerName: purchaseType === 'gift' ? buyerName.trim() : null,
+          giftMessage: purchaseType === 'gift' && giftMessage.trim() !== '' ? giftMessage.trim() : null,
         }),
       });
 
@@ -247,6 +255,27 @@ export const PurchaseCheckoutPage: React.FC = () => {
                         <div className="space-y-4">
                           <div>
                             <label className="block text-sm font-semibold mb-2" style={{ color: NarraColors.text.primary }}>
+                              Tu Nombre
+                            </label>
+                            <input
+                              type="text"
+                              value={buyerName}
+                              onChange={(e) => setBuyerName(e.target.value)}
+                              placeholder="¿Cómo te llamas?"
+                              className="w-full px-4 py-3 rounded-xl border-2 focus:outline-none focus:border-opacity-100"
+                              style={{
+                                borderColor: NarraColors.border.light,
+                                background: NarraColors.surface.white,
+                              }}
+                              required
+                            />
+                            <p className="text-xs mt-2" style={{ color: NarraColors.text.light }}>
+                              Este nombre aparecerá en el email de regalo
+                            </p>
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-semibold mb-2" style={{ color: NarraColors.text.primary }}>
                               Tu Email
                             </label>
                             <input
@@ -279,6 +308,26 @@ export const PurchaseCheckoutPage: React.FC = () => {
                               }}
                               required
                             />
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-semibold mb-2" style={{ color: NarraColors.text.primary }}>
+                              Mensaje de Regalo (opcional)
+                            </label>
+                            <textarea
+                              value={giftMessage}
+                              onChange={(e) => setGiftMessage(e.target.value)}
+                              placeholder="Escribe un mensaje especial para acompañar tu regalo..."
+                              rows={4}
+                              className="w-full px-4 py-3 rounded-xl border-2 focus:outline-none focus:border-opacity-100 resize-none"
+                              style={{
+                                borderColor: NarraColors.border.light,
+                                background: NarraColors.surface.white,
+                              }}
+                            />
+                            <p className="text-xs mt-2" style={{ color: NarraColors.text.light }}>
+                              Este mensaje aparecerá en el email que reciba el destinatario
+                            </p>
                           </div>
                         </div>
                       </div>

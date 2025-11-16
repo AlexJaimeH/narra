@@ -456,7 +456,7 @@ class _DashboardPageState extends State<DashboardPage> {
         }
         break;
       case _WalkthroughStep.createStory:
-        // El widget de bienvenida ya está visible tras el menú.
+        await _scrollToWidget(_createStoryKey);
         break;
       case _WalkthroughStep.ghostWriter:
         await _scrollToWidget(_ghostWriterKey);

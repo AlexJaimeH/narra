@@ -49,8 +49,8 @@ class _DashboardPageState extends State<DashboardPage> {
   bool _hasShowcaseStarted = false;
 
   static const _walkthroughTapCooldown = Duration(milliseconds: 400);
-  static const _walkthroughScrollDuration = Duration(milliseconds: 100);
-  static const _walkthroughScrollSettleDelay = Duration(milliseconds: 300);
+  static const _walkthroughScrollDuration = Duration(milliseconds: 500);
+  static const _walkthroughScrollSettleDelay = Duration(milliseconds: 400);
 
   // Keys para el walkthrough
   final GlobalKey _createStoryKey = GlobalKey();

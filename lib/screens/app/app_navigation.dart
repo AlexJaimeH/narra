@@ -333,9 +333,10 @@ class _AppNavigationState extends State<AppNavigation> {
               ),
               if (_isWalkthroughBlocking)
                 Positioned.fill(
-                  child: GestureDetector(
+                  child: Listener(
                     behavior: HitTestBehavior.opaque,
-                    onTap: () {
+                    onPointerDown: (_) {
+                      // Capturar TODOS los eventos de pointer para bloquear scroll
                       DashboardWalkthroughController.triggerStart();
                       DashboardWalkthroughController.triggerAdvance();
                     },

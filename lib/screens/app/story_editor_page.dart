@@ -7326,7 +7326,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
       if (_currentStory != null) {
         final storyId = _currentStory!.id;
-        final resolvedTitle = () {
+        final String? resolvedTitle = () {
           final controllerTitle = _titleController.text.trim();
           if (controllerTitle.isNotEmpty) {
             return controllerTitle;

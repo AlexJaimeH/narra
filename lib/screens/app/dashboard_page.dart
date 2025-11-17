@@ -46,8 +46,11 @@ class _DashboardPageState extends State<DashboardPage> {
   bool _isAdvancingWalkthrough = false;
   DateTime? _lastWalkthroughTap;
   int? _pendingWalkthroughStepIndex;
+  bool _hasShowcaseStarted = false;
 
   static const _walkthroughTapCooldown = Duration(milliseconds: 400);
+  static const _walkthroughScrollDuration = Duration(milliseconds: 100);
+  static const _walkthroughScrollSettleDelay = Duration(milliseconds: 300);
 
   // Keys para el walkthrough
   final GlobalKey _createStoryKey = GlobalKey();
@@ -309,6 +312,8 @@ class _DashboardPageState extends State<DashboardPage> {
       _updateWalkthroughBlocking();
     }
 
+    _hasShowcaseStarted = false;
+
     unawaited(() async {
       await _prepareForStep(_walkthroughSteps.first);
 
@@ -342,16 +347,17 @@ class _DashboardPageState extends State<DashboardPage> {
 
       await _scrollController.animateTo(
         targetScroll.clamp(0, _scrollController.position.maxScrollExtent),
-        duration: const Duration(milliseconds: 750),
+        duration: _walkthroughScrollDuration,
         curve: Curves.easeInOut,
       );
 
-      await Future.delayed(const Duration(milliseconds: 450));
+      await Future.delayed(_walkthroughScrollSettleDelay);
     }
   }
 
   void _handleWalkthroughTap() {
-    if (!_isWalkthroughActive || _isAdvancingWalkthrough) {
+    if (!_isWalkthroughActive || _isAdvancingWalkthrough ||
+        !_hasShowcaseStarted) {
       return;
     }
 
@@ -398,6 +404,10 @@ class _DashboardPageState extends State<DashboardPage> {
   void _handleShowcaseStepStarted(GlobalKey key) {
     if (!_isWalkthroughActive) {
       return;
+    }
+
+    if (!_hasShowcaseStarted) {
+      _hasShowcaseStarted = true;
     }
 
     final index = _walkthroughKeys.indexOf(key);
@@ -456,7 +466,7 @@ class _DashboardPageState extends State<DashboardPage> {
         }
         break;
       case _WalkthroughStep.createStory:
-        // El widget de bienvenida ya está visible tras el menú.
+        await _scrollToWidget(_createStoryKey);
         break;
       case _WalkthroughStep.ghostWriter:
         await _scrollToWidget(_ghostWriterKey);
@@ -489,6 +499,7 @@ class _DashboardPageState extends State<DashboardPage> {
     _lastWalkthroughTap = null;
     _isAdvancingWalkthrough = false;
     _pendingWalkthroughStepIndex = null;
+    _hasShowcaseStarted = false;
 
     _updateWalkthroughBlocking();
 

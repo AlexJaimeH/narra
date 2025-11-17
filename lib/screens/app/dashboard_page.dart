@@ -303,44 +303,72 @@ class _DashboardPageState extends State<DashboardPage> {
       _scrollController.jumpTo(0);
     }
 
-    // Esperar a que el frame se complete para asegurar que los widgets estén construidos
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!mounted || !_isWalkthroughActive) {
-        return;
-      }
+    // Esperar a que los contextos estén disponibles con timeout
+    _waitForContextsAndStart();
+  }
 
+  Future<void> _waitForContextsAndStart() async {
+    const maxWaitTime = Duration(milliseconds: 3000);
+    const checkInterval = Duration(milliseconds: 100);
+    final startTime = DateTime.now();
+
+    while (mounted && _isWalkthroughActive) {
       // Verificar que todos los contextos estén disponibles
       final allContextsReady =
           _walkthroughKeys.every((key) => key.currentContext != null);
 
-      if (!allContextsReady) {
-        // Si no están listos, esperar un frame más
-        WidgetsBinding.instance.addPostFrameCallback((_) async {
-          if (!mounted || !_isWalkthroughActive) {
-            return;
-          }
+      if (allContextsReady) {
+        // Todos los contextos están listos, iniciar walkthrough
+        await _prepareForStep(_walkthroughSteps.first);
 
-          await _prepareForStep(_walkthroughSteps.first);
+        if (!mounted || !_isWalkthroughActive || _walkthroughKeys.isEmpty) {
+          return;
+        }
 
-          if (!mounted || !_isWalkthroughActive || _walkthroughKeys.isEmpty) {
-            return;
-          }
-
-          final showcase = ShowCaseWidget.of(context);
-          showcase.startShowCase(List<GlobalKey>.from(_walkthroughKeys));
-        });
+        final showcase = ShowCaseWidget.of(context);
+        showcase.startShowCase(List<GlobalKey>.from(_walkthroughKeys));
         return;
       }
 
-      await _prepareForStep(_walkthroughSteps.first);
+      // Verificar timeout
+      final elapsed = DateTime.now().difference(startTime);
+      if (elapsed > maxWaitTime) {
+        // Timeout alcanzado, iniciar solo con los pasos disponibles
+        final availableKeys = _walkthroughKeys
+            .where((key) => key.currentContext != null)
+            .toList();
 
-      if (!mounted || !_isWalkthroughActive || _walkthroughKeys.isEmpty) {
+        if (availableKeys.isEmpty) {
+          // No hay ningún contexto disponible, cancelar walkthrough
+          if (mounted) {
+            setState(() {
+              _isWalkthroughActive = false;
+              _shouldShowWalkthrough = false;
+            });
+            _updateWalkthroughBlocking();
+          }
+          return;
+        }
+
+        // Usar solo las keys disponibles
+        _walkthroughKeys
+          ..clear()
+          ..addAll(availableKeys);
+
+        await _prepareForStep(_walkthroughSteps.first);
+
+        if (!mounted || !_isWalkthroughActive || _walkthroughKeys.isEmpty) {
+          return;
+        }
+
+        final showcase = ShowCaseWidget.of(context);
+        showcase.startShowCase(List<GlobalKey>.from(_walkthroughKeys));
         return;
       }
 
-      final showcase = ShowCaseWidget.of(context);
-      showcase.startShowCase(List<GlobalKey>.from(_walkthroughKeys));
-    });
+      // Esperar antes de verificar nuevamente
+      await Future.delayed(checkInterval);
+    }
   }
 
   Future<void> _scrollToWidget(GlobalKey key) async {

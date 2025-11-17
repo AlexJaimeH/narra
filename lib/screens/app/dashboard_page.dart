@@ -94,8 +94,10 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   void _updateWalkthroughBlocking() {
+    // El overlay solo debe estar activo ANTES de iniciar el walkthrough
+    // Una vez iniciado, el Showcase maneja todos los clics
     DashboardWalkthroughController.notifyBlockingChanged(
-      _shouldShowWalkthrough || _isWalkthroughActive,
+      _shouldShowWalkthrough && !_isWalkthroughActive,
     );
   }
 

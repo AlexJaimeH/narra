@@ -46,6 +46,7 @@ class _DashboardPageState extends State<DashboardPage> {
   bool _isAdvancingWalkthrough = false;
   DateTime? _lastWalkthroughTap;
   int? _pendingWalkthroughStepIndex;
+  bool _hasShowcaseStarted = false;
 
   static const _walkthroughTapCooldown = Duration(milliseconds: 400);
 
@@ -309,6 +310,8 @@ class _DashboardPageState extends State<DashboardPage> {
       _updateWalkthroughBlocking();
     }
 
+    _hasShowcaseStarted = false;
+
     unawaited(() async {
       await _prepareForStep(_walkthroughSteps.first);
 
@@ -346,12 +349,47 @@ class _DashboardPageState extends State<DashboardPage> {
         curve: Curves.easeInOut,
       );
 
-      await Future.delayed(const Duration(milliseconds: 450));
+      await _waitForScrollToSettle();
     }
   }
 
+  Future<void> _waitForScrollToSettle() async {
+    if (!_scrollController.hasClients) {
+      await Future.delayed(const Duration(milliseconds: 350));
+      return;
+    }
+
+    final position = _scrollController.position;
+
+    if (!position.isScrollingNotifier.value) {
+      await Future.delayed(const Duration(milliseconds: 350));
+      return;
+    }
+
+    final completer = Completer<void>();
+    late VoidCallback listener;
+    listener = () {
+      if (!position.isScrollingNotifier.value && !completer.isCompleted) {
+        completer.complete();
+      }
+    };
+
+    position.isScrollingNotifier.addListener(listener);
+
+    try {
+      await completer.future.timeout(const Duration(seconds: 2));
+    } on TimeoutException {
+      // Best effort: si el scroll no se detiene a tiempo, continuamos.
+    } finally {
+      position.isScrollingNotifier.removeListener(listener);
+    }
+
+    await Future.delayed(const Duration(milliseconds: 350));
+  }
+
   void _handleWalkthroughTap() {
-    if (!_isWalkthroughActive || _isAdvancingWalkthrough) {
+    if (!_isWalkthroughActive || _isAdvancingWalkthrough ||
+        !_hasShowcaseStarted) {
       return;
     }
 
@@ -398,6 +436,10 @@ class _DashboardPageState extends State<DashboardPage> {
   void _handleShowcaseStepStarted(GlobalKey key) {
     if (!_isWalkthroughActive) {
       return;
+    }
+
+    if (!_hasShowcaseStarted) {
+      _hasShowcaseStarted = true;
     }
 
     final index = _walkthroughKeys.indexOf(key);
@@ -453,10 +495,11 @@ class _DashboardPageState extends State<DashboardPage> {
             duration: const Duration(milliseconds: 400),
             curve: Curves.easeOut,
           );
+          await _waitForScrollToSettle();
         }
         break;
       case _WalkthroughStep.createStory:
-        // El widget de bienvenida ya está visible tras el menú.
+        await _scrollToWidget(_createStoryKey);
         break;
       case _WalkthroughStep.ghostWriter:
         await _scrollToWidget(_ghostWriterKey);
@@ -489,6 +532,7 @@ class _DashboardPageState extends State<DashboardPage> {
     _lastWalkthroughTap = null;
     _isAdvancingWalkthrough = false;
     _pendingWalkthroughStepIndex = null;
+    _hasShowcaseStarted = false;
 
     _updateWalkthroughBlocking();
 

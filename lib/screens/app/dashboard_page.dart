@@ -49,6 +49,8 @@ class _DashboardPageState extends State<DashboardPage> {
   bool _hasShowcaseStarted = false;
 
   static const _walkthroughTapCooldown = Duration(milliseconds: 400);
+  static const _walkthroughScrollDuration = Duration(milliseconds: 100);
+  static const _walkthroughScrollSettleDelay = Duration(milliseconds: 300);
 
   // Keys para el walkthrough
   final GlobalKey _createStoryKey = GlobalKey();
@@ -345,11 +347,11 @@ class _DashboardPageState extends State<DashboardPage> {
 
       await _scrollController.animateTo(
         targetScroll.clamp(0, _scrollController.position.maxScrollExtent),
-        duration: const Duration(milliseconds: 750),
+        duration: _walkthroughScrollDuration,
         curve: Curves.easeInOut,
       );
 
-      await _waitForScrollToSettle();
+      await Future.delayed(_walkthroughScrollSettleDelay);
     }
   }
 

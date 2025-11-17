@@ -94,6 +94,8 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   void _updateWalkthroughBlocking() {
+    // El overlay debe estar activo TODO el tiempo: antes Y durante el walkthrough
+    // Esto previene que el usuario haga clic en los componentes reales
     DashboardWalkthroughController.notifyBlockingChanged(
       _shouldShowWalkthrough || _isWalkthroughActive,
     );
@@ -726,9 +728,6 @@ class _DashboardPageState extends State<DashboardPage> {
                   overlayColor: Colors.black,
                   overlayOpacity: 0.60,
                   disableDefaultTargetGestures: true,
-                  onTargetClick: _handleWalkthroughTap,
-                  onToolTipClick: _handleWalkthroughTap,
-                  onBarrierClick: _handleWalkthroughTap,
                   child: _WelcomeSection(
                     userProfile: _userProfile,
                     userSettings: _userSettings,
@@ -763,9 +762,6 @@ class _DashboardPageState extends State<DashboardPage> {
                     overlayColor: Colors.black,
                     overlayOpacity: 0.60,
                     disableDefaultTargetGestures: true,
-                    onTargetClick: _handleWalkthroughTap,
-                    onToolTipClick: _handleWalkthroughTap,
-                    onBarrierClick: _handleWalkthroughTap,
                     child: _GhostWriterIntroCard(
                       onDismiss: () {
                         setState(() => _shouldShowGhostWriterIntro = false);
@@ -808,9 +804,6 @@ class _DashboardPageState extends State<DashboardPage> {
                   overlayColor: Colors.black,
                   overlayOpacity: 0.60,
                   disableDefaultTargetGestures: true,
-                  onTargetClick: _handleWalkthroughTap,
-                  onToolTipClick: _handleWalkthroughTap,
-                  onBarrierClick: _handleWalkthroughTap,
                   child: _BookProgressSection(
                     stats: _dashboardStats,
                     lastPublishedStory: _lastPublishedStory,

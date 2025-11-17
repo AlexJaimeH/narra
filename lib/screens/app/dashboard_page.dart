@@ -280,18 +280,6 @@ class _DashboardPageState extends State<DashboardPage> {
       return;
     }
 
-    final allContextsReady =
-        steps.map(_keyForStep).every((key) => key.currentContext != null);
-
-    if (!allContextsReady) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && _shouldShowWalkthrough) {
-          _startWalkthrough();
-        }
-      });
-      return;
-    }
-
     _walkthroughSteps
       ..clear()
       ..addAll(steps);
@@ -310,22 +298,49 @@ class _DashboardPageState extends State<DashboardPage> {
 
     _hasShowcaseStarted = false;
 
-    unawaited(() async {
-      await _prepareForStep(_walkthroughSteps.first);
+    // Scroll inmediatamente al inicio para asegurar que todos los widgets se rendericen
+    if (_scrollController.hasClients) {
+      _scrollController.jumpTo(0);
+    }
 
+    // Esperar a que el frame se complete para asegurar que los widgets estén construidos
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted || !_isWalkthroughActive) {
         return;
       }
 
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || !_isWalkthroughActive || _walkthroughKeys.isEmpty) {
-          return;
-        }
+      // Verificar que todos los contextos estén disponibles
+      final allContextsReady =
+          _walkthroughKeys.every((key) => key.currentContext != null);
 
-        final showcase = ShowCaseWidget.of(context);
-        showcase.startShowCase(List<GlobalKey>.from(_walkthroughKeys));
-      });
-    }());
+      if (!allContextsReady) {
+        // Si no están listos, esperar un frame más
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          if (!mounted || !_isWalkthroughActive) {
+            return;
+          }
+
+          await _prepareForStep(_walkthroughSteps.first);
+
+          if (!mounted || !_isWalkthroughActive || _walkthroughKeys.isEmpty) {
+            return;
+          }
+
+          final showcase = ShowCaseWidget.of(context);
+          showcase.startShowCase(List<GlobalKey>.from(_walkthroughKeys));
+        });
+        return;
+      }
+
+      await _prepareForStep(_walkthroughSteps.first);
+
+      if (!mounted || !_isWalkthroughActive || _walkthroughKeys.isEmpty) {
+        return;
+      }
+
+      final showcase = ShowCaseWidget.of(context);
+      showcase.startShowCase(List<GlobalKey>.from(_walkthroughKeys));
+    });
   }
 
   Future<void> _scrollToWidget(GlobalKey key) async {

@@ -2858,8 +2858,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                                 icon: Icons.library_books,
                               ),
                               AppNavigationItem(
-                                  label: 'Personas', icon: Icons.people),
-                              AppNavigationItem(
                                 label: 'Suscriptores',
                                 icon: Icons.email,
                               ),
@@ -7255,12 +7253,15 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   }
 
   Future<bool> _saveDraft() async {
-    if (_titleController.text.trim().isEmpty) {
+    final trimmedTitle = _titleController.text.trim();
+    if (trimmedTitle.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('El título es obligatorio')),
       );
       return false;
     }
+
+    final trimmedContent = _contentController.text.trim();
 
     setState(() => _isSaving = true);
 
@@ -7272,66 +7273,56 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       }
 
       if (_currentStory == null) {
-        // Create new story with minimal data first
-        final now = DateTime.now().toIso8601String();
-        final content = _contentController.text.trim();
-
-        final storyData = {
-          'title': _titleController.text.trim(),
-          'content': content,
-          'user_id': user.id,
-          'status': 'draft',
-          'created_at': now,
-          'updated_at': now,
-        };
-
-        // Add optional fields only if they exist
-        if (_startDate != null) {
-          storyData['story_date'] = _startDate!.toIso8601String();
-          storyData['start_date'] = _startDate!.toIso8601String();
-        }
-        if (_endDate != null) {
-          storyData['end_date'] = _endDate!.toIso8601String();
-        }
-        if (_datesPrecision.isNotEmpty) {
-          storyData['dates_precision'] = _datesPrecision;
-        }
-
-        // Direct Supabase insert
-        final client = NarraSupabaseClient.client;
-        final result =
-            await client.from('stories').insert(storyData).select().single();
-
-        _currentStory = Story.fromMap(result);
-      } else {
-        // Update existing story
-        final content = _contentController.text.trim();
-
-        final updates = {
-          'title': _titleController.text.trim(),
-          'content': content,
-          'updated_at': DateTime.now().toIso8601String(),
-        };
-
-        // Add optional fields
-        if (_startDate != null) {
-          updates['story_date'] = _startDate!.toIso8601String();
-          updates['start_date'] = _startDate!.toIso8601String();
-        }
-        if (_endDate != null) {
-          updates['end_date'] = _endDate!.toIso8601String();
-        }
-        if (_datesPrecision.isNotEmpty) {
-          updates['dates_precision'] = _datesPrecision;
-        }
-
-        final client = NarraSupabaseClient.client;
-        await client
-            .from('stories')
-            .update(updates)
-            .eq('id', _currentStory!.id)
-            .eq('user_id', user.id);
+        final createdStory = await StoryServiceNew.createStory(
+          title: trimmedTitle,
+          content: trimmedContent,
+          startDate: _startDate,
+          endDate: _endDate,
+          datesPrecision: _datesPrecision.isNotEmpty ? _datesPrecision : null,
+          status: 'draft',
+        );
+        _currentStory = createdStory;
       }
+
+      if (_currentStory == null) {
+        throw Exception('No se pudo crear la historia');
+      }
+
+      final updates = <String, dynamic>{
+        'title': trimmedTitle,
+        'content': trimmedContent,
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+
+      if (!_currentStory!.isPublished) {
+        updates['status'] = 'draft';
+        updates['published_at'] = null;
+      }
+
+      if (_startDate != null) {
+        updates['story_date'] = _startDate!.toIso8601String();
+        updates['start_date'] = _startDate!.toIso8601String();
+      }
+      if (_endDate != null) {
+        updates['end_date'] = _endDate!.toIso8601String();
+      }
+      if (_datesPrecision.isNotEmpty) {
+        updates['dates_precision'] = _datesPrecision;
+      }
+
+      final client = NarraSupabaseClient.client;
+      await client
+          .from('stories')
+          .update(updates)
+          .eq('id', _currentStory!.id)
+          .eq('user_id', user.id);
+
+      _currentStory = _currentStory!.copyWith(
+        title: trimmedTitle,
+        content: trimmedContent,
+        status:
+            _currentStory!.isPublished ? _currentStory!.status : StoryStatus.draft,
+      );
 
       if (_currentStory != null) {
         final storyId = _currentStory!.id;
@@ -8682,17 +8673,24 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
     setState(() => _hasChanges = true);
 
-    ScaffoldMessenger.of(context).showSnackBar(
+    final messenger = ScaffoldMessenger.of(context);
+    final controller = messenger.showSnackBar(
       SnackBar(
         content: Text(
             '✓ Se colocó la etiqueta $photoPlaceholder. Al publicar la historia, los suscriptores verán la imagen en ese espacio.'),
         duration: const Duration(seconds: 4),
+        behavior: SnackBarBehavior.floating,
         action: SnackBarAction(
           label: 'Ver',
           onPressed: () => _tabController.animateTo(0),
         ),
       ),
     );
+
+    Future.delayed(const Duration(seconds: 5), () {
+      if (!mounted) return;
+      controller.close();
+    });
   }
 
   String _removeAllPlaceholdersExceptToken(

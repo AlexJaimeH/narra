@@ -355,6 +355,40 @@ class _DashboardPageState extends State<DashboardPage> {
     }
   }
 
+  Future<void> _waitForScrollToSettle() async {
+    if (!_scrollController.hasClients) {
+      await Future.delayed(const Duration(milliseconds: 350));
+      return;
+    }
+
+    final position = _scrollController.position;
+
+    if (!position.isScrollingNotifier.value) {
+      await Future.delayed(const Duration(milliseconds: 350));
+      return;
+    }
+
+    final completer = Completer<void>();
+    late VoidCallback listener;
+    listener = () {
+      if (!position.isScrollingNotifier.value && !completer.isCompleted) {
+        completer.complete();
+      }
+    };
+
+    position.isScrollingNotifier.addListener(listener);
+
+    try {
+      await completer.future.timeout(const Duration(seconds: 2));
+    } on TimeoutException {
+      // Best effort: si el scroll no se detiene a tiempo, continuamos.
+    } finally {
+      position.isScrollingNotifier.removeListener(listener);
+    }
+
+    await Future.delayed(const Duration(milliseconds: 350));
+  }
+
   void _handleWalkthroughTap() {
     if (!_isWalkthroughActive || _isAdvancingWalkthrough ||
         !_hasShowcaseStarted) {
@@ -463,6 +497,7 @@ class _DashboardPageState extends State<DashboardPage> {
             duration: const Duration(milliseconds: 400),
             curve: Curves.easeOut,
           );
+          await _waitForScrollToSettle();
         }
         break;
       case _WalkthroughStep.createStory:

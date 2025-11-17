@@ -246,10 +246,6 @@ class _DashboardPageState extends State<DashboardPage> {
       return;
     }
 
-    await Future.delayed(const Duration(seconds: 1));
-
-    if (!mounted) return;
-
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && _shouldShowWalkthrough && !_isWalkthroughActive) {
         _startWalkthrough();

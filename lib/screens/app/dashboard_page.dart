@@ -49,8 +49,8 @@ class _DashboardPageState extends State<DashboardPage> {
   bool _hasShowcaseStarted = false;
 
   static const _walkthroughTapCooldown = Duration(milliseconds: 400);
-  static const _walkthroughScrollDuration = Duration(milliseconds: 100);
-  static const _walkthroughScrollSettleDelay = Duration(milliseconds: 300);
+  static const _walkthroughScrollDuration = Duration(milliseconds: 500);
+  static const _walkthroughScrollSettleDelay = Duration(milliseconds: 400);
 
   // Keys para el walkthrough
   final GlobalKey _createStoryKey = GlobalKey();
@@ -191,7 +191,6 @@ class _DashboardPageState extends State<DashboardPage> {
 
       // Check if should show ghost writer intro
       final shouldShowIntro = await UserService.shouldShowGhostWriterIntro();
-      print('[Dashboard] shouldShowGhostWriterIntro: $shouldShowIntro');
 
       // Check if should show set name prompt (new users)
       final shouldShowSetName = await UserService.shouldShowSetNamePrompt();
@@ -267,9 +266,6 @@ class _DashboardPageState extends State<DashboardPage> {
 
     if (_shouldShowGhostWriterIntro) {
       steps.add(_WalkthroughStep.ghostWriter);
-      print('[Walkthrough] Added ghostWriter step. Widget should be visible.');
-    } else {
-      print('[Walkthrough] Skipping ghostWriter step - _shouldShowGhostWriterIntro is false');
     }
 
     steps.add(_WalkthroughStep.bookProgress);
@@ -316,23 +312,10 @@ class _DashboardPageState extends State<DashboardPage> {
     const checkInterval = Duration(milliseconds: 100);
     final startTime = DateTime.now();
 
-    print('[Walkthrough] Waiting for ${_walkthroughKeys.length} contexts. Steps: $_walkthroughSteps');
-
     while (mounted && _isWalkthroughActive) {
       // Verificar que todos los contextos estén disponibles
       final allContextsReady =
           _walkthroughKeys.every((key) => key.currentContext != null);
-
-      final missingContexts = <int>[];
-      for (var i = 0; i < _walkthroughKeys.length; i++) {
-        if (_walkthroughKeys[i].currentContext == null) {
-          missingContexts.add(i);
-        }
-      }
-
-      if (missingContexts.isNotEmpty) {
-        print('[Walkthrough] Missing contexts for steps: ${missingContexts.map((i) => _walkthroughSteps[i]).toList()}');
-      }
 
       if (allContextsReady) {
         // Todos los contextos están listos, iniciar walkthrough

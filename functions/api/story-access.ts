@@ -3,6 +3,7 @@ import {
   resolveSupabaseConfig,
   type SupabaseEnv,
 } from "./_supabase";
+import { fetchAuthorDisplayName } from "./_author_display_name";
 
 interface Env extends SupabaseEnv {}
 
@@ -151,31 +152,39 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         const subscriberName = subscriber.name || 'Suscriptor';
 
         if (subscriberEmail && typeof subscriberEmail === 'string') {
-          // Fetch author name from user_settings
-          let authorName = 'el autor';
-          try {
-            const settingsUrl = new URL(`${rpcUrl}/rest/v1/user_settings`);
-            settingsUrl.searchParams.set('user_id', `eq.${authorId}`);
-            settingsUrl.searchParams.set('select', 'public_author_name');
-            settingsUrl.searchParams.set('limit', '1');
-
-            const settingsResponse = await fetch(settingsUrl.toString(), {
-              headers: {
-                'Content-Type': 'application/json',
-                apikey: apiKey,
-                Authorization: `Bearer ${apiKey}`,
-              },
-            });
-
-            if (settingsResponse.ok) {
-              const settingsData = await parseJson(settingsResponse);
-              if (Array.isArray(settingsData) && settingsData.length > 0) {
-                authorName = (settingsData[0] as any).public_author_name || 'el autor';
+          let authorEmail: string | undefined;
+          if (credentials?.serviceKey) {
+            try {
+              const authorResponse = await fetch(
+                `${rpcUrl}/auth/v1/admin/users/${authorId}`,
+                {
+                  headers: {
+                    'Content-Type': 'application/json',
+                    apikey: credentials.serviceKey,
+                    Authorization: `Bearer ${credentials.serviceKey}`,
+                  },
+                },
+              );
+              if (authorResponse.ok) {
+                const authorData = await parseJson(authorResponse);
+                if (
+                  authorData
+                  && typeof (authorData as any).email === 'string'
+                ) {
+                  authorEmail = (authorData as any).email;
+                }
               }
+            } catch (err) {
+              console.warn('[story-access] Failed to fetch author email for unsubscribe notice', err);
             }
-          } catch (err) {
-            console.warn('[story-access] Failed to fetch author name for email', err);
           }
+
+          const authorName = await fetchAuthorDisplayName(
+            rpcUrl,
+            credentials?.serviceKey,
+            authorId,
+            authorEmail,
+          );
 
           // Send email notification
           const emailHtml = `

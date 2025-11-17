@@ -1,3 +1,5 @@
+import { fetchAuthorDisplayName } from './_author_display_name';
+
 interface Env {
   SUPABASE_URL: string;
   SUPABASE_SERVICE_ROLE_KEY: string;
@@ -147,6 +149,13 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     const userId = newUser.id;
 
     console.log('[purchase-create-account] User created:', userId);
+
+    const authorDisplayName = await fetchAuthorDisplayName(
+      env.SUPABASE_URL,
+      env.SUPABASE_SERVICE_ROLE_KEY,
+      userId,
+      authorEmail,
+    );
 
     // Create management token for both gift AND self purchases (for account recovery)
     let managementToken: string | null = null;
@@ -357,8 +366,16 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 };
 
 // Email templates (simplified, will be expanded)
-function buildSelfPurchaseEmail(email: string, magicLink: string, appUrl: string, managementToken: string | null): string {
+function buildSelfPurchaseEmail(
+  email: string,
+  magicLink: string,
+  appUrl: string,
+  managementToken: string | null,
+  authorName: string,
+): string {
   const recoveryPortalUrl = managementToken ? `${appUrl}/gift-management?token=${managementToken}` : null;
+  const normalizedAuthor = authorName.trim();
+  const greetingLine = normalizedAuthor.length > 0 ? `Hola ${normalizedAuthor},` : 'Hola,';
   return `<!DOCTYPE html>
 <html lang="es">
   <head>
@@ -385,7 +402,7 @@ function buildSelfPurchaseEmail(email: string, magicLink: string, appUrl: string
                 </div>
 
                 <div style="padding:40px 36px;">
-                  <p style="margin:0 0 24px 0;font-size:18px;line-height:1.65;color:#374151;font-weight:500;">Hola,</p>
+                  <p style="margin:0 0 24px 0;font-size:18px;line-height:1.65;color:#374151;font-weight:500;">${greetingLine}</p>
                   <p style="margin:0 0 28px 0;font-size:17px;line-height:1.7;color:#4b5563;">¡Gracias por unirte a Narra! Tu cuenta ha sido creada y estás listo para comenzar a preservar tus memorias.</p>
 
                   <div style="background:#E8F5F4;border-left:4px solid #4DB3A8;border-radius:16px;padding:24px;margin:32px 0;">
@@ -440,10 +457,18 @@ function buildSelfPurchaseEmail(email: string, magicLink: string, appUrl: string
 </html>`;
 }
 
-function buildSelfPurchaseEmailText(email: string, magicLink: string, appUrl: string, managementToken: string | null): string {
+function buildSelfPurchaseEmailText(
+  email: string,
+  magicLink: string,
+  appUrl: string,
+  managementToken: string | null,
+  authorName: string,
+): string {
   const recoveryPortalUrl = managementToken ? `${appUrl}/gift-management?token=${managementToken}` : null;
+  const normalizedAuthor = authorName.trim();
+  const greetingLine = normalizedAuthor.length > 0 ? `Hola ${normalizedAuthor},` : 'Hola,';
 
-  let text = `¡Bienvenido a Narra!
+  let text = `${greetingLine}
 
 Tu cuenta ha sido creada exitosamente.
 
@@ -474,8 +499,16 @@ ${recoveryPortalUrl}
   return text;
 }
 
-function buildGiftAuthorEmail(email: string, magicLink: string, buyerName: string, giftMessage: string | null): string {
+function buildGiftAuthorEmail(
+  email: string,
+  magicLink: string,
+  buyerName: string,
+  giftMessage: string | null,
+  authorName: string,
+): string {
   const hasMessage = giftMessage && giftMessage.trim() !== '';
+  const normalizedAuthor = authorName.trim();
+  const greetingLine = normalizedAuthor.length > 0 ? `Hola ${normalizedAuthor},` : 'Hola,';
 
   return `<!DOCTYPE html>
 <html lang="es">
@@ -501,7 +534,7 @@ function buildGiftAuthorEmail(email: string, magicLink: string, buyerName: strin
                 </div>
 
                 <div style="padding:40px 36px;">
-                  <p style="margin:0 0 24px 0;font-size:18px;line-height:1.65;color:#374151;font-weight:500;">Hola,</p>
+                  <p style="margin:0 0 24px 0;font-size:18px;line-height:1.65;color:#374151;font-weight:500;">${greetingLine}</p>
                   <p style="margin:0 0 28px 0;font-size:17px;line-height:1.7;color:#4b5563;"><strong>${buyerName}</strong> te ha regalado acceso de por vida a <strong>Narra</strong>, una plataforma para preservar y compartir tus historias con tu familia.</p>
 
                   ${hasMessage ? `
@@ -554,10 +587,20 @@ function buildGiftAuthorEmail(email: string, magicLink: string, buyerName: strin
 </html>`;
 }
 
-function buildGiftAuthorEmailText(email: string, magicLink: string, buyerName: string, giftMessage: string | null): string {
+function buildGiftAuthorEmailText(
+  email: string,
+  magicLink: string,
+  buyerName: string,
+  giftMessage: string | null,
+  authorName: string,
+): string {
   const hasMessage = giftMessage && giftMessage.trim() !== '';
+  const normalizedAuthor = authorName.trim();
+  const greetingLine = normalizedAuthor.length > 0 ? `Hola ${normalizedAuthor},` : 'Hola,';
 
   let text = `¡${buyerName} te ha regalado Narra!
+
+${greetingLine}
 
 ${buyerName} te ha regalado acceso de por vida a Narra, una plataforma para preservar y compartir tus historias con tu familia.`;
 
@@ -582,7 +625,14 @@ ${magicLink}
   return text;
 }
 
-function buildGiftBuyerEmail(buyerEmail: string, authorEmail: string, managementUrl: string): string {
+function buildGiftBuyerEmail(
+  buyerEmail: string,
+  authorEmail: string,
+  managementUrl: string,
+  authorName: string,
+): string {
+  const normalizedAuthor = authorName.trim();
+  const displayName = normalizedAuthor.length > 0 ? normalizedAuthor : authorEmail;
   return `<!DOCTYPE html>
 <html lang="es">
   <head>
@@ -610,7 +660,7 @@ function buildGiftBuyerEmail(buyerEmail: string, authorEmail: string, management
 
                 <div style="padding:40px 36px;">
                   <p style="margin:0 0 24px 0;font-size:18px;line-height:1.65;color:#374151;font-weight:500;">Hola,</p>
-                  <p style="margin:0 0 28px 0;font-size:17px;line-height:1.7;color:#4b5563;">Tu regalo de Narra ha sido enviado exitosamente a <strong>${authorEmail}</strong>.</p>
+                  <p style="margin:0 0 28px 0;font-size:17px;line-height:1.7;color:#4b5563;">Tu regalo de Narra ha sido enviado exitosamente a <strong>${displayName}</strong>${displayName !== authorEmail ? ` <span style="color:#6b7280;">(${authorEmail})</span>` : ''}.</p>
 
                   <div style="background:#E8F5F4;border-left:4px solid #4DB3A8;border-radius:16px;padding:24px;margin:32px 0;">
                     <p style="margin:0 0 12px 0;font-size:15px;line-height:1.6;color:#38827A;font-weight:700;">🎁 Panel de Gestión</p>
@@ -657,10 +707,17 @@ function buildGiftBuyerEmail(buyerEmail: string, authorEmail: string, management
 </html>`;
 }
 
-function buildGiftBuyerEmailText(buyerEmail: string, authorEmail: string, managementUrl: string): string {
+function buildGiftBuyerEmailText(
+  buyerEmail: string,
+  authorEmail: string,
+  managementUrl: string,
+  authorName: string,
+): string {
+  const normalizedAuthor = authorName.trim();
+  const displayName = normalizedAuthor.length > 0 ? normalizedAuthor : authorEmail;
   return `Regalo enviado - Panel de gestión
 
-Tu regalo de Narra ha sido enviado exitosamente a ${authorEmail}.
+Tu regalo de Narra ha sido enviado exitosamente a ${displayName}${displayName !== authorEmail ? ` (${authorEmail})` : ''}.
 
 Panel de Gestión:
 Desde este panel puedes administrar el regalo:

@@ -1,3 +1,5 @@
+import { fetchAuthorDisplayName } from './_author_display_name';
+
 interface Env {
   SUPABASE_URL: string;
   SUPABASE_SERVICE_ROLE_KEY: string;
@@ -94,6 +96,13 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     const userData = await userResponse.json();
     const authorEmail = userData.email;
 
+    const authorDisplayName = await fetchAuthorDisplayName(
+      env.SUPABASE_URL,
+      env.SUPABASE_SERVICE_ROLE_KEY,
+      authorUserId,
+      authorEmail,
+    );
+
     // Generate magic link
     console.log('[gift-management-send-magic-link] Generating magic link...');
     const appUrl = (env as any).APP_URL || 'https://narra.mx';
@@ -173,8 +182,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
     // Send email
     console.log('[gift-management-send-magic-link] Sending magic link email...');
-    const emailHtml = buildMagicLinkEmail(authorEmail, magicLink);
-    const emailText = buildMagicLinkEmailText(authorEmail, magicLink);
+    const emailHtml = buildMagicLinkEmail(authorEmail, magicLink, authorDisplayName);
+    const emailText = buildMagicLinkEmailText(authorEmail, magicLink, authorDisplayName);
 
     const emailResponse = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -211,7 +220,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   }
 };
 
-function buildMagicLinkEmail(email: string, magicLink: string): string {
+function buildMagicLinkEmail(email: string, magicLink: string, authorName: string): string {
+  const normalizedAuthor = authorName.trim();
+  const greetingLine = normalizedAuthor.length > 0 ? `Hola ${normalizedAuthor},` : 'Hola,';
   return `<!DOCTYPE html>
 <html lang="es">
   <head>
@@ -238,7 +249,7 @@ function buildMagicLinkEmail(email: string, magicLink: string): string {
                 </div>
 
                 <div style="padding:40px 36px;">
-                  <p style="margin:0 0 24px 0;font-size:18px;line-height:1.65;color:#374151;font-weight:500;">Hola,</p>
+                  <p style="margin:0 0 24px 0;font-size:18px;line-height:1.65;color:#374151;font-weight:500;">${greetingLine}</p>
                   <p style="margin:0 0 28px 0;font-size:17px;line-height:1.7;color:#4b5563;">Haz clic en el botón de abajo para acceder a tu cuenta de Narra.</p>
 
                   <div style="background:#E8F5F4;border-left:4px solid #4DB3A8;border-radius:16px;padding:24px;margin:32px 0;">
@@ -276,10 +287,12 @@ function buildMagicLinkEmail(email: string, magicLink: string): string {
 </html>`;
 }
 
-function buildMagicLinkEmailText(email: string, magicLink: string): string {
+function buildMagicLinkEmailText(email: string, magicLink: string, authorName: string): string {
+  const normalizedAuthor = authorName.trim();
+  const greetingLine = normalizedAuthor.length > 0 ? `Hola ${normalizedAuthor},` : 'Hola,';
   return `Accede a tu cuenta de Narra
 
-Hola,
+${greetingLine}
 
 Haz clic en el siguiente enlace para acceder a tu cuenta:
 

@@ -1,3 +1,5 @@
+import { fetchAuthorDisplayName } from './_author_display_name';
+
 interface Env {
   SUPABASE_URL: string;
   SUPABASE_SERVICE_ROLE_KEY: string;
@@ -74,6 +76,35 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     const tokenData = tokens[0];
     const authorUserId = tokenData.author_user_id;
 
+    let authorEmail: string | undefined;
+    try {
+      const userResponse = await fetch(
+        `${env.SUPABASE_URL}/auth/v1/admin/users/${authorUserId}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+            'apikey': env.SUPABASE_SERVICE_ROLE_KEY,
+            'Content-Type': 'application/json',
+          },
+        },
+      );
+      if (userResponse.ok) {
+        const userData = await userResponse.json();
+        if (userData && typeof userData.email === 'string') {
+          authorEmail = userData.email;
+        }
+      }
+    } catch (error) {
+      console.warn('[gift-management-resend-subscriber-link] Failed to fetch author email', error);
+    }
+
+    const authorDisplayName = await fetchAuthorDisplayName(
+      env.SUPABASE_URL,
+      env.SUPABASE_SERVICE_ROLE_KEY,
+      authorUserId,
+      authorEmail,
+    );
+
     // Get subscriber and verify it belongs to this author
     console.log('[gift-management-resend-subscriber-link] Getting subscriber...');
     const subscriberResponse = await fetch(
@@ -112,8 +143,17 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
     // Send email to subscriber
     console.log('[gift-management-resend-subscriber-link] Sending email to subscriber...');
-    const emailHtml = buildSubscriberEmail(subscriber.name, subscriber.email, fullMagicLink);
-    const emailText = buildSubscriberEmailText(subscriber.name, fullMagicLink);
+    const emailHtml = buildSubscriberEmail(
+      subscriber.name,
+      subscriber.email,
+      fullMagicLink,
+      authorDisplayName,
+    );
+    const emailText = buildSubscriberEmailText(
+      subscriber.name,
+      fullMagicLink,
+      authorDisplayName,
+    );
 
     const emailResponse = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -150,7 +190,14 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   }
 };
 
-function buildSubscriberEmail(name: string, email: string, magicLink: string): string {
+function buildSubscriberEmail(
+  name: string,
+  email: string,
+  magicLink: string,
+  authorName: string,
+): string {
+  const normalizedAuthor = authorName.trim();
+  const resolvedAuthor = normalizedAuthor.length > 0 ? normalizedAuthor : 'tu autor/a en Narra';
   return `<!DOCTYPE html>
 <html lang="es">
   <head>
@@ -175,8 +222,11 @@ function buildSubscriberEmail(name: string, email: string, magicLink: string): s
 
                 <div style="padding:40px 36px;">
                   <p style="margin:0 0 24px 0;font-size:18px;line-height:1.65;color:#374151;">Hola ${name},</p>
+                  <p style="margin:0 0 18px 0;font-size:16px;line-height:1.65;color:#374151;">
+                    ${resolvedAuthor} te envió un acceso directo a sus historias privadas en Narra.
+                  </p>
                   <p style="margin:0 0 28px 0;font-size:16px;line-height:1.65;color:#374151;">
-                    Haz clic en el botón de abajo para acceder al blog de historias en Narra.
+                    Usa el botón siguiente para entrar a tu blog personalizado.
                   </p>
 
                   <div style="text-align:center;margin:40px 0 32px;">
@@ -196,6 +246,9 @@ function buildSubscriberEmail(name: string, email: string, magicLink: string): s
                 </div>
 
                 <div style="background:#fafaf9;padding:32px 36px;border-top:1px solid #e7e5e4;">
+                  <p style="margin:0 0 8px 0;font-size:14px;color:#78716c;line-height:1.6;text-align:center;">
+                    Formas parte del círculo privado de <strong>${resolvedAuthor}</strong> en Narra
+                  </p>
                   <p style="margin:0;font-size:12px;color:#a8a29e;line-height:1.6;text-align:center;">
                     Correo automático de Narra • Por favor no respondas
                   </p>
@@ -212,12 +265,18 @@ function buildSubscriberEmail(name: string, email: string, magicLink: string): s
 </html>`;
 }
 
-function buildSubscriberEmailText(name: string, magicLink: string): string {
+function buildSubscriberEmailText(
+  name: string,
+  magicLink: string,
+  authorName: string,
+): string {
+  const normalizedAuthor = authorName.trim();
+  const resolvedAuthor = normalizedAuthor.length > 0 ? normalizedAuthor : 'tu autor/a en Narra';
   return `Hola ${name},
 
-Haz clic en el siguiente enlace para acceder al blog de historias en Narra:
+${resolvedAuthor} reenvió tu acceso personal a sus historias privadas. Abre este enlace para entrar:
 
 ${magicLink}
 
-Correo automático de Narra`;
+Este enlace es único para ti. Si necesitas otro, responde directamente a ${resolvedAuthor}.`;
 }

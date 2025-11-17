@@ -1960,15 +1960,12 @@ Future<void> _sendPublishedStoryEmails(Story story) async {
     final subscribers = await SubscriberService.getConfirmedSubscribers();
     if (subscribers.isEmpty) return;
 
-    // Get user profile for display name
-    final profile = await UserService.getCurrentUserProfile();
-    final authorName = profile?['display_name'] as String? ??
-                      profile?['name'] as String? ??
-                      user.email?.split('@').first ??
-                      'Tu autor en Narra';
+  final authorName = await UserService.resolveAuthorDisplayName(
+    fallbackLabel: 'Tu autor en Narra',
+  );
 
-    // Send emails
-    await SubscriberEmailService.sendStoryPublished(
+  // Send emails
+  await SubscriberEmailService.sendStoryPublished(
       story: story,
       subscribers: subscribers,
       authorDisplayName: authorName,

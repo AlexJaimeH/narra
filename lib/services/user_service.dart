@@ -230,6 +230,46 @@ class UserService {
     return settings.isNotEmpty ? settings.first : null;
   }
 
+  static Future<String> resolveAuthorDisplayName({
+    String fallbackLabel = 'Tu autor/a en Narra',
+  }) async {
+    Map<String, dynamic>? settings;
+    try {
+      settings = await getUserSettings();
+    } catch (_) {
+      settings = null;
+    }
+
+    final settingsName = (settings?['public_author_name'] as String?)?.trim();
+    if (settingsName != null && settingsName.isNotEmpty) {
+      return settingsName;
+    }
+
+    Map<String, dynamic>? profile;
+    try {
+      profile = await getCurrentUserProfile();
+    } catch (_) {
+      profile = null;
+    }
+
+    final profileName = ((profile?['display_name'] as String?) ??
+            (profile?['name'] as String?))
+        ?.trim();
+    if (profileName != null && profileName.isNotEmpty) {
+      return profileName;
+    }
+
+    final email = SupabaseAuth.currentUser?.email;
+    if (email != null && email.contains('@')) {
+      final localPart = email.split('@').first.trim();
+      if (localPart.isNotEmpty) {
+        return localPart;
+      }
+    }
+
+    return fallbackLabel;
+  }
+
   // Actualizar configuraciones del usuario
   static Future<Map<String, dynamic>> updateUserSettings(
     Map<String, dynamic> updates,

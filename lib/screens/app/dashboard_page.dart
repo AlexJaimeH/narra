@@ -15,6 +15,70 @@ import 'app_navigation.dart';
 import 'subscribers_page.dart';
 import 'dashboard_walkthrough_controller.dart';
 
+String _normalizeTopicName(String value) {
+  const diacriticReplacements = {
+    'á': 'a',
+    'à': 'a',
+    'ä': 'a',
+    'â': 'a',
+    'ã': 'a',
+    'å': 'a',
+    'é': 'e',
+    'è': 'e',
+    'ë': 'e',
+    'ê': 'e',
+    'í': 'i',
+    'ì': 'i',
+    'ï': 'i',
+    'î': 'i',
+    'ó': 'o',
+    'ò': 'o',
+    'ö': 'o',
+    'ô': 'o',
+    'õ': 'o',
+    'ú': 'u',
+    'ù': 'u',
+    'ü': 'u',
+    'û': 'u',
+    'ñ': 'n',
+    'ç': 'c',
+  };
+
+  final normalized = value.trim().toLowerCase();
+  final buffer = StringBuffer();
+  for (final codePoint in normalized.runes) {
+    final char = String.fromCharCode(codePoint);
+    buffer.write(diacriticReplacements[char] ?? char);
+  }
+  return buffer.toString();
+}
+
+const List<String> _forbiddenSuggestedTopics = [
+  'Otros momentos',
+  'Recuerdos únicos',
+  'Sin categoría',
+  'Naturaleza',
+  'Recuperación',
+  'Cultura',
+  'Hogar',
+  'Amistad',
+  'Graduación',
+  'Mentoría laboral',
+  'Primer día de clases',
+  'Actividades escolares',
+  'Servicio comunitario',
+  'Descubrimientos',
+  'Aventura en carretera',
+  'Fe y esperanza',
+  'Recetas favoritas',
+  'Música',
+  'Tecnología',
+  'Conversaciones especiales',
+];
+
+final Set<String> _normalizedForbiddenSuggestedTopics =
+    _forbiddenSuggestedTopics.map(_normalizeTopicName).toSet();
+
 enum _WalkthroughStep { menu, createStory, ghostWriter, bookProgress }
 
 class DashboardPage extends StatefulWidget {
@@ -102,32 +166,7 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   List<String> _calculateSuggestedTopics(List<StoryTag> allTags) {
-    final usedTags = allTags.map((t) => t.name.toLowerCase()).toSet();
-
-    const excludedTopics = {
-      'otros momentos',
-      'recuerdos unicos',
-      'recuerdos únicos',
-      'sin categoría',
-      'sin categoria',
-      'naturaleza',
-      'recuperacion',
-      'recuperación',
-      'cultura',
-      'hogar',
-      'amistad',
-      'graduación',
-      'graduacion',
-      'mentoría laboral',
-      'mentoria laboral',
-      'fe y esperanza',
-      'recetas favoritas',
-      'música',
-      'musica',
-      'tecnología',
-      'tecnologia',
-      'conversaciones especiales',
-    };
+    final usedTags = allTags.map((t) => _normalizeTopicName(t.name)).toSet();
 
     const commonTopics = [
       'Familia',
@@ -161,11 +200,11 @@ class _DashboardPageState extends State<DashboardPage> {
       'Emprendimiento',
     ];
 
-    final unusedTopics = commonTopics
-        .where((topic) =>
-            !usedTags.contains(topic.toLowerCase()) &&
-            !excludedTopics.contains(topic.toLowerCase()))
-        .toList();
+    final unusedTopics = commonTopics.where((topic) {
+      final normalizedTopic = _normalizeTopicName(topic);
+      return !usedTags.contains(normalizedTopic) &&
+          !_normalizedForbiddenSuggestedTopics.contains(normalizedTopic);
+    }).toList();
 
     unusedTopics.shuffle();
     return unusedTopics.take(5).toList();
@@ -271,7 +310,8 @@ class _DashboardPageState extends State<DashboardPage> {
       steps.add(_WalkthroughStep.ghostWriter);
       print('[Walkthrough] Added ghostWriter step. Widget should be visible.');
     } else {
-      print('[Walkthrough] Skipping ghostWriter step - _shouldShowGhostWriterIntro is false');
+      print(
+          '[Walkthrough] Skipping ghostWriter step - _shouldShowGhostWriterIntro is false');
     }
 
     steps.add(_WalkthroughStep.bookProgress);
@@ -318,7 +358,8 @@ class _DashboardPageState extends State<DashboardPage> {
     const checkInterval = Duration(milliseconds: 100);
     final startTime = DateTime.now();
 
-    print('[Walkthrough] Waiting for ${_walkthroughKeys.length} contexts. Steps: $_walkthroughSteps');
+    print(
+        '[Walkthrough] Waiting for ${_walkthroughKeys.length} contexts. Steps: $_walkthroughSteps');
 
     while (mounted && _isWalkthroughActive) {
       // Verificar que todos los contextos estén disponibles
@@ -333,7 +374,8 @@ class _DashboardPageState extends State<DashboardPage> {
       }
 
       if (missingContexts.isNotEmpty) {
-        print('[Walkthrough] Missing contexts for steps: ${missingContexts.map((i) => _walkthroughSteps[i]).toList()}');
+        print(
+            '[Walkthrough] Missing contexts for steps: ${missingContexts.map((i) => _walkthroughSteps[i]).toList()}');
       }
 
       if (allContextsReady) {
@@ -448,7 +490,8 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   void _handleWalkthroughTap() {
-    if (!_isWalkthroughActive || _isAdvancingWalkthrough ||
+    if (!_isWalkthroughActive ||
+        _isAdvancingWalkthrough ||
         !_hasShowcaseStarted) {
       return;
     }
@@ -2434,7 +2477,8 @@ class _SetNameCardState extends State<_SetNameCard> {
                             height: 20,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                              valueColor:
+                                  AlwaysStoppedAnimation<Color>(Colors.white),
                             ),
                           )
                         : const Icon(Icons.check_circle, size: 22),

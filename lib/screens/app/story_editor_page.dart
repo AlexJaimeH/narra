@@ -4317,6 +4317,12 @@ class _StoryEditorPageState extends State<StoryEditorPage>
             category: 'Raíces y familia',
             emoji: '🏠',
           ),
+          _TagOption(
+            name: 'Nacimiento',
+            color: const Color(0xFFFFE5A5),
+            category: 'Raíces y familia',
+            emoji: '👶',
+          ),
         ],
       ),
       _TagPaletteSection(

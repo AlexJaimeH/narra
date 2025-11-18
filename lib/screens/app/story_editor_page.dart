@@ -5085,15 +5085,27 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
   void _startAutoVersionTimer() {
     _autoVersionTimer?.cancel();
-    _autoVersionTimer = Timer.periodic(const Duration(minutes: 5), (_) {
-      if (!mounted) return;
-      if (!_hasChanges) return;
-      if (_titleController.text.trim().isEmpty &&
-          _contentController.text.trim().isEmpty) {
-        return;
-      }
-      _captureVersion(reason: 'Guardado automático (5 minutos)');
-    });
+    _autoVersionTimer =
+        Timer.periodic(const Duration(minutes: 3), (_) => _handleAutoVersionTick());
+  }
+
+  void _handleAutoVersionTick() {
+    if (!mounted) return;
+    if (_isSaving) return;
+    if (!_hasChanges) return;
+    final hasTitle = _titleController.text.trim().isNotEmpty;
+    final hasContent = _contentController.text.trim().isNotEmpty;
+    if (!hasTitle && !hasContent) {
+      return;
+    }
+
+    _captureVersion(reason: 'Guardado automático (3 minutos)');
+
+    if (!hasTitle) {
+      return;
+    }
+
+    unawaited(_saveDraft(autoSave: true, captureVersion: false));
   }
 
   void _captureVersion({
@@ -5286,7 +5298,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       assign(Icons.mic_rounded, colorScheme.secondary);
     } else if (matchesAny(['restaur', 'restaurar'])) {
       assign(Icons.restart_alt_rounded, colorScheme.secondary);
-    } else if (matchesAny(['automático', 'automatico', '5 minutos'])) {
+    } else if (matchesAny(['automático', 'automatico', '3 minutos'])) {
       assign(Icons.schedule_rounded, colorScheme.outline);
     }
 
@@ -6849,12 +6861,14 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     return true;
   }
 
-  Future<bool> _saveDraft() async {
+  Future<bool> _saveDraft({bool autoSave = false, bool captureVersion = true}) async {
     final trimmedTitle = _titleController.text.trim();
     if (trimmedTitle.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('El título es obligatorio')),
-      );
+      if (!autoSave) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('El título es obligatorio')),
+        );
+      }
       return false;
     }
 
@@ -6958,12 +6972,18 @@ class _StoryEditorPageState extends State<StoryEditorPage>
               ? 'Se guardó en borradores'
               : 'Se guardó en borradores. Audio pendiente por subir');
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
-      _captureVersion(
-        reason: isPublished ? 'Historia modificada' : 'Se guardó en borradores',
-      );
+      if (!autoSave) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message)),
+        );
+      }
+      if (captureVersion) {
+        _captureVersion(
+          reason: isPublished
+              ? 'Historia modificada'
+              : (autoSave ? 'Guardado automático en borradores' : 'Se guardó en borradores'),
+        );
+      }
       return true;
     } catch (e) {
       setState(() => _isSaving = false);

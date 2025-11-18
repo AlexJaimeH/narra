@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:showcaseview/showcaseview.dart';
 import 'package:narra/api/narra_api.dart';
+import 'package:narra/data/curated_tags.dart';
 import 'package:narra/repositories/user_repository.dart';
 import 'package:narra/repositories/story_repository.dart';
 import 'package:narra/services/story_service_new.dart';
@@ -15,69 +16,8 @@ import 'app_navigation.dart';
 import 'subscribers_page.dart';
 import 'dashboard_walkthrough_controller.dart';
 
-String _normalizeTopicName(String value) {
-  const diacriticReplacements = {
-    'á': 'a',
-    'à': 'a',
-    'ä': 'a',
-    'â': 'a',
-    'ã': 'a',
-    'å': 'a',
-    'é': 'e',
-    'è': 'e',
-    'ë': 'e',
-    'ê': 'e',
-    'í': 'i',
-    'ì': 'i',
-    'ï': 'i',
-    'î': 'i',
-    'ó': 'o',
-    'ò': 'o',
-    'ö': 'o',
-    'ô': 'o',
-    'õ': 'o',
-    'ú': 'u',
-    'ù': 'u',
-    'ü': 'u',
-    'û': 'u',
-    'ñ': 'n',
-    'ç': 'c',
-  };
-
-  final normalized = value.trim().toLowerCase();
-  final buffer = StringBuffer();
-  for (final codePoint in normalized.runes) {
-    final char = String.fromCharCode(codePoint);
-    buffer.write(diacriticReplacements[char] ?? char);
-  }
-  return buffer.toString();
-}
-
-const List<String> _forbiddenSuggestedTopics = [
-  'Otros momentos',
-  'Recuerdos únicos',
-  'Sin categoría',
-  'Naturaleza',
-  'Recuperación',
-  'Cultura',
-  'Hogar',
-  'Amistad',
-  'Graduación',
-  'Mentoría laboral',
-  'Primer día de clases',
-  'Actividades escolares',
-  'Servicio comunitario',
-  'Descubrimientos',
-  'Aventura en carretera',
-  'Fe y esperanza',
-  'Recetas favoritas',
-  'Música',
-  'Tecnología',
-  'Conversaciones especiales',
-];
-
 final Set<String> _normalizedForbiddenSuggestedTopics =
-    _forbiddenSuggestedTopics.map(_normalizeTopicName).toSet();
+    normalizedForbiddenSuggestedTagNames;
 
 enum _WalkthroughStep { menu, createStory, ghostWriter, bookProgress }
 
@@ -166,48 +106,18 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   List<String> _calculateSuggestedTopics(List<StoryTag> allTags) {
-    final usedTags = allTags.map((t) => _normalizeTopicName(t.name)).toSet();
+    final usedTags = allTags.map((t) => normalizeTagName(t.name)).toSet();
 
-    const commonTopics = [
-      'Familia',
-      'Viajes',
-      'Infancia',
-      'Amigos',
-      'Trabajo',
-      'Mascotas',
-      'Hobbies',
-      'Logros',
-      'Aventuras',
-      'Momentos especiales',
-      'Aprendizajes',
-      'Celebraciones',
-      'Arte',
-      'Música',
-      'Comida',
-      'Deportes',
-      'Tradiciones',
-      'Sueños',
-      'Reflexiones',
-      'Amor',
-      'Salud',
-      'Educación',
-      'Fotografía',
-      'Tecnología',
-      'Libros',
-      'Cine',
-      'Juegos',
-      'Voluntariado',
-      'Emprendimiento',
-    ];
+    final availableTopics = curatedTagDefinitions.map((tag) => tag.name).where(
+      (topic) {
+        final normalizedTopic = normalizeTagName(topic);
+        return !usedTags.contains(normalizedTopic) &&
+            !_normalizedForbiddenSuggestedTopics.contains(normalizedTopic);
+      },
+    ).toList();
 
-    final unusedTopics = commonTopics.where((topic) {
-      final normalizedTopic = _normalizeTopicName(topic);
-      return !usedTags.contains(normalizedTopic) &&
-          !_normalizedForbiddenSuggestedTopics.contains(normalizedTopic);
-    }).toList();
-
-    unusedTopics.shuffle();
-    return unusedTopics.take(5).toList();
+    availableTopics.shuffle();
+    return availableTopics.take(5).toList();
   }
 
   Future<void> _loadDashboardData() async {

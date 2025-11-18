@@ -1955,10 +1955,41 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         suggestedTopics = _getUnusedTopicsForSuggestions();
       }
 
+      // Obtener historias anteriores del usuario para contexto de fechas
+      List<Map<String, dynamic>>? previousStoryDates;
+      if (wordCount < 20) {
+        try {
+          final allStories = await StoryServiceNew.getStories();
+          // Excluir la historia actual si existe
+          final otherStories = _currentStory != null
+              ? allStories.where((s) => s.id != _currentStory!.id).toList()
+              : allStories;
+
+          // Extraer fechas de inicio y crear lista con información relevante
+          previousStoryDates = otherStories
+              .where((s) => s.startDate != null || s.storyDate != null)
+              .map((s) {
+                final date = s.startDate ?? s.storyDate;
+                final precision = s.datesPrecision ?? 'day';
+                return {
+                  'date': date,
+                  'precision': precision,
+                  'title': s.title,
+                };
+              })
+              .toList()
+            ..sort((a, b) => (a['date'] as DateTime).compareTo(b['date'] as DateTime));
+        } catch (e) {
+          // Si hay error obteniendo historias, continuar sin ese contexto
+          previousStoryDates = null;
+        }
+      }
+
       final planJson = await OpenAIService.generateStoryCoachPlan(
         title: _titleController.text,
         content: _contentController.text,
         suggestedTopics: suggestedTopics,
+        previousStoryDates: previousStoryDates,
       );
       if (!mounted) return;
       setState(() {
@@ -3488,6 +3519,16 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                         setState(() => _showSuggestions = !_showSuggestions);
                         if (_showSuggestions) {
                           _generateAISuggestions();
+                          // Esperar 150ms y hacer scroll hasta abajo donde están las sugerencias
+                          Future.delayed(const Duration(milliseconds: 150), () {
+                            if (mounted && _editorScrollController.hasClients) {
+                              _editorScrollController.animateTo(
+                                _editorScrollController.position.maxScrollExtent,
+                                duration: const Duration(milliseconds: 300),
+                                curve: Curves.easeOut,
+                              );
+                            }
+                          });
                         }
                       },
                       icon: Icon(

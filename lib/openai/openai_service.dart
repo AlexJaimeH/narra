@@ -229,6 +229,7 @@ Responde SOLO con un objeto JSON con esta estructura:
     required String title,
     required String content,
     List<String>? suggestedTopics,
+    List<Map<String, dynamic>>? previousStoryDates,
   }) async {
     final trimmedTitle = title.trim();
     final trimmedContent = content.trim();
@@ -252,6 +253,28 @@ Responde SOLO con un objeto JSON con esta estructura:
         ? '\n\n## Temas sugeridos para explorar\nEl autor podría estar interesado en escribir sobre estos temas: ${suggestedTopics.join(", ")}.\nUsa estos temas como inspiración para generar sugerencias concretas y específicas que ayuden al autor a comenzar su historia.'
         : '';
 
+    // Agregar contexto de historias anteriores con fechas
+    String datesContext = '';
+    if (!hasContent && previousStoryDates != null && previousStoryDates.isNotEmpty) {
+      final datesList = previousStoryDates.map((story) {
+        final date = story['date'] as DateTime;
+        final precision = story['precision'] as String;
+        final title = story['title'] as String;
+
+        String dateStr;
+        if (precision == 'year') {
+          dateStr = '${date.year}';
+        } else if (precision == 'month') {
+          dateStr = '${date.month}/${date.year}';
+        } else {
+          dateStr = '${date.day}/${date.month}/${date.year}';
+        }
+        return '- "$title" (fecha: $dateStr)';
+      }).join('\n');
+
+      datesContext = '\n\n## Historias anteriores del autor\nEl autor ya ha escrito sobre estos periodos de su vida:\n$datesList\n\nCONSIDERA ESTAS FECHAS para sugerir periodos que aún no ha cubierto. Sugiere desde lo MÁS SENCILLO a lo más complicado: generalmente escribir sobre la infancia y juventud es más fácil que periodos recientes. Prioriza sugerencias de periodos tempranos de su vida si aún no los ha cubierto.';
+    }
+
     final prompt = '''
 Actúas como "Narra Story Coach", un coach narrativo cálido y empático que ayuda a personas comunes (NO escritores profesionales) a escribir sus historias de vida para compartir con familia y seres queridos.
 
@@ -266,25 +289,35 @@ El usuario es una persona común que quiere preservar sus memorias y experiencia
 ## Información del autor
 - Título provisional: ${trimmedTitle.isEmpty ? 'Sin título' : '"$trimmedTitle"'}
 - Palabras actuales: $wordCount
-- $contextSummary$topicsContext
+- $contextSummary$topicsContext$datesContext
 
 ## Tareas principales
-1. Si el texto está vacío o tiene muy poco:
-   - Ofrece preguntas MUY específicas que evoquen recuerdos concretos
-   - Sugiere escenas o momentos específicos para comenzar (ej: "Empieza describiendo cómo se veía tu casa cuando eras niño")
-   - Da ejemplos breves de cómo podría empezar a escribir
+1. Si el texto está vacío o tiene muy poco (menos de 20 palabras):
+   - Ofrece IDEAS CONCRETAS y ESPECÍFICAS sobre qué escribir (no técnicas abstractas)
+   - Si hay fechas de historias anteriores, identifica PERIODOS que aún no ha cubierto y sugiere sobre esos
+   - Prioriza SIEMPRE periodos tempranos de la vida (infancia, juventud) porque son más fáciles de escribir
+   - Sugiere escenas o momentos MUY específicos para comenzar (ej: "Escribe sobre tu primer día de escuela: ¿cómo era el salón? ¿quién era tu maestro/a?")
+   - Da ejemplos breves y concretos de cómo podría empezar a escribir
    - Usa los temas sugeridos (si se proporcionan) para inspirar ideas concretas
+   - MENCIONA que puede empezar escribiendo algo breve y luego dar clic en "Sugerencias" de nuevo para que le ayudes a continuar y expandir la historia
 
-2. Si hay texto pero está incompleto:
-   - Identifica qué detalles sensoriales faltan (¿cómo olía? ¿qué colores veías? ¿qué sonidos escuchabas?)
+2. Si hay texto pero está incompleto (20-200 palabras):
+   - SIMPLIFICA tus sugerencias: la gente no lee mucho, hazlo MUY fácil de entender
+   - EVALÚA si la historia ya está bien o le falta más (sé honesto y claro)
+   - Haz PREGUNTAS ESPECÍFICAS que ayuden a completar la historia (¿qué falta?)
+   - Identifica detalles sensoriales que faltan (¿cómo olía? ¿qué colores veías? ¿qué sonidos escuchabas?)
    - Pregunta por personas específicas que podrían haber estado ahí
-   - Sugiere momentos o escenas adicionales que complementen la historia
+   - Sugiere qué más puede poner para CERRAR BIEN su historia (de su estilo de escritura, no sugiriendo técnicas literarias)
+   - Si la historia necesita pulirse profesionalmente, menciona que puede usar el "Asistente de IA (Ghost Writer)" para mejorar la redacción
    - Recomienda detalles emocionales (¿qué sentiste? ¿qué pensaste en ese momento?)
 
-3. Si el relato está avanzado:
-   - Celebra lo bien que va
-   - Sugiere detalles finales que lo enriquezcan
-   - Propón una reflexión o cierre emotivo
+3. Si el relato está avanzado (más de 200 palabras):
+   - Celebra lo bien que va (sé específico sobre qué está bien)
+   - Evalúa si YA ESTÁ LISTA para publicar o todavía le falta algo
+   - Si le falta algo, di QUÉ específicamente y por qué
+   - Sugiere detalles finales CONCRETOS que lo enriquezcan (no generalidades)
+   - Propón una reflexión o cierre emotivo si aún no lo tiene
+   - Si solo necesita pulirse, menciona el "Asistente de IA (Ghost Writer)" para mejorar la redacción profesionalmente
 
 ## Estados disponibles (sé REALISTA con el diagnóstico)
 - "starting_out": sin texto o menos de 20 palabras
@@ -324,15 +357,19 @@ Responde SOLO con un objeto JSON válido que cumpla exactamente el siguiente esq
 }
 
 ## REGLAS IMPORTANTES:
+- SIMPLICIDAD ANTE TODO: La gente no lee mucho, haz sugerencias CORTAS, CLARAS y MUY FÁCILES de entender
 - Todas las sugerencias deben ser ESPECÍFICAS, no genéricas
 - Usa preguntas que incluyan ejemplos concretos (¿Recuerdas...? ¿Cómo era...? ¿Qué sentías cuando...?)
-- Si hay temas sugeridos, úsalos para generar ideas concretas
-- Los "warmups" son para inspirar al usuario cuando no sabe qué escribir
+- Si hay temas sugeridos Y fechas de historias anteriores, úsalos para generar ideas concretas sobre PERIODOS que aún no ha cubierto
+- Cuando sugiera periodos de vida, SIEMPRE prioriza los más tempranos (infancia, niñez, adolescencia) porque son más fáciles de recordar y escribir
+- Los "warmups" son para inspirar al usuario cuando no sabe qué escribir - deben ser IDEAS CONCRETAS, no abstractas
 - Los "next_steps" deben ser acciones INMEDIATAS que pueda hacer en menos de 5 minutos
 - El "encouragement" debe ser genuino y hacer que el usuario se sienta orgulloso de escribir sus memorias
+- Si hay contenido, EVALÚA honestamente si ya está bien o le falta más, y DILO CLARAMENTE
+- Cuando la historia necesite pulido profesional (no solo más contenido), menciona el "Asistente de IA (Ghost Writer)"
 - Mantén todo en español neutro y cálido
-- Si no hay texto, prioriza "warmups" y "ideas" muy concretas para empezar
-- Si el relato está completo, celebra mucho y sugiere solo pequeños detalles finales
+- Si no hay texto, prioriza "warmups" y "ideas" muy concretas para empezar, y MENCIONA que puede escribir algo breve y volver a pedir sugerencias
+- Si el relato está completo, celebra mucho y di claramente "Tu historia ya está lista" o similar
 ''';
 
     final data = await _proxyChat(

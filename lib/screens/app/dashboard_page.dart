@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:showcaseview/showcaseview.dart';
 import 'package:narra/api/narra_api.dart';
+import 'package:narra/data/curated_tags.dart';
 import 'package:narra/repositories/user_repository.dart';
 import 'package:narra/repositories/story_repository.dart';
 import 'package:narra/services/story_service_new.dart';
@@ -14,6 +15,9 @@ import 'story_editor_page.dart';
 import 'app_navigation.dart';
 import 'subscribers_page.dart';
 import 'dashboard_walkthrough_controller.dart';
+
+final Set<String> _normalizedForbiddenSuggestedTopics =
+    normalizedForbiddenSuggestedTagNames;
 
 enum _WalkthroughStep { menu, createStory, ghostWriter, bookProgress }
 
@@ -102,73 +106,18 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   List<String> _calculateSuggestedTopics(List<StoryTag> allTags) {
-    final usedTags = allTags.map((t) => t.name.toLowerCase()).toSet();
+    final usedTags = allTags.map((t) => normalizeTagName(t.name)).toSet();
 
-    const excludedTopics = {
-      'otros momentos',
-      'recuerdos unicos',
-      'recuerdos únicos',
-      'sin categoría',
-      'sin categoria',
-      'naturaleza',
-      'recuperacion',
-      'recuperación',
-      'cultura',
-      'hogar',
-      'amistad',
-      'graduación',
-      'graduacion',
-      'mentoría laboral',
-      'mentoria laboral',
-      'fe y esperanza',
-      'recetas favoritas',
-      'música',
-      'musica',
-      'tecnología',
-      'tecnologia',
-      'conversaciones especiales',
-    };
+    final availableTopics = curatedTagDefinitions.map((tag) => tag.name).where(
+      (topic) {
+        final normalizedTopic = normalizeTagName(topic);
+        return !usedTags.contains(normalizedTopic) &&
+            !_normalizedForbiddenSuggestedTopics.contains(normalizedTopic);
+      },
+    ).toList();
 
-    const commonTopics = [
-      'Familia',
-      'Viajes',
-      'Infancia',
-      'Amigos',
-      'Trabajo',
-      'Mascotas',
-      'Hobbies',
-      'Logros',
-      'Aventuras',
-      'Momentos especiales',
-      'Aprendizajes',
-      'Celebraciones',
-      'Arte',
-      'Música',
-      'Comida',
-      'Deportes',
-      'Tradiciones',
-      'Sueños',
-      'Reflexiones',
-      'Amor',
-      'Salud',
-      'Educación',
-      'Fotografía',
-      'Tecnología',
-      'Libros',
-      'Cine',
-      'Juegos',
-      'Voluntariado',
-      'Emprendimiento',
-    ];
-
-    final unusedTopics = commonTopics
-        .where((topic) =>
-            !usedTags.contains(topic.toLowerCase()) &&
-            !excludedTopics.contains(topic.toLowerCase()))
-        .toList();
-
-    unusedTopics.shuffle();
-    return unusedTopics.take(5).toList();
+    availableTopics.shuffle();
+    return availableTopics.take(5).toList();
   }
 
   Future<void> _loadDashboardData() async {
@@ -271,7 +220,8 @@ class _DashboardPageState extends State<DashboardPage> {
       steps.add(_WalkthroughStep.ghostWriter);
       print('[Walkthrough] Added ghostWriter step. Widget should be visible.');
     } else {
-      print('[Walkthrough] Skipping ghostWriter step - _shouldShowGhostWriterIntro is false');
+      print(
+          '[Walkthrough] Skipping ghostWriter step - _shouldShowGhostWriterIntro is false');
     }
 
     steps.add(_WalkthroughStep.bookProgress);
@@ -318,7 +268,8 @@ class _DashboardPageState extends State<DashboardPage> {
     const checkInterval = Duration(milliseconds: 100);
     final startTime = DateTime.now();
 
-    print('[Walkthrough] Waiting for ${_walkthroughKeys.length} contexts. Steps: $_walkthroughSteps');
+    print(
+        '[Walkthrough] Waiting for ${_walkthroughKeys.length} contexts. Steps: $_walkthroughSteps');
 
     while (mounted && _isWalkthroughActive) {
       // Verificar que todos los contextos estén disponibles
@@ -333,7 +284,8 @@ class _DashboardPageState extends State<DashboardPage> {
       }
 
       if (missingContexts.isNotEmpty) {
-        print('[Walkthrough] Missing contexts for steps: ${missingContexts.map((i) => _walkthroughSteps[i]).toList()}');
+        print(
+            '[Walkthrough] Missing contexts for steps: ${missingContexts.map((i) => _walkthroughSteps[i]).toList()}');
       }
 
       if (allContextsReady) {
@@ -448,7 +400,8 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   void _handleWalkthroughTap() {
-    if (!_isWalkthroughActive || _isAdvancingWalkthrough ||
+    if (!_isWalkthroughActive ||
+        _isAdvancingWalkthrough ||
         !_hasShowcaseStarted) {
       return;
     }
@@ -2434,7 +2387,8 @@ class _SetNameCardState extends State<_SetNameCard> {
                             height: 20,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                              valueColor:
+                                  AlwaysStoppedAnimation<Color>(Colors.white),
                             ),
                           )
                         : const Icon(Icons.check_circle, size: 22),

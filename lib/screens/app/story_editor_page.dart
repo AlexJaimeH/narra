@@ -15,6 +15,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
+import 'package:narra/data/curated_tags.dart';
 import 'package:narra/models/voice_recording.dart';
 import 'package:narra/services/story_service_new.dart';
 import 'package:narra/services/tag_service.dart';
@@ -1907,61 +1908,17 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
   /// Obtiene temas/etiquetas no usadas para enviar a OpenAI como inspiración
   List<String> _getUnusedTopicsForSuggestions() {
-    // Obtener etiquetas ya usadas en esta historia
-    final usedTags = _selectedTags.map((t) => t.toLowerCase()).toSet();
+    final usedTags = _selectedTags.map(normalizeTagName).toSet();
 
-    // Temas a excluir
-    const excludedTopics = {
-      'otros momentos',
-      'recuerdos unicos',
-      'recuerdos únicos',
-      'sin categoría',
-      'sin categoria',
-      'naturaleza',
-      'recuperacion',
-      'recuperación',
-      'cultura',
-    };
-
-    // Temas comunes que podemos sugerir
-    const commonTopics = [
-      'Familia',
-      'Viajes',
-      'Infancia',
-      'Amigos',
-      'Trabajo',
-      'Mascotas',
-      'Hobbies',
-      'Logros',
-      'Aventuras',
-      'Momentos especiales',
-      'Aprendizajes',
-      'Celebraciones',
-      'Arte',
-      'Música',
-      'Comida',
-      'Deportes',
-      'Tradiciones',
-      'Sueños',
-      'Reflexiones',
-      'Amor',
-      'Salud',
-      'Educación',
-      'Fotografía',
-      'Libros',
-      'Juegos',
-      'Voluntariado',
-      'Emprendimiento',
-    ];
-
-    // Filtrar temas no usados y no excluidos
-    final unusedTopics = commonTopics
-        .where((topic) =>
-            !usedTags.contains(topic.toLowerCase()) &&
-            !excludedTopics.contains(topic.toLowerCase()))
+    final unusedTopics = curatedTagDefinitions
+        .map((tag) => tag.name)
+        .where((topic) {
+          final normalizedTopic = normalizeTagName(topic);
+          return !usedTags.contains(normalizedTopic) &&
+              !normalizedForbiddenSuggestedTagNames.contains(normalizedTopic);
+        })
         .toList();
 
-    // Mezclar y tomar 5 aleatorios
     unusedTopics.shuffle();
     return unusedTopics.take(5).toList();
   }
@@ -4274,386 +4231,26 @@ class _StoryEditorPageState extends State<StoryEditorPage>
   }
 
   List<_TagPaletteSection> _buildCuratedTagSections() {
-    return [
-      _TagPaletteSection(
-        title: 'Raíces y familia',
-        description:
-            'Recuerdos del hogar, figuras importantes y tradiciones que marcaron tu infancia.',
-        icon: Icons.family_restroom,
-        tags: [
-          _TagOption(
-            name: 'Familia',
-            color: const Color(0xFFF97362),
-            category: 'Raíces y familia',
-            emoji: '🏡',
-          ),
-          _TagOption(
-            name: 'Infancia',
-            color: const Color(0xFFFABF58),
-            category: 'Raíces y familia',
-            emoji: '🧸',
-          ),
-          _TagOption(
-            name: 'Padres',
-            color: const Color(0xFFFF8A80),
-            category: 'Raíces y familia',
-            emoji: '❤️',
-          ),
-          _TagOption(
-            name: 'Hermanos',
-            color: const Color(0xFFFFAFCC),
-            category: 'Raíces y familia',
-            emoji: '🤗',
-          ),
-          _TagOption(
-            name: 'Tradiciones familiares',
-            color: const Color(0xFFFFD166),
-            category: 'Raíces y familia',
-            emoji: '🎎',
-          ),
-          _TagOption(
-            name: 'Hogar',
-            color: const Color(0xFFFFC4A8),
-            category: 'Raíces y familia',
-            emoji: '🏠',
-          ),
-        ],
-      ),
-      _TagPaletteSection(
-        title: 'Amor y amistades',
-        description:
-            'Personas especiales, vínculos afectivos y momentos que hicieron latir tu corazón.',
-        icon: Icons.favorite_outline,
-        tags: [
-          _TagOption(
-            name: 'Historia de amor',
-            color: const Color(0xFFFF8FA2),
-            category: 'Amor y amistades',
-            emoji: '💕',
-          ),
-          _TagOption(
-            name: 'Pareja',
-            color: const Color(0xFFFB6F92),
-            category: 'Amor y amistades',
-            emoji: '💑',
-          ),
-          _TagOption(
-            name: 'Matrimonio',
-            color: const Color(0xFFFFC6A5),
-            category: 'Amor y amistades',
-            emoji: '💍',
-          ),
-          _TagOption(
-            name: 'Hijos',
-            color: const Color(0xFFFFB347),
-            category: 'Amor y amistades',
-            emoji: '👶',
-          ),
-          _TagOption(
-            name: 'Nietos',
-            color: const Color(0xFFFFD6BA),
-            category: 'Amor y amistades',
-            emoji: '👵',
-          ),
-          _TagOption(
-            name: 'Amistad',
-            color: const Color(0xFF74C69D),
-            category: 'Amor y amistades',
-            emoji: '🤝',
-          ),
-        ],
-      ),
-      _TagPaletteSection(
-        title: 'Escuela y formación',
-        description:
-            'Aulas, aprendizajes, maestros y descubrimientos que formaron tu manera de ver la vida.',
-        icon: Icons.school,
-        tags: [
-          _TagOption(
-            name: 'Escuela',
-            color: const Color(0xFF4BA3C3),
-            category: 'Escuela y formación',
-            emoji: '🏫',
-          ),
-          _TagOption(
-            name: 'Universidad',
-            color: const Color(0xFF6C63FF),
-            category: 'Escuela y formación',
-            emoji: '🎓',
-          ),
-          _TagOption(
-            name: 'Mentores',
-            color: const Color(0xFF89A1EF),
-            category: 'Escuela y formación',
-            emoji: '🧑‍🏫',
-          ),
-          _TagOption(
-            name: 'Primer día de clases',
-            color: const Color(0xFF80C7FF),
-            category: 'Escuela y formación',
-            emoji: '📚',
-          ),
-          _TagOption(
-            name: 'Graduación',
-            color: const Color(0xFF9381FF),
-            category: 'Escuela y formación',
-            emoji: '🎉',
-          ),
-          _TagOption(
-            name: 'Actividades escolares',
-            color: const Color(0xFF59C3C3),
-            category: 'Escuela y formación',
-            emoji: '🎨',
-          ),
-        ],
-      ),
-      _TagPaletteSection(
-        title: 'Trabajo y propósito',
-        description:
-            'Profesiones, vocaciones y proyectos que te dieron identidad y sentido.',
-        icon: Icons.work_outline,
-        tags: [
-          _TagOption(
-            name: 'Primer trabajo',
-            color: const Color(0xFF0077B6),
-            category: 'Trabajo y propósito',
-            emoji: '💼',
-          ),
-          _TagOption(
-            name: 'Carrera profesional',
-            color: const Color(0xFF00B4D8),
-            category: 'Trabajo y propósito',
-            emoji: '📈',
-          ),
-          _TagOption(
-            name: 'Emprendimiento',
-            color: const Color(0xFF48CAE4),
-            category: 'Trabajo y propósito',
-            emoji: '🚀',
-          ),
-          _TagOption(
-            name: 'Mentoría laboral',
-            color: const Color(0xFF8ECAE6),
-            category: 'Trabajo y propósito',
-            emoji: '🧭',
-          ),
-          _TagOption(
-            name: 'Jubilación',
-            color: const Color(0xFF90E0EF),
-            category: 'Trabajo y propósito',
-            emoji: '⛱️',
-          ),
-          _TagOption(
-            name: 'Servicio comunitario',
-            color: const Color(0xFF6BCB77),
-            category: 'Trabajo y propósito',
-            emoji: '🤲',
-          ),
-        ],
-      ),
-      _TagPaletteSection(
-        title: 'Aventuras y viajes',
-        description:
-            'Travesías, cambios de ciudad y experiencias que te mostraron nuevos horizontes.',
-        icon: Icons.flight_takeoff,
-        tags: [
-          _TagOption(
-            name: 'Viajes',
-            color: const Color(0xFF00A6FB),
-            category: 'Aventuras y viajes',
-            emoji: '✈️',
-          ),
-          _TagOption(
-            name: 'Mudanzas',
-            color: const Color(0xFF72EFDD),
-            category: 'Aventuras y viajes',
-            emoji: '🚚',
-          ),
-          _TagOption(
-            name: 'Naturaleza',
-            color: const Color(0xFF2BB673),
-            category: 'Aventuras y viajes',
-            emoji: '🌿',
-          ),
-          _TagOption(
-            name: 'Cultura',
-            color: const Color(0xFFFFC857),
-            category: 'Aventuras y viajes',
-            emoji: '🎭',
-          ),
-          _TagOption(
-            name: 'Descubrimientos',
-            color: const Color(0xFF4D96FF),
-            category: 'Aventuras y viajes',
-            emoji: '🧭',
-          ),
-          _TagOption(
-            name: 'Aventura en carretera',
-            color: const Color(0xFF5E60CE),
-            category: 'Aventuras y viajes',
-            emoji: '🛣️',
-          ),
-        ],
-      ),
-      _TagPaletteSection(
-        title: 'Logros y celebraciones',
-        description:
-            'Metas alcanzadas, sorpresas y momentos brillantes para compartir con los tuyos.',
-        icon: Icons.emoji_events_outlined,
-        tags: [
-          _TagOption(
-            name: 'Logros',
-            color: const Color(0xFFFFB703),
-            category: 'Logros y celebraciones',
-            emoji: '🏆',
-          ),
-          _TagOption(
-            name: 'Sueños cumplidos',
-            color: const Color(0xFFFF9E00),
-            category: 'Logros y celebraciones',
-            emoji: '🌟',
-          ),
-          _TagOption(
-            name: 'Celebraciones familiares',
-            color: const Color(0xFFFFD670),
-            category: 'Logros y celebraciones',
-            emoji: '🎊',
-          ),
-          _TagOption(
-            name: 'Reconocimientos',
-            color: const Color(0xFFFFC8DD),
-            category: 'Logros y celebraciones',
-            emoji: '🥇',
-          ),
-          _TagOption(
-            name: 'Momentos de orgullo',
-            color: const Color(0xFFFF8FAB),
-            category: 'Logros y celebraciones',
-            emoji: '🙌',
-          ),
-          _TagOption(
-            name: 'Cumpleaños memorables',
-            color: const Color(0xFFFFC4D6),
-            category: 'Logros y celebraciones',
-            emoji: '🎂',
-          ),
-        ],
-      ),
-      _TagPaletteSection(
-        title: 'Desafíos y resiliencia',
-        description:
-            'Historias de fortaleza, aprendizajes difíciles y caminos de sanación.',
-        icon: Icons.psychology_alt_outlined,
-        tags: [
-          _TagOption(
-            name: 'Enfermedad',
-            color: const Color(0xFF9D4EDD),
-            category: 'Desafíos y resiliencia',
-            emoji: '💜',
-          ),
-          _TagOption(
-            name: 'Recuperación',
-            color: const Color(0xFFB15EFF),
-            category: 'Desafíos y resiliencia',
-            emoji: '🦋',
-          ),
-          _TagOption(
-            name: 'Momentos difíciles',
-            color: const Color(0xFF845EC2),
-            category: 'Desafíos y resiliencia',
-            emoji: '⛈️',
-          ),
-          _TagOption(
-            name: 'Pérdidas',
-            color: const Color(0xFF6D597A),
-            category: 'Desafíos y resiliencia',
-            emoji: '🕯️',
-          ),
-          _TagOption(
-            name: 'Fe y esperanza',
-            color: const Color(0xFF80CED7),
-            category: 'Desafíos y resiliencia',
-            emoji: '🕊️',
-          ),
-          _TagOption(
-            name: 'Lecciones de vida',
-            color: const Color(0xFF577590),
-            category: 'Desafíos y resiliencia',
-            emoji: '📖',
-          ),
-        ],
-      ),
-      _TagPaletteSection(
-        title: 'Momentos cotidianos',
-        description:
-            'Pequeños detalles, pasatiempos y costumbres que hacen tu vida única.',
-        icon: Icons.local_florist_outlined,
-        tags: [
-          _TagOption(
-            name: 'Hobbies',
-            color: const Color(0xFF06D6A0),
-            category: 'Momentos cotidianos',
-            emoji: '🎨',
-          ),
-          _TagOption(
-            name: 'Mascotas',
-            color: const Color(0xFFFFA69E),
-            category: 'Momentos cotidianos',
-            emoji: '🐾',
-          ),
-          _TagOption(
-            name: 'Recetas favoritas',
-            color: const Color(0xFFFFC15E),
-            category: 'Momentos cotidianos',
-            emoji: '🍲',
-          ),
-          _TagOption(
-            name: 'Música',
-            color: const Color(0xFF118AB2),
-            category: 'Momentos cotidianos',
-            emoji: '🎶',
-          ),
-          _TagOption(
-            name: 'Tecnología',
-            color: const Color(0xFF73B0FF),
-            category: 'Momentos cotidianos',
-            emoji: '💡',
-          ),
-          _TagOption(
-            name: 'Conversaciones especiales',
-            color: const Color(0xFF9EADC8),
-            category: 'Momentos cotidianos',
-            emoji: '🗣️',
-          ),
-        ],
-      ),
-      _TagPaletteSection(
-        title: 'Para todo lo demás',
-        description:
-            'Etiquetas versátiles para recuerdos únicos que quieres conservar.',
-        icon: Icons.auto_awesome_outlined,
-        tags: [
-          _TagOption(
-            name: 'Otros momentos',
-            color: const Color(0xFFB0BEC5),
-            category: 'Para todo lo demás',
-            emoji: '✨',
-          ),
-          _TagOption(
-            name: 'Recuerdos únicos',
-            color: const Color(0xFFCDB4DB),
-            category: 'Para todo lo demás',
-            emoji: '🌀',
-          ),
-          _TagOption(
-            name: 'Sin categoría',
-            color: const Color(0xFFE2E2E2),
-            category: 'Para todo lo demás',
-            emoji: '📁',
-          ),
-        ],
-      ),
-    ];
+    return curatedTagCategories.map((category) {
+      final categoryTags = curatedTagDefinitions
+          .where((tag) => tag.category == category.title)
+          .map(
+            (tag) => _TagOption(
+              name: tag.name,
+              color: tag.color,
+              category: tag.category,
+              emoji: tag.emoji,
+            ),
+          )
+          .toList();
+
+      return _TagPaletteSection(
+        title: category.title,
+        description: category.description,
+        icon: category.icon,
+        tags: categoryTags,
+      );
+    }).toList();
   }
 
   _TagOption? _getTagOption(String name) {

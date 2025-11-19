@@ -502,13 +502,8 @@ class _DashboardPageState extends State<DashboardPage> {
 
     switch (step) {
       case _WalkthroughStep.menu:
-        if (_scrollController.hasClients) {
-          await _scrollController.animateTo(
-            0,
-            duration: const Duration(milliseconds: 400),
-            curve: Curves.easeOut,
-          );
-          await _waitForScrollToSettle();
+        if (widget.menuKey != null) {
+          await _scrollToWidget(widget.menuKey!);
         }
         break;
       case _WalkthroughStep.createStory:

@@ -249,7 +249,7 @@ class _AppNavigationState extends State<AppNavigation> {
 
         return ShowCaseWidget(
           blurValue: 4,
-          disableBarrierInteraction: false,
+          disableBarrierInteraction: true,
           enableAutoScroll: false,
           onStart: (index, key) {
             DashboardWalkthroughController.notifyStepStarted(key);

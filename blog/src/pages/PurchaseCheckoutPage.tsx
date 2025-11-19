@@ -13,6 +13,7 @@ export const PurchaseCheckoutPage: React.FC = () => {
   // Form states
   const [authorEmail, setAuthorEmail] = useState('');
   const [authorEmailConfirm, setAuthorEmailConfirm] = useState('');
+  const [authorName, setAuthorName] = useState('');
   const [buyerEmail, setBuyerEmail] = useState('');
   const [buyerEmailConfirm, setBuyerEmailConfirm] = useState('');
   const [buyerName, setBuyerName] = useState('');
@@ -42,6 +43,10 @@ export const PurchaseCheckoutPage: React.FC = () => {
         setError('Los emails no coinciden');
         return false;
       }
+      if (!authorName || authorName.trim() === '') {
+        setError('Por favor ingresa tu nombre');
+        return false;
+      }
       const emailRegex = /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/;
       if (!emailRegex.test(authorEmail)) {
         setError('Por favor ingresa un email válido');
@@ -51,6 +56,10 @@ export const PurchaseCheckoutPage: React.FC = () => {
       // Gift flow
       if (!authorEmail) {
         setError('Por favor ingresa el email del destinatario');
+        return false;
+      }
+      if (!authorName || authorName.trim() === '') {
+        setError('Por favor ingresa el nombre del destinatario');
         return false;
       }
       if (!buyerEmail || !buyerEmailConfirm) {
@@ -104,6 +113,7 @@ export const PurchaseCheckoutPage: React.FC = () => {
         body: JSON.stringify({
           purchaseType,
           authorEmail: authorEmail.toLowerCase().trim(),
+          authorName: authorName.trim(),
           buyerEmail: purchaseType === 'gift' ? buyerEmail.toLowerCase().trim() : null,
           buyerName: purchaseType === 'gift' ? buyerName.trim() : null,
           giftMessage: purchaseType === 'gift' && giftMessage.trim() !== '' ? giftMessage.trim() : null,
@@ -189,6 +199,27 @@ export const PurchaseCheckoutPage: React.FC = () => {
                     <>
                       <div>
                         <label className="block text-sm font-semibold mb-2" style={{ color: NarraColors.text.primary }}>
+                          Tu Nombre
+                        </label>
+                        <input
+                          type="text"
+                          value={authorName}
+                          onChange={(e) => setAuthorName(e.target.value)}
+                          placeholder="¿Cómo te llamas?"
+                          className="w-full px-4 py-3 rounded-xl border-2 focus:outline-none focus:border-opacity-100"
+                          style={{
+                            borderColor: NarraColors.border.light,
+                            background: NarraColors.surface.white,
+                          }}
+                          required
+                        />
+                        <p className="text-xs mt-2" style={{ color: NarraColors.text.light }}>
+                          Este nombre aparecerá en tu perfil de autor
+                        </p>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-semibold mb-2" style={{ color: NarraColors.text.primary }}>
                           Tu Email
                         </label>
                         <input
@@ -226,6 +257,27 @@ export const PurchaseCheckoutPage: React.FC = () => {
                   ) : (
                     // Gift flow
                     <>
+                      <div>
+                        <label className="block text-sm font-semibold mb-2" style={{ color: NarraColors.text.primary }}>
+                          Nombre del Destinatario
+                        </label>
+                        <input
+                          type="text"
+                          value={authorName}
+                          onChange={(e) => setAuthorName(e.target.value)}
+                          placeholder="¿Cómo se llama?"
+                          className="w-full px-4 py-3 rounded-xl border-2 focus:outline-none focus:border-opacity-100"
+                          style={{
+                            borderColor: NarraColors.border.light,
+                            background: NarraColors.surface.white,
+                          }}
+                          required
+                        />
+                        <p className="text-xs mt-2" style={{ color: NarraColors.text.light }}>
+                          Este nombre aparecerá en su perfil de autor
+                        </p>
+                      </div>
+
                       <div>
                         <label className="block text-sm font-semibold mb-2" style={{ color: NarraColors.text.primary }}>
                           Email del Destinatario

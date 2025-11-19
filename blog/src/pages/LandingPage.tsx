@@ -374,7 +374,7 @@ export const LandingPage: React.FC = () => {
               icon="🎤"
               title="Habla o escribe"
               description="Cuenta tus recuerdos como prefieras: escribiendo o usando tu voz con transcripción automática"
-              image="https://images.unsplash.com/photo-1525182008055-f88b95ff7980?q=80&w=800&auto=format&fit=crop"
+              image="/step1.png"
               imageAlt="Mujer mayor latina dictando sus memorias con el apoyo de un celular"
             />
             <HowStepCard
@@ -382,7 +382,7 @@ export const LandingPage: React.FC = () => {
               icon="✨"
               title="La IA te ayuda"
               description="El Ghost Writer sugiere mejoras, organiza tus ideas y te hace preguntas para enriquecer tu historia"
-              image="https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?q=80&w=800&auto=format&fit=crop"
+              image="/step2.png"
               imageAlt="Facilitadora joven ayudando a una autora mayor en su tablet"
             />
             <HowStepCard
@@ -390,7 +390,7 @@ export const LandingPage: React.FC = () => {
               icon="📷"
               title="Añade recuerdos visuales"
               description="Sube fotos antiguas o recientes. Cada historia puede tener múltiples imágenes"
-              image="https://images.unsplash.com/photo-1545239351-1141bd82e8a6?q=80&w=800&auto=format&fit=crop"
+              image="/step3.png"
               imageAlt="Manos familiares revisando un álbum de fotos antiguas"
             />
             <HowStepCard
@@ -398,7 +398,7 @@ export const LandingPage: React.FC = () => {
               icon="📖"
               title="Comparte y publica"
               description="Tus suscriptores reciben cada historia. Al completar 20, recibes tu libro digital"
-              image="https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?q=80&w=800&auto=format&fit=crop"
+              image="/step4.png"
               imageAlt="Familia latina reunida leyendo historias en una tableta"
             />
           </motion.div>
@@ -455,7 +455,7 @@ export const LandingPage: React.FC = () => {
             >
               <div className="rounded-3xl overflow-hidden shadow-2xl">
                 <img
-                  src="https://images.unsplash.com/photo-1523580846011-d3a5bc25702b?q=80&w=1600&auto=format&fit=crop"
+                  src="/emotional-legacy.png"
                   alt="Familia multigeneracional latina sonriendo en casa mientras comparten recuerdos"
                   className="w-full h-[600px] object-cover"
                 />

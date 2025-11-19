@@ -905,11 +905,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       case _EditorWalkthroughStep.content:
         return 0;
       case _EditorWalkthroughStep.photosTab:
-        return 1;
       case _EditorWalkthroughStep.datesTab:
-        return 2;
       case _EditorWalkthroughStep.tagsTab:
-        return 3;
       case _EditorWalkthroughStep.ghostWriter:
       case _EditorWalkthroughStep.suggestions:
       case _EditorWalkthroughStep.microphone:

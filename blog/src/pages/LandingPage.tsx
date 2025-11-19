@@ -257,8 +257,8 @@ export const LandingPage: React.FC = () => {
             >
               <div className="rounded-3xl overflow-hidden shadow-2xl">
                 <img
-                  src="https://images.unsplash.com/photo-1524504388940-b1c1722653e1?q=80&w=1600&auto=format&fit=crop"
-                  alt="Abuela latina abrazando a su nieta mientras escriben juntas"
+                  src="https://images.unsplash.com/photo-1521572267360-ee0c2909d518?q=80&w=1600&auto=format&fit=crop"
+                  alt="Retrato profesional de un hombre mexicano de 70 años con una expresión emotiva como si quisiera contarte su historia"
                   className="w-full h-[500px] object-cover"
                 />
               </div>

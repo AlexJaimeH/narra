@@ -61,6 +61,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
     const purchaseType = (payload as any).purchaseType as string;
     const authorEmail = ((payload as any).authorEmail as string || '').toLowerCase().trim();
+    const authorName = ((payload as any).authorName as string || '').trim();
     const buyerEmail = purchaseType === 'gift' ? ((payload as any).buyerEmail as string || '').toLowerCase().trim() : null;
     const buyerName = purchaseType === 'gift' ? ((payload as any).buyerName as string || '').trim() : null;
     const giftMessage = purchaseType === 'gift' && (payload as any).giftMessage ? ((payload as any).giftMessage as string).trim() : null;
@@ -72,6 +73,10 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
     if (!authorEmail || !authorEmail.includes('@')) {
       return json({ error: 'Email válido del autor es requerido' }, 400);
+    }
+
+    if (!authorName || authorName === '') {
+      return json({ error: 'Nombre del autor es requerido' }, 400);
     }
 
     if (purchaseType === 'gift' && (!buyerEmail || !buyerEmail.includes('@'))) {
@@ -150,12 +155,83 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
     console.log('[purchase-create-account] User created:', userId);
 
-    const authorDisplayName = await fetchAuthorDisplayName(
-      env.SUPABASE_URL,
-      env.SUPABASE_SERVICE_ROLE_KEY,
-      userId,
-      authorEmail,
+    // Create public.users record
+    console.log('[purchase-create-account] Creating public.users record...');
+    const createPublicUserResponse = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/users`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+          'apikey': env.SUPABASE_SERVICE_ROLE_KEY,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal',
+        },
+        body: JSON.stringify({
+          id: userId,
+          name: authorName,
+          email: authorEmail,
+          subscription_tier: 'premium', // Since they purchased
+          stories_written: 0,
+          words_written: 0,
+          ai_queries_used: 0,
+          ai_queries_limit: 999999, // Unlimited for premium
+        }),
+      }
     );
+
+    if (!createPublicUserResponse.ok) {
+      const errorText = await createPublicUserResponse.text();
+      console.error('[purchase-create-account] Failed to create public.users record:', errorText);
+      return json({ error: 'Error al crear el perfil de usuario' }, 500);
+    }
+
+    console.log('[purchase-create-account] public.users record created');
+
+    // Create user_settings record with defaults
+    console.log('[purchase-create-account] Creating user_settings record...');
+    const createSettingsResponse = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/user_settings`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+          'apikey': env.SUPABASE_SERVICE_ROLE_KEY,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal',
+        },
+        body: JSON.stringify({
+          user_id: userId,
+          auto_save: true,
+          notification_stories: true,
+          notification_reminders: true,
+          sharing_enabled: false,
+          language: 'es',
+          font_family: 'Montserrat',
+          text_scale: 1.0,
+          high_contrast: false,
+          reduce_motion: false,
+          ai_no_bad_words: true,
+          ai_person: 'first',
+          ai_fidelity: 'balanced',
+          writing_tone: 'warm',
+          has_used_ghost_writer: false,
+          has_configured_ghost_writer: false,
+          has_dismissed_ghost_writer_intro: false,
+          has_seen_home_walkthrough: false,
+          has_seen_editor_walkthrough: false,
+          public_author_name: authorName,
+        }),
+      }
+    );
+
+    if (!createSettingsResponse.ok) {
+      const errorText = await createSettingsResponse.text();
+      console.error('[purchase-create-account] Failed to create user_settings record:', errorText);
+      return json({ error: 'Error al crear configuración de usuario' }, 500);
+    }
+
+    console.log('[purchase-create-account] user_settings record created');
 
     // Create management token for both gift AND self purchases (for account recovery)
     let managementToken: string | null = null;
@@ -274,8 +350,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
     if (purchaseType === 'self') {
       // Send welcome + magic link email to author
-      const emailHtml = buildSelfPurchaseEmail(authorEmail, magicLink, appUrl, managementToken);
-      const emailText = buildSelfPurchaseEmailText(authorEmail, magicLink, appUrl, managementToken);
+      const emailHtml = buildSelfPurchaseEmail(authorEmail, magicLink, appUrl, managementToken, authorName);
+      const emailText = buildSelfPurchaseEmailText(authorEmail, magicLink, appUrl, managementToken, authorName);
 
       const emailResponse = await fetch('https://api.resend.com/emails', {
         method: 'POST',
@@ -300,8 +376,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     } else {
       // Gift: Send two emails
       // 1. To author
-      const authorEmailHtml = buildGiftAuthorEmail(authorEmail, magicLink, buyerName || '', giftMessage);
-      const authorEmailText = buildGiftAuthorEmailText(authorEmail, magicLink, buyerName || '', giftMessage);
+      const authorEmailHtml = buildGiftAuthorEmail(authorEmail, magicLink, buyerName || '', giftMessage, authorName);
+      const authorEmailText = buildGiftAuthorEmailText(authorEmail, magicLink, buyerName || '', giftMessage, authorName);
 
       const authorEmailResponse = await fetch('https://api.resend.com/emails', {
         method: 'POST',
@@ -326,8 +402,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       // 2. To buyer
       if (buyerEmail && managementToken) {
         const managementUrl = `${appUrl}/gift-management?token=${managementToken}`;
-        const buyerEmailHtml = buildGiftBuyerEmail(buyerEmail, authorEmail, managementUrl);
-        const buyerEmailText = buildGiftBuyerEmailText(buyerEmail, authorEmail, managementUrl);
+        const buyerEmailHtml = buildGiftBuyerEmail(buyerEmail, authorEmail, managementUrl, authorName);
+        const buyerEmailText = buildGiftBuyerEmailText(buyerEmail, authorEmail, managementUrl, authorName);
 
         const buyerEmailResponse = await fetch('https://api.resend.com/emails', {
           method: 'POST',

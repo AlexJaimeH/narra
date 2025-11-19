@@ -337,7 +337,6 @@ class _AppNavigationState extends State<AppNavigation> {
                     behavior: HitTestBehavior.opaque,
                     onPointerDown: (_) {
                       // Capturar TODOS los eventos de pointer para bloquear scroll
-                      DashboardWalkthroughController.triggerStart();
                       DashboardWalkthroughController.triggerAdvance();
                     },
                     child: Container(

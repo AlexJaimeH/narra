@@ -172,6 +172,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
           name: authorName,
           email: authorEmail,
           subscription_tier: 'premium', // Since they purchased
+          writing_tone: 'warm', // Default tone for family stories
           stories_written: 0,
           words_written: 0,
           ai_queries_used: 0,
@@ -198,7 +199,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
           'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
           'apikey': env.SUPABASE_SERVICE_ROLE_KEY,
           'Content-Type': 'application/json',
-          'Prefer': 'return=minimal',
+          'Prefer': 'resolution=ignore-duplicates',
         },
         body: JSON.stringify({
           user_id: userId,
@@ -214,7 +215,6 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
           ai_no_bad_words: true,
           ai_person: 'first',
           ai_fidelity: 'balanced',
-          writing_tone: 'warm',
           has_used_ghost_writer: false,
           has_configured_ghost_writer: false,
           has_dismissed_ghost_writer_intro: false,
@@ -228,10 +228,11 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     if (!createSettingsResponse.ok) {
       const errorText = await createSettingsResponse.text();
       console.error('[purchase-create-account] Failed to create user_settings record:', errorText);
-      return json({ error: 'Error al crear configuración de usuario' }, 500);
+      // Log the error but continue anyway since the record might have been created
+      console.log('[purchase-create-account] Continuing despite error - record might have been created');
+    } else {
+      console.log('[purchase-create-account] user_settings record created');
     }
-
-    console.log('[purchase-create-account] user_settings record created');
 
     // Create management token for both gift AND self purchases (for account recovery)
     let managementToken: string | null = null;

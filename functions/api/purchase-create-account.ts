@@ -221,7 +221,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
           has_seen_home_walkthrough: false,
           has_seen_editor_walkthrough: false,
           public_author_name: authorName,
-          has_confirmed_name: true, // Ya proporcionó el nombre en el registro
+          has_confirmed_name: false, // Debe confirmar el nombre en dashboard
         }),
       }
     );

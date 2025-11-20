@@ -388,7 +388,7 @@ class UserService {
         subscribers.where((s) => s['status'] == 'confirmed').length;
 
     // Actividad reciente
-    final recentActivity = await getRecentActivity(limit: 5);
+    final recentActivity = await getRecentActivity(limit: 10);
 
     return {
       'total_stories': stories.length,

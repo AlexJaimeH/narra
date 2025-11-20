@@ -2142,9 +2142,44 @@ class _SetNameCard extends StatefulWidget {
 class _SetNameCardState extends State<_SetNameCard> {
   final TextEditingController _nameController = TextEditingController();
   bool _isSaving = false;
+  String _originalName = '';
+  bool _hasEdited = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCurrentName();
+    _nameController.addListener(_onNameChanged);
+  }
+
+  Future<void> _loadCurrentName() async {
+    try {
+      final settings = await UserService.getUserSettings();
+      final currentName = settings?['public_author_name'] as String?;
+
+      if (currentName != null && currentName.isNotEmpty) {
+        setState(() {
+          _originalName = currentName;
+          _nameController.text = currentName;
+        });
+      }
+    } catch (e) {
+      print('[SetNameCard] Error loading current name: $e');
+    }
+  }
+
+  void _onNameChanged() {
+    final hasChanged = _nameController.text.trim() != _originalName.trim();
+    if (_hasEdited != hasChanged) {
+      setState(() {
+        _hasEdited = hasChanged;
+      });
+    }
+  }
 
   @override
   void dispose() {
+    _nameController.removeListener(_onNameChanged);
     _nameController.dispose();
     super.dispose();
   }
@@ -2165,13 +2200,21 @@ class _SetNameCardState extends State<_SetNameCard> {
     setState(() => _isSaving = true);
 
     try {
-      await UserService.savePublicAuthorName(name);
+      // Guardar el nombre (solo si cambió)
+      if (_hasEdited) {
+        await UserService.savePublicAuthorName(name);
+      }
+
+      // Marcar que el usuario confirmó su nombre para que no vuelva a aparecer
+      await UserService.markNameAsConfirmed();
 
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('¡Nombre guardado exitosamente!'),
+        SnackBar(
+          content: Text(_hasEdited
+              ? '¡Nombre actualizado exitosamente!'
+              : '¡Nombre confirmado!'),
           backgroundColor: Colors.green,
         ),
       );
@@ -2386,9 +2429,13 @@ class _SetNameCardState extends State<_SetNameCard> {
                                   AlwaysStoppedAnimation<Color>(Colors.white),
                             ),
                           )
-                        : const Icon(Icons.check_circle, size: 22),
+                        : Icon(
+                            _hasEdited ? Icons.edit : Icons.check_circle,
+                            size: 22),
                     label: Text(
-                      _isSaving ? 'Guardando...' : 'Guardar nombre',
+                      _isSaving
+                          ? 'Guardando...'
+                          : (_hasEdited ? 'Cambiar nombre' : 'Confirmar nombre'),
                       style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
                     style: FilledButton.styleFrom(

@@ -176,16 +176,6 @@ class UserService {
     });
   }
 
-  // Marcar que el usuario confirmó su nombre
-  static Future<void> markNameAsConfirmed() async {
-    final userId = SupabaseAuth.currentUser?.id;
-    if (userId == null) return;
-
-    await updateUserSettings({
-      'has_confirmed_name': true,
-    });
-  }
-
   // Guardar nombre público del usuario
   static Future<void> savePublicAuthorName(String name) async {
     final userId = SupabaseAuth.currentUser?.id;

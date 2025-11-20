@@ -160,13 +160,10 @@ class UserService {
     final settings = await getUserSettings();
     if (settings == null) return true;
 
-    // No mostrar si ya confirmó el nombre
+    // Mostrar el widget si NO ha confirmado el nombre
+    // Sin importar si ya tiene un nombre o no
     final hasConfirmedName = settings['has_confirmed_name'] as bool?;
-    if (hasConfirmedName == true) return false;
-
-    final publicAuthorName = settings['public_author_name'] as String?;
-    // Mostrar solo si el nombre público está vacío o es null
-    return publicAuthorName == null || publicAuthorName.trim().isEmpty;
+    return hasConfirmedName != true;
   }
 
   // Marcar que el usuario confirmó su nombre

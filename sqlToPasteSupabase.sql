@@ -2233,3 +2233,22 @@ comment on column public.contact_messages.is_current_client is 'Indica si la per
 commit;
 
 -- Fin de migración de contact_messages
+
+-- ============================================================
+-- Columna has_confirmed_name en user_settings (Fecha: 2025-11-20)
+-- ============================================================
+-- Esta columna permite trackear si el usuario ya confirmó su nombre
+-- en el widget del dashboard. Una vez confirmado, el widget no vuelve
+-- a aparecer aunque el nombre haya sido proporcionado en el registro.
+begin;
+
+-- Agregar columna para tracking de confirmación de nombre
+alter table if exists public.user_settings
+add column if not exists has_confirmed_name boolean not null default false;
+
+-- Comentario
+comment on column public.user_settings.has_confirmed_name is 'Indica si el usuario ya confirmó su nombre en el dashboard. Una vez confirmado, el widget de nombre no vuelve a aparecer.';
+
+commit;
+
+-- Fin de migración de has_confirmed_name

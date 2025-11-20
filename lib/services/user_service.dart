@@ -160,9 +160,23 @@ class UserService {
     final settings = await getUserSettings();
     if (settings == null) return true;
 
+    // No mostrar si ya confirmó el nombre
+    final hasConfirmedName = settings['has_confirmed_name'] as bool?;
+    if (hasConfirmedName == true) return false;
+
     final publicAuthorName = settings['public_author_name'] as String?;
     // Mostrar solo si el nombre público está vacío o es null
     return publicAuthorName == null || publicAuthorName.trim().isEmpty;
+  }
+
+  // Marcar que el usuario confirmó su nombre
+  static Future<void> markNameAsConfirmed() async {
+    final userId = SupabaseAuth.currentUser?.id;
+    if (userId == null) return;
+
+    await updateUserSettings({
+      'has_confirmed_name': true,
+    });
   }
 
   // Guardar nombre público del usuario

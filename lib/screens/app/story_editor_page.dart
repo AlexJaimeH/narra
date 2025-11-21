@@ -6019,56 +6019,56 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                             ),
                           ),
                         ),
-                        child: Row(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            Expanded(
-                              child: ElevatedButton.icon(
-                                onPressed: _isRecorderConnecting ||
-                                        _isProcessingAudio ||
-                                        _isFinalizingRecording ||
-                                        !_isPaused ||
-                                        _liveTranscript.trim().isEmpty
-                                    ? null
-                                    : () async {
-                                        final text = _liveTranscript.trim();
+                            ElevatedButton.icon(
+                              onPressed: _isRecorderConnecting ||
+                                      _isProcessingAudio ||
+                                      _isFinalizingRecording ||
+                                      !_isPaused ||
+                                      _liveTranscript.trim().isEmpty
+                                  ? null
+                                  : () async {
+                                      final text = _liveTranscript.trim();
 
-                                        setState(() {
-                                          _isFinalizingRecording = true;
-                                        });
-                                        setSheetState(() {});
+                                      setState(() {
+                                        _isFinalizingRecording = true;
+                                      });
+                                      setSheetState(() {});
 
-                                        try {
-                                          await _finalizeRecording();
-                                          if (sheetContext.mounted) {
-                                            Navigator.pop(sheetContext, text);
-                                          }
-                                        } catch (error) {
-                                          // Error handling
-                                        } finally {
-                                          if (mounted) {
-                                            setState(() {
-                                              _isFinalizingRecording = false;
-                                            });
-                                          }
+                                      try {
+                                        await _finalizeRecording();
+                                        if (sheetContext.mounted) {
+                                          Navigator.pop(sheetContext, text);
                                         }
-                                      },
-                                icon: _isFinalizingRecording
-                                    ? const SizedBox(
-                                        width: 16,
-                                        height: 16,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                        ),
-                                      )
-                                    : const Icon(Icons.add),
-                                label: Text(
-                                  _isFinalizingRecording
-                                      ? 'Guardando...'
-                                      : 'Agregar a la historia',
-                                ),
+                                      } catch (error) {
+                                        // Error handling
+                                      } finally {
+                                        if (mounted) {
+                                          setState(() {
+                                            _isFinalizingRecording = false;
+                                          });
+                                        }
+                                      }
+                                    },
+                              icon: _isFinalizingRecording
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(Icons.add),
+                              label: Text(
+                                _isFinalizingRecording
+                                    ? 'Guardando...'
+                                    : 'Agregar a la historia',
                               ),
                             ),
-                            const SizedBox(width: 12),
+                            const SizedBox(height: 8),
                             TextButton(
                               onPressed: _isFinalizingRecording
                                   ? null

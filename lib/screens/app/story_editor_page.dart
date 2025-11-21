@@ -4320,6 +4320,8 @@ class _StoryEditorPageState extends State<StoryEditorPage>
 
   // Helper Methods
   String get _recorderStatusLabel {
+    // Si está conectando pero ya hay transcripción activa, mostrar "Transcribiendo"
+    if (_isRecorderConnecting && _isTranscribing) return 'Transcribiendo...';
     if (_isRecorderConnecting) return 'Conectando...';
     if (_isProcessingAudio) return 'Procesando audio...';
     if (_isRecording && !_isPaused && _isTranscribing) {
@@ -4328,6 +4330,11 @@ class _StoryEditorPageState extends State<StoryEditorPage>
     if (_isRecording && !_isPaused) return 'Grabando...';
     if (_isPaused) return 'Pausado';
     return _liveTranscript.isNotEmpty ? 'Listo' : 'Listo';
+  }
+
+  bool get _isCurrentlyTranscribing {
+    return (_isRecorderConnecting && _isTranscribing) ||
+        (_isRecording && !_isPaused && _isTranscribing);
   }
 
   void _appendRecorderLog(String level, String message) {
@@ -5378,15 +5385,15 @@ class _StoryEditorPageState extends State<StoryEditorPage>
       try {
         final position = _transcriptScrollController.position;
         final target = position.maxScrollExtent;
-        if (position.pixels >= target) {
-          return;
-        }
 
-        _transcriptScrollController.animateTo(
-          target,
-          duration: const Duration(milliseconds: 160),
-          curve: Curves.easeOut,
-        );
+        // Siempre hacer scroll al final para mostrar el texto más reciente
+        if (target > 0) {
+          _transcriptScrollController.animateTo(
+            target,
+            duration: const Duration(milliseconds: 160),
+            curve: Curves.easeOut,
+          );
+        }
       } catch (_) {
         // Silenciar errores si el scroll controller no está disponible
       }
@@ -5810,7 +5817,34 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                                                 .primary),
                                   ),
                                   const SizedBox(width: 8),
-                                  Text(_recorderStatusLabel),
+                                  _isCurrentlyTranscribing
+                                      ? TweenAnimationBuilder<double>(
+                                          tween: Tween(begin: 0.4, end: 1.0),
+                                          duration:
+                                              const Duration(milliseconds: 800),
+                                          curve: Curves.easeInOut,
+                                          builder: (context, value, child) {
+                                            return Opacity(
+                                              opacity: value,
+                                              child: Text(
+                                                _recorderStatusLabel,
+                                                style: TextStyle(
+                                                  color: Theme.of(context)
+                                                      .colorScheme
+                                                      .primary,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                          onEnd: () {
+                                            if (mounted &&
+                                                _isCurrentlyTranscribing) {
+                                              setState(() {});
+                                            }
+                                          },
+                                        )
+                                      : Text(_recorderStatusLabel),
                                   const Spacer(),
                                   IconButton(
                                     tooltip: _isRecorderConnecting

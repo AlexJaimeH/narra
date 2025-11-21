@@ -2270,8 +2270,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                     fontWeight: FontWeight.w600,
                     height: 1.4,
                   ),
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
@@ -2298,8 +2296,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                       color: colorScheme.onSurface.withValues(alpha: 0.85),
                       height: 1.4,
                     ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
@@ -2369,8 +2365,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                   style: theme.textTheme.bodyMedium?.copyWith(
                     height: 1.4,
                   ),
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             );
@@ -2432,8 +2426,6 @@ class _StoryEditorPageState extends State<StoryEditorPage>
                       style: theme.textTheme.bodyMedium?.copyWith(
                         height: 1.4,
                       ),
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 );

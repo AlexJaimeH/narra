@@ -120,18 +120,57 @@ class _DashboardPageState extends State<DashboardPage> {
     return availableTopics.take(5).toList();
   }
 
+  // Helper methods to check settings locally (avoid duplicate API calls)
+  bool _shouldShowGhostWriterIntroFromSettings(
+      Map<String, dynamic>? settings) {
+    if (settings == null) return true;
+    final hasUsed = settings['has_used_ghost_writer'] as bool? ?? false;
+    final hasConfigured =
+        settings['has_configured_ghost_writer'] as bool? ?? false;
+    final hasDismissed =
+        settings['has_dismissed_ghost_writer_intro'] as bool? ?? false;
+    return !hasUsed && !hasConfigured && !hasDismissed;
+  }
+
+  bool _shouldShowSetNamePromptFromSettings(Map<String, dynamic>? settings) {
+    if (settings == null) return true;
+    final hasConfirmedName = settings['has_confirmed_name'] as bool?;
+    return hasConfirmedName != true;
+  }
+
+  bool _shouldShowHomeWalkthroughFromSettings(Map<String, dynamic>? settings) {
+    if (settings == null) return true;
+    final hasSeenWalkthrough =
+        settings['has_seen_home_walkthrough'] as bool? ?? false;
+    return !hasSeenWalkthrough;
+  }
+
   Future<void> _loadDashboardData() async {
     try {
-      final profile = await NarraAPI.getCurrentUserProfile();
+      // Step 1: Load settings first (needed for local checks)
       final settings = await UserService.getUserSettings();
-      final dashboardStats = await NarraAPI.getDashboardStats();
-      final allStories = await StoryServiceNew.getStories();
+
+      // Step 2: Load all other data in parallel for faster loading
+      final results = await Future.wait([
+        NarraAPI.getCurrentUserProfile(), // index 0
+        NarraAPI.getDashboardStats(), // index 1
+        StoryServiceNew.getStories(), // index 2
+        NarraAPI.getTags(), // index 3
+        SubscriberService.getDashboardData(
+          recentCommentLimit: 10,
+          recentReactionLimit: 10,
+        ), // index 4
+      ]);
+
+      // Extract results
+      final profile = results[0] as UserProfile?;
+      final dashboardStats = results[1] as DashboardStats;
+      final allStories = results[2] as List<Story>;
+      final allTags = results[3] as List<StoryTag>;
+      final subscriberDashboard = results[4] as SubscriberDashboardData?;
+
+      // Step 3: Process data locally (no API calls)
       final draftStories = allStories.where((s) => s.isDraft).toList();
-      final allTags = await NarraAPI.getTags();
-      final subscriberDashboard = await SubscriberService.getDashboardData(
-        recentCommentLimit: 10,
-        recentReactionLimit: 10,
-      );
 
       // Get last published story
       final publishedStories = allStories.where((s) => s.isPublished).toList()
@@ -140,15 +179,13 @@ class _DashboardPageState extends State<DashboardPage> {
       final lastPublished =
           publishedStories.isNotEmpty ? publishedStories.first : null;
 
-      // Check if should show ghost writer intro
-      final shouldShowIntro = await UserService.shouldShowGhostWriterIntro();
+      // Check UI flags from settings (no additional API calls)
+      final shouldShowIntro = _shouldShowGhostWriterIntroFromSettings(settings);
       print('[Dashboard] shouldShowGhostWriterIntro: $shouldShowIntro');
 
-      // Check if should show set name prompt (new users)
-      final shouldShowSetName = await UserService.shouldShowSetNamePrompt();
-
+      final shouldShowSetName = _shouldShowSetNamePromptFromSettings(settings);
       final shouldShowWalkthrough =
-          await UserService.shouldShowHomeWalkthrough();
+          _shouldShowHomeWalkthroughFromSettings(settings);
 
       if (mounted) {
         // Calculate suggested topics once to avoid random changes on rebuild

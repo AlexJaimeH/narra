@@ -1,0 +1,22 @@
+# robots.txt para Narra
+
+# Permitir indexación de la landing page
+User-agent: *
+Allow: /$
+Allow: /logo-horizontal.png
+Allow: /favicon.png
+Allow: /hero-portrait.png
+Allow: /emotional-legacy.png
+Allow: /step1.png
+Allow: /step2.png
+Allow: /step3.png
+Allow: /step4.png
+
+# Bloquear indexación de aplicaciones privadas
+Disallow: /app/
+Disallow: /blog/
+Disallow: /purchase
+Disallow: /api/
+
+# Sitemap
+Sitemap: https://narra.mx/sitemap.xml

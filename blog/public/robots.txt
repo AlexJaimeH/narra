@@ -3,6 +3,7 @@
 # Permitir indexación de la landing page
 User-agent: *
 Allow: /$
+Allow: /logo.png
 Allow: /logo-horizontal.png
 Allow: /favicon.png
 Allow: /hero-portrait.png

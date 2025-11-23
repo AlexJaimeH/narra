@@ -8,6 +8,45 @@ export const PurchaseSuccessPage: React.FC = () => {
   const purchaseType = searchParams.get('type') || 'self';
   const email = searchParams.get('email') || '';
 
+  // Determinar el título y descripción según el tipo
+  const getHeaderInfo = () => {
+    switch (purchaseType) {
+      case 'self':
+        return {
+          emoji: '✅',
+          title: '¡Bienvenido a Narra!',
+          subtitle: 'Tu cuenta ha sido creada exitosamente'
+        };
+      case 'gift':
+      case 'gift_now':
+        return {
+          emoji: '🎁',
+          title: '¡Regalo Enviado!',
+          subtitle: 'Tu regalo ha sido enviado exitosamente'
+        };
+      case 'gift_later':
+        return {
+          emoji: '📅',
+          title: '¡Regalo Guardado!',
+          subtitle: 'Tu regalo está listo para activar cuando quieras'
+        };
+      case 'gift_activated':
+        return {
+          emoji: '🎉',
+          title: '¡Regalo Activado!',
+          subtitle: 'El regalo ha sido activado exitosamente'
+        };
+      default:
+        return {
+          emoji: '✅',
+          title: '¡Éxito!',
+          subtitle: 'Operación completada'
+        };
+    }
+  };
+
+  const headerInfo = getHeaderInfo();
+
   useEffect(() => {
     // Scroll to top on mount
     window.scrollTo(0, 0);
@@ -45,21 +84,142 @@ export const PurchaseSuccessPage: React.FC = () => {
               className="w-20 h-20 mx-auto mb-4 rounded-full flex items-center justify-center"
               style={{ background: 'rgba(255,255,255,0.2)' }}
             >
-              <span className="text-5xl">✅</span>
+              <span className="text-5xl">{headerInfo.emoji}</span>
             </motion.div>
             <h1 className="text-3xl font-bold text-white mb-2">
-              {purchaseType === 'self' ? '¡Bienvenido a Narra!' : '¡Regalo Enviado!'}
+              {headerInfo.title}
             </h1>
             <p className="text-white/90">
-              {purchaseType === 'self'
-                ? 'Tu cuenta ha sido creada exitosamente'
-                : 'Tu regalo ha sido enviado exitosamente'}
+              {headerInfo.subtitle}
             </p>
           </div>
 
           {/* Content */}
           <div className="p-8">
-            {purchaseType === 'self' ? (
+            {purchaseType === 'gift_later' ? (
+              // Gift Later success
+              <>
+                <div
+                  className="rounded-2xl p-6 mb-6"
+                  style={{
+                    background: '#E8F5F4',
+                    borderLeft: `4px solid ${NarraColors.brand.primary}`,
+                  }}
+                >
+                  <h2 className="font-bold mb-2" style={{ color: NarraColors.brand.primarySolid }}>
+                    📧 Revisa tu email
+                  </h2>
+                  <p className="text-sm mb-3" style={{ color: NarraColors.text.secondary }}>
+                    Hemos enviado un correo a <strong>{email}</strong> con:
+                  </p>
+                  <ul className="space-y-2 text-sm" style={{ color: NarraColors.text.secondary }}>
+                    <li className="flex items-start gap-2">
+                      <span style={{ color: NarraColors.brand.primary }}>✓</span>
+                      <span>Un enlace especial para activar el regalo cuando quieras</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span style={{ color: NarraColors.brand.primary }}>✓</span>
+                      <span>Instrucciones de cómo completar los datos del destinatario</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span style={{ color: NarraColors.brand.primary }}>✓</span>
+                      <span>El enlace no expira - actívalo en el momento perfecto</span>
+                    </li>
+                  </ul>
+                </div>
+
+                <div
+                  className="rounded-2xl p-6 mb-6"
+                  style={{
+                    background: '#FFFBEB',
+                    border: `2px solid ${NarraColors.status.warning}`,
+                  }}
+                >
+                  <h3 className="font-bold mb-2 flex items-center gap-2" style={{ color: NarraColors.text.primary }}>
+                    <span>📅</span>
+                    <span>¿Cómo funciona?</span>
+                  </h3>
+                  <ol className="space-y-2 text-sm" style={{ color: NarraColors.text.secondary }}>
+                    <li>1. Abre el email que te enviamos</li>
+                    <li>2. Cuando quieras activar el regalo, haz clic en el enlace</li>
+                    <li>3. Completa los datos del destinatario</li>
+                    <li>4. ¡El destinatario recibirá su acceso a Narra de inmediato!</li>
+                  </ol>
+                </div>
+
+                <motion.a
+                  href="/"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="block w-full text-center py-4 rounded-xl font-bold text-white shadow-lg"
+                  style={{
+                    background: 'linear-gradient(135deg, #4DB3A8 0%, #38827A 100%)',
+                  }}
+                >
+                  Volver al Inicio
+                </motion.a>
+              </>
+            ) : purchaseType === 'gift_activated' ? (
+              // Gift Activated success
+              <>
+                <div
+                  className="rounded-2xl p-6 mb-6"
+                  style={{
+                    background: '#E8F5F4',
+                    borderLeft: `4px solid ${NarraColors.brand.primary}`,
+                  }}
+                >
+                  <h2 className="font-bold mb-2" style={{ color: NarraColors.brand.primarySolid }}>
+                    📧 Emails Enviados
+                  </h2>
+                  <div className="space-y-4 text-sm" style={{ color: NarraColors.text.secondary }}>
+                    <div>
+                      <p className="font-semibold mb-1">Al destinatario ({email}):</p>
+                      <ul className="space-y-1 ml-4">
+                        <li>• Notificación del regalo</li>
+                        <li>• Enlace para iniciar sesión</li>
+                        <li>• Introducción a Narra</li>
+                      </ul>
+                    </div>
+                    <div>
+                      <p className="font-semibold mb-1">A ti:</p>
+                      <ul className="space-y-1 ml-4">
+                        <li>• Confirmación de activación</li>
+                        <li>• Detalles del regalo activado</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  className="rounded-2xl p-6 mb-6"
+                  style={{
+                    background: 'linear-gradient(135deg, #FFF8F0 0%, #FFE8D6 100%)',
+                    border: '2px solid #F59E0B',
+                  }}
+                >
+                  <div className="text-center mb-3">
+                    <span className="text-4xl">🎁</span>
+                  </div>
+                  <p className="text-sm text-center" style={{ color: NarraColors.text.secondary }}>
+                    <strong>Has regalado memorias que durarán para siempre.</strong><br/>
+                    Tu regalo ayudará a preservar historias familiares que se transmitirán de generación en generación.
+                  </p>
+                </div>
+
+                <motion.a
+                  href="/"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="block w-full text-center py-4 rounded-xl font-bold text-white shadow-lg"
+                  style={{
+                    background: 'linear-gradient(135deg, #4DB3A8 0%, #38827A 100%)',
+                  }}
+                >
+                  Volver al Inicio
+                </motion.a>
+              </>
+            ) : purchaseType === 'self' ? (
               // Self purchase success
               <>
                 <div

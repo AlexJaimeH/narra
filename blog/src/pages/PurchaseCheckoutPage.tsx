@@ -234,6 +234,76 @@ export const PurchaseCheckoutPage: React.FC = () => {
                   Información de {purchaseType === 'self' ? 'Contacto' : 'Regalo'}
                 </h2>
 
+                {/* Purchase Type Selector */}
+                <div className="mb-6">
+                  <label className="block text-sm font-semibold mb-3" style={{ color: NarraColors.text.primary }}>
+                    ¿Para quién es Narra?
+                  </label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <motion.div
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => {
+                        setPurchaseType('self');
+                        setGiftTiming('now');
+                        // Reset gift-specific fields
+                        setBuyerName('');
+                        setBuyerEmail('');
+                        setBuyerEmailConfirm('');
+                        setGiftMessage('');
+                      }}
+                      className={`p-4 rounded-xl cursor-pointer transition-all ${
+                        purchaseType === 'self' ? 'ring-2 ring-offset-2' : ''
+                      }`}
+                      style={{
+                        background: purchaseType === 'self'
+                          ? 'linear-gradient(135deg, #E8F5F4 0%, #D1F0ED 100%)'
+                          : NarraColors.surface.white,
+                        border: `2px solid ${purchaseType === 'self' ? NarraColors.brand.primary : NarraColors.border.light}`,
+                        ['--tw-ring-color' as any]: NarraColors.brand.primary,
+                      }}
+                    >
+                      <div className="text-3xl mb-2">👤</div>
+                      <h4 className="font-bold text-sm mb-1" style={{ color: NarraColors.text.primary }}>
+                        Para Mí
+                      </h4>
+                      <p className="text-xs" style={{ color: NarraColors.text.secondary }}>
+                        Quiero usar Narra yo mismo
+                      </p>
+                    </motion.div>
+
+                    <motion.div
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => {
+                        setPurchaseType('gift');
+                        // Reset self-specific fields when switching to gift
+                        setAuthorEmail('');
+                        setAuthorEmailConfirm('');
+                        setAuthorName('');
+                      }}
+                      className={`p-4 rounded-xl cursor-pointer transition-all ${
+                        purchaseType === 'gift' ? 'ring-2 ring-offset-2' : ''
+                      }`}
+                      style={{
+                        background: purchaseType === 'gift'
+                          ? 'linear-gradient(135deg, #E8F5F4 0%, #D1F0ED 100%)'
+                          : NarraColors.surface.white,
+                        border: `2px solid ${purchaseType === 'gift' ? NarraColors.brand.primary : NarraColors.border.light}`,
+                        ['--tw-ring-color' as any]: NarraColors.brand.primary,
+                      }}
+                    >
+                      <div className="text-3xl mb-2">🎁</div>
+                      <h4 className="font-bold text-sm mb-1" style={{ color: NarraColors.text.primary }}>
+                        Regalo
+                      </h4>
+                      <p className="text-xs" style={{ color: NarraColors.text.secondary }}>
+                        Quiero regalarlo a alguien
+                      </p>
+                    </motion.div>
+                  </div>
+                </div>
+
                 <form onSubmit={handleSubmit} className="space-y-6">
                   {purchaseType === 'self' ? (
                     // Self flow

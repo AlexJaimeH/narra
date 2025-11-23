@@ -10,6 +10,10 @@ export const GiftActivationPage: React.FC = () => {
   const [isValidating, setIsValidating] = useState(true);
   const [tokenValid, setTokenValid] = useState(false);
   const [tokenError, setTokenError] = useState('');
+  const [buyerEmailFromToken, setBuyerEmailFromToken] = useState('');
+
+  // Activation type: 'gift' or 'self'
+  const [activationType, setActivationType] = useState<'gift' | 'self'>('gift');
 
   // Form states
   const [authorName, setAuthorName] = useState('');
@@ -38,9 +42,9 @@ export const GiftActivationPage: React.FC = () => {
 
       if (response.ok && data.valid) {
         setTokenValid(true);
-        // Si tiene datos del comprador, prellenar el nombre
+        // Guardar el email del comprador del token
         if (data.buyerEmail) {
-          // Podríamos mostrar el email del comprador o alguna info
+          setBuyerEmailFromToken(data.buyerEmail);
         }
       } else {
         setTokenError(data.error || 'Token inválido o expirado');
@@ -58,12 +62,12 @@ export const GiftActivationPage: React.FC = () => {
     setError('');
 
     if (!authorName || authorName.trim() === '') {
-      setError('Por favor ingresa el nombre del destinatario');
+      setError(activationType === 'self' ? 'Por favor ingresa tu nombre' : 'Por favor ingresa el nombre del destinatario');
       return false;
     }
 
     if (!authorEmail || !authorEmail.includes('@')) {
-      setError('Por favor ingresa un email válido del destinatario');
+      setError(activationType === 'self' ? 'Por favor ingresa tu email' : 'Por favor ingresa un email válido del destinatario');
       return false;
     }
 
@@ -71,6 +75,11 @@ export const GiftActivationPage: React.FC = () => {
     if (!emailRegex.test(authorEmail)) {
       setError('Por favor ingresa un email válido');
       return false;
+    }
+
+    // Si es para sí mismo y el email es el mismo que el del token, advertir
+    if (activationType === 'self' && buyerEmailFromToken && authorEmail.toLowerCase() === buyerEmailFromToken.toLowerCase()) {
+      // Está bien, es la misma persona
     }
 
     return true;
@@ -231,16 +240,82 @@ export const GiftActivationPage: React.FC = () => {
                   Información del Regalo
                 </h2>
 
+                {/* Activation Type Selector */}
+                <div className="mb-6">
+                  <label className="block text-sm font-semibold mb-3" style={{ color: NarraColors.text.primary }}>
+                    ¿Para quién es este regalo?
+                  </label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <motion.div
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => {
+                        setActivationType('self');
+                        // Si cambia a "Para mí", usar el email del comprador si está disponible
+                        if (buyerEmailFromToken) {
+                          setAuthorEmail(buyerEmailFromToken);
+                        }
+                      }}
+                      className={`p-4 rounded-xl cursor-pointer transition-all ${
+                        activationType === 'self' ? 'ring-2 ring-offset-2' : ''
+                      }`}
+                      style={{
+                        background: activationType === 'self'
+                          ? 'linear-gradient(135deg, #E8F5F4 0%, #D1F0ED 100%)'
+                          : NarraColors.surface.white,
+                        border: `2px solid ${activationType === 'self' ? NarraColors.brand.primary : NarraColors.border.light}`,
+                        ['--tw-ring-color' as any]: NarraColors.brand.primary,
+                      }}
+                    >
+                      <div className="text-3xl mb-2">👤</div>
+                      <h4 className="font-bold text-sm mb-1" style={{ color: NarraColors.text.primary }}>
+                        Para Mí
+                      </h4>
+                      <p className="text-xs" style={{ color: NarraColors.text.secondary }}>
+                        Quiero usar Narra yo mismo
+                      </p>
+                    </motion.div>
+
+                    <motion.div
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => {
+                        setActivationType('gift');
+                        // Limpiar campos al cambiar a regalo
+                        setAuthorEmail('');
+                      }}
+                      className={`p-4 rounded-xl cursor-pointer transition-all ${
+                        activationType === 'gift' ? 'ring-2 ring-offset-2' : ''
+                      }`}
+                      style={{
+                        background: activationType === 'gift'
+                          ? 'linear-gradient(135deg, #E8F5F4 0%, #D1F0ED 100%)'
+                          : NarraColors.surface.white,
+                        border: `2px solid ${activationType === 'gift' ? NarraColors.brand.primary : NarraColors.border.light}`,
+                        ['--tw-ring-color' as any]: NarraColors.brand.primary,
+                      }}
+                    >
+                      <div className="text-3xl mb-2">🎁</div>
+                      <h4 className="font-bold text-sm mb-1" style={{ color: NarraColors.text.primary }}>
+                        Para Regalar
+                      </h4>
+                      <p className="text-xs" style={{ color: NarraColors.text.secondary }}>
+                        Quiero regalarlo a alguien más
+                      </p>
+                    </motion.div>
+                  </div>
+                </div>
+
                 <form onSubmit={handleSubmit} className="space-y-6">
                   <div>
                     <label className="block text-sm font-semibold mb-2" style={{ color: NarraColors.text.primary }}>
-                      Nombre del Destinatario
+                      {activationType === 'self' ? 'Tu Nombre' : 'Nombre del Destinatario'}
                     </label>
                     <input
                       type="text"
                       value={authorName}
                       onChange={(e) => setAuthorName(e.target.value)}
-                      placeholder="¿Cómo se llama?"
+                      placeholder={activationType === 'self' ? '¿Cómo te llamas?' : '¿Cómo se llama?'}
                       className="w-full px-4 py-3 rounded-xl border-2 focus:outline-none focus:border-opacity-100"
                       style={{
                         borderColor: NarraColors.border.light,
@@ -249,35 +324,39 @@ export const GiftActivationPage: React.FC = () => {
                       required
                     />
                     <p className="text-xs mt-2" style={{ color: NarraColors.text.light }}>
-                      Este nombre aparecerá en su perfil de autor
+                      {activationType === 'self' ? 'Este nombre aparecerá en tu perfil de autor' : 'Este nombre aparecerá en su perfil de autor'}
                     </p>
                   </div>
 
                   <div>
                     <label className="block text-sm font-semibold mb-2" style={{ color: NarraColors.text.primary }}>
-                      Email del Destinatario
+                      {activationType === 'self' ? 'Tu Email' : 'Email del Destinatario'}
                     </label>
                     <input
                       type="email"
                       value={authorEmail}
                       onChange={(e) => setAuthorEmail(e.target.value)}
-                      placeholder="destinatario@email.com"
+                      placeholder={activationType === 'self' ? 'tu@email.com' : 'destinatario@email.com'}
                       className="w-full px-4 py-3 rounded-xl border-2 focus:outline-none focus:border-opacity-100"
                       style={{
                         borderColor: NarraColors.border.light,
                         background: NarraColors.surface.white,
                       }}
                       required
+                      readOnly={activationType === 'self' && !!buyerEmailFromToken}
                     />
                     <p className="text-xs mt-2" style={{ color: NarraColors.text.light }}>
-                      La persona que recibirá el acceso a Narra
+                      {activationType === 'self'
+                        ? (buyerEmailFromToken ? 'Este es el email que usaste para comprar' : 'El email con el que accederás a Narra')
+                        : 'La persona que recibirá el acceso a Narra'}
                     </p>
                   </div>
 
-                  <div className="border-t pt-6" style={{ borderColor: NarraColors.border.light }}>
-                    <h3 className="text-lg font-bold mb-4" style={{ color: NarraColors.text.primary }}>
-                      Personaliza tu Regalo
-                    </h3>
+                  {activationType === 'gift' && (
+                    <div className="border-t pt-6" style={{ borderColor: NarraColors.border.light }}>
+                      <h3 className="text-lg font-bold mb-4" style={{ color: NarraColors.text.primary }}>
+                        Personaliza tu Regalo
+                      </h3>
 
                     <div className="space-y-4">
                       <div>
@@ -320,7 +399,8 @@ export const GiftActivationPage: React.FC = () => {
                         </p>
                       </div>
                     </div>
-                  </div>
+                    </div>
+                  )}
 
                   {error && (
                     <div
@@ -344,7 +424,9 @@ export const GiftActivationPage: React.FC = () => {
                     }}
                   >
                     <p className="text-sm" style={{ color: NarraColors.text.secondary }}>
-                      📧 El destinatario recibirá un email con su acceso a Narra de inmediato
+                      {activationType === 'self'
+                        ? '📧 Recibirás un email con tu enlace de acceso a Narra de inmediato'
+                        : '📧 El destinatario recibirá un email con su acceso a Narra de inmediato'}
                     </p>
                   </div>
 
@@ -366,7 +448,7 @@ export const GiftActivationPage: React.FC = () => {
                         <span>Activando...</span>
                       </span>
                     ) : (
-                      '🎁 Activar Regalo'
+                      activationType === 'self' ? '✨ Activar Mi Cuenta' : '🎁 Activar Regalo'
                     )}
                   </motion.button>
                 </form>

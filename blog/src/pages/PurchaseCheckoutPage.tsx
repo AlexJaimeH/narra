@@ -4,11 +4,13 @@ import { motion } from 'framer-motion';
 import { NarraColors } from '../styles/colors';
 
 type PurchaseType = 'self' | 'gift';
+type GiftTiming = 'now' | 'later';
 
 export const PurchaseCheckoutPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [purchaseType, setPurchaseType] = useState<PurchaseType>('self');
+  const [giftTiming, setGiftTiming] = useState<GiftTiming>('now');
 
   // Form states
   const [authorEmail, setAuthorEmail] = useState('');
@@ -52,8 +54,23 @@ export const PurchaseCheckoutPage: React.FC = () => {
         setError('Por favor ingresa un email válido');
         return false;
       }
+    } else if (purchaseType === 'gift' && giftTiming === 'later') {
+      // Gift later flow - solo necesita email del comprador
+      if (!buyerEmail || !buyerEmailConfirm) {
+        setError('Por favor ingresa tu email en ambos campos');
+        return false;
+      }
+      if (buyerEmail !== buyerEmailConfirm) {
+        setError('Los emails no coinciden');
+        return false;
+      }
+      const emailRegex = /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/;
+      if (!emailRegex.test(buyerEmail)) {
+        setError('Por favor ingresa un email válido');
+        return false;
+      }
     } else {
-      // Gift flow
+      // Gift now flow
       if (!authorEmail) {
         setError('Por favor ingresa el email del destinatario');
         return false;
@@ -104,29 +121,53 @@ export const PurchaseCheckoutPage: React.FC = () => {
 
       await new Promise(resolve => setTimeout(resolve, 1500));
 
-      // Llamar a la API para crear la cuenta
-      const response = await fetch('/api/purchase-create-account', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          purchaseType,
-          authorEmail: authorEmail.toLowerCase().trim(),
-          authorName: authorName.trim(),
-          buyerEmail: purchaseType === 'gift' ? buyerEmail.toLowerCase().trim() : null,
-          buyerName: purchaseType === 'gift' ? buyerName.trim() : null,
-          giftMessage: purchaseType === 'gift' && giftMessage.trim() !== '' ? giftMessage.trim() : null,
-        }),
-      });
+      // Si es regalo para más tarde, usar API diferente
+      if (purchaseType === 'gift' && giftTiming === 'later') {
+        const response = await fetch('/api/gift-later-request', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            buyerEmail: buyerEmail.toLowerCase().trim(),
+          }),
+        });
 
-      const data = await response.json();
+        const data = await response.json();
 
-      if (response.ok && data.success) {
-        // Redirigir a página de éxito
-        navigate(`/purchase/success?type=${purchaseType}&email=${encodeURIComponent(authorEmail)}`);
+        if (response.ok && data.success) {
+          // Redirigir a página de éxito con tipo especial
+          navigate(`/purchase/success?type=gift_later&email=${encodeURIComponent(buyerEmail)}`);
+        } else {
+          setError(data.error || 'Error al procesar la compra. Por favor intenta nuevamente.');
+        }
       } else {
-        setError(data.error || 'Error al procesar la compra. Por favor intenta nuevamente.');
+        // Flujo normal: self o gift_now
+        const finalPurchaseType = purchaseType === 'self' ? 'self' : 'gift_now';
+
+        const response = await fetch('/api/purchase-create-account', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            purchaseType: finalPurchaseType,
+            authorEmail: authorEmail.toLowerCase().trim(),
+            authorName: authorName.trim(),
+            buyerEmail: purchaseType === 'gift' ? buyerEmail.toLowerCase().trim() : null,
+            buyerName: purchaseType === 'gift' ? buyerName.trim() : null,
+            giftMessage: purchaseType === 'gift' && giftMessage.trim() !== '' ? giftMessage.trim() : null,
+          }),
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+          // Redirigir a página de éxito
+          navigate(`/purchase/success?type=${purchaseType}&email=${encodeURIComponent(authorEmail)}`);
+        } else {
+          setError(data.error || 'Error al procesar la compra. Por favor intenta nuevamente.');
+        }
       }
     } catch (error) {
       setError('Error de conexión. Por favor intenta nuevamente.');
@@ -257,54 +298,168 @@ export const PurchaseCheckoutPage: React.FC = () => {
                   ) : (
                     // Gift flow
                     <>
-                      <div>
-                        <label className="block text-sm font-semibold mb-2" style={{ color: NarraColors.text.primary }}>
-                          Nombre del Destinatario
+                      {/* Gift Timing Selection */}
+                      <div className="mb-6">
+                        <label className="block text-sm font-semibold mb-3" style={{ color: NarraColors.text.primary }}>
+                          ¿Cuándo quieres regalar Narra?
                         </label>
-                        <input
-                          type="text"
-                          value={authorName}
-                          onChange={(e) => setAuthorName(e.target.value)}
-                          placeholder="¿Cómo se llama?"
-                          className="w-full px-4 py-3 rounded-xl border-2 focus:outline-none focus:border-opacity-100"
-                          style={{
-                            borderColor: NarraColors.border.light,
-                            background: NarraColors.surface.white,
-                          }}
-                          required
-                        />
-                        <p className="text-xs mt-2" style={{ color: NarraColors.text.light }}>
-                          Este nombre aparecerá en su perfil de autor
-                        </p>
+                        <div className="grid grid-cols-2 gap-4">
+                          <motion.div
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            onClick={() => setGiftTiming('now')}
+                            className={`p-4 rounded-xl cursor-pointer transition-all ${
+                              giftTiming === 'now' ? 'ring-2 ring-offset-2' : ''
+                            }`}
+                            style={{
+                              background: giftTiming === 'now'
+                                ? 'linear-gradient(135deg, #E8F5F4 0%, #D1F0ED 100%)'
+                                : NarraColors.surface.white,
+                              border: `2px solid ${giftTiming === 'now' ? NarraColors.brand.primary : NarraColors.border.light}`,
+                              ['--tw-ring-color' as any]: NarraColors.brand.primary,
+                            }}
+                          >
+                            <div className="text-3xl mb-2">🎁</div>
+                            <h4 className="font-bold text-sm mb-1" style={{ color: NarraColors.text.primary }}>
+                              Regalar Ahora
+                            </h4>
+                            <p className="text-xs" style={{ color: NarraColors.text.secondary }}>
+                              Envío inmediato al destinatario
+                            </p>
+                          </motion.div>
+
+                          <motion.div
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            onClick={() => setGiftTiming('later')}
+                            className={`p-4 rounded-xl cursor-pointer transition-all ${
+                              giftTiming === 'later' ? 'ring-2 ring-offset-2' : ''
+                            }`}
+                            style={{
+                              background: giftTiming === 'later'
+                                ? 'linear-gradient(135deg, #E8F5F4 0%, #D1F0ED 100%)'
+                                : NarraColors.surface.white,
+                              border: `2px solid ${giftTiming === 'later' ? NarraColors.brand.primary : NarraColors.border.light}`,
+                              ['--tw-ring-color' as any]: NarraColors.brand.primary,
+                            }}
+                          >
+                            <div className="text-3xl mb-2">📅</div>
+                            <h4 className="font-bold text-sm mb-1" style={{ color: NarraColors.text.primary }}>
+                              Regalar Más Tarde
+                            </h4>
+                            <p className="text-xs" style={{ color: NarraColors.text.secondary }}>
+                              Tú decides cuándo activarlo
+                            </p>
+                          </motion.div>
+                        </div>
                       </div>
 
-                      <div>
-                        <label className="block text-sm font-semibold mb-2" style={{ color: NarraColors.text.primary }}>
-                          Email del Destinatario
-                        </label>
-                        <input
-                          type="email"
-                          value={authorEmail}
-                          onChange={(e) => setAuthorEmail(e.target.value)}
-                          placeholder="destinatario@email.com"
-                          className="w-full px-4 py-3 rounded-xl border-2 focus:outline-none focus:border-opacity-100"
-                          style={{
-                            borderColor: NarraColors.border.light,
-                            background: NarraColors.surface.white,
-                          }}
-                          required
-                        />
-                        <p className="text-xs mt-2" style={{ color: NarraColors.text.light }}>
-                          La persona que recibirá el acceso a Narra
-                        </p>
-                      </div>
+                      {giftTiming === 'later' ? (
+                        // Gift Later flow - Solo email del comprador
+                        <>
+                          <div
+                            className="p-4 rounded-xl mb-6"
+                            style={{
+                              background: '#E8F5F4',
+                              borderLeft: `4px solid ${NarraColors.brand.primary}`,
+                            }}
+                          >
+                            <p className="text-sm leading-relaxed" style={{ color: NarraColors.text.secondary }}>
+                              <strong>📧 ¿Cómo funciona?</strong><br/>
+                              Te enviaremos un email con un enlace especial. Cuando quieras activar el regalo, solo haz clic en el enlace y completa los datos del destinatario. Así podrás elegir el momento perfecto para dar la sorpresa.
+                            </p>
+                          </div>
 
-                      <div className="border-t pt-6" style={{ borderColor: NarraColors.border.light }}>
-                        <h3 className="text-lg font-bold mb-4" style={{ color: NarraColors.text.primary }}>
-                          Tu Información
-                        </h3>
+                          <div>
+                            <label className="block text-sm font-semibold mb-2" style={{ color: NarraColors.text.primary }}>
+                              Tu Email
+                            </label>
+                            <input
+                              type="email"
+                              value={buyerEmail}
+                              onChange={(e) => setBuyerEmail(e.target.value)}
+                              placeholder="tu@email.com"
+                              className="w-full px-4 py-3 rounded-xl border-2 focus:outline-none focus:border-opacity-100"
+                              style={{
+                                borderColor: NarraColors.border.light,
+                                background: NarraColors.surface.white,
+                              }}
+                              required
+                            />
+                            <p className="text-xs mt-2" style={{ color: NarraColors.text.light }}>
+                              Te enviaremos el enlace de activación a este email
+                            </p>
+                          </div>
 
-                        <div className="space-y-4">
+                          <div>
+                            <label className="block text-sm font-semibold mb-2" style={{ color: NarraColors.text.primary }}>
+                              Confirma tu Email
+                            </label>
+                            <input
+                              type="email"
+                              value={buyerEmailConfirm}
+                              onChange={(e) => setBuyerEmailConfirm(e.target.value)}
+                              placeholder="tu@email.com"
+                              className="w-full px-4 py-3 rounded-xl border-2 focus:outline-none focus:border-opacity-100"
+                              style={{
+                                borderColor: NarraColors.border.light,
+                                background: NarraColors.surface.white,
+                              }}
+                              required
+                            />
+                          </div>
+                        </>
+                      ) : (
+                        // Gift Now flow - Formulario completo
+                        <>
+                          <div>
+                            <label className="block text-sm font-semibold mb-2" style={{ color: NarraColors.text.primary }}>
+                              Nombre del Destinatario
+                            </label>
+                            <input
+                              type="text"
+                              value={authorName}
+                              onChange={(e) => setAuthorName(e.target.value)}
+                              placeholder="¿Cómo se llama?"
+                              className="w-full px-4 py-3 rounded-xl border-2 focus:outline-none focus:border-opacity-100"
+                              style={{
+                                borderColor: NarraColors.border.light,
+                                background: NarraColors.surface.white,
+                              }}
+                              required
+                            />
+                            <p className="text-xs mt-2" style={{ color: NarraColors.text.light }}>
+                              Este nombre aparecerá en su perfil de autor
+                            </p>
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-semibold mb-2" style={{ color: NarraColors.text.primary }}>
+                              Email del Destinatario
+                            </label>
+                            <input
+                              type="email"
+                              value={authorEmail}
+                              onChange={(e) => setAuthorEmail(e.target.value)}
+                              placeholder="destinatario@email.com"
+                              className="w-full px-4 py-3 rounded-xl border-2 focus:outline-none focus:border-opacity-100"
+                              style={{
+                                borderColor: NarraColors.border.light,
+                                background: NarraColors.surface.white,
+                              }}
+                              required
+                            />
+                            <p className="text-xs mt-2" style={{ color: NarraColors.text.light }}>
+                              La persona que recibirá el acceso a Narra
+                            </p>
+                          </div>
+
+                          <div className="border-t pt-6" style={{ borderColor: NarraColors.border.light }}>
+                            <h3 className="text-lg font-bold mb-4" style={{ color: NarraColors.text.primary }}>
+                              Tu Información
+                            </h3>
+
+                            <div className="space-y-4">
                           <div>
                             <label className="block text-sm font-semibold mb-2" style={{ color: NarraColors.text.primary }}>
                               Tu Nombre
@@ -381,8 +536,10 @@ export const PurchaseCheckoutPage: React.FC = () => {
                               Este mensaje aparecerá en el email que reciba el destinatario
                             </p>
                           </div>
-                        </div>
-                      </div>
+                            </div>
+                          </div>
+                        </>
+                      )}
                     </>
                   )}
 
@@ -410,6 +567,8 @@ export const PurchaseCheckoutPage: React.FC = () => {
                     <p className="text-sm" style={{ color: NarraColors.text.secondary }}>
                       {purchaseType === 'self'
                         ? '📧 Recibirás un email para confirmar tu cuenta e iniciar sesión'
+                        : purchaseType === 'gift' && giftTiming === 'later'
+                        ? '📧 Te enviaremos un email con el enlace para activar el regalo cuando quieras'
                         : '📧 Enviaremos emails tanto a ti como al destinatario con toda la información'}
                     </p>
                   </div>

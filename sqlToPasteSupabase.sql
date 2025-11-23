@@ -2252,3 +2252,80 @@ comment on column public.user_settings.has_confirmed_name is 'Indica si el usuar
 commit;
 
 -- Fin de migración de has_confirmed_name
+
+-- ============================================================
+-- Tabla gift_purchases para tracking de compras (Fecha: 2025-11-23)
+-- ============================================================
+-- Esta tabla guarda información de todas las compras realizadas,
+-- incluyendo compras para uno mismo, regalos inmediatos y regalos
+-- para activar más tarde. Permite tener un registro completo del
+-- flujo de compra y facilita la gestión de regalos diferidos.
+begin;
+
+-- Crear tabla de compras de regalos
+create table if not exists public.gift_purchases (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete set null,
+  purchase_type text not null check (purchase_type in ('self', 'gift_now', 'gift_later')),
+
+  -- Información del autor (destinatario del regalo o comprador para sí mismo)
+  author_name text not null,
+  author_email text not null,
+
+  -- Información del comprador (solo para regalos)
+  buyer_name text,
+  buyer_email text,
+  gift_message text,
+
+  -- Token para activación diferida (solo para gift_later)
+  activation_token text unique,
+  token_used boolean not null default false,
+  activated_at timestamptz,
+
+  -- Timestamps
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+-- Índices para búsquedas comunes
+create index if not exists gift_purchases_user_id_idx on public.gift_purchases(user_id);
+create index if not exists gift_purchases_activation_token_idx on public.gift_purchases(activation_token) where activation_token is not null;
+create index if not exists gift_purchases_buyer_email_idx on public.gift_purchases(buyer_email) where buyer_email is not null;
+create index if not exists gift_purchases_created_at_idx on public.gift_purchases(created_at desc);
+
+-- Habilitar RLS
+alter table public.gift_purchases enable row level security;
+
+-- Política: Los usuarios pueden ver sus propias compras
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'gift_purchases'
+      and policyname = 'Users can view their own purchases'
+  ) then
+    create policy "Users can view their own purchases"
+      on public.gift_purchases
+      for select
+      using (auth.uid() = user_id);
+  end if;
+end
+$$;
+
+-- Política: Solo service role puede insertar (desde la API)
+-- No creamos política pública de INSERT, solo service role puede crear
+
+-- Política: Solo service role puede actualizar (para marcar token como usado)
+-- No creamos política pública de UPDATE, solo service role puede actualizar
+
+-- Comentarios
+comment on table public.gift_purchases is 'Registro de todas las compras de Narra (propias, regalos inmediatos, regalos diferidos)';
+comment on column public.gift_purchases.purchase_type is 'Tipo de compra: self (para mí), gift_now (regalo inmediato), gift_later (regalo diferido)';
+comment on column public.gift_purchases.activation_token is 'Token único para activar un regalo diferido. Solo se usa para gift_later';
+comment on column public.gift_purchases.token_used is 'Indica si el token de activación ya fue utilizado';
+comment on column public.gift_purchases.activated_at is 'Fecha y hora en que se activó el regalo diferido';
+
+commit;
+
+-- Fin de migración de gift_purchases

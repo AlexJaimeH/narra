@@ -62,12 +62,13 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     const purchaseType = (payload as any).purchaseType as string;
     const authorEmail = ((payload as any).authorEmail as string || '').toLowerCase().trim();
     const authorName = ((payload as any).authorName as string || '').trim();
-    const buyerEmail = purchaseType === 'gift' ? ((payload as any).buyerEmail as string || '').toLowerCase().trim() : null;
-    const buyerName = purchaseType === 'gift' ? ((payload as any).buyerName as string || '').trim() : null;
-    const giftMessage = purchaseType === 'gift' && (payload as any).giftMessage ? ((payload as any).giftMessage as string).trim() : null;
+    const isGift = purchaseType === 'gift' || purchaseType === 'gift_now';
+    const buyerEmail = isGift ? ((payload as any).buyerEmail as string || '').toLowerCase().trim() : null;
+    const buyerName = isGift ? ((payload as any).buyerName as string || '').trim() : null;
+    const giftMessage = isGift && (payload as any).giftMessage ? ((payload as any).giftMessage as string).trim() : null;
 
     // Validate
-    if (purchaseType !== 'self' && purchaseType !== 'gift') {
+    if (purchaseType !== 'self' && purchaseType !== 'gift' && purchaseType !== 'gift_now') {
       return json({ error: 'Invalid purchase type' }, 400);
     }
 
@@ -79,11 +80,11 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       return json({ error: 'Nombre del autor es requerido' }, 400);
     }
 
-    if (purchaseType === 'gift' && (!buyerEmail || !buyerEmail.includes('@'))) {
+    if (isGift && (!buyerEmail || !buyerEmail.includes('@'))) {
       return json({ error: 'Email válido del comprador es requerido' }, 400);
     }
 
-    if (purchaseType === 'gift' && (!buyerName || buyerName === '')) {
+    if (isGift && (!buyerName || buyerName === '')) {
       return json({ error: 'Nombre del comprador es requerido' }, 400);
     }
 
@@ -263,6 +264,38 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     if (!tokenResponse.ok) {
       console.error('[purchase-create-account] Failed to create management token');
       // Don't fail the whole process, but log it
+    }
+
+    // Create gift_purchases record
+    console.log('[purchase-create-account] Creating gift_purchases record...');
+    const createPurchaseRecordResponse = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/gift_purchases`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+          'apikey': env.SUPABASE_SERVICE_ROLE_KEY,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal',
+        },
+        body: JSON.stringify({
+          user_id: userId,
+          purchase_type: purchaseType,
+          author_name: authorName,
+          author_email: authorEmail,
+          buyer_name: buyerName,
+          buyer_email: buyerEmail,
+          gift_message: giftMessage,
+        }),
+      }
+    );
+
+    if (!createPurchaseRecordResponse.ok) {
+      const errorText = await createPurchaseRecordResponse.text();
+      console.error('[purchase-create-account] Failed to create gift_purchases record:', errorText);
+      // Don't fail the whole process, but log it
+    } else {
+      console.log('[purchase-create-account] gift_purchases record created');
     }
 
     // Generate magic link for author

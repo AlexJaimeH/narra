@@ -8,6 +8,7 @@ import { EmailChangeRevert } from './pages/EmailChangeRevert';
 import { PurchasePage } from './pages/PurchasePage';
 import { PurchaseCheckoutPage } from './pages/PurchaseCheckoutPage';
 import { PurchaseSuccessPage } from './pages/PurchaseSuccessPage';
+import { GiftActivationPage } from './pages/GiftActivationPage';
 import { GiftManagementPage } from './pages/GiftManagementPage';
 import { TermsPage } from './pages/TermsPage';
 import { PrivacyPage } from './pages/PrivacyPage';
@@ -25,6 +26,7 @@ const App: React.FC = () => {
         <Route path="/purchase" element={<PurchasePage />} />
         <Route path="/purchase/checkout" element={<PurchaseCheckoutPage />} />
         <Route path="/purchase/success" element={<PurchaseSuccessPage />} />
+        <Route path="/gift-activation" element={<GiftActivationPage />} />
         <Route path="/gift-management" element={<GiftManagementPage />} />
         <Route path="/terminos" element={<TermsPage />} />
         <Route path="/privacidad" element={<PrivacyPage />} />

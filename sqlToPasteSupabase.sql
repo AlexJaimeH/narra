@@ -2429,7 +2429,8 @@ returns table (
   draft_count integer,
   published_count integer,
   oldest_draft_id uuid,
-  oldest_draft_title text
+  oldest_draft_title text,
+  has_logged_in boolean
 )
 language plpgsql
 security definer
@@ -2449,12 +2450,13 @@ begin
       ) as last_story_activity,
       coalesce(us.last_reminder_sent_at, '1970-01-01'::timestamptz) as last_reminder,
       coalesce(us.email_reminders_enabled, true) as reminders_enabled,
-      coalesce(us.reminder_frequency_days, 14) as frequency_days
+      coalesce(us.reminder_frequency_days, 14) as frequency_days,
+      coalesce(us.has_seen_home_walkthrough, false) as has_logged_in
     from public.users u
     inner join auth.users au on au.id = u.id
     left join public.user_settings us on us.user_id = u.id
     left join public.stories s on s.user_id = u.id
-    group by u.id, au.email, au.raw_user_meta_data, us.public_author_name, us.last_reminder_sent_at, us.email_reminders_enabled, us.reminder_frequency_days
+    group by u.id, au.email, au.raw_user_meta_data, us.public_author_name, us.last_reminder_sent_at, us.email_reminders_enabled, us.reminder_frequency_days, us.has_seen_home_walkthrough
   ),
   user_drafts as (
     select
@@ -2484,7 +2486,8 @@ begin
     coalesce(ud.draft_count, 0)::integer as draft_count,
     coalesce(ud.published_count, 0)::integer as published_count,
     ud.oldest_draft_id,
-    ud.oldest_draft_title
+    ud.oldest_draft_title,
+    ua.has_logged_in
   from user_activity ua
   left join user_drafts ud on ud.user_id = ua.user_id
   where

@@ -37,6 +37,7 @@ class _SettingsPageState extends State<SettingsPage> {
   String _ghostPerson = 'first';
   bool _noBadWords = true; // Nuevo valor por defecto para historias de calidad profesional
   String _ghostFidelity = 'balanced';
+  bool _emailRemindersEnabled = true;
 
   @override
   void initState() {
@@ -74,6 +75,7 @@ class _SettingsPageState extends State<SettingsPage> {
             _ghostPerson = (settings['ai_person'] as String?) ?? 'first';
             _noBadWords = (settings['ai_no_bad_words'] as bool?) ?? true;
             _ghostFidelity = (settings['ai_fidelity'] as String?) ?? 'balanced';
+            _emailRemindersEnabled = (settings['email_reminders_enabled'] as bool?) ?? true;
           }
 
           _publicAuthorName =
@@ -117,6 +119,38 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _upgradeToPremiun() async {}
+
+  Future<void> _updateEmailRemindersPreference(bool enabled) async {
+    try {
+      await UserService.updateUserSettings({
+        'email_reminders_enabled': enabled,
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              enabled
+                  ? 'Recordatorios activados'
+                  : 'Recordatorios desactivados',
+            ),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      // Revert the change if it fails
+      if (mounted) {
+        setState(() { _emailRemindersEnabled = !enabled; });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al actualizar preferencia: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
 
   Future<void> _saveAuthorName() async {
     final newName = _authorNameController.text.trim();
@@ -768,6 +802,31 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
             ),
             
+            const SizedBox(height: 24),
+
+            // Notifications Section
+            _buildSectionHeader('Notificaciones'),
+            Card(
+              child: Column(
+                children: [
+                  SwitchListTile(
+                    secondary: const Icon(Icons.email_outlined),
+                    title: const Text('Recordatorios por correo'),
+                    subtitle: Text(
+                      _emailRemindersEnabled
+                          ? 'Recibirás motivación para escribir cada 2 semanas'
+                          : 'No recibirás correos de recordatorio',
+                    ),
+                    value: _emailRemindersEnabled,
+                    onChanged: (value) async {
+                      setState(() { _emailRemindersEnabled = value; });
+                      await _updateEmailRemindersPreference(value);
+                    },
+                  ),
+                ],
+              ),
+            ),
+
             const SizedBox(height: 24),
 
             // Data & Privacy Section

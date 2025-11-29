@@ -2329,3 +2329,186 @@ comment on column public.gift_purchases.activated_at is 'Fecha y hora en que se 
 commit;
 
 -- Fin de migración de gift_purchases
+
+-- ============================================================
+-- Sistema de Email Reminders para Motivar Creación de Historias (Fecha: 2025-11-26)
+-- ============================================================
+-- Este sistema envía emails motivacionales a usuarios que no han tenido
+-- actividad en las últimas 2 semanas. El cron corre diariamente a las 8:08 PM
+-- de México y selecciona aleatoriamente uno de 10 templates motivadores.
+-- ============================================================
+begin;
+
+-- Agregar columnas de preferencias de recordatorios a user_settings
+alter table if exists public.user_settings
+add column if not exists email_reminders_enabled boolean not null default true;
+
+alter table if exists public.user_settings
+add column if not exists last_reminder_sent_at timestamptz;
+
+alter table if exists public.user_settings
+add column if not exists reminder_frequency_days integer not null default 14;
+
+-- Comentarios
+comment on column public.user_settings.email_reminders_enabled is 'Indica si el usuario quiere recibir emails de recordatorio motivacionales';
+comment on column public.user_settings.last_reminder_sent_at is 'Fecha del último email de recordatorio enviado';
+comment on column public.user_settings.reminder_frequency_days is 'Frecuencia en días para enviar recordatorios (por defecto 14 días)';
+
+-- Tabla para tracking de recordatorios enviados
+create table if not exists public.email_reminders (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.users(id) on delete cascade,
+  reminder_type text not null check (reminder_type in ('no_activity', 'has_drafts', 'first_story', 'general_motivation')),
+  template_id integer not null check (template_id >= 1 and template_id <= 10),
+  sent_at timestamptz not null default timezone('utc', now()),
+  opened_at timestamptz,
+  clicked_at timestamptz,
+  draft_story_id uuid references public.stories(id) on delete set null,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+-- Índices para búsqueda eficiente
+create index if not exists email_reminders_user_id_idx
+  on public.email_reminders (user_id, sent_at desc);
+
+create index if not exists email_reminders_sent_at_idx
+  on public.email_reminders (sent_at desc);
+
+-- Habilitar RLS
+alter table public.email_reminders enable row level security;
+
+-- Política: Los usuarios pueden ver sus propios recordatorios
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'email_reminders'
+      and policyname = 'Users can view their own reminders'
+  ) then
+    create policy "Users can view their own reminders"
+      on public.email_reminders
+      for select
+      using (auth.uid() = user_id);
+  end if;
+end
+$$;
+
+-- Política: Service role puede gestionar todos los recordatorios
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'email_reminders'
+      and policyname = 'Service role can manage all reminders'
+  ) then
+    create policy "Service role can manage all reminders"
+      on public.email_reminders
+      for all
+      using (
+        coalesce(auth.role(), '') = 'service_role'
+        or coalesce(auth.jwt() ->> 'role', '') = 'service_role'
+      )
+      with check (
+        coalesce(auth.role(), '') = 'service_role'
+        or coalesce(auth.jwt() ->> 'role', '') = 'service_role'
+      );
+  end if;
+end
+$$;
+
+-- Función para obtener usuarios que necesitan recordatorio
+create or replace function public.get_users_needing_reminder()
+returns table (
+  user_id uuid,
+  user_email text,
+  user_name text,
+  last_activity_at timestamptz,
+  draft_count integer,
+  published_count integer,
+  oldest_draft_id uuid,
+  oldest_draft_title text,
+  has_logged_in boolean
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  return query
+  with user_activity as (
+    select
+      u.id as user_id,
+      au.email as user_email,
+      coalesce(us.public_author_name, au.raw_user_meta_data->>'full_name', au.raw_user_meta_data->>'name', split_part(au.email, '@', 1)) as user_name,
+      greatest(
+        max(s.updated_at),
+        max(s.created_at),
+        max(s.published_at)
+      ) as last_story_activity,
+      coalesce(us.last_reminder_sent_at, '1970-01-01'::timestamptz) as last_reminder,
+      coalesce(us.email_reminders_enabled, true) as reminders_enabled,
+      coalesce(us.reminder_frequency_days, 14) as frequency_days,
+      coalesce(us.has_seen_home_walkthrough, false) as has_logged_in
+    from public.users u
+    inner join auth.users au on au.id = u.id
+    left join public.user_settings us on us.user_id = u.id
+    left join public.stories s on s.user_id = u.id
+    group by u.id, au.email, au.raw_user_meta_data, us.public_author_name, us.last_reminder_sent_at, us.email_reminders_enabled, us.reminder_frequency_days, us.has_seen_home_walkthrough
+  ),
+  user_drafts as (
+    select
+      s.user_id,
+      count(*) filter (where s.status = 'draft') as draft_count,
+      count(*) filter (where s.status = 'published') as published_count,
+      (
+        select s2.id from public.stories s2
+        where s2.user_id = s.user_id and s2.status = 'draft'
+        order by s2.updated_at desc
+        limit 1
+      ) as oldest_draft_id,
+      (
+        select s2.title from public.stories s2
+        where s2.user_id = s.user_id and s2.status = 'draft'
+        order by s2.updated_at desc
+        limit 1
+      ) as oldest_draft_title
+    from public.stories s
+    group by s.user_id
+  )
+  select
+    ua.user_id,
+    ua.user_email,
+    ua.user_name,
+    ua.last_story_activity as last_activity_at,
+    coalesce(ud.draft_count, 0)::integer as draft_count,
+    coalesce(ud.published_count, 0)::integer as published_count,
+    ud.oldest_draft_id,
+    ud.oldest_draft_title,
+    ua.has_logged_in
+  from user_activity ua
+  left join user_drafts ud on ud.user_id = ua.user_id
+  where
+    ua.reminders_enabled = true
+    and (
+      ua.last_story_activity is null
+      or ua.last_story_activity < (now() - (ua.frequency_days || ' days')::interval)
+    )
+    and ua.last_reminder < (now() - (ua.frequency_days || ' days')::interval);
+end;
+$$;
+
+-- Permisos para la función
+grant execute on function public.get_users_needing_reminder() to service_role;
+
+-- Comentarios
+comment on table public.email_reminders is 'Historial de emails de recordatorio enviados a usuarios para motivar la creación de historias';
+comment on column public.email_reminders.reminder_type is 'Tipo de recordatorio: no_activity (sin actividad), has_drafts (tiene borradores), first_story (nunca ha publicado), general_motivation (motivación general)';
+comment on column public.email_reminders.template_id is 'ID del template de email usado (1-10)';
+comment on column public.email_reminders.draft_story_id is 'Si el recordatorio menciona un borrador específico, el ID de ese borrador';
+
+commit;
+
+-- Fin de migración de email_reminders

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:narra/supabase/supabase_config.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class MagicLinkLoginPage extends StatefulWidget {
@@ -13,24 +16,29 @@ class MagicLinkLoginPage extends StatefulWidget {
 class _MagicLinkLoginPageState extends State<MagicLinkLoginPage> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
+  final _pinFormKey = GlobalKey<FormState>();
+  final _pinController = TextEditingController();
   bool _isLoading = false;
-  bool _emailSent = false;
+  bool _isVerifying = false;
+  bool _pinSent = false;
+  int _failedAttempts = 0;
+  final int _maxAttempts = 5;
 
   @override
   void dispose() {
     _emailController.dispose();
+    _pinController.dispose();
     super.dispose();
   }
 
-  Future<void> _sendMagicLink() async {
+  Future<void> _requestPin() async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
 
     try {
-      // Llamar al API para enviar el magic link
       final response = await http.post(
-        Uri.parse('/api/author-magic-link'),
+        Uri.parse('/api/author-login-pin'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'email': _emailController.text.trim()}),
       );
@@ -38,8 +46,10 @@ class _MagicLinkLoginPageState extends State<MagicLinkLoginPage> {
       if (response.statusCode == 200) {
         if (mounted) {
           setState(() {
-            _emailSent = true;
+            _pinSent = true;
             _isLoading = false;
+            _failedAttempts = 0;
+            _pinController.clear();
           });
         }
       } else {
@@ -98,9 +108,97 @@ class _MagicLinkLoginPageState extends State<MagicLinkLoginPage> {
 
   void _resetForm() {
     setState(() {
-      _emailSent = false;
+      _pinSent = false;
+      _failedAttempts = 0;
       _emailController.clear();
+      _pinController.clear();
     });
+  }
+
+  bool get _pinLocked => _failedAttempts >= _maxAttempts;
+
+  Future<void> _verifyPin() async {
+    if (!_pinFormKey.currentState!.validate() || _pinLocked) return;
+
+    setState(() => _isVerifying = true);
+
+    try {
+      final email = _emailController.text.trim().toLowerCase();
+      final pin = _pinController.text.trim();
+
+      AuthResponse response;
+      try {
+        response = await SupabaseConfig.client.auth.verifyOTP(
+          email: email,
+          token: pin,
+          type: OtpType.magiclink,
+        );
+      } on LateInitializationError {
+        throw AuthException('No se pudo conectar con el servicio de sesión. Intenta más tarde.');
+      }
+
+      if (response.session == null) {
+        throw const AuthException('PIN inválido');
+      }
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('¡Listo! Inicio de sesión exitoso.'),
+          backgroundColor: Colors.green.shade700,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+
+      Navigator.of(context).pushReplacementNamed('/');
+    } on AuthException catch (error) {
+      final attempts = _failedAttempts + 1;
+      setState(() => _failedAttempts = attempts);
+
+      final remaining = (_maxAttempts - attempts).clamp(0, _maxAttempts);
+      String message = error.message.isNotEmpty
+          ? error.message
+          : 'No pudimos validar el PIN. Inténtalo de nuevo.';
+
+      if (attempts >= _maxAttempts) {
+        message = 'Se agotaron los $_maxAttempts intentos. Solicita un nuevo PIN.';
+      } else if (attempts >= 3) {
+        message =
+            'Ya usaste $attempts intentos. Pide un PIN nuevo para evitar bloqueos.';
+      } else {
+        message = '$message Te quedan $remaining intentos.';
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: Colors.red.shade700,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            duration: const Duration(seconds: 6),
+          ),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Hubo un problema al validar el PIN.'),
+            backgroundColor: Colors.red.shade700,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            duration: const Duration(seconds: 6),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isVerifying = false);
+      }
+    }
   }
 
   @override
@@ -128,8 +226,8 @@ class _MagicLinkLoginPageState extends State<MagicLinkLoginPage> {
             ),
             child: Container(
               constraints: BoxConstraints(maxWidth: maxWidth),
-              child: _emailSent
-                  ? _buildSuccessView(theme, colorScheme, isDesktop)
+              child: _pinSent
+                  ? _buildPinVerificationView(theme, colorScheme, isDesktop)
                   : _buildLoginForm(theme, colorScheme, isDesktop),
             ),
           ),
@@ -190,7 +288,7 @@ class _MagicLinkLoginPageState extends State<MagicLinkLoginPage> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'Inicia sesión para crear y compartir tus historias.',
+                          'Recibe un PIN y escríbelo aquí para entrar.',
                           style: theme.textTheme.bodyMedium?.copyWith(
                             color: colorScheme.onSurfaceVariant,
                           ),
@@ -234,9 +332,9 @@ class _MagicLinkLoginPageState extends State<MagicLinkLoginPage> {
                 const SizedBox(height: 12),
                 Text(
                   '1. Escribe tu correo electrónico\n'
-                  '2. Presiona el botón de abajo\n'
-                  '3. Te enviaremos un correo\n'
-                  '4. Abre el correo y haz clic en el enlace',
+                  '2. Te enviamos un PIN de 6 dígitos\n'
+                  '3. Escríbelo en la pantalla\n'
+                  '4. ¡Listo! Entrarás a tu cuenta',
                   style: theme.textTheme.bodyLarge?.copyWith(
                     height: 1.8,
                     fontSize: bodySize,
@@ -308,7 +406,7 @@ class _MagicLinkLoginPageState extends State<MagicLinkLoginPage> {
           SizedBox(
             height: 56,
             child: FilledButton(
-              onPressed: _isLoading ? null : _sendMagicLink,
+              onPressed: _isLoading ? null : _requestPin,
               style: FilledButton.styleFrom(
                 backgroundColor: colorScheme.primary,
                 foregroundColor: colorScheme.onPrimary,
@@ -326,17 +424,17 @@ class _MagicLinkLoginPageState extends State<MagicLinkLoginPage> {
                         strokeWidth: 2.5,
                         valueColor: AlwaysStoppedAnimation<Color>(colorScheme.onPrimary),
                       ),
-                    )
-                  : Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.mail_outline, size: 24),
-                        const SizedBox(width: 12),
-                        Text(
-                          'Enviar correo para iniciar sesión',
-                          style: TextStyle(
-                            fontSize: isDesktop ? 17 : 16,
-                            fontWeight: FontWeight.w600,
+                )
+                : Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.mail_outline, size: 24),
+                      const SizedBox(width: 12),
+                      Text(
+                        'Enviar PIN para iniciar sesión',
+                        style: TextStyle(
+                          fontSize: isDesktop ? 17 : 16,
+                          fontWeight: FontWeight.w600,
                             letterSpacing: 0.2,
                           ),
                         ),
@@ -386,11 +484,13 @@ class _MagicLinkLoginPageState extends State<MagicLinkLoginPage> {
     );
   }
 
-  Widget _buildSuccessView(ThemeData theme, ColorScheme colorScheme, bool isDesktop) {
+  Widget _buildPinVerificationView(ThemeData theme, ColorScheme colorScheme, bool isDesktop) {
+    final attemptNoticeColor = _failedAttempts >= 3 ? Colors.orange.shade800 : colorScheme.onSurfaceVariant;
+    final attemptsLeft = (_maxAttempts - _failedAttempts).clamp(0, _maxAttempts);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Header consistente
         DecoratedBox(
           decoration: BoxDecoration(
             color: colorScheme.surface,
@@ -415,7 +515,7 @@ class _MagicLinkLoginPageState extends State<MagicLinkLoginPage> {
                     borderRadius: BorderRadius.circular(18),
                   ),
                   child: Icon(
-                    Icons.mark_email_read_rounded,
+                    Icons.password_rounded,
                     color: Colors.green.shade700,
                     size: 28,
                   ),
@@ -426,7 +526,7 @@ class _MagicLinkLoginPageState extends State<MagicLinkLoginPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '¡Correo enviado!',
+                        'PIN enviado a tu correo',
                         style: theme.textTheme.headlineSmall?.copyWith(
                           fontWeight: FontWeight.w700,
                           letterSpacing: -0.2,
@@ -435,7 +535,7 @@ class _MagicLinkLoginPageState extends State<MagicLinkLoginPage> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Revisa tu bandeja de entrada para continuar.',
+                        'Escribe el PIN de 6 dígitos que recibiste en ${_emailController.text.trim()}.',
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: colorScheme.onSurfaceVariant,
                         ),
@@ -460,15 +560,16 @@ class _MagicLinkLoginPageState extends State<MagicLinkLoginPage> {
             ),
           ),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Icon(
-                Icons.info_outline_rounded,
+                Icons.dialpad_rounded,
                 size: 56,
                 color: Colors.blue.shade700,
               ),
               const SizedBox(height: 20),
               Text(
-                'Revisa tu correo',
+                'Ingresa tu PIN',
                 style: theme.textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.bold,
                   fontSize: isDesktop ? 26 : 24,
@@ -476,49 +577,188 @@ class _MagicLinkLoginPageState extends State<MagicLinkLoginPage> {
                 ),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 8),
               Text(
-                'Te enviamos un correo a:\n${_emailController.text}',
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  fontSize: isDesktop ? 18 : 17,
-                  height: 1.6,
-                  fontWeight: FontWeight.w600,
-                  color: colorScheme.onSurface,
+                'El PIN vence en 15 minutos. Tienes $_maxAttempts intentos.',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
                 ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 24),
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: colorScheme.surface,
-                  borderRadius: BorderRadius.circular(16),
-                ),
+              Form(
+                key: _pinFormKey,
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildStep(theme, colorScheme, '1', 'Abre tu aplicación de correo'),
-                    const SizedBox(height: 16),
-                    _buildStep(theme, colorScheme, '2', 'Busca el correo de Narra'),
-                    const SizedBox(height: 16),
-                    _buildStep(theme, colorScheme, '3', 'Haz clic en el enlace del correo'),
-                    const SizedBox(height: 16),
-                    _buildStep(theme, colorScheme, '4', 'Listo! Iniciarás sesión automáticamente'),
+                    TextFormField(
+                      controller: _pinController,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                        LengthLimitingTextInputFormatter(6),
+                      ],
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.displaySmall?.copyWith(
+                        letterSpacing: 10,
+                        fontWeight: FontWeight.w800,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: '••••••',
+                        filled: true,
+                        fillColor: colorScheme.surface,
+                        contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(18),
+                          borderSide: BorderSide(
+                            color: colorScheme.outline.withValues(alpha: 0.5),
+                            width: 1.5,
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(18),
+                          borderSide: BorderSide(
+                            color: colorScheme.primary,
+                            width: 2,
+                          ),
+                        ),
+                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Ingresa el PIN de 6 dígitos';
+                        }
+                        if (value.length != 6) {
+                          return 'El PIN debe tener 6 dígitos';
+                        }
+                        if (_pinLocked) {
+                          return 'Se agotaron los intentos. Pide un nuevo PIN.';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.security_rounded, size: 18, color: attemptNoticeColor),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            _failedAttempts >= 3
+                                ? 'Llevas $_failedAttempts intentos. Pide un PIN nuevo para evitar bloqueos.'
+                                : 'Intenta con calma. Te quedan $attemptsLeft intentos.',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: attemptNoticeColor,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
+              SizedBox(
+                height: 54,
+                child: FilledButton.icon(
+                  onPressed: (_isVerifying || _pinLocked) ? null : _verifyPin,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: colorScheme.primary,
+                    foregroundColor: colorScheme.onPrimary,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  ),
+                  icon: _isVerifying
+                      ? SizedBox(
+                          height: 22,
+                          width: 22,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            valueColor: AlwaysStoppedAnimation<Color>(colorScheme.onPrimary),
+                          ),
+                        )
+                      : const Icon(Icons.check_circle_outline_rounded),
+                  label: Text(
+                    _pinLocked ? 'Solicita un nuevo PIN' : 'Validar PIN y entrar',
+                    style: TextStyle(
+                      fontSize: isDesktop ? 17 : 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.orange.withValues(alpha: 0.25)),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.info_rounded, color: Colors.orange.shade800),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '5 intentos disponibles',
+                            style: theme.textTheme.bodyLarge?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: Colors.orange.shade900,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Si llegas a 5 intentos fallidos, el PIN caduca. A partir del intento 3 solicita uno nuevo para evitar bloqueos.',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: Colors.orange.shade900,
+                              height: 1.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
               Row(
-                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.schedule_rounded, size: 20, color: Colors.orange.shade800),
-                  const SizedBox(width: 8),
-                  Text(
-                    'El enlace funciona por 15 minutos',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.orange.shade800,
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _isLoading ? null : _requestPin,
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
+                        side: BorderSide(color: colorScheme.primary.withValues(alpha: 0.6)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                      icon: Icon(Icons.refresh_rounded, color: colorScheme.primary),
+                      label: Text(
+                        'Enviar nuevo PIN',
+                        style: TextStyle(
+                          color: colorScheme.primary,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: TextButton.icon(
+                      onPressed: (_isLoading || _isVerifying) ? null : _resetForm,
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
+                      ),
+                      icon: const Icon(Icons.edit_rounded),
+                      label: const Text('Cambiar correo'),
                     ),
                   ),
                 ],
@@ -526,86 +766,9 @@ class _MagicLinkLoginPageState extends State<MagicLinkLoginPage> {
             ],
           ),
         ),
-        const SizedBox(height: 24),
-
-        // Botón para intentar de nuevo
-        OutlinedButton(
-          onPressed: _resetForm,
-          style: OutlinedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-            side: BorderSide(
-              color: colorScheme.primary,
-              width: 1.5,
-            ),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.refresh_rounded,
-                color: colorScheme.primary,
-                size: 24,
-              ),
-              const SizedBox(width: 12),
-              Text(
-                'Usar otro correo',
-                style: TextStyle(
-                  fontSize: isDesktop ? 17 : 16,
-                  fontWeight: FontWeight.w600,
-                  color: colorScheme.primary,
-                ),
-              ),
-            ],
-          ),
-        ),
       ],
     );
   }
-
-  Widget _buildStep(ThemeData theme, ColorScheme colorScheme, String number, String text) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 32,
-          height: 32,
-          decoration: BoxDecoration(
-            color: colorScheme.primary,
-            shape: BoxShape.circle,
-          ),
-          child: Center(
-            child: Text(
-              number,
-              style: TextStyle(
-                color: colorScheme.onPrimary,
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Text(
-              text,
-              style: theme.textTheme.bodyLarge?.copyWith(
-                fontSize: 16,
-                height: 1.4,
-                fontWeight: FontWeight.w500,
-                color: colorScheme.onSurface,
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildAboutNarra(ThemeData theme, ColorScheme colorScheme, bool isDesktop) {
     return Container(
       padding: const EdgeInsets.all(24),

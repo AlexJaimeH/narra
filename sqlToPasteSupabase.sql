@@ -2512,3 +2512,81 @@ comment on column public.email_reminders.draft_story_id is 'Si el recordatorio m
 commit;
 
 -- Fin de migración de email_reminders
+
+-- ============================================================
+-- Registro de Uso de APIs de IA (Fecha: 2025-12-01)
+-- ============================================================
+-- Este sistema registra cada vez que se usa alguna de las APIs de IA
+-- (Ghost Writer, Sugerencias, Transcripción) para tracking de costos
+-- y uso. Solo accesible por service role.
+-- ============================================================
+begin;
+
+-- Tabla para registrar uso de IA
+create table if not exists public.ai_usage_logs (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  story_id uuid references public.stories(id) on delete set null,
+  usage_type text not null check (usage_type in ('ghost_writer', 'suggestions', 'transcription')),
+  model_used text not null,
+  prompt_tokens integer,
+  completion_tokens integer,
+  total_tokens integer not null,
+  estimated_cost_usd numeric(10, 6),
+  request_metadata jsonb not null default '{}'::jsonb,
+  response_metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+-- Índices para búsqueda eficiente
+create index if not exists ai_usage_logs_user_id_idx
+  on public.ai_usage_logs (user_id, created_at desc);
+
+create index if not exists ai_usage_logs_usage_type_idx
+  on public.ai_usage_logs (usage_type, created_at desc);
+
+create index if not exists ai_usage_logs_created_at_idx
+  on public.ai_usage_logs (created_at desc);
+
+-- Habilitar RLS
+alter table public.ai_usage_logs enable row level security;
+
+-- Política: Solo service role puede leer/escribir
+-- Los usuarios normales NO tienen acceso a esta tabla
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'ai_usage_logs'
+      and policyname = 'Service role can manage all AI usage logs'
+  ) then
+    create policy "Service role can manage all AI usage logs"
+      on public.ai_usage_logs
+      for all
+      using (
+        coalesce(auth.role(), '') = 'service_role'
+        or coalesce(auth.jwt() ->> 'role', '') = 'service_role'
+      )
+      with check (
+        coalesce(auth.role(), '') = 'service_role'
+        or coalesce(auth.jwt() ->> 'role', '') = 'service_role'
+      );
+  end if;
+end
+$$;
+
+-- Comentarios
+comment on table public.ai_usage_logs is 'Registro de uso de APIs de IA (Ghost Writer, Sugerencias, Transcripción) para tracking de costos y uso';
+comment on column public.ai_usage_logs.usage_type is 'Tipo de uso: ghost_writer (mejorar texto), suggestions (sugerencias de historia), transcription (audio a texto)';
+comment on column public.ai_usage_logs.model_used is 'Modelo de OpenAI usado (ej: gpt-4.1, gpt-4o-mini-transcribe)';
+comment on column public.ai_usage_logs.prompt_tokens is 'Cantidad de tokens en el prompt/entrada';
+comment on column public.ai_usage_logs.completion_tokens is 'Cantidad de tokens en la respuesta/salida';
+comment on column public.ai_usage_logs.total_tokens is 'Total de tokens usados (prompt + completion)';
+comment on column public.ai_usage_logs.estimated_cost_usd is 'Costo estimado en USD basado en el modelo y tokens';
+comment on column public.ai_usage_logs.request_metadata is 'Metadata adicional de la solicitud (temperatura, parámetros, etc)';
+comment on column public.ai_usage_logs.response_metadata is 'Metadata adicional de la respuesta (duración, etc)';
+
+commit;
+
+-- Fin de migración de ai_usage_logs

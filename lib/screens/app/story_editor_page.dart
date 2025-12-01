@@ -1987,6 +1987,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         content: _contentController.text,
         suggestedTopics: suggestedTopics,
         previousStoryDates: previousStoryDates,
+        storyId: _currentStory?.id ?? widget.storyId,
       );
       if (!mounted) return;
       setState(() {
@@ -8892,6 +8893,7 @@ class _StoryEditorPageState extends State<StoryEditorPage>
         perspective: _ghostWriterPerspective,
         avoidProfanity: _ghostWriterAvoidProfanity,
         extraInstructions: _ghostWriterExtraInstructions.trim(),
+        storyId: _currentStory?.id ?? widget.storyId,
       );
 
       if (mounted) {

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { NarraColors } from '../styles/colors';
+import { useStripePrice, formatPrice } from '../hooks/useStripePrice';
 
 type PurchaseType = 'self' | 'gift';
 type GiftTiming = 'now' | 'later';
@@ -11,6 +12,9 @@ export const PurchaseCheckoutPage: React.FC = () => {
   const navigate = useNavigate();
   const [purchaseType, setPurchaseType] = useState<PurchaseType>('self');
   const [giftTiming, setGiftTiming] = useState<GiftTiming>('now');
+
+  // Get dynamic price from Stripe
+  const { priceData } = useStripePrice();
 
   // Form states
   const [authorEmail, setAuthorEmail] = useState('');
@@ -23,6 +27,13 @@ export const PurchaseCheckoutPage: React.FC = () => {
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState('');
+
+  // Check if coming back from cancelled payment
+  useEffect(() => {
+    if (searchParams.get('cancelled') === 'true') {
+      setError('El pago fue cancelado. Puedes intentar de nuevo cuando estés listo.');
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     const type = searchParams.get('type');
@@ -116,58 +127,36 @@ export const PurchaseCheckoutPage: React.FC = () => {
     setError('');
 
     try {
-      // TODO: Aquí va la integración con Stripe
-      // Por ahora simulamos que el pago fue exitoso
+      // Create Stripe Checkout session and redirect to Stripe
+      const response = await fetch('/api/stripe-create-checkout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          purchaseType,
+          giftTiming: purchaseType === 'gift' ? giftTiming : null,
+          authorEmail: purchaseType === 'self' || (purchaseType === 'gift' && giftTiming === 'now')
+            ? authorEmail.toLowerCase().trim()
+            : '',
+          authorName: purchaseType === 'self' || (purchaseType === 'gift' && giftTiming === 'now')
+            ? authorName.trim()
+            : '',
+          buyerEmail: purchaseType === 'gift' ? buyerEmail.toLowerCase().trim() : '',
+          buyerName: purchaseType === 'gift' && giftTiming === 'now' ? buyerName.trim() : '',
+          giftMessage: purchaseType === 'gift' && giftTiming === 'now' && giftMessage.trim() !== ''
+            ? giftMessage.trim()
+            : '',
+        }),
+      });
 
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      const data = await response.json();
 
-      // Si es regalo para más tarde, usar API diferente
-      if (purchaseType === 'gift' && giftTiming === 'later') {
-        const response = await fetch('/api/gift-later-request', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            buyerEmail: buyerEmail.toLowerCase().trim(),
-          }),
-        });
-
-        const data = await response.json();
-
-        if (response.ok && data.success) {
-          // Redirigir a página de éxito con tipo especial
-          navigate(`/purchase/success?type=gift_later&email=${encodeURIComponent(buyerEmail)}`);
-        } else {
-          setError(data.error || 'Error al procesar la compra. Por favor intenta nuevamente.');
-        }
+      if (response.ok && data.success && data.url) {
+        // Redirect to Stripe Checkout
+        window.location.href = data.url;
       } else {
-        // Flujo normal: self o gift_now
-        const finalPurchaseType = purchaseType === 'self' ? 'self' : 'gift_now';
-
-        const response = await fetch('/api/purchase-create-account', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            purchaseType: finalPurchaseType,
-            authorEmail: authorEmail.toLowerCase().trim(),
-            authorName: authorName.trim(),
-            buyerEmail: purchaseType === 'gift' ? buyerEmail.toLowerCase().trim() : null,
-            buyerName: purchaseType === 'gift' ? buyerName.trim() : null,
-            giftMessage: purchaseType === 'gift' && giftMessage.trim() !== '' ? giftMessage.trim() : null,
-          }),
-        });
-
-        const data = await response.json();
-
-        if (response.ok && data.success) {
-          // Redirigir a página de éxito
-          navigate(`/purchase/success?type=${purchaseType}&email=${encodeURIComponent(authorEmail)}`);
-        } else {
-          setError(data.error || 'Error al procesar la compra. Por favor intenta nuevamente.');
-        }
+        setError(data.error || 'Error al procesar la compra. Por favor intenta nuevamente.');
       }
     } catch (error) {
       setError('Error de conexión. Por favor intenta nuevamente.');
@@ -176,7 +165,12 @@ export const PurchaseCheckoutPage: React.FC = () => {
     }
   };
 
-  const price = 300;
+  // Use dynamic price from Stripe, fallback to 300 if loading
+  const displayPrice = priceData?.discountedPrice ?? 300;
+  const originalPrice = priceData?.originalPrice ?? 300;
+  const hasDiscount = priceData?.hasCoupon ?? false;
+  const discountPercentage = priceData?.discountPercentage ?? 0;
+  const currency = priceData?.currency ?? 'MXN';
 
   return (
     <div
@@ -661,10 +655,10 @@ export const PurchaseCheckoutPage: React.FC = () => {
                     {isProcessing ? (
                       <span className="flex items-center justify-center gap-2">
                         <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        <span>Procesando...</span>
+                        <span>Redirigiendo a pago...</span>
                       </span>
                     ) : (
-                      `💳 Pagar $${price} MXN`
+                      `💳 Continuar al Pago - ${formatPrice(displayPrice, currency)}`
                     )}
                   </motion.button>
                 </form>
@@ -689,16 +683,40 @@ export const PurchaseCheckoutPage: React.FC = () => {
                     <span style={{ color: NarraColors.text.secondary }}>
                       {purchaseType === 'self' ? 'Narra - Para Mí' : 'Narra - Regalo'}
                     </span>
-                    <span className="font-bold" style={{ color: NarraColors.text.primary }}>
-                      ${price} MXN
-                    </span>
+                    <div className="text-right">
+                      {hasDiscount ? (
+                        <>
+                          <span className="text-sm line-through mr-2" style={{ color: NarraColors.text.light }}>
+                            {formatPrice(originalPrice, currency)}
+                          </span>
+                          <span className="font-bold" style={{ color: NarraColors.text.primary }}>
+                            {formatPrice(displayPrice, currency)}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="font-bold" style={{ color: NarraColors.text.primary }}>
+                          {formatPrice(displayPrice, currency)}
+                        </span>
+                      )}
+                    </div>
                   </div>
+
+                  {hasDiscount && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span style={{ color: NarraColors.text.secondary }}>
+                        Descuento ({discountPercentage}%)
+                      </span>
+                      <span style={{ color: '#10B981' }}>
+                        -{formatPrice(originalPrice - displayPrice, currency)}
+                      </span>
+                    </div>
+                  )}
 
                   <div className="border-t pt-4" style={{ borderColor: NarraColors.border.light }}>
                     <div className="flex items-center justify-between text-lg font-bold">
                       <span style={{ color: NarraColors.text.primary }}>Total</span>
                       <span style={{ color: NarraColors.brand.primary }}>
-                        ${price} MXN
+                        {formatPrice(displayPrice, currency)}
                       </span>
                     </div>
                   </div>

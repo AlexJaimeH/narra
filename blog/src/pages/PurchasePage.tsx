@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { NarraColors } from '../styles/colors';
 import { NavigationHeader } from '../components/NavigationHeader';
+import { useStripePrice, formatPrice } from '../hooks/useStripePrice';
 
 type PurchaseType = 'self' | 'gift';
 
@@ -12,6 +13,16 @@ export const PurchasePage: React.FC = () => {
   const [selectedType, setSelectedType] = useState<PurchaseType>(
     (searchParams.get('type') as PurchaseType) || 'self'
   );
+
+  // Get dynamic price from Stripe
+  const { priceData } = useStripePrice();
+
+  // Use dynamic price from Stripe, fallback to 300 if loading
+  const displayPrice = priceData?.discountedPrice ?? 300;
+  const originalPrice = priceData?.originalPrice ?? 300;
+  const hasDiscount = priceData?.hasCoupon ?? false;
+  const discountPercentage = priceData?.discountPercentage ?? 0;
+  const currency = priceData?.currency ?? 'MXN';
 
   useEffect(() => {
     const type = searchParams.get('type');
@@ -53,7 +64,7 @@ export const PurchasePage: React.FC = () => {
     },
   ];
 
-  const price = 300; // MXN
+  // Price is now dynamically loaded from Stripe (see useStripePrice hook above)
 
   return (
     <div
@@ -175,7 +186,15 @@ export const PurchasePage: React.FC = () => {
             {selectedType === 'self' ? '🚀 Continuar con mi Compra' : '🎁 Continuar con el Regalo'}
           </motion.button>
           <p className="text-sm mt-4" style={{ color: NarraColors.text.light }}>
-            Solo $300 MXN • Pago único • Sin suscripciones
+            {hasDiscount ? (
+              <>
+                <span className="line-through mr-2">{formatPrice(originalPrice, currency)}</span>
+                <span className="font-bold">{formatPrice(displayPrice, currency)}</span>
+              </>
+            ) : (
+              <>Solo {formatPrice(displayPrice, currency)}</>
+            )}
+            {' '}• Pago único • Sin suscripciones
           </p>
         </motion.div>
 
@@ -226,14 +245,34 @@ export const PurchasePage: React.FC = () => {
           }}
         >
           <div className="text-center mb-8">
-            <div className="flex items-baseline justify-center gap-2 mb-2">
-              <span className="text-5xl font-bold" style={{ color: NarraColors.brand.primary }}>
-                ${price}
-              </span>
-              <span className="text-2xl" style={{ color: NarraColors.text.secondary }}>
-                MXN
-              </span>
-            </div>
+            {hasDiscount ? (
+              <>
+                {/* Original price strikethrough */}
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <span className="text-2xl line-through" style={{ color: NarraColors.text.light }}>
+                    {formatPrice(originalPrice, currency)}
+                  </span>
+                  <span
+                    className="px-3 py-1 rounded-full text-sm font-bold"
+                    style={{ background: '#FEF3C7', color: '#92400E' }}
+                  >
+                    -{discountPercentage}%
+                  </span>
+                </div>
+                {/* Discounted price */}
+                <div className="flex items-baseline justify-center gap-2 mb-2">
+                  <span className="text-5xl font-bold" style={{ color: NarraColors.brand.primary }}>
+                    {formatPrice(displayPrice, currency)}
+                  </span>
+                </div>
+              </>
+            ) : (
+              <div className="flex items-baseline justify-center gap-2 mb-2">
+                <span className="text-5xl font-bold" style={{ color: NarraColors.brand.primary }}>
+                  {formatPrice(displayPrice, currency)}
+                </span>
+              </div>
+            )}
             <p className="text-lg" style={{ color: NarraColors.text.secondary }}>
               Pago único • Sin suscripciones • Uso de por vida
             </p>

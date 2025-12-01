@@ -1,12 +1,74 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { NarraColors } from '../styles/colors';
 
 export const PurchaseSuccessPage: React.FC = () => {
   const [searchParams] = useSearchParams();
-  const purchaseType = searchParams.get('type') || 'self';
-  const email = searchParams.get('email') || '';
+  const sessionId = searchParams.get('session_id');
+  const initialType = searchParams.get('type') || 'self';
+  const timing = searchParams.get('timing');
+
+  const [purchaseType, setPurchaseType] = useState(initialType);
+  const [email, setEmail] = useState('');
+  const [isLoading, setIsLoading] = useState(!!sessionId);
+  const [error, setError] = useState<string | null>(null);
+  const [, setAlreadyProcessed] = useState(false);
+
+  // Verify Stripe session and create account if needed
+  useEffect(() => {
+    const verifyPayment = async () => {
+      if (!sessionId) {
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/stripe-verify-session', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ sessionId }),
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+          // Payment verified and account created (or was already created)
+          if (data.alreadyProcessed) {
+            setAlreadyProcessed(true);
+          }
+
+          // Update type based on response
+          if (data.type === 'gift_later' || timing === 'later') {
+            setPurchaseType('gift_later');
+          } else if (data.type === 'gift') {
+            setPurchaseType('gift');
+          }
+
+          // Email might come from metadata
+          if (data.email) {
+            setEmail(data.email);
+          }
+        } else {
+          // Handle specific errors
+          if (data.alreadyExists) {
+            setError('Este email ya está registrado. El pago fue procesado. Por favor revisa tu email o contacta a soporte.');
+          } else {
+            setError(data.error || 'Hubo un error al procesar tu pago. Por favor contacta a soporte.');
+          }
+        }
+      } catch (err) {
+        console.error('Error verifying payment:', err);
+        setError('Error de conexión. Por favor recarga la página o contacta a soporte.');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    verifyPayment();
+  }, [sessionId, timing]);
 
   // Determinar el título y descripción según el tipo
   const getHeaderInfo = () => {
@@ -51,6 +113,84 @@ export const PurchaseSuccessPage: React.FC = () => {
     // Scroll to top on mount
     window.scrollTo(0, 0);
   }, []);
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div
+        className="min-h-screen flex items-center justify-center p-4"
+        style={{ background: 'linear-gradient(135deg, #fdfbf7 0%, #f0ebe3 100%)' }}
+      >
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="text-center"
+        >
+          <div className="w-16 h-16 mx-auto mb-4 border-4 border-t-transparent rounded-full animate-spin" style={{ borderColor: NarraColors.brand.primary, borderTopColor: 'transparent' }} />
+          <h2 className="text-xl font-bold mb-2" style={{ color: NarraColors.text.primary }}>
+            Verificando tu pago...
+          </h2>
+          <p style={{ color: NarraColors.text.secondary }}>
+            Por favor espera un momento
+          </p>
+        </motion.div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div
+        className="min-h-screen flex items-center justify-center p-4"
+        style={{ background: 'linear-gradient(135deg, #fdfbf7 0%, #f0ebe3 100%)' }}
+      >
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="w-full max-w-md"
+        >
+          <div
+            className="rounded-3xl p-8 text-center"
+            style={{
+              background: NarraColors.surface.white,
+              boxShadow: '0 20px 60px rgba(0,0,0,0.1)',
+            }}
+          >
+            <div className="w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center" style={{ background: '#FEE2E2' }}>
+              <span className="text-3xl">⚠️</span>
+            </div>
+            <h2 className="text-xl font-bold mb-4" style={{ color: NarraColors.text.primary }}>
+              Hubo un problema
+            </h2>
+            <p className="mb-6" style={{ color: NarraColors.text.secondary }}>
+              {error}
+            </p>
+            <div className="space-y-3">
+              <motion.a
+                href="mailto:hola@narra.mx"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                className="block w-full py-3 rounded-xl font-bold text-white"
+                style={{ background: 'linear-gradient(135deg, #4DB3A8 0%, #38827A 100%)' }}
+              >
+                Contactar Soporte
+              </motion.a>
+              <motion.a
+                href="/"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                className="block w-full py-3 rounded-xl font-bold border-2"
+                style={{ borderColor: NarraColors.brand.primary, color: NarraColors.brand.primary }}
+              >
+                Volver al Inicio
+              </motion.a>
+            </div>
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
 
   return (
     <div

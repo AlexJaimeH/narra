@@ -2590,3 +2590,92 @@ comment on column public.ai_usage_logs.response_metadata is 'Metadata adicional 
 commit;
 
 -- Fin de migración de ai_usage_logs
+
+-- ============================================================
+-- Integración de Stripe para Pagos (Fecha: 2025-12-01)
+-- ============================================================
+-- Este sistema agrega campos para integrar con Stripe Checkout.
+-- Permite rastrear sesiones de pago y payment intents para
+-- verificar pagos y manejar idempotencia.
+-- ============================================================
+begin;
+
+-- Agregar columnas de Stripe a gift_purchases
+alter table if exists public.gift_purchases
+add column if not exists stripe_session_id text;
+
+alter table if exists public.gift_purchases
+add column if not exists stripe_payment_intent text;
+
+-- Índice para búsqueda por session_id (idempotencia)
+create index if not exists gift_purchases_stripe_session_id_idx
+  on public.gift_purchases (stripe_session_id)
+  where stripe_session_id is not null;
+
+-- Tabla para regalos diferidos (gift_later) pendientes de activación
+-- Se usa cuando el comprador quiere pagar primero y activar después
+create table if not exists public.gift_later_requests (
+  id uuid primary key default gen_random_uuid(),
+  buyer_email text not null,
+  activation_token text not null unique,
+  stripe_session_id text,
+  stripe_payment_intent text,
+  status text not null default 'pending' check (status in ('pending', 'activated', 'cancelled', 'expired')),
+  activated_at timestamptz,
+  activated_for_email text,
+  activated_for_name text,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+-- Índices para gift_later_requests
+create index if not exists gift_later_requests_activation_token_idx
+  on public.gift_later_requests (activation_token);
+
+create index if not exists gift_later_requests_buyer_email_idx
+  on public.gift_later_requests (buyer_email);
+
+create index if not exists gift_later_requests_stripe_session_id_idx
+  on public.gift_later_requests (stripe_session_id)
+  where stripe_session_id is not null;
+
+-- Habilitar RLS
+alter table public.gift_later_requests enable row level security;
+
+-- Política: Solo service role puede gestionar estas solicitudes
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'gift_later_requests'
+      and policyname = 'Service role can manage gift later requests'
+  ) then
+    create policy "Service role can manage gift later requests"
+      on public.gift_later_requests
+      for all
+      using (
+        coalesce(auth.role(), '') = 'service_role'
+        or coalesce(auth.jwt() ->> 'role', '') = 'service_role'
+      )
+      with check (
+        coalesce(auth.role(), '') = 'service_role'
+        or coalesce(auth.jwt() ->> 'role', '') = 'service_role'
+      );
+  end if;
+end
+$$;
+
+-- Comentarios
+comment on table public.gift_later_requests is 'Solicitudes de regalo diferido pagadas pero pendientes de activación';
+comment on column public.gift_later_requests.activation_token is 'Token único para activar el regalo';
+comment on column public.gift_later_requests.stripe_session_id is 'ID de la sesión de Stripe Checkout';
+comment on column public.gift_later_requests.stripe_payment_intent is 'ID del Payment Intent de Stripe';
+comment on column public.gift_later_requests.status is 'Estado: pending (esperando activación), activated (regalo activado), cancelled (cancelado), expired (expirado)';
+
+comment on column public.gift_purchases.stripe_session_id is 'ID de la sesión de Stripe Checkout usada para esta compra';
+comment on column public.gift_purchases.stripe_payment_intent is 'ID del Payment Intent de Stripe para esta compra';
+
+commit;
+
+-- Fin de migración de Stripe

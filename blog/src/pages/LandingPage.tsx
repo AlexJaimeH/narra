@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, useInView } from 'framer-motion';
 import { useLocation } from 'react-router-dom';
+import { useStripePrice, formatPrice } from '../hooks/useStripePrice';
 
 // Animation variants - Optimized for subtlety
 const fadeInUp = {
@@ -53,6 +54,16 @@ export const LandingPage: React.FC = () => {
   const featuresRef = useRef<HTMLDivElement>(null);
   const testimonialsRef = useRef<HTMLDivElement>(null);
   const pricingRef = useRef<HTMLDivElement>(null);
+
+  // Get dynamic price from Stripe
+  const { priceData } = useStripePrice();
+
+  // Use dynamic price from Stripe, fallback to 300 if loading
+  const displayPrice = priceData?.discountedPrice ?? 300;
+  const originalPrice = priceData?.originalPrice ?? 300;
+  const hasDiscount = priceData?.hasCoupon ?? false;
+  const discountPercentage = priceData?.discountPercentage ?? 0;
+  const currency = priceData?.currency ?? 'MXN';
 
   const scrollToSection = (ref: React.RefObject<HTMLDivElement>) => {
     ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -244,7 +255,12 @@ export const LandingPage: React.FC = () => {
                 className="text-sm"
                 style={{ color: '#9CA3AF' }}
               >
-                Sin suscripción • Pago único de $300 MXN • Para toda la vida
+                Sin suscripción • Pago único de {hasDiscount ? (
+                  <>
+                    <span className="line-through">{formatPrice(originalPrice, currency)}</span>{' '}
+                    <span className="font-bold">{formatPrice(displayPrice, currency)}</span>
+                  </>
+                ) : formatPrice(displayPrice, currency)} • Para toda la vida
               </motion.p>
             </div>
 
@@ -598,10 +614,34 @@ export const LandingPage: React.FC = () => {
 
             <div className="text-center mb-8 mt-8">
               <p className="text-lg font-semibold mb-2" style={{ color: '#4DB3A8' }}>Pago único • Sin suscripciones</p>
-              <div className="flex items-center justify-center gap-2 mb-2">
-                <span className="text-7xl font-bold" style={{ color: '#4DB3A8' }}>$300</span>
-                <span className="text-3xl font-bold" style={{ color: '#4B5563' }}>MXN</span>
-              </div>
+              {hasDiscount ? (
+                <>
+                  {/* Original price strikethrough */}
+                  <div className="flex items-center justify-center gap-2 mb-2">
+                    <span className="text-3xl line-through" style={{ color: '#9CA3AF' }}>
+                      {formatPrice(originalPrice, currency)}
+                    </span>
+                    <span
+                      className="px-3 py-1 rounded-full text-sm font-bold"
+                      style={{ background: '#FEF3C7', color: '#92400E' }}
+                    >
+                      -{discountPercentage}%
+                    </span>
+                  </div>
+                  {/* Discounted price */}
+                  <div className="flex items-center justify-center gap-2 mb-2">
+                    <span className="text-7xl font-bold" style={{ color: '#4DB3A8' }}>
+                      {formatPrice(displayPrice, currency)}
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <span className="text-7xl font-bold" style={{ color: '#4DB3A8' }}>
+                    {formatPrice(displayPrice, currency)}
+                  </span>
+                </div>
+              )}
               <p className="text-lg" style={{ color: '#6B7280' }}>Pago único para siempre</p>
             </div>
 
@@ -728,7 +768,7 @@ export const LandingPage: React.FC = () => {
             />
             <FaqItem
               question="¿Realmente no hay mensualidades?"
-              answer="Correcto. Pagas $300 MXN una sola vez y tienes acceso de por vida a todas las funciones, sin límites. No hay cargos recurrentes ni sorpresas."
+              answer={`Correcto. Pagas ${formatPrice(displayPrice, currency)} una sola vez y tienes acceso de por vida a todas las funciones, sin límites. No hay cargos recurrentes ni sorpresas.`}
             />
             <FaqItem
               question="¿Cómo funciona si lo regalo?"
@@ -798,7 +838,15 @@ export const LandingPage: React.FC = () => {
             className="text-sm"
             style={{ color: '#9CA3AF' }}
           >
-            Solo $300 MXN • Pago único • Para toda la vida
+            {hasDiscount ? (
+              <>
+                <span className="line-through">{formatPrice(originalPrice, currency)}</span>{' '}
+                <span className="font-bold">{formatPrice(displayPrice, currency)}</span>
+              </>
+            ) : (
+              <>Solo {formatPrice(displayPrice, currency)}</>
+            )}
+            {' '}• Pago único • Para toda la vida
           </motion.p>
         </div>
       </section>

@@ -133,7 +133,9 @@ class _MagicLinkLoginPageState extends State<MagicLinkLoginPage> {
           token: pin,
           type: OtpType.magiclink,
         );
-      } on LateInitializationError {
+      } on AuthException {
+        rethrow;
+      } catch (_) {
         throw AuthException('No se pudo conectar con el servicio de sesión. Intenta más tarde.');
       }
 

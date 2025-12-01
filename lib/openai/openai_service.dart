@@ -1,6 +1,9 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+
+import 'package:narra/repositories/ai_usage_repository.dart';
 
 class OpenAIProxyException implements Exception {
   OpenAIProxyException({
@@ -131,6 +134,52 @@ class OpenAIService {
     return attempt(chosenModel, allowFallback: shouldAllowFallback);
   }
 
+  /// Registra el uso de IA en la base de datos
+  static Future<void> _logAIUsage({
+    required String usageType,
+    required Map<String, dynamic> apiResponse,
+    String? storyId,
+    Map<String, dynamic>? requestMetadata,
+  }) async {
+    try {
+      // Extraer información de uso de la respuesta de OpenAI
+      final usage = apiResponse['usage'] as Map<String, dynamic>?;
+      if (usage == null) return;
+
+      final promptTokens = usage['prompt_tokens'] as int? ?? 0;
+      final completionTokens = usage['completion_tokens'] as int? ?? 0;
+      final totalTokens = usage['total_tokens'] as int? ?? 0;
+
+      // Extraer el modelo usado de la respuesta
+      final modelUsed = apiResponse['model'] as String? ?? 'unknown';
+
+      // Calcular costo estimado
+      final estimatedCost = AIUsageRepository.estimateCost(
+        model: modelUsed,
+        promptTokens: promptTokens,
+        completionTokens: completionTokens,
+      );
+
+      // Registrar uso
+      await AIUsageRepository.logUsage(
+        usageType: usageType,
+        modelUsed: modelUsed,
+        totalTokens: totalTokens,
+        promptTokens: promptTokens,
+        completionTokens: completionTokens,
+        estimatedCostUsd: estimatedCost,
+        storyId: storyId,
+        requestMetadata: requestMetadata,
+        responseMetadata: {
+          'finish_reason': apiResponse['choices']?[0]?['finish_reason'],
+        },
+      );
+    } catch (error) {
+      // No queremos que un error de logging rompa la funcionalidad
+      debugPrint('⚠️ [OpenAIService] Error logging AI usage: $error');
+    }
+  }
+
   // Generar preguntas/pistas para ayudar a escribir historias
   // Compatibilidad: acepta (currentTitle/currentContent) o (context/theme)
   static Future<List<String>> generateStoryPrompts({
@@ -230,6 +279,7 @@ Responde SOLO con un objeto JSON con esta estructura:
     required String content,
     List<String>? suggestedTopics,
     List<Map<String, dynamic>>? previousStoryDates,
+    String? storyId,
   }) async {
     final trimmedTitle = title.trim();
     final trimmedContent = content.trim();
@@ -462,6 +512,20 @@ Responde SOLO con un objeto JSON válido que cumpla exactamente el siguiente esq
       temperature: hasContent ? 0.7 : 0.85,
     );
 
+    // Registrar uso de IA (no esperar, ejecutar en background)
+    unawaited(_logAIUsage(
+      usageType: 'suggestions',
+      apiResponse: data,
+      storyId: storyId,
+      requestMetadata: {
+        'title_length': trimmedTitle.length,
+        'content_length': trimmedContent.length,
+        'word_count': wordCount,
+        'has_suggested_topics': suggestedTopics != null && suggestedTopics.isNotEmpty,
+        'has_previous_dates': previousStoryDates != null && previousStoryDates.isNotEmpty,
+      },
+    ));
+
     final contentRaw = data['choices'][0]['message']['content'];
     final decoded = jsonDecode(contentRaw);
     if (decoded is Map<String, dynamic>) {
@@ -481,6 +545,7 @@ Responde SOLO con un objeto JSON válido que cumpla exactamente el siguiente esq
     String perspective = 'first',
     bool avoidProfanity = false,
     String extraInstructions = '',
+    String? storyId,
   }) async {
     final toneDescriptions = {
       'formal':
@@ -635,6 +700,24 @@ Responde únicamente con el objeto JSON y nada más.
         ),
         temperature: 0.55,
       );
+
+      // Registrar uso de IA (no esperar, ejecutar en background)
+      unawaited(_logAIUsage(
+        usageType: 'ghost_writer',
+        apiResponse: data,
+        storyId: storyId,
+        requestMetadata: {
+          'title': title,
+          'tone': tone,
+          'fidelity': fidelity,
+          'language': language,
+          'perspective': perspective,
+          'avoid_profanity': avoidProfanity,
+          'original_text_length': originalText.length,
+          'has_extra_instructions': extraInstructions.isNotEmpty,
+        },
+      ));
+
       final content = jsonDecode(data['choices'][0]['message']['content']);
       final polishedTextRaw = (content['polished_text'] as String?)?.trim();
       final missingTokens = placeholderTokenMap.keys

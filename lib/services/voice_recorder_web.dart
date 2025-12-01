@@ -9,6 +9,8 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 
+import 'package:narra/repositories/ai_usage_repository.dart';
+
 // Helper functions to replace dart:js_util
 js.JsObject _asJsObject(Object object) {
   if (object is js.JsObject) {
@@ -967,6 +969,13 @@ class VoiceRecorder {
       level: 'debug',
     );
 
+    // Registrar uso de transcripción (no esperar, ejecutar en background)
+    unawaited(_logTranscriptionUsage(
+      payload: payload,
+      audioBytes: slice.bytes.length,
+      model: _primaryModel,
+    ));
+
     if (forceFull) {
       _introPlaceholdersRemaining = 0;
     }
@@ -1393,5 +1402,76 @@ class VoiceRecorder {
     }
     _lastReportedTranscribing = active;
     _onTranscriptionState?.call(active);
+  }
+
+  /// Registra el uso de transcripción en la base de datos
+  Future<void> _logTranscriptionUsage({
+    required Map<String, dynamic> payload,
+    required int audioBytes,
+    required String model,
+  }) async {
+    try {
+      // Estimar tokens basados en la duración del audio
+      // La API de Whisper no devuelve tokens directamente
+      // Estimamos ~150 palabras por minuto de audio, ~1.3 tokens por palabra
+      final duration = _estimateAudioDuration(payload);
+      final estimatedWords = (duration / 60.0) * 150;
+      final estimatedTokens = (estimatedWords * 1.3).round();
+
+      // Calcular costo estimado para Whisper
+      // Whisper cobra por minuto, no por token
+      final durationMinutes = duration / 60.0;
+      final estimatedCost = durationMinutes * 0.006; // $0.006 por minuto
+
+      await AIUsageRepository.logUsage(
+        usageType: 'transcription',
+        modelUsed: model,
+        totalTokens: estimatedTokens,
+        estimatedCostUsd: estimatedCost,
+        requestMetadata: {
+          'audio_bytes': audioBytes,
+          'duration_seconds': duration,
+          'language': _languageHint ?? 'auto',
+        },
+        responseMetadata: {
+          'text_length': (payload['text'] as String?)?.length ?? 0,
+          'segments_count': (payload['segments'] as List?)?.length ?? 0,
+          'duration': payload['duration'],
+        },
+      );
+    } catch (error) {
+      // No queremos que un error de logging rompa la funcionalidad
+      _log('⚠️ Error logging transcription usage: $error', level: 'warning');
+    }
+  }
+
+  /// Estima la duración del audio basado en el payload de transcripción
+  double _estimateAudioDuration(Map<String, dynamic> payload) {
+    // Intentar obtener la duración del payload
+    final duration = payload['duration'];
+    if (duration is num) {
+      return duration.toDouble();
+    }
+
+    // Si no está disponible, intentar calcularla desde los segmentos
+    final segments = payload['segments'];
+    if (segments is List && segments.isNotEmpty) {
+      double maxEnd = 0;
+      for (final segment in segments) {
+        if (segment is Map<String, dynamic>) {
+          final end = segment['end'];
+          if (end is num) {
+            maxEnd = math.max(maxEnd, end.toDouble());
+          }
+        }
+      }
+      if (maxEnd > 0) {
+        return maxEnd;
+      }
+    }
+
+    // Fallback: estimar basado en bytes (muy aproximado)
+    // Asumimos ~16kbps para audio comprimido webm/opus
+    return 0;
   }
 }

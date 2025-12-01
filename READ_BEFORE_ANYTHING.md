@@ -72,24 +72,26 @@ Narra tiene **dos sistemas de autenticación separados** para diferentes tipos d
 - ✅ Sin contraseña (passwordless)
 - ✅ Diseñado para personas mayores (60-90 años)
 - ✅ Interfaz simple y clara con instrucciones paso a paso
-- ✅ Usa Supabase Admin API para generar magic links
+- ✅ `/app/login` usa PIN de 6 dígitos (OTP) con 5 intentos máximos
+- ✅ Otros flujos (alta desde panel/primer registro) mantienen magic links
 - ✅ **Solo usuarios existentes** pueden iniciar sesión (no auto-registro)
-- ✅ Enlaces válidos por 15 minutos
+- ✅ PIN y magic links válidos por 15 minutos
 - ✅ Email personalizado via Resend API
 
-**Flujo de autenticación**:
+**Flujo de autenticación en `/app/login` (PIN)**:
 1. Usuario ingresa su email en `/app/login`
 2. API verifica que el usuario existe en `auth.users`
-3. Si existe, genera magic link usando Supabase Admin API
-4. Envía email con enlace personalizado via Resend
-5. Usuario hace clic en el enlace del correo
-6. Supabase procesa los tokens del hash fragment (#access_token=...)
+3. Si existe, genera un OTP de 6 dígitos vía Supabase Admin API
+4. Envía email con el PIN personalizado via Resend
+5. Usuario escribe el PIN en la misma pantalla (máx. 5 intentos; desde el intento 3 se sugiere pedir uno nuevo)
+6. Supabase valida el OTP (verifyOTP) y entrega la sesión
 7. Flutter detecta la sesión y redirige al Dashboard
 8. Sesión persiste en localStorage
 
 **Archivos clave**:
-- `lib/screens/auth/magic_link_login_page.dart` - UI de login
-- `functions/api/author-magic-link.ts` - API que genera y envía magic links
+- `lib/screens/auth/magic_link_login_page.dart` - UI de login con PIN
+- `functions/api/author-login-pin.ts` - API que genera el OTP y envía el mail de PIN
+- `functions/api/author-magic-link.ts` - API de magic links (sigue usándose en flujos de panel/registro)
 - `lib/screens/app/app_navigation.dart` - Detecta sesión y maneja errores
 - `lib/supabase/supabase_config.dart` - Configuración con implicit flow
 
@@ -429,17 +431,22 @@ Todos los emails que envía Narra deben seguir el mismo formato y paleta de colo
 
 #### 📧 Emails Actuales
 
-**1. Magic Link Login** (`functions/api/author-magic-link.ts`)
-- **Cuándo:** Usuario solicita iniciar sesión
+**1. Login con PIN (OTP)** (`functions/api/author-login-pin.ts`)
+- **Cuándo:** Usuario inicia sesión desde `/app/login`
+- **Propósito:** Enviar PIN de 6 dígitos (5 intentos; sugerir nuevo PIN al 3er intento)
+- **Badge:** "🔐 PIN de acceso"
+
+**2. Magic Link Login (otros flujos)** (`functions/api/author-magic-link.ts`)
+- **Cuándo:** Envíos desde panel de gestión/registro inicial (no `/app/login`)
 - **Propósito:** Enviar enlace seguro de acceso único
 - **Badge:** "🔑 Acceso Seguro"
 
-**2. Nueva Historia** (`lib/services/email/email_templates.dart` - `storyPublishedHtml`)
+**3. Nueva Historia** (`lib/services/email/email_templates.dart` - `storyPublishedHtml`)
 - **Cuándo:** Autor publica nueva historia
 - **Propósito:** Notificar a suscriptores con enlace personalizado
 - **Badge:** "✨ Nueva Historia"
 
-**3. Invitación Suscriptor** (`lib/services/email/email_templates.dart` - `subscriberInviteHtml`)
+**4. Invitación Suscriptor** (`lib/services/email/email_templates.dart` - `subscriberInviteHtml`)
 - **Cuándo:** Autor invita nuevo suscriptor
 - **Propósito:** Dar acceso privado al círculo
 - **Badge:** "🔐 Invitación Privada"

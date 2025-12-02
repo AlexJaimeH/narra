@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { NarraColors } from '../styles/colors';
 import { useStripePrice, formatPrice } from '../hooks/useStripePrice';
+import { useGoogleAdsTag } from '../hooks/useGoogleAdsTag';
 
 type PurchaseType = 'self' | 'gift';
 type GiftTiming = 'now' | 'later';
@@ -12,6 +13,8 @@ export const PurchaseCheckoutPage: React.FC = () => {
   const navigate = useNavigate();
   const [purchaseType, setPurchaseType] = useState<PurchaseType>('self');
   const [giftTiming, setGiftTiming] = useState<GiftTiming>('now');
+
+  useGoogleAdsTag();
 
   // Get dynamic price from Stripe
   const { priceData } = useStripePrice();

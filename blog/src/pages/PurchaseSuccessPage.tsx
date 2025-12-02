@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { NarraColors } from '../styles/colors';
+import { useGoogleAdsTag } from '../hooks/useGoogleAdsTag';
 
 export const PurchaseSuccessPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -14,6 +15,8 @@ export const PurchaseSuccessPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(!!sessionId);
   const [error, setError] = useState<string | null>(null);
   const [, setAlreadyProcessed] = useState(false);
+
+  useGoogleAdsTag();
 
   // Verify Stripe session and create account if needed
   useEffect(() => {

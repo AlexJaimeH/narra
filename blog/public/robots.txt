@@ -1,19 +1,20 @@
 # robots.txt para Narra
+# Permitir acceso a buscadores y agentes AI (Google, Bing, Claude, ChatGPT, Gemini, etc.)
+# Solo bloquear secciones privadas que requieren autenticación
 
-# Permitir indexación de la landing page
 User-agent: *
-Allow: /$
-Allow: /logo.png
-Allow: /logo-horizontal.png
-Allow: /favicon.png
-Allow: /hero-portrait.png
-Allow: /emotional-legacy.png
-Allow: /step1.png
-Allow: /step2.png
-Allow: /step3.png
-Allow: /step4.png
 
-# Bloquear indexación de aplicaciones privadas
+# Permitir indexación de la landing page y assets públicos
+Allow: /$
+Allow: /*.png$
+Allow: /*.jpg$
+Allow: /*.jpeg$
+Allow: /*.svg$
+Allow: /*.webp$
+Allow: /*.css$
+Allow: /*.js$
+
+# Bloquear secciones privadas que requieren autenticación
 Disallow: /app/
 Disallow: /blog/
 Disallow: /purchase

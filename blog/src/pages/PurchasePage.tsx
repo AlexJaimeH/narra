@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { NarraColors } from '../styles/colors';
 import { NavigationHeader } from '../components/NavigationHeader';
 import { useStripePrice, formatPrice } from '../hooks/useStripePrice';
+import { useGoogleAdsTag } from '../hooks/useGoogleAdsTag';
 
 type PurchaseType = 'self' | 'gift';
 
@@ -13,6 +14,8 @@ export const PurchasePage: React.FC = () => {
   const [selectedType, setSelectedType] = useState<PurchaseType>(
     (searchParams.get('type') as PurchaseType) || 'self'
   );
+
+  useGoogleAdsTag();
 
   // Get dynamic price from Stripe
   const { priceData } = useStripePrice();

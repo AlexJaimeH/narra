@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { NarraColors } from '../styles/colors';
 import { useGoogleAdsTag } from '../hooks/useGoogleAdsTag';
+import { useGoogleAdsPurchaseConversion } from '../hooks/useGoogleAdsPurchaseConversion';
 
 export const PurchaseSuccessPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -17,6 +18,7 @@ export const PurchaseSuccessPage: React.FC = () => {
   const [, setAlreadyProcessed] = useState(false);
 
   useGoogleAdsTag();
+  useGoogleAdsPurchaseConversion();
 
   // Verify Stripe session and create account if needed
   useEffect(() => {

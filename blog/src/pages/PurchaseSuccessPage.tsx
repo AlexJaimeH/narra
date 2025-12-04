@@ -18,7 +18,7 @@ export const PurchaseSuccessPage: React.FC = () => {
   const [, setAlreadyProcessed] = useState(false);
 
   useGoogleAdsTag();
-  useGoogleAdsPurchaseConversion();
+  useGoogleAdsPurchaseConversion(sessionId || undefined);
 
   // Verify Stripe session and create account if needed
   useEffect(() => {

@@ -14,11 +14,11 @@ export const useGoogleAdsPurchaseConversion = () => {
     // Wait for gtag to be available
     const sendConversionEvent = () => {
       if (window.gtag) {
-        console.log('[Google Ads] Sending conversion event with ID: AW-7406196450');
+        console.log('[Google Ads] Sending conversion event with ID: AW-17774980441/Szt7CNSb28obENna4ptC');
 
-        // Send conversion with the correct ID
+        // Send conversion with the correct ID and label
         window.gtag('event', 'conversion', {
-          'send_to': 'AW-7406196450',
+          'send_to': 'AW-17774980441/Szt7CNSb28obENna4ptC',
           'transaction_id': ''
         });
 

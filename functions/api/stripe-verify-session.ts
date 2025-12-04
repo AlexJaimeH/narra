@@ -480,6 +480,29 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
     console.log('[stripe-verify-session] Account created successfully');
 
+    // Send notification email to admin
+    try {
+      const notificationHtml = buildAdminNotificationEmail(purchaseType, authorEmail, authorName, buyerEmail, buyerName);
+      await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${env.RESEND_API_KEY}`,
+        },
+        body: JSON.stringify({
+          from: env.RESEND_FROM_EMAIL,
+          to: ['ajaimeh@gmail.com'],
+          subject: `🎉 Nueva compra en Narra - ${purchaseType === 'self' ? 'Compra propia' : 'Regalo'}`,
+          html: notificationHtml,
+          tags: [{ name: 'type', value: 'admin-notification' }],
+        }),
+      });
+      console.log('[stripe-verify-session] Admin notification sent');
+    } catch (error) {
+      console.error('[stripe-verify-session] Failed to send admin notification:', error);
+      // Don't fail the whole process if notification fails
+    }
+
     return json({
       success: true,
       type: purchaseType,
@@ -727,4 +750,101 @@ Panel de Gestión: ${managementUrl}
 Guarda este email. El enlace no expira.
 
 ¿Preguntas? hola@narra.mx`;
+}
+
+function buildAdminNotificationEmail(
+  purchaseType: string,
+  authorEmail: string,
+  authorName: string,
+  buyerEmail: string,
+  buyerName: string
+): string {
+  const isSelf = purchaseType === 'self';
+  const displayType = isSelf ? 'Compra Propia' : 'Regalo';
+  const purchaseDate = new Date().toLocaleString('es-MX', {
+    timeZone: 'America/Mexico_City',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+
+  return `<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nueva compra en Narra</title>
+  </head>
+  <body style="margin:0;padding:0;background:linear-gradient(135deg, #fdfbf7 0%, #f0ebe3 100%);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;color:#1f2937;">
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:660px;margin:40px auto;padding:0 20px;">
+      <tr>
+        <td>
+          <div style="text-align:center;margin-bottom:32px;">
+            <img src="https://narra.mx/logo-horizontal.png" alt="Narra" style="height:36px;width:auto;" />
+          </div>
+
+          <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#ffffff;border-radius:24px;box-shadow:0 20px 60px rgba(77,179,168,0.12),0 8px 20px rgba(0,0,0,0.06);overflow:hidden;">
+            <tr>
+              <td style="padding:0;">
+                <div style="background:linear-gradient(135deg, #4DB3A8 0%, #38827A 100%);padding:40px 36px;text-align:center;">
+                  <div style="display:inline-block;background:rgba(255,255,255,0.25);backdrop-filter:blur(10px);border-radius:16px;padding:12px 24px;margin-bottom:20px;">
+                    <p style="margin:0;font-size:14px;color:#ffffff;letter-spacing:0.08em;text-transform:uppercase;font-weight:600;">🎉 NUEVA COMPRA</p>
+                  </div>
+                  <h1 style="font-size:32px;line-height:1.2;margin:0;font-weight:800;color:#ffffff;text-shadow:0 2px 8px rgba(0,0,0,0.15);">${displayType}</h1>
+                  <p style="margin:12px 0 0 0;font-size:14px;color:rgba(255,255,255,0.9);">${purchaseDate}</p>
+                </div>
+
+                <div style="padding:40px 36px;">
+                  <div style="background:#E8F5F4;border-left:4px solid #4DB3A8;border-radius:16px;padding:24px;margin:0 0 24px 0;">
+                    <p style="margin:0 0 12px 0;font-size:15px;line-height:1.6;color:#38827A;font-weight:700;">👤 Datos del Autor</p>
+                    <table style="width:100%;font-size:14px;line-height:1.8;color:#4b5563;">
+                      <tr>
+                        <td style="padding:4px 0;font-weight:600;color:#374151;width:120px;">Nombre:</td>
+                        <td style="padding:4px 0;">${authorName || 'No proporcionado'}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding:4px 0;font-weight:600;color:#374151;">Email:</td>
+                        <td style="padding:4px 0;"><a href="mailto:${authorEmail}" style="color:#38827A;text-decoration:none;">${authorEmail}</a></td>
+                      </tr>
+                    </table>
+                  </div>
+
+                  ${!isSelf && buyerEmail ? `
+                  <div style="background:#FFF8F0;border-left:4px solid #F59E0B;border-radius:16px;padding:24px;margin:0 0 24px 0;">
+                    <p style="margin:0 0 12px 0;font-size:15px;line-height:1.6;color:#92400E;font-weight:700;">🎁 Datos del Comprador</p>
+                    <table style="width:100%;font-size:14px;line-height:1.8;color:#78350F;">
+                      <tr>
+                        <td style="padding:4px 0;font-weight:600;color:#92400E;width:120px;">Nombre:</td>
+                        <td style="padding:4px 0;">${buyerName || 'No proporcionado'}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding:4px 0;font-weight:600;color:#92400E;">Email:</td>
+                        <td style="padding:4px 0;"><a href="mailto:${buyerEmail}" style="color:#92400E;text-decoration:none;">${buyerEmail}</a></td>
+                      </tr>
+                    </table>
+                  </div>
+                  ` : ''}
+
+                  <div style="background:#F3F4F6;border-radius:12px;padding:20px;margin:24px 0 0 0;">
+                    <p style="margin:0;font-size:13px;line-height:1.6;color:#6b7280;text-align:center;">
+                      Esta es una notificación automática de compra en Narra
+                    </p>
+                  </div>
+                </div>
+
+                <div style="background:#fafaf9;padding:24px 36px;border-top:1px solid #e7e5e4;text-align:center;">
+                  <p style="margin:0;font-size:12px;color:#a8a29e;">Narra - Historias Familiares</p>
+                </div>
+              </td>
+            </tr>
+          </table>
+
+          <div style="height:40px;"></div>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
 }

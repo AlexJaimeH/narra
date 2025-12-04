@@ -7,7 +7,7 @@ declare global {
   }
 }
 
-export const useGoogleAdsPurchaseConversion = () => {
+export const useGoogleAdsPurchaseConversion = (transactionId?: string) => {
   useEffect(() => {
     console.log('[Google Ads] Starting conversion tracking setup');
 
@@ -15,11 +15,12 @@ export const useGoogleAdsPurchaseConversion = () => {
     const sendConversionEvent = () => {
       if (window.gtag) {
         console.log('[Google Ads] Sending conversion event with ID: AW-17774980441/Szt7CNSb28obENna4ptC');
+        console.log('[Google Ads] Transaction ID:', transactionId || 'not provided');
 
-        // Send conversion with the correct ID and label
+        // Send conversion with the correct ID, label, and transaction_id
         window.gtag('event', 'conversion', {
           'send_to': 'AW-17774980441/Szt7CNSb28obENna4ptC',
-          'transaction_id': ''
+          'transaction_id': transactionId || ''
         });
 
         console.log('[Google Ads] Conversion event sent successfully');
@@ -55,5 +56,5 @@ export const useGoogleAdsPurchaseConversion = () => {
         clearInterval(checkGtag);
       };
     }
-  }, []);
+  }, [transactionId]);
 };

@@ -3,37 +3,57 @@ import { useEffect } from 'react';
 declare global {
   interface Window {
     gtag?: (...args: unknown[]) => void;
+    dataLayer?: unknown[];
   }
 }
 
 export const useGoogleAdsPurchaseConversion = () => {
   useEffect(() => {
+    console.log('[Google Ads] Starting conversion tracking setup');
+
     // Wait for gtag to be available
     const sendConversionEvent = () => {
       if (window.gtag) {
+        console.log('[Google Ads] Sending conversion event with ID: AW-7406196450');
+
+        // Send conversion with the correct ID
         window.gtag('event', 'conversion', {
-          'send_to': 'AW-17774980441/QmIwCOKtxssbENna4ptC',
+          'send_to': 'AW-7406196450',
           'transaction_id': ''
         });
+
+        console.log('[Google Ads] Conversion event sent successfully');
+      } else {
+        console.warn('[Google Ads] gtag not available');
       }
     };
 
-    // If gtag is already available, send immediately
-    if (window.gtag) {
+    // Try sending immediately if gtag is ready
+    if (window.gtag && window.dataLayer) {
+      console.log('[Google Ads] gtag and dataLayer already available, sending immediately');
       sendConversionEvent();
     } else {
-      // Otherwise, wait for it to load
+      // Wait for gtag to load
+      console.log('[Google Ads] Waiting for gtag to load...');
+      let attempts = 0;
+      const maxAttempts = 50; // 5 seconds with 100ms intervals
+
       const checkGtag = setInterval(() => {
-        if (window.gtag) {
+        attempts++;
+
+        if (window.gtag && window.dataLayer) {
+          console.log(`[Google Ads] gtag loaded after ${attempts * 100}ms`);
           sendConversionEvent();
+          clearInterval(checkGtag);
+        } else if (attempts >= maxAttempts) {
+          console.error('[Google Ads] gtag failed to load after 5 seconds');
           clearInterval(checkGtag);
         }
       }, 100);
 
-      // Cleanup interval after 5 seconds max
-      setTimeout(() => clearInterval(checkGtag), 5000);
-
-      return () => clearInterval(checkGtag);
+      return () => {
+        clearInterval(checkGtag);
+      };
     }
   }, []);
 };

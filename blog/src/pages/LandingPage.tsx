@@ -1,8 +1,9 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, useInView } from 'framer-motion';
 import { useLocation } from 'react-router-dom';
 import { useStripePrice, formatPrice } from '../hooks/useStripePrice';
 import { useGoogleAdsTag } from '../hooks/useGoogleAdsTag';
+import { ChristmasBanner } from '../components/ChristmasBanner';
 
 // Animation variants - Optimized for subtlety
 const fadeInUp = {
@@ -50,6 +51,7 @@ const AnimatedSection: React.FC<{ children: React.ReactNode; className?: string 
 
 export const LandingPage: React.FC = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [showBanner, setShowBanner] = useState(false);
   const location = useLocation();
   const howRef = useRef<HTMLDivElement>(null);
   const featuresRef = useRef<HTMLDivElement>(null);
@@ -57,6 +59,10 @@ export const LandingPage: React.FC = () => {
   const pricingRef = useRef<HTMLDivElement>(null);
 
   useGoogleAdsTag();
+
+  const handleBannerVisibilityChange = useCallback((visible: boolean) => {
+    setShowBanner(visible);
+  }, []);
 
   // Get dynamic price from Stripe
   const { priceData } = useStripePrice();
@@ -89,15 +95,21 @@ export const LandingPage: React.FC = () => {
     }
   }, [location]);
 
+  // Banner height for positioning (approx 56px desktop, 88px mobile with benefits text)
+  const bannerHeight = showBanner ? 56 : 0;
+
   return (
     <div className="min-h-screen" style={{ background: 'linear-gradient(135deg, #fdfbf7 0%, #f0ebe3 100%)' }}>
+      {/* Christmas Promo Banner */}
+      <ChristmasBanner onVisibilityChange={handleBannerVisibilityChange} />
+
       {/* Header */}
       <motion.header
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
-        className="fixed top-0 left-0 right-0 bg-white/95 backdrop-blur-sm shadow-sm z-50 border-b"
-        style={{ borderColor: '#e5e7eb' }}
+        className="fixed left-0 right-0 bg-white/95 backdrop-blur-sm shadow-sm z-50 border-b transition-all duration-300"
+        style={{ borderColor: '#e5e7eb', top: showBanner ? `${bannerHeight}px` : 0 }}
       >
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
@@ -189,7 +201,7 @@ export const LandingPage: React.FC = () => {
       </motion.header>
 
       {/* Hero Section */}
-      <section className="pt-32 pb-20 px-6">
+      <section className={`pb-20 px-6 transition-all duration-300 ${showBanner ? 'pt-44 md:pt-40' : 'pt-32'}`}>
         <div className="max-w-7xl mx-auto">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             {/* Left: Text Content */}

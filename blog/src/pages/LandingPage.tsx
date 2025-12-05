@@ -95,8 +95,8 @@ export const LandingPage: React.FC = () => {
     }
   }, [location]);
 
-  // Banner height for positioning (approx 56px desktop, 88px mobile with benefits text)
-  const bannerHeight = showBanner ? 56 : 0;
+  // Banner height for positioning (approx 56px desktop + 12px spacing)
+  const bannerHeight = showBanner ? 68 : 0;
 
   return (
     <div className="min-h-screen" style={{ background: 'linear-gradient(135deg, #fdfbf7 0%, #f0ebe3 100%)' }}>
@@ -201,7 +201,7 @@ export const LandingPage: React.FC = () => {
       </motion.header>
 
       {/* Hero Section */}
-      <section className={`pb-20 px-6 transition-all duration-300 ${showBanner ? 'pt-44 md:pt-40' : 'pt-32'}`}>
+      <section className={`pb-20 px-6 transition-all duration-300 ${showBanner ? 'pt-48 md:pt-44' : 'pt-32'}`}>
         <div className="max-w-7xl mx-auto">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             {/* Left: Text Content */}

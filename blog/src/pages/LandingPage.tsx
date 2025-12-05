@@ -95,9 +95,6 @@ export const LandingPage: React.FC = () => {
     }
   }, [location]);
 
-  // Banner height for positioning (approx 56px desktop + 12px spacing)
-  const bannerHeight = showBanner ? 68 : 0;
-
   return (
     <div className="min-h-screen" style={{ background: 'linear-gradient(135deg, #fdfbf7 0%, #f0ebe3 100%)' }}>
       {/* Christmas Promo Banner */}
@@ -108,8 +105,8 @@ export const LandingPage: React.FC = () => {
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
-        className="fixed left-0 right-0 bg-white/95 backdrop-blur-sm shadow-sm z-50 border-b transition-all duration-300"
-        style={{ borderColor: '#e5e7eb', top: showBanner ? `${bannerHeight}px` : 0 }}
+        className={`fixed left-0 right-0 bg-white/95 backdrop-blur-sm shadow-sm z-50 border-b transition-all duration-300 ${showBanner ? 'top-[100px] md:top-[68px]' : 'top-0'}`}
+        style={{ borderColor: '#e5e7eb' }}
       >
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
@@ -201,7 +198,7 @@ export const LandingPage: React.FC = () => {
       </motion.header>
 
       {/* Hero Section */}
-      <section className={`pb-20 px-6 transition-all duration-300 ${showBanner ? 'pt-48 md:pt-44' : 'pt-32'}`}>
+      <section className={`pb-20 px-6 transition-all duration-300 ${showBanner ? 'pt-[180px] md:pt-44' : 'pt-32'}`}>
         <div className="max-w-7xl mx-auto">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             {/* Left: Text Content */}

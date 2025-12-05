@@ -3,24 +3,17 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 const BANNER_DISMISSED_KEY = 'narra_christmas_banner_dismissed_2024';
 
-interface ChristmasBannerProps {
-  onVisibilityChange?: (visible: boolean) => void;
-}
-
-export const ChristmasBanner: React.FC<ChristmasBannerProps> = ({ onVisibilityChange }) => {
+export const ChristmasBanner: React.FC = () => {
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
     // Check if banner was previously dismissed
     const wasDismissed = localStorage.getItem(BANNER_DISMISSED_KEY);
-    const shouldShow = !wasDismissed;
-    setIsVisible(shouldShow);
-    onVisibilityChange?.(shouldShow);
-  }, [onVisibilityChange]);
+    setIsVisible(!wasDismissed);
+  }, []);
 
   const handleDismiss = () => {
     setIsVisible(false);
-    onVisibilityChange?.(false);
     localStorage.setItem(BANNER_DISMISSED_KEY, 'true');
   };
 
@@ -32,7 +25,7 @@ export const ChristmasBanner: React.FC<ChristmasBannerProps> = ({ onVisibilityCh
           animate={{ height: 'auto', opacity: 1 }}
           exit={{ height: 0, opacity: 0 }}
           transition={{ duration: 0.3, ease: 'easeInOut' }}
-          className="fixed top-0 left-0 right-0 w-full overflow-hidden z-[60]"
+          className="w-full overflow-hidden"
           style={{
             background: 'linear-gradient(135deg, #1a472a 0%, #2d5a3d 50%, #1a472a 100%)',
           }}

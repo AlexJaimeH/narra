@@ -2,9 +2,9 @@ import { useEffect, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 
 // ============================================================
-// CONFIGURACION - Pon aqui tu ID de GA4
+// CONFIGURACION
 // ============================================================
-const GA4_MEASUREMENT_ID = 'G-XXXXXXXXXX'; // TODO: Reemplazar con tu ID real de GA4
+const GA4_MEASUREMENT_ID = 'G-4GQ0HNZG0Y';
 const GOOGLE_ADS_ID = 'AW-17774980441';
 
 // ============================================================

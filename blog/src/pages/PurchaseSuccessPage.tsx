@@ -2,8 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { NarraColors } from '../styles/colors';
-import { useGoogleAdsTag } from '../hooks/useGoogleAdsTag';
-import { useGoogleAdsPurchaseConversion } from '../hooks/useGoogleAdsPurchaseConversion';
+import { useAnalytics, trackPurchase } from '../hooks/useAnalytics';
 
 export const PurchaseSuccessPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -16,9 +15,9 @@ export const PurchaseSuccessPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(!!sessionId);
   const [error, setError] = useState<string | null>(null);
   const [, setAlreadyProcessed] = useState(false);
+  const [conversionTracked, setConversionTracked] = useState(false);
 
-  useGoogleAdsTag();
-  useGoogleAdsPurchaseConversion(sessionId || undefined);
+  useAnalytics();
 
   // Verify Stripe session and create account if needed
   useEffect(() => {
@@ -46,15 +45,29 @@ export const PurchaseSuccessPage: React.FC = () => {
           }
 
           // Update type based on response
+          let finalType = initialType;
           if (data.type === 'gift_later' || timing === 'later') {
             setPurchaseType('gift_later');
+            finalType = 'gift';
           } else if (data.type === 'gift') {
             setPurchaseType('gift');
+            finalType = 'gift';
           }
 
           // Email might come from metadata
           if (data.email) {
             setEmail(data.email);
+          }
+
+          // Track purchase conversion (only once)
+          if (!conversionTracked && sessionId) {
+            trackPurchase(
+              sessionId,
+              data.amount || 300, // Amount from response or default
+              finalType as 'self' | 'gift',
+              data.currency || 'MXN'
+            );
+            setConversionTracked(true);
           }
         } else {
           // Handle specific errors
@@ -73,7 +86,7 @@ export const PurchaseSuccessPage: React.FC = () => {
     };
 
     verifyPayment();
-  }, [sessionId, timing]);
+  }, [sessionId, timing, initialType, conversionTracked]);
 
   // Determinar el título y descripción según el tipo
   const getHeaderInfo = () => {

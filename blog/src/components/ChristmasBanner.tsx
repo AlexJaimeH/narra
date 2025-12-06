@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { trackBannerInteraction, trackCTAClick } from '../hooks/useAnalytics';
 
 const BANNER_DISMISSED_KEY = 'narra_christmas_banner_dismissed_2024';
 
@@ -9,12 +10,24 @@ export const ChristmasBanner: React.FC = () => {
   useEffect(() => {
     // Check if banner was previously dismissed
     const wasDismissed = localStorage.getItem(BANNER_DISMISSED_KEY);
-    setIsVisible(!wasDismissed);
+    const shouldShow = !wasDismissed;
+    setIsVisible(shouldShow);
+
+    // Track banner view
+    if (shouldShow) {
+      trackBannerInteraction('view', 'christmas_promo_2024');
+    }
   }, []);
 
   const handleDismiss = () => {
+    trackBannerInteraction('dismiss', 'christmas_promo_2024');
     setIsVisible(false);
     localStorage.setItem(BANNER_DISMISSED_KEY, 'true');
+  };
+
+  const handleCTAClick = () => {
+    trackBannerInteraction('click', 'christmas_promo_2024');
+    trackCTAClick('comprar_ahora', 'christmas_banner', '/purchase?type=gift');
   };
 
   return (
@@ -71,6 +84,7 @@ export const ChristmasBanner: React.FC = () => {
               {/* CTA Button */}
               <motion.a
                 href="/purchase?type=gift"
+                onClick={handleCTAClick}
                 className="flex items-center gap-2 px-5 py-2 rounded-full font-bold text-sm shadow-lg"
                 style={{
                   background: 'linear-gradient(135deg, #c41e3a 0%, #a01830 100%)',

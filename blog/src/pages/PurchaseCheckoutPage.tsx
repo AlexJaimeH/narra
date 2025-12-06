@@ -3,7 +3,14 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { NarraColors } from '../styles/colors';
 import { useStripePrice, formatPrice } from '../hooks/useStripePrice';
-import { useGoogleAdsTag } from '../hooks/useGoogleAdsTag';
+import {
+  useAnalytics,
+  trackSelectPurchaseType,
+  trackSelectGiftTiming,
+  trackCheckoutSubmit,
+  trackFormEngagement,
+  trackError,
+} from '../hooks/useAnalytics';
 
 type PurchaseType = 'self' | 'gift';
 type GiftTiming = 'now' | 'later';
@@ -14,7 +21,7 @@ export const PurchaseCheckoutPage: React.FC = () => {
   const [purchaseType, setPurchaseType] = useState<PurchaseType>('self');
   const [giftTiming, setGiftTiming] = useState<GiftTiming>('now');
 
-  useGoogleAdsTag();
+  useAnalytics();
 
   // Get dynamic price from Stripe
   const { priceData } = useStripePrice();
@@ -123,8 +130,12 @@ export const PurchaseCheckoutPage: React.FC = () => {
     e.preventDefault();
 
     if (!validateEmails()) {
+      trackError('validation', error, 'checkout');
       return;
     }
+
+    // Track checkout submit
+    trackCheckoutSubmit(purchaseType, purchaseType === 'gift' ? giftTiming : undefined);
 
     setIsProcessing(true);
     setError('');

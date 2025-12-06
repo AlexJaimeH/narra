@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import { NarraColors } from '../styles/colors';
 import { NavigationHeader } from '../components/NavigationHeader';
 import { useStripePrice, formatPrice } from '../hooks/useStripePrice';
-import { useGoogleAdsTag } from '../hooks/useGoogleAdsTag';
+import { useAnalytics, trackSelectPurchaseType, trackBeginCheckout } from '../hooks/useAnalytics';
 
 type PurchaseType = 'self' | 'gift';
 
@@ -15,7 +15,7 @@ export const PurchasePage: React.FC = () => {
     (searchParams.get('type') as PurchaseType) || 'self'
   );
 
-  useGoogleAdsTag();
+  useAnalytics();
 
   // Get dynamic price from Stripe
   const { priceData } = useStripePrice();
@@ -107,7 +107,10 @@ export const PurchasePage: React.FC = () => {
           <motion.div
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
-            onClick={() => setSelectedType('self')}
+            onClick={() => {
+              setSelectedType('self');
+              trackSelectPurchaseType('self');
+            }}
             className={`relative p-8 rounded-3xl cursor-pointer transition-all ${
               selectedType === 'self' ? 'ring-4 ring-offset-4' : 'hover:shadow-xl'
             }`}
@@ -140,7 +143,10 @@ export const PurchasePage: React.FC = () => {
           <motion.div
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
-            onClick={() => setSelectedType('gift')}
+            onClick={() => {
+              setSelectedType('gift');
+              trackSelectPurchaseType('gift');
+            }}
             className={`relative p-8 rounded-3xl cursor-pointer transition-all ${
               selectedType === 'gift' ? 'ring-4 ring-offset-4' : 'hover:shadow-xl'
             }`}
@@ -180,7 +186,10 @@ export const PurchasePage: React.FC = () => {
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
-            onClick={() => navigate(`/purchase/checkout?type=${selectedType}`)}
+            onClick={() => {
+              trackBeginCheckout(selectedType, displayPrice, currency);
+              navigate(`/purchase/checkout?type=${selectedType}`);
+            }}
             className="px-12 py-4 rounded-xl font-bold text-white text-lg shadow-lg"
             style={{
               background: 'linear-gradient(135deg, #4DB3A8 0%, #38827A 100%)',
@@ -322,7 +331,10 @@ export const PurchasePage: React.FC = () => {
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
-            onClick={() => navigate(`/purchase/checkout?type=${selectedType}`)}
+            onClick={() => {
+              trackBeginCheckout(selectedType, displayPrice, currency);
+              navigate(`/purchase/checkout?type=${selectedType}`);
+            }}
             className="w-full py-4 rounded-xl font-bold text-white text-lg shadow-lg"
             style={{
               background: 'linear-gradient(135deg, #4DB3A8 0%, #38827A 100%)',

@@ -2,8 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { motion, useInView } from 'framer-motion';
 import { useLocation } from 'react-router-dom';
 import { useStripePrice, formatPrice } from '../hooks/useStripePrice';
-import { useGoogleAdsTag } from '../hooks/useGoogleAdsTag';
 import { ChristmasBanner } from '../components/ChristmasBanner';
+import { useAnalytics, useScrollTracking, trackCTAClick, trackSectionView } from '../hooks/useAnalytics';
 
 // Animation variants - Optimized for subtlety
 const fadeInUp = {
@@ -57,7 +57,9 @@ export const LandingPage: React.FC = () => {
   const testimonialsRef = useRef<HTMLDivElement>(null);
   const pricingRef = useRef<HTMLDivElement>(null);
 
-  useGoogleAdsTag();
+  // Analytics
+  useAnalytics();
+  useScrollTracking();
 
   // Get dynamic price from Stripe
   const { priceData } = useStripePrice();
